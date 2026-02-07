@@ -1,7 +1,7 @@
-export type AIProvider = "openai" | "anthropic";
+export type AIProvider = 'openai' | 'anthropic';
 
 export interface AIMessage {
-  role: "system" | "user" | "assistant";
+  role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
@@ -10,12 +10,15 @@ export interface AICompletionOptions {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  stream?: boolean;
 }
 
 export interface AICompletionResult {
   content: string;
   provider: AIProvider;
   model: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface AIProviderInterface {
@@ -24,4 +27,8 @@ export interface AIProviderInterface {
     messages: AIMessage[],
     options?: Partial<AICompletionOptions>
   ): Promise<AICompletionResult>;
+  stream(
+    messages: AIMessage[],
+    options?: Partial<AICompletionOptions>
+  ): Promise<ReadableStream<string>>;
 }

@@ -10,6 +10,6 @@ export type {
   AICompletionOptions,
   AICompletionResult,
   AIProviderInterface,
-} from "./types";
+} from './types';
 
-export { getAIProvider } from "./get-provider";
+export { getAIProvider } from './get-provider';

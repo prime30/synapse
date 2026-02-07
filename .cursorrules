@@ -1,0 +1,111 @@
+# Synapse Development Context
+
+## Project Overview
+Synapse is an AI-powered Shopify theme development platform using:
+- Next.js 14+ (App Router, TypeScript)
+- Supabase (Postgres, Auth, Storage)
+- Multi-provider AI (Anthropic Claude, OpenAI GPT)
+- Graph-based agent coordination
+
+## Architecture Patterns
+
+### File Organization
+- `/app` - Next.js pages and layouts
+- `/app/api` - Backend API routes
+- `/components/ui` - Reusable UI components
+- `/components/features` - Feature-specific components
+- `/lib` - Utilities, types, shared logic
+- `/lib/ai` - AI provider integrations
+- `/lib/auth` - Authentication utilities
+- `/lib/middleware` - Middleware functions
+- `/lib/services` - Business logic services
+- `/lib/storage` - Storage utilities
+- `/lib/types` - TypeScript type definitions
+
+### Shopify Liquid Files
+- Store in Supabase (content field for <100KB, Storage for ≥100KB)
+- File types: 'liquid', 'javascript', 'css', 'other'
+- All agents receive full file context
+
+### API Conventions
+- RESTful endpoints under `/api`
+- JSON request/response format
+- Error format: `{ error: string, code: string }`
+- Success format: `{ data: T }`
+- Supabase JWT in Authorization header
+
+### TypeScript Standards
+- Strict mode enabled
+- Explicit return types for functions
+- Interface over type for object shapes
+- Descriptive variable names (no single letters except loop counters)
+
+## Shopify Liquid Best Practices
+- Use `{% liquid %}` tag for multi-line logic
+- Avoid deep nesting (max 3 levels)
+- Cache expensive operations with `{% capture %}`
+- Use `{% render %}` for snippets, not `{% include %}`
+- Validate objects before accessing properties
+
+## Common Patterns
+
+### API Route Pattern
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+  }
+
+  // Implementation
+  return NextResponse.json({ data: result });
+}
+```
+
+### File Storage Decision
+```typescript
+const shouldStoreInDB = file.size < 100 * 1024; // 100KB
+if (shouldStoreInDB) {
+  // Store in files.content
+} else {
+  // Upload to Supabase Storage, store path in files.storage_path
+}
+```
+
+### AI Agent Context
+```typescript
+interface FileContext {
+  fileId: string;
+  fileName: string;
+  fileType: 'liquid' | 'javascript' | 'css' | 'other';
+  content: string;
+}
+// All agents receive all project files as context
+```
+
+### Supabase Server Client Pattern
+```typescript
+import { createClient } from '@/lib/supabase/server';
+
+export async function serverAction() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('table').select('*');
+  if (error) throw error;
+  return data;
+}
+```
+
+### Middleware Pattern
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+
+export type Middleware = (
+  request: NextRequest,
+  next: () => Promise<NextResponse>
+) => Promise<NextResponse>;
+```

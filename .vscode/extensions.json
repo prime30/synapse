@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "Shopify.theme-check-vscode",
+    "dsznajder.es7-react-js-snippets",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "usernamehw.errorlens",
+    "ckolkman.vscode-postgres"
+  ]
+}
