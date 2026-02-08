@@ -1,0 +1,127 @@
+{
+  "objects": {
+    "product": {
+      "properties": {
+        "title": "string",
+        "handle": "string",
+        "description": "string",
+        "price": "number",
+        "compare_at_price": "number",
+        "available": "boolean",
+        "type": "string",
+        "vendor": "string",
+        "tags": "array<string>",
+        "variants": "array<variant>",
+        "images": "array<image>",
+        "featured_image": "image",
+        "url": "string",
+        "id": "number",
+        "selected_variant": "variant",
+        "options": "array<string>"
+      }
+    },
+    "variant": {
+      "properties": {
+        "id": "number",
+        "title": "string",
+        "price": "number",
+        "available": "boolean",
+        "sku": "string",
+        "option1": "string",
+        "option2": "string",
+        "option3": "string",
+        "url": "string"
+      }
+    },
+    "collection": {
+      "properties": {
+        "title": "string",
+        "handle": "string",
+        "description": "string",
+        "products": "array<product>",
+        "products_count": "number",
+        "url": "string",
+        "id": "number",
+        "image": "image"
+      }
+    },
+    "cart": {
+      "properties": {
+        "items": "array<line_item>",
+        "item_count": "number",
+        "total_price": "number",
+        "note": "string",
+        "currency": "currency"
+      }
+    },
+    "line_item": {
+      "properties": {
+        "product": "product",
+        "variant": "variant",
+        "quantity": "number",
+        "price": "number",
+        "title": "string",
+        "url": "string"
+      }
+    },
+    "customer": {
+      "properties": {
+        "id": "number",
+        "email": "string",
+        "first_name": "string",
+        "last_name": "string",
+        "name": "string",
+        "orders_count": "number",
+        "total_spent": "number",
+        "tags": "array<string>",
+        "addresses": "array<address>"
+      }
+    },
+    "shop": {
+      "properties": {
+        "name": "string",
+        "url": "string",
+        "domain": "string",
+        "description": "string",
+        "currency": "string",
+        "money_format": "string"
+      }
+    },
+    "page": {
+      "properties": {
+        "title": "string",
+        "handle": "string",
+        "content": "string",
+        "url": "string",
+        "id": "number"
+      }
+    },
+    "blog": {
+      "properties": {
+        "title": "string",
+        "handle": "string",
+        "articles": "array<article>",
+        "url": "string"
+      }
+    },
+    "article": {
+      "properties": {
+        "title": "string",
+        "author": "string",
+        "content": "string",
+        "excerpt": "string",
+        "url": "string",
+        "created_at": "string",
+        "tags": "array<string>"
+      }
+    },
+    "image": {
+      "properties": {
+        "src": "string",
+        "alt": "string",
+        "width": "number",
+        "height": "number"
+      }
+    }
+  }
+}

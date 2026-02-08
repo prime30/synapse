@@ -43,3 +43,25 @@ export const createFileSchema = z.object({
   file_type: z.enum(['liquid', 'javascript', 'css', 'other']),
   content: z.string(),
 });
+
+export const previewStateSchema = z.object({
+  project_id: uuidSchema,
+  device_width: z.coerce.number().int().min(320).max(2560),
+  page_type: z.enum([
+    'home',
+    'product',
+    'collection',
+    'cart',
+    'blog',
+    'page',
+    'not_found',
+  ]),
+  resource_id: z.string().optional().nullable(),
+});
+
+export const presenceUpdateSchema = z.object({
+  project_id: uuidSchema,
+  file_path: z.string().optional().nullable(),
+  cursor_position: z.record(z.string(), z.unknown()).optional().nullable(),
+  state: z.enum(['active', 'idle', 'offline']).optional(),
+});

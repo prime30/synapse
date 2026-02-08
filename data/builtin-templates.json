@@ -1,0 +1,219 @@
+[
+  {
+    "title": "Hero Banner",
+    "category": "section",
+    "tags": ["hero", "banner"],
+    "variables": [{"name": "heading", "type": "string"}],
+    "content": "<section class=\"hero\"><h1>{{ section.settings.heading }}</h1></section>"
+  },
+  {
+    "title": "Product Grid",
+    "category": "section",
+    "tags": ["product", "grid"],
+    "variables": [{"name": "collection", "type": "collection"}],
+    "content": "{% for product in collection.products %}{{ product.title }}{% endfor %}"
+  },
+  {
+    "title": "Newsletter Signup",
+    "category": "section",
+    "tags": ["newsletter"],
+    "variables": [{"name": "heading", "type": "string"}],
+    "content": "<form>{% form 'customer' %}<input name=\"email\">{% endform %}</form>"
+  },
+  {
+    "title": "Feature Columns",
+    "category": "section",
+    "tags": ["features"],
+    "variables": [{"name": "columns", "type": "array"}],
+    "content": "{% for block in section.blocks %}{{ block.settings.title }}{% endfor %}"
+  },
+  {
+    "title": "Image with Text",
+    "category": "section",
+    "tags": ["image", "text"],
+    "variables": [{"name": "image", "type": "image"}],
+    "content": "<img src=\"{{ section.settings.image | image_url }}\" alt=\"\">"
+  },
+  {
+    "title": "FAQ Accordion",
+    "category": "section",
+    "tags": ["faq", "accordion"],
+    "variables": [{"name": "items", "type": "array"}],
+    "content": "{% for block in section.blocks %}{{ block.settings.question }}{% endfor %}"
+  },
+  {
+    "title": "Product Card",
+    "category": "snippet",
+    "tags": ["product", "card"],
+    "variables": [{"name": "product", "type": "product"}],
+    "content": "<div class=\"product-card\">{{ product.title }}</div>"
+  },
+  {
+    "title": "Price Badge",
+    "category": "snippet",
+    "tags": ["price"],
+    "variables": [{"name": "price", "type": "money"}],
+    "content": "<span class=\"price\">{{ price | money }}</span>"
+  },
+  {
+    "title": "Rating Stars",
+    "category": "snippet",
+    "tags": ["rating"],
+    "variables": [{"name": "rating", "type": "number"}],
+    "content": "<div class=\"rating\">{{ rating }}</div>"
+  },
+  {
+    "title": "Breadcrumbs",
+    "category": "snippet",
+    "tags": ["navigation"],
+    "variables": [],
+    "content": "<nav aria-label=\"Breadcrumb\">{{ page.title }}</nav>"
+  },
+  {
+    "title": "Add to Cart Button",
+    "category": "snippet",
+    "tags": ["cart"],
+    "variables": [{"name": "product", "type": "product"}],
+    "content": "<button type=\"submit\">Add to cart</button>"
+  },
+  {
+    "title": "Announcement Bar",
+    "category": "snippet",
+    "tags": ["announcement"],
+    "variables": [{"name": "text", "type": "string"}],
+    "content": "<div class=\"announcement\">{{ text }}</div>"
+  },
+  {
+    "title": "Section Schema Basics",
+    "category": "schema",
+    "tags": ["schema"],
+    "variables": [],
+    "content": "{% schema %}{\"name\":\"Section\",\"settings\":[]}{% endschema %}"
+  },
+  {
+    "title": "Block Schema",
+    "category": "schema",
+    "tags": ["schema", "block"],
+    "variables": [],
+    "content": "{% schema %}{\"blocks\":[{\"type\":\"text\",\"name\":\"Text\"}]}{% endschema %}"
+  },
+  {
+    "title": "Image Picker Schema",
+    "category": "schema",
+    "tags": ["schema", "image"],
+    "variables": [],
+    "content": "{% schema %}{\"settings\":[{\"type\":\"image_picker\",\"id\":\"image\",\"label\":\"Image\"}]}{% endschema %}"
+  },
+  {
+    "title": "Color Picker Schema",
+    "category": "schema",
+    "tags": ["schema", "color"],
+    "variables": [],
+    "content": "{% schema %}{\"settings\":[{\"type\":\"color\",\"id\":\"color\",\"label\":\"Color\"}]}{% endschema %}"
+  },
+  {
+    "title": "Text Setting Schema",
+    "category": "schema",
+    "tags": ["schema", "text"],
+    "variables": [],
+    "content": "{% schema %}{\"settings\":[{\"type\":\"text\",\"id\":\"heading\",\"label\":\"Heading\"}]}{% endschema %}"
+  },
+  {
+    "title": "Metafield Product Tag",
+    "category": "metafield",
+    "tags": ["metafield"],
+    "variables": [],
+    "content": "{{ product.metafields.custom.label }}"
+  },
+  {
+    "title": "Metafield Collection Tag",
+    "category": "metafield",
+    "tags": ["metafield"],
+    "variables": [],
+    "content": "{{ collection.metafields.custom.badge }}"
+  },
+  {
+    "title": "Metafield Customer Tag",
+    "category": "metafield",
+    "tags": ["metafield"],
+    "variables": [],
+    "content": "{{ customer.metafields.custom.loyalty }}"
+  },
+  {
+    "title": "Filter Money",
+    "category": "filter",
+    "tags": ["filter", "money"],
+    "variables": [],
+    "content": "{{ product.price | money }}"
+  },
+  {
+    "title": "Filter Image URL",
+    "category": "filter",
+    "tags": ["filter", "image"],
+    "variables": [],
+    "content": "{{ product.featured_image | image_url: width: 800 }}"
+  },
+  {
+    "title": "Filter Escape",
+    "category": "filter",
+    "tags": ["filter", "escape"],
+    "variables": [],
+    "content": "{{ page.title | escape }}"
+  },
+  {
+    "title": "Filter Truncate",
+    "category": "filter",
+    "tags": ["filter", "text"],
+    "variables": [],
+    "content": "{{ product.description | truncate: 120 }}"
+  },
+  {
+    "title": "Filter Date",
+    "category": "filter",
+    "tags": ["filter", "date"],
+    "variables": [],
+    "content": "{{ article.published_at | date: '%b %d, %Y' }}"
+  },
+  {
+    "title": "App Block Wrapper",
+    "category": "app_block",
+    "tags": ["app", "block"],
+    "variables": [],
+    "content": "{% render 'app-block' %}"
+  },
+  {
+    "title": "App Block Header",
+    "category": "app_block",
+    "tags": ["app", "header"],
+    "variables": [],
+    "content": "<div class=\"app-block-header\">{{ block.settings.title }}</div>"
+  },
+  {
+    "title": "App Block CTA",
+    "category": "app_block",
+    "tags": ["app", "cta"],
+    "variables": [],
+    "content": "<a class=\"btn\" href=\"{{ block.settings.link }}\">{{ block.settings.label }}</a>"
+  },
+  {
+    "title": "App Block Grid",
+    "category": "app_block",
+    "tags": ["app", "grid"],
+    "variables": [],
+    "content": "<div class=\"app-block-grid\">{% for item in block.settings.items %}{{ item }}{% endfor %}</div>"
+  },
+  {
+    "title": "App Block Notice",
+    "category": "app_block",
+    "tags": ["app", "notice"],
+    "variables": [],
+    "content": "<div class=\"app-block-notice\">{{ block.settings.notice }}</div>"
+  },
+  {
+    "title": "App Block Footer",
+    "category": "app_block",
+    "tags": ["app", "footer"],
+    "variables": [],
+    "content": "<div class=\"app-block-footer\">{{ block.settings.footer_text }}</div>"
+  }
+]

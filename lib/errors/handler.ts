@@ -26,6 +26,10 @@ export class APIError extends Error {
     return new APIError(message, code, 404);
   }
 
+  static conflict(message = 'Resource conflict', code = 'CONFLICT'): APIError {
+    return new APIError(message, code, 409);
+  }
+
   static tooManyRequests(message = 'Too many requests', code = 'RATE_LIMITED'): APIError {
     return new APIError(message, code, 429);
   }
@@ -40,6 +44,15 @@ export function handleAPIError(error: unknown): NextResponse {
     return NextResponse.json(
       { error: error.message, code: error.code },
       { status: error.status }
+    );
+  }
+
+  // Map Supabase/Postgres unique violation to 409 Conflict
+  const err = error as { code?: string; message?: string };
+  if (err?.code === '23505') {
+    return NextResponse.json(
+      { error: err.message ?? 'Resource already exists', code: 'CONFLICT' },
+      { status: 409 }
     );
   }
 

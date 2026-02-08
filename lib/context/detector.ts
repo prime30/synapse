@@ -1,0 +1,411 @@
+/**
+ * Cross-file dependency detector - REQ-5
+ */
+
+import type {
+  FileContext,
+  FileDependency,
+  DependencyReference,
+} from './types';
+import { SymbolExtractor } from './symbol-extractor';
+
+export class DependencyDetector {
+  private extractor: SymbolExtractor;
+
+  constructor() {
+    this.extractor = new SymbolExtractor();
+  }
+
+  /**
+   * Detect all cross-file dependencies across a set of files.
+   */
+  detectDependencies(files: FileContext[]): FileDependency[] {
+    const dependencies: FileDependency[] = [];
+
+    for (const file of files) {
+      switch (file.fileType) {
+        case 'liquid':
+          dependencies.push(
+            ...this.detectLiquidDependencies(file, files)
+          );
+          break;
+        case 'javascript':
+          dependencies.push(
+            ...this.detectJavaScriptDependencies(file, files)
+          );
+          break;
+        case 'css':
+          dependencies.push(
+            ...this.detectCssDependencies(file, files)
+          );
+          break;
+      }
+    }
+
+    return dependencies;
+  }
+
+  /**
+   * Detect dependencies within a Liquid file:
+   * - CSS class usage → links to CSS files defining those classes
+   * - JS function references → links to JS files defining those functions
+   * - Liquid includes/renders → links to referenced .liquid files
+   * - Data attribute usage
+   * - Asset references via {{ 'file' | asset_url }}
+   */
+  detectLiquidDependencies(
+    file: FileContext,
+    allFiles: FileContext[]
+  ): FileDependency[] {
+    const dependencies: FileDependency[] = [];
+    const content = file.content;
+
+    // --- CSS class references ---
+    const cssFiles = allFiles.filter((f) => f.fileType === 'css');
+    const classRegex = /class=["']([^"']+)["']/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = classRegex.exec(content)) !== null) {
+      const classNames = match[1].split(/\s+/).filter(Boolean);
+
+      for (const className of classNames) {
+        for (const cssFile of cssFiles) {
+          const cssClasses =
+            this.extractor.extractCssClasses(cssFile.content);
+          if (cssClasses.includes(className)) {
+            const sourceLocation = this.extractor.getLineNumber(
+              content,
+              match.index
+            );
+            const context = this.extractor.getContextSnippet(
+              content,
+              match.index,
+              match[0].length
+            );
+
+            const existing = dependencies.find(
+              (d) =>
+                d.sourceFileId === file.fileId &&
+                d.targetFileId === cssFile.fileId &&
+                d.dependencyType === 'css_class'
+            );
+
+            const reference: DependencyReference = {
+              sourceLocation,
+              symbol: className,
+              context,
+            };
+
+            if (existing) {
+              existing.references.push(reference);
+            } else {
+              dependencies.push({
+                sourceFileId: file.fileId,
+                targetFileId: cssFile.fileId,
+                dependencyType: 'css_class',
+                references: [reference],
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // --- JS function references ---
+    const jsFiles = allFiles.filter(
+      (f) => f.fileType === 'javascript'
+    );
+    const onclickRegex =
+      /(?:onclick|data-action)=["']([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?:\([^)]*\))?["']/g;
+
+    while ((match = onclickRegex.exec(content)) !== null) {
+      const funcName = match[1];
+
+      for (const jsFile of jsFiles) {
+        const jsFunctions = this.extractor.extractJsFunctions(
+          jsFile.content
+        );
+        if (jsFunctions.includes(funcName)) {
+          const sourceLocation = this.extractor.getLineNumber(
+            content,
+            match.index
+          );
+          const context = this.extractor.getContextSnippet(
+            content,
+            match.index,
+            match[0].length
+          );
+
+          const existing = dependencies.find(
+            (d) =>
+              d.sourceFileId === file.fileId &&
+              d.targetFileId === jsFile.fileId &&
+              d.dependencyType === 'js_function'
+          );
+
+          const reference: DependencyReference = {
+            sourceLocation,
+            symbol: funcName,
+            context,
+          };
+
+          if (existing) {
+            existing.references.push(reference);
+          } else {
+            dependencies.push({
+              sourceFileId: file.fileId,
+              targetFileId: jsFile.fileId,
+              dependencyType: 'js_function',
+              references: [reference],
+            });
+          }
+        }
+      }
+    }
+
+    // --- Liquid includes/renders ---
+    const liquidFiles = allFiles.filter(
+      (f) => f.fileType === 'liquid'
+    );
+    const includeRegex =
+      /\{%[-\s]*(?:include|render)\s+['"]([^'"]+)['"]/g;
+
+    while ((match = includeRegex.exec(content)) !== null) {
+      const includeName = match[1];
+      const targetFile = liquidFiles.find(
+        (f) =>
+          f.fileName === includeName ||
+          f.fileName === `${includeName}.liquid` ||
+          f.fileName.endsWith(`/${includeName}`) ||
+          f.fileName.endsWith(`/${includeName}.liquid`)
+      );
+
+      if (targetFile && targetFile.fileId !== file.fileId) {
+        const sourceLocation = this.extractor.getLineNumber(
+          content,
+          match.index
+        );
+        const context = this.extractor.getContextSnippet(
+          content,
+          match.index,
+          match[0].length
+        );
+
+        dependencies.push({
+          sourceFileId: file.fileId,
+          targetFileId: targetFile.fileId,
+          dependencyType: 'liquid_include',
+          references: [
+            {
+              sourceLocation,
+              symbol: includeName,
+              context,
+            },
+          ],
+        });
+      }
+    }
+
+    // --- Data attributes ---
+    const dataAttrRegex = /data-([a-zA-Z0-9-]+)=["']([^"']+)["']/g;
+
+    while ((match = dataAttrRegex.exec(content)) !== null) {
+      const attrName = match[1];
+      const attrValue = match[2];
+      const sourceLocation = this.extractor.getLineNumber(
+        content,
+        match.index
+      );
+      const context = this.extractor.getContextSnippet(
+        content,
+        match.index,
+        match[0].length
+      );
+
+      // Link data attributes to JS files that reference the same data attribute
+      for (const jsFile of jsFiles) {
+        if (jsFile.content.includes(`data-${attrName}`)) {
+          const existing = dependencies.find(
+            (d) =>
+              d.sourceFileId === file.fileId &&
+              d.targetFileId === jsFile.fileId &&
+              d.dependencyType === 'data_attribute'
+          );
+
+          const reference: DependencyReference = {
+            sourceLocation,
+            symbol: `data-${attrName}=${attrValue}`,
+            context,
+          };
+
+          if (existing) {
+            existing.references.push(reference);
+          } else {
+            dependencies.push({
+              sourceFileId: file.fileId,
+              targetFileId: jsFile.fileId,
+              dependencyType: 'data_attribute',
+              references: [reference],
+            });
+          }
+        }
+      }
+    }
+
+    // --- Asset references: {{ 'file' | asset_url }} ---
+    const assetRegex =
+      /\{\{\s*['"]([^'"]+)['"]\s*\|\s*asset_url\s*\}\}/g;
+
+    while ((match = assetRegex.exec(content)) !== null) {
+      const assetName = match[1];
+      const targetFile = allFiles.find(
+        (f) =>
+          f.fileName === assetName ||
+          f.fileName.endsWith(`/${assetName}`)
+      );
+
+      if (targetFile && targetFile.fileId !== file.fileId) {
+        const sourceLocation = this.extractor.getLineNumber(
+          content,
+          match.index
+        );
+        const context = this.extractor.getContextSnippet(
+          content,
+          match.index,
+          match[0].length
+        );
+
+        dependencies.push({
+          sourceFileId: file.fileId,
+          targetFileId: targetFile.fileId,
+          dependencyType: 'asset_reference',
+          references: [
+            {
+              sourceLocation,
+              symbol: assetName,
+              context,
+            },
+          ],
+        });
+      }
+    }
+
+    return dependencies;
+  }
+
+  /**
+   * Detect JS import dependencies.
+   * Matches `import ... from '...'` statements.
+   */
+  detectJavaScriptDependencies(
+    file: FileContext,
+    allFiles: FileContext[]
+  ): FileDependency[] {
+    const dependencies: FileDependency[] = [];
+    const content = file.content;
+
+    const importRegex =
+      /import\s+(?:(?:\{[^}]*\}|[a-zA-Z_$][a-zA-Z0-9_$]*|\*\s+as\s+[a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*,\s*(?:\{[^}]*\}|[a-zA-Z_$][a-zA-Z0-9_$]*))?\s+from\s+)?['"]([^'"]+)['"]/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1];
+      // Normalize relative path: strip leading ./ for matching
+      const normalizedPath = importPath.replace(/^\.\//, '');
+      const targetFile = allFiles.find(
+        (f) =>
+          f.fileId !== file.fileId &&
+          (f.fileName === importPath ||
+            f.fileName === normalizedPath ||
+            f.fileName.endsWith(`/${importPath}`) ||
+            f.fileName.endsWith(`/${normalizedPath}`) ||
+            f.fileName === `${normalizedPath}.js` ||
+            f.fileName.endsWith(`/${normalizedPath}.js`) ||
+            f.fileName === `${normalizedPath}.ts` ||
+            f.fileName.endsWith(`/${normalizedPath}.ts`))
+      );
+
+      if (targetFile) {
+        const sourceLocation = this.extractor.getLineNumber(
+          content,
+          match.index
+        );
+        const context = this.extractor.getContextSnippet(
+          content,
+          match.index,
+          match[0].length
+        );
+
+        dependencies.push({
+          sourceFileId: file.fileId,
+          targetFileId: targetFile.fileId,
+          dependencyType: 'js_import',
+          references: [
+            {
+              sourceLocation,
+              symbol: importPath,
+              context,
+            },
+          ],
+        });
+      }
+    }
+
+    return dependencies;
+  }
+
+  /**
+   * Detect CSS @import dependencies.
+   * Matches `@import '...'` and `@import url('...')`.
+   */
+  detectCssDependencies(
+    file: FileContext,
+    allFiles: FileContext[]
+  ): FileDependency[] {
+    const dependencies: FileDependency[] = [];
+    const content = file.content;
+
+    const importRegex =
+      /@import\s+(?:url\(\s*)?['"]([^'"]+)['"]\s*\)?/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1];
+      const targetFile = allFiles.find(
+        (f) =>
+          f.fileId !== file.fileId &&
+          (f.fileName === importPath ||
+            f.fileName.endsWith(`/${importPath}`) ||
+            f.fileName === `${importPath}.css` ||
+            f.fileName.endsWith(`/${importPath}.css`))
+      );
+
+      if (targetFile) {
+        const sourceLocation = this.extractor.getLineNumber(
+          content,
+          match.index
+        );
+        const context = this.extractor.getContextSnippet(
+          content,
+          match.index,
+          match[0].length
+        );
+
+        dependencies.push({
+          sourceFileId: file.fileId,
+          targetFileId: targetFile.fileId,
+          dependencyType: 'css_import',
+          references: [
+            {
+              sourceLocation,
+              symbol: importPath,
+              context,
+            },
+          ],
+        });
+      }
+    }
+
+    return dependencies;
+  }
+}

@@ -1,0 +1,28 @@
+-- Reference schema for files table (REQ-4)
+-- Actual migration: supabase/migrations/004_create_files_table.sql
+-- Constraints: supabase/migrations/009_files_schema_constraints.sql
+
+-- File type enum
+-- CREATE TYPE public.file_type AS ENUM ('liquid', 'javascript', 'css', 'other');
+
+-- Files table
+-- Columns:
+--   id UUID PRIMARY KEY
+--   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE
+--   name TEXT NOT NULL
+--   path TEXT NOT NULL
+--   file_type file_type NOT NULL DEFAULT 'other'
+--   content TEXT              -- For files <100KB
+--   storage_path TEXT         -- For files >=100KB (Supabase Storage)
+--   size_bytes INTEGER NOT NULL DEFAULT 0
+--   created_by UUID NOT NULL REFERENCES profiles(id)
+--   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+--   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+--
+-- Constraints:
+--   UNIQUE(project_id, path)
+--   UNIQUE(project_id, name)   -- idx_files_project_name
+--   CHECK: (content IS NOT NULL AND storage_path IS NULL) OR (content IS NULL AND storage_path IS NOT NULL)
+--
+-- Indexes:
+--   idx_files_project, idx_files_type, idx_files_project_path, idx_files_project_name

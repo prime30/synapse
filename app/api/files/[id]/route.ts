@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { getFile, updateFile, deleteFile } from '@/lib/services/files';
+import type { UpdateFileRequest } from '@/lib/types/files';
+import { APIError } from '@/lib/errors/handler';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -23,8 +25,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     await requireAuth(request);
     const { id } = await params;
-    const body = await request.json();
-    const file = await updateFile(id, body);
+    const body = (await request.json()) as UpdateFileRequest;
+    if (body.name !== undefined) {
+      throw APIError.badRequest('Use PATCH for rename; PUT is for content updates only');
+    }
+    const file = await updateFile(id, { content: body.content });
+    return successResponse(file);
+  } catch (error) {
+    return handleAPIError(error);
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireAuth(request);
+    const { id } = await params;
+    const body = (await request.json()) as UpdateFileRequest;
+    if (!body.name) {
+      throw APIError.badRequest('PATCH requires name for rename');
+    }
+    const file = await updateFile(id, { name: body.name, path: body.name });
     return successResponse(file);
   } catch (error) {
     return handleAPIError(error);

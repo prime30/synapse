@@ -1,0 +1,70 @@
+---
+description: BrainGrid workflow rules - always pull tasks from BrainGrid before building
+alwaysApply: true
+---
+
+# BrainGrid Workflow Rules
+
+## Task Breakdown Rule (HARD RULE)
+
+NEVER create your own task breakdown for a requirement. Always check BrainGrid first:
+
+```bash
+braingrid task list -r REQ-X -p PROJ-1 --limit 20
+```
+
+- If tasks exist: pull them and build to spec exactly as defined
+- If tasks DON'T exist: STOP and tell the user to run the breakdown in BrainGrid first:
+  - Via CLI: `braingrid requirement breakdown REQ-X -p PROJ-1`
+  - Via web app: https://app.braingrid.ai
+
+Do NOT improvise, guess, or create your own task structure. BrainGrid tasks have exact file paths, interfaces, dependency chains, and acceptance criteria that must be followed.
+
+## Requirement Build Workflow
+
+1. Pull the requirement: `braingrid requirement show REQ-X -p PROJ-1`
+2. Pull the tasks: `braingrid task list -r REQ-X -p PROJ-1`
+3. If no tasks exist, tell the user to break it down in BrainGrid
+4. Build tasks in dependency order (respect "Blocked by" fields)
+5. Run lint, tests, build after each requirement
+6. Commit with conventional commit referencing the REQ ID
+
+## PM Agent Orchestration (Multi-Task Requirements)
+
+When building a requirement with multiple tasks, act as a PM: analyze dependencies, group by tiers, and execute optimally.
+
+### 1. Ingest All Tasks
+
+Pull the full task list and parse every "Blocked by" / "Dependencies" field from each task. Extract task IDs (e.g. TASK-1, TASK-2) and their blockers.
+
+### 2. Build a Dependency Graph
+
+- Map which tasks block which
+- Identify **independent tasks** (no blockers) — these run first
+- Compute **dependency tiers** — group tasks by when they become unblocked:
+  - Tier 0: tasks with no blockers
+  - Tier N+1: tasks whose blockers are all in tiers 0..N
+
+### 3. Execute in Tiers
+
+For each tier, in order:
+- **Prefer sub-agents for parallel work:** Within a tier, spawn sub-agents via the Task tool for independent tasks so they run in parallel. One sub-agent per task (or per logical workstream) when tasks are non-trivial.
+- **When to use sub-agents:** Use sub-agents when a task involves multiple files, new components, or non-trivial logic. Reserve parallel tool calls for trivial single-file edits.
+- Wait for a tier to complete (all sub-agents done) before starting the next tier.
+
+### 4. Track Progress
+
+Use TodoWrite to show the dependency graph as a todo list with tier labels (e.g. "Tier 0: TASK-1", "Tier 1: TASK-2, TASK-3"). Mark complete as each task finishes.
+
+### 5. Verify Between Tiers
+
+After completing a tier that touches shared code (e.g. lib/, config, package.json), run `npm run lint` and `npm run test:run` before proceeding. Fix any regressions.
+
+### Example Dependency Analysis
+
+Given: TASK-1 (no deps), TASK-2 (blocked by 1), TASK-3 (blocked by 1), TASK-4 (blocked by 2,3), TASK-5 (blocked by 2)
+
+- Tier 0: TASK-1
+- Tier 1: TASK-2, TASK-3 — spawn two sub-agents in parallel (both only need TASK-1)
+- Tier 2: TASK-5 (needs TASK-2)
+- Tier 3: TASK-4 (needs TASK-2 + TASK-3)

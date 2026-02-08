@@ -6,9 +6,22 @@ import {
   deleteFromStorage,
 } from '@/lib/storage/files';
 import type { CreateFileInput, UpdateFileInput, FileFilter } from '@/lib/types/files';
+import { APIError } from '@/lib/errors/handler';
 
 export async function createFile(input: CreateFileInput) {
   const supabase = await createClient();
+
+  // Check for duplicate filename per project (REQ-4)
+  const { data: existing } = await supabase
+    .from('files')
+    .select('id')
+    .eq('project_id', input.project_id)
+    .eq('name', input.name)
+    .maybeSingle();
+
+  if (existing) {
+    throw APIError.conflict(`A file named '${input.name}' already exists`);
+  }
   const sizeBytes = new TextEncoder().encode(input.content).length;
   const useStorage = shouldUseStorage(sizeBytes);
 
@@ -63,8 +76,28 @@ export async function updateFile(fileId: string, input: UpdateFileInput) {
 
   const updates: Record<string, unknown> = {};
 
-  if (input.name) updates.name = input.name;
-  if (input.path) updates.path = input.path;
+  if (input.name) {
+    const { data: currentFile } = await supabase
+      .from('files')
+      .select('project_id')
+      .eq('id', fileId)
+      .single();
+    if (currentFile) {
+      const { data: existing } = await supabase
+        .from('files')
+        .select('id')
+        .eq('project_id', currentFile.project_id)
+        .eq('name', input.name)
+        .neq('id', fileId)
+        .maybeSingle();
+      if (existing) {
+        throw APIError.conflict(`A file named '${input.name}' already exists`);
+      }
+    }
+    updates.name = input.name;
+    updates.path = input.path ?? input.name;
+  }
+  if (input.path && !input.name) updates.path = input.path;
 
   if (input.content !== undefined) {
     const sizeBytes = new TextEncoder().encode(input.content).length;
