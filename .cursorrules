@@ -1,5 +1,34 @@
 # Synapse Development Context
 
+## Development Standards (REQ-77)
+- Write tests BEFORE implementation (TDD)
+- Target minimum 80% code coverage
+- Use TypeScript strict mode
+- Follow contracts in synapse-coordination/contracts.md (or contracts/ for Zod schemas)
+- Update status.json in synapse-coordination after each task when coordinating agents
+- Commit after each logical change
+- Branch naming: `feature/req-{number}`
+
+## Contract Compliance
+- Check contracts.md for component interfaces before integrating
+- Validate against Zod schemas when consuming shared types
+- Update contracts when interfaces change; document breaking changes
+- Related contracts: list in PR description when touching interfaces
+
+## Testing Requirements
+- Unit tests for all exported functions
+- Integration tests for API endpoints
+- Component tests for React components
+- Test error scenarios and edge cases
+
+## Commit Message Format
+```
+[REQ-XXX] Brief description
+
+Detailed explanation of changes
+Related contracts: [Component names]
+```
+
 ## Project Overview
 Synapse is an AI-powered Shopify theme development platform using:
 - Next.js 14+ (App Router, TypeScript)
