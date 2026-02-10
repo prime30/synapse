@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server';
 import JSZip from 'jszip';
-
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createFile } from '@/lib/services/files';
 import { detectFileTypeFromName } from '@/lib/types/files';
 
 interface RouteParams {
@@ -27,6 +25,23 @@ const THEME_DIRS = new Set([
 
 const MAX_ZIP_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 500;
+
+const BINARY_EXTS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg',
+  'woff', 'woff2', 'ttf', 'eot', 'otf',
+  'mp4', 'webm', 'mp3',
+]);
+
+function getAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for file uploads');
+  }
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey,
+  );
+}
 
 /**
  * Determine whether a ZIP entry is a valid theme file we should import.
@@ -49,6 +64,9 @@ function normalizeThemePath(rawPath: string): string | null {
   const path = segments.join('/');
   if (!path) return null;
 
+  // Only accept files inside recognised theme directories
+  if (!THEME_DIRS.has(segments[0])) return null;
+
   return path;
 }
 
@@ -57,12 +75,13 @@ function normalizeThemePath(rawPath: string): string | null {
  *
  * Accepts a multipart FormData with a `file` field containing a .zip.
  * Extracts the ZIP, normalizes Shopify theme paths, and creates files
- * in the project.
+ * in the project using the service role client (bypasses RLS).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
     const userId = await requireProjectAccess(request, projectId);
+    const supabase = getAdminClient();
 
     // ── Parse FormData ──────────────────────────────────────────────────
     const formData = await request.formData();
@@ -107,65 +126,66 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // ── Delete existing files for a clean import ────────────────────────
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (serviceKey) {
-      const supabase = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey);
-      await supabase.from('files').delete().eq('project_id', projectId);
-    }
+    await supabase.from('files').delete().eq('project_id', projectId);
 
-    // ── Create files ────────────────────────────────────────────────────
+    // ── Create files directly via service role client ────────────────────
     let imported = 0;
     const errors: string[] = [];
 
-    // Process in batches of 20 to avoid overwhelming the DB
+    // Process in batches of 20
     const BATCH = 20;
     for (let i = 0; i < entries.length; i += BATCH) {
       const batch = entries.slice(i, i + BATCH);
 
-      await Promise.all(
+      // Read all file contents in parallel
+      const rows = await Promise.all(
         batch.map(async ({ path, zipEntry }) => {
           try {
-            // Read file content as text; binary files get base64
-            let content: string;
             const ext = path.split('.').pop()?.toLowerCase() ?? '';
-            const binaryExts = new Set([
-              'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg',
-              'woff', 'woff2', 'ttf', 'eot', 'otf',
-              'mp4', 'webm', 'mp3',
-            ]);
+            const content = BINARY_EXTS.has(ext)
+              ? await zipEntry.async('base64')
+              : await zipEntry.async('string');
 
-            if (binaryExts.has(ext)) {
-              // Store binary as base64
-              content = await zipEntry.async('base64');
-            } else {
-              content = await zipEntry.async('string');
-            }
+            const sizeBytes = new TextEncoder().encode(content).length;
 
-            // Use filename as the display name (last segment)
-            const name = path.split('/').pop()!;
-
-            await createFile({
+            return {
               project_id: projectId,
-              name: path, // use full path as name for uniqueness
+              name: path,
               path,
-              file_type: detectFileTypeFromName(name),
+              file_type: detectFileTypeFromName(path),
+              size_bytes: sizeBytes,
               content,
+              storage_path: null,
               created_by: userId,
-            });
-
-            imported++;
+            };
           } catch (err) {
             errors.push(
-              `${path}: ${err instanceof Error ? err.message : 'unknown error'}`
+              `${path}: ${err instanceof Error ? err.message : 'read error'}`
             );
+            return null;
           }
         })
       );
+
+      // Filter out nulls (read failures) and insert in one batch
+      const validRows = rows.filter(Boolean);
+      if (validRows.length > 0) {
+        const { error: insertError, data } = await supabase
+          .from('files')
+          .insert(validRows)
+          .select('id');
+
+        if (insertError) {
+          errors.push(`Batch insert error: ${insertError.message}`);
+        } else {
+          imported += data?.length ?? 0;
+        }
+      }
     }
 
     return successResponse({
       imported,
-      errors: errors.slice(0, 10), // Cap error list
+      errors: errors.slice(0, 10),
       total: entries.length,
     });
   } catch (error) {
