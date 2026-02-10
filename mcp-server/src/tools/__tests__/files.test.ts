@@ -15,6 +15,9 @@ vi.mock('../../fs/reader.js', () => {
       getFileType() {
         return 'liquid';
       }
+      async listFiles() {
+        return ['sections/header.liquid', 'snippets/new.liquid'];
+      }
     },
   };
 });
@@ -44,6 +47,7 @@ function createMockApiClient() {
     addFile: vi.fn(async () => ({
       data: { id: 'file-uuid-1', name: 'layout.liquid' },
     })),
+    updateFileContent: vi.fn(async () => ({ data: {} })),
     listProjects: vi.fn(),
     createProject: vi.fn(),
     listProjectFiles: vi.fn(),
@@ -153,5 +157,48 @@ describe('registerFileTools', () => {
     ).rejects.toThrow('AUTH_REQUIRED');
 
     expect(apiClient.addFile).not.toHaveBeenCalled();
+  });
+
+  it('registers synapse_sync_workspace_to_project tool', () => {
+    registerFileTools(registry, apiClient as never, authManager as never);
+
+    expect(registry.has('synapse_sync_workspace_to_project')).toBe(true);
+
+    const definitions = registry.getDefinitions();
+    const syncTool = definitions.find((d) => d.name === 'synapse_sync_workspace_to_project');
+    expect(syncTool).toBeDefined();
+    expect(syncTool!.inputSchema.required).toContain('projectId');
+    expect(syncTool!.inputSchema.required).toContain('workspacePath');
+  });
+
+  it('synapse_sync_workspace_to_project updates existing and adds new files', async () => {
+    apiClient.listProjectFiles = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'id-header', name: 'header.liquid', path: 'sections/header.liquid', file_type: 'liquid' },
+      ],
+    });
+
+    registerFileTools(registry, apiClient as never, authManager as never);
+    const handler = registry.getHandler('synapse_sync_workspace_to_project')!;
+
+    const result = await handler({
+      projectId: 'proj-1',
+      workspacePath: '/workspace/theme',
+    });
+
+    expect(apiClient.listProjectFiles).toHaveBeenCalledWith('proj-1');
+    expect(apiClient.updateFileContent).toHaveBeenCalledTimes(1);
+    expect(apiClient.updateFileContent).toHaveBeenCalledWith('id-header', '<div>file content</div>');
+    expect(apiClient.addFile).toHaveBeenCalledTimes(1);
+    expect(apiClient.addFile).toHaveBeenCalledWith('proj-1', {
+      name: 'new.liquid',
+      path: 'snippets/new.liquid',
+      file_type: 'liquid',
+      content: '<div>file content</div>',
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.updated).toBe(1);
+    expect(parsed.added).toBe(1);
   });
 });

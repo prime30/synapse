@@ -76,6 +76,10 @@ export class APIClient {
     return this.request('GET', `/api/projects/${projectId}/files`);
   }
 
+  async updateFileContent(fileId: string, content: string): Promise<{ data: unknown }> {
+    return this.request('PUT', `/api/files/${fileId}`, { content });
+  }
+
   // Agent endpoints
   async executeAgents(projectId: string, userRequest: string): Promise<{ data: { executionId: string } }> {
     return this.request('POST', '/api/agents/execute', {

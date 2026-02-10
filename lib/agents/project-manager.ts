@@ -1,5 +1,6 @@
 import { Agent } from './base';
 import { PROJECT_MANAGER_PROMPT } from './prompts';
+import { getThemeContext, THEME_STRUCTURE_DOC } from '@/lib/shopify/theme-structure';
 import type {
   AgentTask,
   AgentResult,
@@ -30,8 +31,17 @@ export class ProjectManagerAgent extends Agent {
       .map((p) => `- [${p.category}] ${p.key}: ${p.value}`)
       .join('\n');
 
+    const themeFiles = task.context.files
+      .filter((f) => f.path ?? f.fileName.includes('/'))
+      .map((f) => ({ path: f.path ?? f.fileName }));
+    const themeContext = getThemeContext(themeFiles);
+
     return [
       `User Request: ${task.instruction}`,
+      '',
+      '## Shopify Theme Structure:',
+      THEME_STRUCTURE_DOC,
+      themeContext.summary,
       '',
       '## Project Files:',
       fileList,

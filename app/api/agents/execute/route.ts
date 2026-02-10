@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       fileName: f.name,
       fileType: f.file_type as 'liquid' | 'javascript' | 'css' | 'other',
       content: f.content ?? '',
+      path: f.path ?? undefined,
     }));
 
     const executionId = crypto.randomUUID();

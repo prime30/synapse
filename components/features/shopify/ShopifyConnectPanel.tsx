@@ -36,7 +36,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     connection,
     connected,
     isLoading,
-    connect,
+    connectOAuth,
     disconnect,
     isDisconnecting,
     sync,
@@ -57,7 +57,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     const fullDomain = domain.includes('.myshopify.com')
       ? domain
       : `${domain}.myshopify.com`;
-    connect(fullDomain);
+    connectOAuth(fullDomain);
   };
 
   const handleDisconnect = async () => {

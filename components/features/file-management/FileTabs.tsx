@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { FileTab } from './FileTab';
+import type { FileGroup } from '@/lib/shopify/theme-grouping';
 
 export interface FileMeta {
   id: string;
@@ -18,6 +19,10 @@ interface FileTabsProps {
   onAddFile: () => void;
   onNextTab: () => void;
   onPrevTab: () => void;
+  tabGroups?: FileGroup[];
+  activeGroupId?: string | null;
+  onGroupSelect?: (groupId: string) => void;
+  onGroupClose?: (groupId: string) => void;
 }
 
 export function FileTabs({
@@ -30,6 +35,10 @@ export function FileTabs({
   onAddFile,
   onNextTab,
   onPrevTab,
+  tabGroups,
+  activeGroupId,
+  onGroupSelect,
+  onGroupClose,
 }: FileTabsProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -50,33 +59,96 @@ export function FileTabs({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const hasGroups = Boolean(tabGroups && tabGroups.length > 0);
+
+  const visibleTabs = useMemo(() => {
+    if (!hasGroups || activeGroupId == null) {
+      return openTabs;
+    }
+    const activeGroup = tabGroups!.find((g) => g.id === activeGroupId);
+    if (!activeGroup) {
+      return openTabs;
+    }
+    const groupFileSet = new Set(activeGroup.fileIds);
+    return openTabs.filter((fileId) => groupFileSet.has(fileId));
+  }, [openTabs, hasGroups, activeGroupId, tabGroups]);
+
   return (
-    <div className="flex items-stretch bg-gray-900 border-b border-gray-700 overflow-x-auto">
-      <div className="flex flex-1 min-w-0">
-        {openTabs.map((fileId) => {
-          const meta = fileMetaMap.get(fileId);
-          const fileName = meta?.name ?? fileId;
-          return (
-            <FileTab
-              key={fileId}
-              fileId={fileId}
-              fileName={fileName}
-              isActive={activeFileId === fileId}
-              isUnsaved={unsavedFileIds.has(fileId)}
-              onSelect={() => onTabSelect(fileId)}
-              onClose={() => onTabClose(fileId)}
-            />
-          );
-        })}
+    <div className="flex flex-col">
+      {hasGroups && (
+        <div className="bg-gray-900/80 border-b border-gray-800 px-2 py-1 flex gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => onGroupSelect?.('__all__')}
+            className={`px-2.5 py-1 text-xs rounded-full cursor-pointer transition-colors ${
+              activeGroupId == null
+                ? 'bg-gray-700 text-white'
+                : 'bg-gray-800/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800'
+            }`}
+          >
+            All
+          </button>
+          {tabGroups!.map((group) => (
+            <span
+              key={group.id}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full cursor-pointer transition-colors ${
+                activeGroupId === group.id
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onGroupSelect?.(group.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onGroupSelect?.(group.id);
+                }
+              }}
+            >
+              {group.label}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onGroupClose?.(group.id);
+                }}
+                className="ml-0.5 hover:text-white transition-colors"
+                aria-label={`Close group ${group.label}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-stretch bg-gray-900 border-b border-gray-700 overflow-x-auto">
+        <div className="flex flex-1 min-w-0">
+          {visibleTabs.map((fileId) => {
+            const meta = fileMetaMap.get(fileId);
+            const fileName = meta?.name ?? fileId;
+            return (
+              <FileTab
+                key={fileId}
+                fileId={fileId}
+                fileName={fileName}
+                isActive={activeFileId === fileId}
+                isUnsaved={unsavedFileIds.has(fileId)}
+                onSelect={() => onTabSelect(fileId)}
+                onClose={() => onTabClose(fileId)}
+              />
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={onAddFile}
+          className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/30 border-l border-gray-700/50 transition-colors"
+          aria-label="Add file"
+        >
+          +
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onAddFile}
-        className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/30 border-l border-gray-700/50 transition-colors"
-        aria-label="Add file"
-      >
-        +
-      </button>
     </div>
   );
 }

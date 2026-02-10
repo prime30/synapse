@@ -24,6 +24,6 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface MagicLinkRequest {
+export interface ForgotPasswordRequest {
   email: string;
 }

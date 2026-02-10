@@ -8,6 +8,7 @@ import type {
   DependencyReference,
 } from './types';
 import { SymbolExtractor } from './symbol-extractor';
+import { classifyThemePath } from '@/lib/shopify/theme-structure';
 
 export class DependencyDetector {
   private extractor: SymbolExtractor;
@@ -39,9 +40,64 @@ export class DependencyDetector {
             ...this.detectCssDependencies(file, files)
           );
           break;
+        case 'other':
+          dependencies.push(
+            ...this.detectTemplateSectionDependencies(file, files)
+          );
+          break;
       }
     }
 
+    return dependencies;
+  }
+
+  /**
+   * Template → section chain: template JSON files reference sections by type.
+   */
+  private detectTemplateSectionDependencies(
+    file: FileContext,
+    allFiles: FileContext[]
+  ): FileDependency[] {
+    const path = file.fileName.replace(/\\/g, '/');
+    const classification = classifyThemePath(path);
+    if (classification.role !== 'template' || !path.endsWith('.json')) {
+      return [];
+    }
+    const dependencies: FileDependency[] = [];
+    try {
+      const data = JSON.parse(file.content) as {
+        sections?: Record<string, { type?: string }>;
+      };
+      const sections = data.sections ?? {};
+      for (const sectionType of Object.values(sections).map((s) => s?.type).filter(Boolean)) {
+        const sectionPath = (sectionType as string).endsWith('.liquid')
+          ? `sections/${sectionType}`
+          : `sections/${sectionType}.liquid`;
+        const targetFile = allFiles.find(
+          (f) =>
+            f.fileId !== file.fileId &&
+            (f.fileName === sectionPath ||
+              f.fileName.replace(/\\/g, '/') === sectionPath ||
+              f.fileName.endsWith(`/${sectionPath}`))
+        );
+        if (targetFile) {
+          dependencies.push({
+            sourceFileId: file.fileId,
+            targetFileId: targetFile.fileId,
+            dependencyType: 'template_section',
+            references: [
+              {
+                sourceLocation: { line: 1, column: 1 },
+                symbol: sectionType as string,
+                context: `template references section ${sectionType}`,
+              },
+            ],
+          });
+        }
+      }
+    } catch {
+      // ignore invalid JSON
+    }
     return dependencies;
   }
 

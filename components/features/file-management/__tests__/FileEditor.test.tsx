@@ -13,6 +13,32 @@ vi.mock('@/components/editor/CollaborativeCursors', () => ({
   CollaborativeCursors: () => null,
 }));
 
+// Mock MonacoEditor as a controlled textarea so tests can query by role
+vi.mock('@/components/editor/MonacoEditor', () => ({
+  MonacoEditor: ({
+    value,
+    onChange,
+    onSaveKeyDown,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    onSaveKeyDown?: () => void;
+  }) => (
+    <textarea
+      role="textbox"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+          e.preventDefault();
+          onSaveKeyDown?.();
+        }
+      }}
+      aria-label="Editor"
+    />
+  ),
+}));
+
 // Mock useRemoteCursors hook (imported for type only, but mock for completeness)
 vi.mock('@/hooks/useRemoteCursors', () => ({
   useRemoteCursors: vi.fn(() => []),

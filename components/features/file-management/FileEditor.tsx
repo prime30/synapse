@@ -3,10 +3,12 @@
 import { useEffect, useCallback } from 'react';
 import { useFileEditor } from '@/hooks/useFileEditor';
 import { CollaborativeCursors } from '@/components/editor/CollaborativeCursors';
+import { MonacoEditor, type EditorLanguage } from '@/components/editor/MonacoEditor';
 import type { RemoteCursor } from '@/hooks/useRemoteCursors';
 
 interface FileEditorProps {
   fileId: string | null;
+  fileType?: 'liquid' | 'javascript' | 'css' | 'other';
   onSave?: () => void;
   onMarkDirty?: (dirty: boolean) => void;
   cursors?: RemoteCursor[];
@@ -14,6 +16,7 @@ interface FileEditorProps {
 
 export function FileEditor({
   fileId,
+  fileType = 'liquid',
   onSave,
   onMarkDirty,
   cursors = [],
@@ -31,15 +34,9 @@ export function FileEditor({
     onMarkDirty?.(isDirty);
   }, [isDirty, onMarkDirty]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        save().then(onSave).catch(() => {});
-      }
-    },
-    [save, onSave]
-  );
+  const handleSaveKeyDown = useCallback(() => {
+    save().then(onSave).catch(() => {});
+  }, [save, onSave]);
 
   if (!fileId) {
     return (
@@ -82,13 +79,13 @@ export function FileEditor({
       </div>
       <div className="flex-1 min-h-0 relative">
         <CollaborativeCursors cursors={cursors} />
-        <textarea
+        <MonacoEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="flex-1 w-full h-full min-h-[200px] p-4 font-mono text-sm text-gray-200 bg-gray-900 border-0 resize-none focus:outline-none focus:ring-0"
-          spellCheck={false}
-          style={{ tabSize: 2 }}
+          onChange={setContent}
+          language={fileType as EditorLanguage}
+          onSaveKeyDown={handleSaveKeyDown}
+          height="100%"
+          className="flex-1 w-full min-h-[200px]"
         />
       </div>
     </div>

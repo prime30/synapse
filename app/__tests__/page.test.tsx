@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import Page from "../page";
+import Page from "../(marketing)/page";
 
-describe("Home Page", () => {
+describe("Marketing Landing Page", () => {
   it("should render the page", () => {
     render(<Page />);
-    const heading = screen.getByText(/To get started/i);
+    const heading = screen.getByText(/Ship themes that convert/i);
     expect(heading).toBeDefined();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { signUpSchema, loginSchema, magicLinkSchema } from '@/lib/api/validation';
+import { signUpSchema, loginSchema, forgotPasswordSchema } from '@/lib/api/validation';
 import type { AuthUser, SignUpRequest, LoginRequest } from '@/lib/types/auth';
 
 describe('Auth Validation Schemas', () => {
@@ -32,14 +32,14 @@ describe('Auth Validation Schemas', () => {
     expect(() => loginSchema.parse(data)).not.toThrow();
   });
 
-  it('should validate valid magic link data', () => {
+  it('should validate valid forgot password data', () => {
     expect(() =>
-      magicLinkSchema.parse({ email: 'user@example.com' })
+      forgotPasswordSchema.parse({ email: 'user@example.com' })
     ).not.toThrow();
   });
 
-  it('should reject invalid magic link email', () => {
-    expect(() => magicLinkSchema.parse({ email: 'not-an-email' })).toThrow();
+  it('should reject invalid forgot password email', () => {
+    expect(() => forgotPasswordSchema.parse({ email: 'not-an-email' })).toThrow();
   });
 });
 

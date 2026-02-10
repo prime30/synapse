@@ -1,0 +1,22 @@
+'use client';
+
+import { Preloader } from './preloader';
+import { CustomCursor } from './cursor';
+import { PreloaderProvider } from './PreloaderContext';
+import { AuthModalProvider } from './AuthModalContext';
+import { CursorRevealCode } from './textures/CursorRevealCode';
+
+export function MarketingShell({ children }: { children: React.ReactNode }) {
+  return (
+    <PreloaderProvider>
+      <AuthModalProvider>
+        <Preloader />
+        <CustomCursor />
+        <div className="relative">
+          <CursorRevealCode />
+          {children}
+        </div>
+      </AuthModalProvider>
+    </PreloaderProvider>
+  );
+}

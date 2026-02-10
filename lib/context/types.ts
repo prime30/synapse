@@ -31,6 +31,7 @@ export interface FileDependency {
     | 'css_class'
     | 'js_function'
     | 'liquid_include'
+    | 'template_section'
     | 'data_attribute'
     | 'asset_reference'
     | 'js_import'

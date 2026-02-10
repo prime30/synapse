@@ -1,0 +1,39 @@
+---
+description: Synapse MCP workflow - sync workspace to project, run agents, apply changes. Use when the user asks for Shopify theme changes and Synapse MCP is available.
+alwaysApply: false
+---
+
+# Synapse MCP Workflow
+
+## When to use
+
+Use this workflow when the user asks for changes to a Shopify theme (e.g. "add a section", "fix this Liquid", "refactor this component") and the workspace is (or contains) that theme, and Synapse MCP tools are available.
+
+## Workflow (strict order)
+
+Follow these steps in order. Do not skip steps. If a step fails, do not proceed; surface the error to the user.
+
+1. **Sync**  
+   Call `synapse_sync_workspace_to_project` with:
+   - `projectId`: The Synapse project ID (infer from context or ask the user if there are multiple projects).
+   - `workspacePath`: The **absolute** path to the workspace root (e.g. the repo or theme root opened in Cursor).
+
+2. **Execute**  
+   Call `synapse_execute_agents` with:
+   - `projectId`: Same as in step 1.
+   - `userRequest`: The user's request (or a refined version of it).
+
+3. **Apply**  
+   When execution completes with proposed changes, call `synapse_apply_changes` with:
+   - `executionId`: The execution ID returned from step 2.
+   - `workspacePath`: The same absolute workspace root as in step 1.
+
+## Parameters
+
+- **workspacePath** must be the absolute path to the repo/theme root (e.g. from the Cursor workspace). Do not use a relative path.
+
+## Errors
+
+- If **sync** fails (e.g. AUTH_REQUIRED, path error): do not call execute. Report the error to the user.
+- If **execute** fails or returns no proposed changes: do not call apply. Report the error or result to the user.
+- If **apply** fails: report which files failed and any error message to the user.

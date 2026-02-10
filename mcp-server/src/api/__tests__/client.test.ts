@@ -244,6 +244,26 @@ describe('APIClient', () => {
     });
   });
 
+  describe('updateFileContent', () => {
+    it('sends PUT /api/files/:id with content', async () => {
+      const responseData = { data: { id: 'file-1', name: 'snippet.liquid', content: 'updated' } };
+      fetchSpy = mockFetchResponse(responseData);
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const result = await client.updateFileContent('file-1', 'new content');
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://test.api/api/files/file-1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ content: 'new content' }),
+        }),
+      );
+
+      expect(result).toEqual(responseData);
+    });
+  });
+
   describe('executeAgents', () => {
     it('sends POST /api/agents/execute with projectId and request', async () => {
       const responseData = { data: { executionId: 'exec-1' } };

@@ -19,7 +19,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) throw error;
-    return successResponse({ user: data.user }, 201);
+    return successResponse(
+      {
+        user: data.user,
+        session: data.session,
+        needsEmailConfirmation: !data.session,
+      },
+      201
+    );
   } catch (error) {
     return handleAPIError(error);
   }

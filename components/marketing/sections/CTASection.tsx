@@ -1,0 +1,67 @@
+'use client';
+
+import { useRef } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { PromptExperienceMockup } from '../mockups/PromptExperienceMockup';
+import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
+import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
+
+export function CTASection() {
+  const ref = useRef<HTMLElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+
+  return (
+    <section
+      ref={ref}
+      data-navbar-theme="light"
+      className="relative bg-gradient-to-br from-[#fafaf9] via-[#f0f7f1] to-[#fafaf9] dark:from-[#0a0a0a] dark:via-[#0d1a0f] dark:to-[#0a0a0a] overflow-hidden"
+    >
+      <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden="true">
+        <div className="relative h-full">
+          <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
+          <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          {/* Left column — text + CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <h2 className="text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight">
+              Start <PixelAccent>shipping</PixelAccent>.
+            </h2>
+            <p className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-md">
+              No credit card. Free for solo projects. Your first theme deploys
+              today.
+            </p>
+
+            <div className="mt-10">
+              <MagneticElement strength={6} radius={120}>
+                <button
+                  type="button"
+                  className="h-12 px-8 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
+                >
+                  Sign up
+                </button>
+              </MagneticElement>
+            </div>
+          </motion.div>
+
+          {/* Right column — prompting experience mockup */}
+          <motion.div
+            className="hidden lg:block"
+            initial={{ opacity: 0, x: 40 }}
+            animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <PromptExperienceMockup />
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}

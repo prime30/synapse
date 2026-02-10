@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { validationErrorResponse } from '@/lib/api/response';
 
 export class APIError extends Error {
   constructor(
@@ -39,6 +40,21 @@ export class APIError extends Error {
   }
 }
 
+/**
+ * Friendly error messages for common Supabase Auth error codes.
+ * These are returned in the API JSON response so the UI can display them directly.
+ */
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  invalid_credentials: 'Invalid email or password.',
+  email_not_confirmed: 'Email not confirmed. Check your inbox for a confirmation link.',
+  user_already_exists: 'An account with this email already exists.',
+  over_email_send_rate_limit: 'Too many requests. Please wait a minute and try again.',
+  user_not_found: 'No account found with this email.',
+  weak_password: 'Password is too weak. Use at least 8 characters.',
+  same_password: 'New password must be different from the old password.',
+  signup_disabled: 'Signups are currently disabled.',
+};
+
 export function handleAPIError(error: unknown): NextResponse {
   if (error instanceof APIError) {
     return NextResponse.json(
@@ -54,6 +70,40 @@ export function handleAPIError(error: unknown): NextResponse {
       { error: err.message ?? 'Resource already exists', code: 'CONFLICT' },
       { status: 409 }
     );
+  }
+
+  // Map Supabase Auth errors to actionable responses
+  const authErr = error as {
+    __isAuthError?: boolean;
+    status?: number;
+    code?: string;
+    message?: string;
+    name?: string;
+  };
+  if (
+    (authErr?.__isAuthError || authErr?.name?.includes('AuthApiError')) &&
+    typeof authErr?.status === 'number'
+  ) {
+    const code = authErr.code ?? 'auth_error';
+    const friendlyMessage =
+      AUTH_ERROR_MESSAGES[code] ?? authErr.message ?? 'Authentication error';
+
+    return NextResponse.json(
+      { error: friendlyMessage, code: code.toUpperCase() },
+      { status: authErr.status }
+    );
+  }
+
+  // Handle validation errors thrown by validateBody (Record<string, string[]>)
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    !(error instanceof Error) &&
+    !('__isAuthError' in error) &&
+    Object.keys(error as Record<string, unknown>).length > 0 &&
+    Object.values(error as Record<string, unknown>).every(Array.isArray)
+  ) {
+    return validationErrorResponse(error as Record<string, string[]>);
   }
 
   console.error('Unhandled error:', error);

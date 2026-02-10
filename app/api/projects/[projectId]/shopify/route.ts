@@ -5,6 +5,7 @@ import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { createClient } from '@/lib/supabase/server';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
+import { ShopifyAdminAPI } from '@/lib/shopify/admin-api';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -31,6 +32,64 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return successResponse({
       connected: !!connection,
       connection: connection ?? null,
+    });
+  } catch (error) {
+    return handleAPIError(error);
+  }
+}
+
+/**
+ * POST /api/projects/[projectId]/shopify
+ * Manually connect a Shopify store using a store domain and Admin API access token.
+ */
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { projectId } = await params;
+    await requireProjectAccess(request, projectId);
+
+    const body = await request.json().catch(() => ({}));
+    const storeDomain = typeof body.storeDomain === 'string' ? body.storeDomain.trim() : '';
+    const adminApiToken = typeof body.adminApiToken === 'string' ? body.adminApiToken.trim() : '';
+
+    if (!storeDomain || !adminApiToken) {
+      throw APIError.badRequest('storeDomain and adminApiToken are required');
+    }
+
+    // Normalize domain
+    const fullDomain = storeDomain.includes('.myshopify.com')
+      ? storeDomain
+      : `${storeDomain}.myshopify.com`;
+
+    // Validate credentials by attempting to list themes
+    const testApi = new ShopifyAdminAPI(fullDomain, adminApiToken);
+    try {
+      await testApi.listThemes();
+    } catch {
+      throw APIError.badRequest(
+        'Could not connect to Shopify. Please check your store domain and Admin API token.'
+      );
+    }
+
+    // Store the connection (encrypted)
+    const tokenManager = new ShopifyTokenManager();
+    const connection = await tokenManager.storeConnection(
+      projectId,
+      fullDomain,
+      adminApiToken,
+      ['read_themes', 'write_themes']
+    );
+
+    return successResponse({
+      connected: true,
+      connection: {
+        id: connection.id,
+        store_domain: connection.store_domain,
+        sync_status: connection.sync_status,
+        scopes: connection.scopes,
+        last_sync_at: connection.last_sync_at,
+        created_at: connection.created_at,
+        updated_at: connection.updated_at,
+      },
     });
   } catch (error) {
     return handleAPIError(error);

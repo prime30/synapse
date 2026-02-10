@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/specification/main/schema/mcp-config-schema.json",
+  "mcpServers": {
+    "synapse": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "cwd": "<ABSOLUTE_PATH_TO_REPO>/mcp-server",
+      "env": {
+        "SYNAPSE_API_BASE": "http://localhost:3000"
+      }
+    }
+  }
+}

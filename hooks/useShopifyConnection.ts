@@ -52,10 +52,38 @@ export function useShopifyConnection(projectId: string) {
   });
 
   // ── Connect: redirect to Shopify OAuth install flow ───────────────────────
-  const connect = (shop: string) => {
+  const connectOAuth = (shop: string) => {
     const params = new URLSearchParams({ shop, projectId });
     window.location.href = `/api/shopify/install?${params.toString()}`;
   };
+
+  // ── Connect: manual Admin API token ──────────────────────────────────────
+  const connectManualMutation = useMutation({
+    mutationFn: async ({
+      storeDomain,
+      adminApiToken,
+    }: {
+      storeDomain: string;
+      adminApiToken: string;
+    }): Promise<ConnectionStatus> => {
+      const res = await fetch(`/api/projects/${projectId}/shopify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeDomain, adminApiToken }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? 'Failed to connect');
+      }
+      const json = await res.json();
+      return json.data as ConnectionStatus;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['shopify-connection', projectId],
+      });
+    },
+  });
 
   // ── Disconnect ────────────────────────────────────────────────────────────
   const disconnectMutation = useMutation({
@@ -126,7 +154,10 @@ export function useShopifyConnection(projectId: string) {
     refetch: statusQuery.refetch,
 
     // Actions
-    connect,
+    connectOAuth,
+    connectManual: connectManualMutation.mutateAsync,
+    isConnecting: connectManualMutation.isPending,
+    connectError: connectManualMutation.error,
     disconnect: disconnectMutation.mutateAsync,
     isDisconnecting: disconnectMutation.isPending,
 

@@ -41,6 +41,21 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
     description:
       'Your session has expired. Please sign in again to continue.',
   },
+  oauth_config: {
+    title: 'Sign-In Not Configured',
+    description:
+      'Google sign-in is not set up. Please use email and password to sign in.',
+  },
+  oauth_not_configured: {
+    title: 'Google Sign-In Not Configured',
+    description:
+      'Google sign-in is not configured for this project. Add your Google Client ID and Client Secret in Supabase Dashboard under Authentication → Providers → Google, or sign in with email and password.',
+  },
+  missing_token: {
+    title: 'Invalid or Expired Link',
+    description:
+      'This link is invalid or has already been used. Request a new password reset link and try again.',
+  },
   Default: {
     title: 'Authentication Error',
     description:

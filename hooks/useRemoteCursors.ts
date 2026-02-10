@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 export interface RemoteCursor {
   userId: string;
@@ -11,42 +12,46 @@ export interface RemoteCursor {
 
 interface UseRemoteCursorsOptions {
   workspaceId: string;
+  /** No longer used; kept for API compatibility. Cursors use Supabase Realtime. */
   token?: string;
 }
 
-export function useRemoteCursors({ workspaceId, token }: UseRemoteCursorsOptions) {
+export function useRemoteCursors({ workspaceId }: UseRemoteCursorsOptions) {
   const [cursors, setCursors] = useState<Record<string, RemoteCursor>>({});
-
-  const wsUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (token) params.set('token', token);
-    return `/api/ws/workspace/${workspaceId}?${params.toString()}`;
-  }, [workspaceId, token]);
 
   useEffect(() => {
     if (!workspaceId) return;
-    const ws = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type !== 'cursor_update') return;
-        const cursor: RemoteCursor = {
-          userId: msg.userId,
-          filePath: msg.filePath,
-          position: msg.position,
-          color: msg.color,
-        };
-        setCursors((prev) => ({ ...prev, [msg.userId]: cursor }));
-      } catch {
-        // ignore malformed messages
-      }
-    };
+    const client = createClient();
+    const channelName = `workspace:${workspaceId}`;
+    const channel = client.channel(channelName);
+
+    (channel as { on(type: string, filter: { event: string }, callback: (payload: unknown) => void): typeof channel })
+      .on(
+        'broadcast',
+        { event: 'cursor_update' },
+        (payload: unknown) => {
+          const p = payload as { userId?: string; filePath?: string; position?: { line: number; column: number }; color?: string };
+          const userId = p.userId;
+          if (!userId) return;
+          setCursors((prev) => ({
+            ...prev,
+            [userId]: {
+              userId,
+              filePath: p.filePath,
+              position: p.position,
+              color: p.color,
+            },
+          }));
+        }
+      )
+      .subscribe();
 
     return () => {
-      ws.close();
+      channel.unsubscribe();
+      client.removeChannel(channel);
     };
-  }, [workspaceId, wsUrl]);
+  }, [workspaceId]);
 
   return Object.values(cursors);
 }

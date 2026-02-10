@@ -43,6 +43,8 @@ export interface FileContext {
   fileName: string;
   fileType: 'liquid' | 'javascript' | 'css' | 'other';
   content: string;
+  /** Theme-relative path (e.g. sections/header.liquid) for theme structure awareness */
+  path?: string;
 }
 
 /** Error reported by an agent */

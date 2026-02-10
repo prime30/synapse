@@ -13,7 +13,7 @@ export interface ProtectedRouteConfig {
 }
 
 export const DEFAULT_ROUTE_CONFIG: ProtectedRouteConfig = {
-  publicPaths: ['/', '/auth/signin', '/auth/error'],
+  publicPaths: ['/', '/auth/signin', '/auth/confirm', '/auth/error', '/auth/forgot-password', '/auth/reset-password', '/pricing', '/signup', '/welcome', '/docs', '/blog'],
   apiPublicPaths: ['/api/auth/', '/api/health'],
 };
 
@@ -34,7 +34,16 @@ export function isPublicPath(
   }
 
   // Prefix match against public API paths
-  return config.apiPublicPaths.some((prefix) => pathname.startsWith(prefix));
+  if (config.apiPublicPaths.some((prefix) => pathname.startsWith(prefix))) {
+    return true;
+  }
+
+  // Marketing subpaths (docs/*, blog/*)
+  if (pathname.startsWith('/docs/') || pathname.startsWith('/blog/')) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

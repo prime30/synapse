@@ -25,7 +25,7 @@ export const loginSchema = z.object({
   password: passwordSchema,
 });
 
-export const magicLinkSchema = z.object({
+export const forgotPasswordSchema = z.object({
   email: emailSchema,
 });
 
