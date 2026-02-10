@@ -20,7 +20,7 @@ function ConfirmContent() {
 
   useEffect(() => {
     if (handled.current) return;
-    const next = searchParams.get('next') ?? '/';
+    const next = searchParams.get('next') ?? '/projects?signed_in=1';
 
     async function run() {
       // Capture type from URL before anything else (client may clear hash)

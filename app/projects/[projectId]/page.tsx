@@ -1,8 +1,9 @@
 'use client';
 
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
 import { FileList } from '@/components/features/file-management/FileList';
 import { FileViewer } from '@/components/features/file-management/FileViewer';
@@ -221,6 +222,11 @@ export default function ProjectPage() {
 
   return (
     <div className="flex h-screen flex-col bg-gray-950 text-gray-200">
+      {/* Login transition overlay (activates when ?signed_in=1 is present) */}
+      <Suspense fallback={null}>
+        <LoginTransition />
+      </Suspense>
+
       {shouldShowRecoveryLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950">
           <div className="flex items-center gap-3 text-gray-400">

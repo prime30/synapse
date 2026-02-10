@@ -199,7 +199,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
         }
 
         onClose();
-        router.push('/welcome');
+        router.push('/projects?signed_in=1');
         router.refresh();
       } catch (err) {
         setErrorMessage(
