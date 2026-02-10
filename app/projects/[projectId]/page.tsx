@@ -38,7 +38,6 @@ export default function ProjectPage() {
   const {
     projects,
     isLoading: isLoadingProjects,
-    createProject,
     setLastProjectId,
   } = useProjects();
   const { connected, connection, themes } = useShopifyConnection(projectId);
@@ -58,6 +57,7 @@ export default function ProjectPage() {
   // Recover invalid/stale project URLs:
   // 1) Redirect to first accessible project when possible
   // 2) If user has no projects, auto-create an Untitled project
+  // Note: only attempt recovery once per projectId to avoid loops
   useEffect(() => {
     if (isLoadingProjects || recoveryAttemptedRef.current) return;
     if (isCurrentProjectAccessible) return;
@@ -69,18 +69,12 @@ export default function ProjectPage() {
       return;
     }
 
-    createProject({ name: 'Untitled project' })
-      .then((created) => {
-        router.replace(`/projects/${created.id}`);
-      })
-      .catch(() => {
-        setToast('Failed to recover project context');
-      });
+    // No projects found — but don't auto-create; we may have just
+    // been redirected here from project creation. Just let the IDE load.
   }, [
     isLoadingProjects,
     isCurrentProjectAccessible,
     projects,
-    createProject,
     router,
   ]);
 
@@ -118,8 +112,10 @@ export default function ProjectPage() {
   );
 
   const hasFiles = rawFiles.length > 0;
-  const shouldShowRecoveryLoading =
-    isLoadingProjects || !isCurrentProjectAccessible;
+  // Only block the UI while projects are actively loading for the first time.
+  // Once loading finishes, show the IDE even if the project isn't in the list
+  // (the list RPC may not be deployed yet, or the project was just created).
+  const shouldShowRecoveryLoading = isLoadingProjects;
 
   // ── Toasts ────────────────────────────────────────────────────────────────
   useEffect(() => {

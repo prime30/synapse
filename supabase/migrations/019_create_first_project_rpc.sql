@@ -26,7 +26,7 @@ BEGIN
   WHERE user_id = v_user_id
   LIMIT 1;
 
-  -- If no org, create personal org (trigger will add user to organization_members)
+  -- If no org, create personal org and add user as owner member
   IF v_org_id IS NULL THEN
     INSERT INTO public.organizations (name, slug, owner_id)
     VALUES (
@@ -35,6 +35,11 @@ BEGIN
       v_user_id
     )
     RETURNING id INTO v_org_id;
+
+    -- Explicitly add user to organization_members (don't rely on trigger)
+    INSERT INTO public.organization_members (organization_id, user_id, role)
+    VALUES (v_org_id, v_user_id, 'owner')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
   END IF;
 
   -- Create project
