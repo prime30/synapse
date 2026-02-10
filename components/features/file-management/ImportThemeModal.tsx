@@ -32,7 +32,6 @@ export function ImportThemeModal({
   // ── From Store state ─────────────────────────────────────────────────────
   const [storeDomain, setStoreDomain] = useState('');
   const [adminToken, setAdminToken] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
   const [storeStep, setStoreStep] = useState<StoreStep>('connect');
   const [storeError, setStoreError] = useState<string | null>(null);
@@ -94,8 +93,6 @@ export function ImportThemeModal({
     setIsUploading(true);
 
     try {
-      // TODO: POST the file to `/api/projects/${projectId}/files/upload`
-      // For now, simulate a successful upload
       const formData = new FormData();
       formData.append('file', zipFile);
 
@@ -109,7 +106,9 @@ export function ImportThemeModal({
         throw new Error(json.error ?? 'Upload failed');
       }
 
-      setImportSuccess(`Successfully imported theme from ${zipFile.name}`);
+      const result = await res.json();
+      const count = result.data?.imported ?? 0;
+      setImportSuccess(`Imported ${count} file${count !== 1 ? 's' : ''} from ${zipFile.name}`);
       onImportSuccess?.();
       setTimeout(() => onClose(), 1500);
     } catch (err) {
@@ -294,70 +293,47 @@ export function ImportThemeModal({
                   >
                     Store domain
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="store-domain"
-                      type="text"
-                      value={storeDomain}
-                      onChange={(e) => setStoreDomain(e.target.value)}
-                      onKeyDown={(e) =>
-                        e.key === 'Enter' && handleStoreConnect()
-                      }
-                      placeholder="store-name.myshopify.com"
-                      className="flex-1 px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleStoreConnect}
-                      disabled={!storeDomain.trim() || isConnecting}
-                      className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {isConnecting ? 'Connecting…' : 'Connect'}
-                    </button>
-                  </div>
+                  <input
+                    id="store-domain"
+                    type="text"
+                    value={storeDomain}
+                    onChange={(e) => setStoreDomain(e.target.value)}
+                    placeholder="store-name.myshopify.com"
+                    className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
 
-                  {/* Advanced collapsible */}
-                  <div className="border border-gray-700 rounded">
-                    <button
-                      type="button"
-                      onClick={() => setAdvancedOpen(!advancedOpen)}
-                      className="flex items-center justify-between w-full px-3 py-2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                    >
-                      <span>Advanced</span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                        className={`w-3.5 h-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-                        />
-                      </svg>
-                    </button>
-                    {advancedOpen && (
-                      <div className="px-3 pb-3 space-y-2">
-                        <label
-                          htmlFor="admin-token"
-                          className="block text-xs font-medium text-gray-400"
-                        >
-                          Admin API token
-                        </label>
-                        <input
-                          id="admin-token"
-                          type="password"
-                          value={adminToken}
-                          onChange={(e) => setAdminToken(e.target.value)}
-                          placeholder="shpat_..."
-                          className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <label
+                    htmlFor="admin-token"
+                    className="block text-xs font-medium text-gray-400"
+                  >
+                    Admin API access token
+                  </label>
+                  <input
+                    id="admin-token"
+                    type="password"
+                    value={adminToken}
+                    onChange={(e) => setAdminToken(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && handleStoreConnect()
+                    }
+                    placeholder="shpat_..."
+                    className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Create a token in your Shopify admin:{' '}
+                    <span className="text-gray-400">Settings &rarr; Apps &rarr; Develop apps &rarr; Create app &rarr; Configure Admin API scopes</span>.
+                    Enable <span className="text-gray-300">read_themes</span> and <span className="text-gray-300">write_themes</span>, then install the app and copy the Admin API access token.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleStoreConnect}
+                    disabled={!storeDomain.trim() || !adminToken.trim() || isConnecting}
+                    className="w-full px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isConnecting ? 'Connecting…' : 'Connect Store'}
+                  </button>
 
                   {(storeError || connectError) && (
                     <div className="p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm">
