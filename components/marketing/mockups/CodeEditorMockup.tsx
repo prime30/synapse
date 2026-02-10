@@ -450,7 +450,7 @@ export function CodeEditorMockup() {
       setThinkingLabel('');
       setActiveAgent(4); // Review
       setComplete(true);
-      timerRef.current = setTimeout(() => setPhase('preview'), 1000);
+      timerRef.current = setTimeout(() => setPhase('preview'), 1500);
     }
 
     if (phase === 'preview') {
@@ -515,199 +515,224 @@ export function CodeEditorMockup() {
         )}
       </div>
 
-      {/* Body — cross-fade between editor and preview (fixed height) */}
+      {/* Body — editor base layer + review overlay + slide-up preview */}
       <div className="h-[320px] relative overflow-hidden">
-        <AnimatePresence>
-          {isPreview ? (
-            <motion.div
-              key="preview"
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <StorefrontPreview />
-            </motion.div>
+        {/* ── Editor (always rendered) ─────────────────────────────────── */}
+        <div className="absolute inset-0 flex">
+          {isCodingOrComplete ? (
+            /* ── 3-pane layout during coding/complete ── */
+            <div className="flex-1 flex flex-col overflow-hidden w-full">
+              {/* AI thinking bar (only during coding) */}
+              <AnimatePresence>
+                {phase === 'coding' && (
+                  <motion.div
+                    className="flex items-center gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/5 shrink-0"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ThinkingCaretIcon />
+                    <span className="text-[11px] text-stone-400 dark:text-white/40">
+                      {thinkingLabel}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="flex flex-1 min-h-0">
+                <AgentCodePane
+                  file="hero.liquid"
+                  agent="Liquid"
+                  color="bg-green-500"
+                  lines={liquidLines}
+                  isWriting={liquidLines.length < CODE_LINES.length}
+                  isDone={liquidLines.length >= CODE_LINES.length && CODE_LINES.length > 0}
+                />
+                <AgentCodePane
+                  file="hero.css"
+                  agent="CSS"
+                  color="bg-pink-400"
+                  lines={cssLines}
+                  isWriting={cssLines.length < CSS_LINES.length}
+                  isDone={cssLines.length >= CSS_LINES.length && CSS_LINES.length > 0}
+                />
+                <AgentCodePane
+                  file="hero.js"
+                  agent="JS"
+                  color="bg-amber-400"
+                  lines={jsLines}
+                  isWriting={jsLines.length < JS_LINES.length}
+                  isDone={jsLines.length >= JS_LINES.length && JS_LINES.length > 0}
+                />
+              </div>
+            </div>
           ) : (
-            <motion.div
-              key="editor"
-              className="absolute inset-0 flex"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              {isCodingOrComplete ? (
-                /* ── 3-pane layout during coding/complete ── */
-                <div className="flex-1 flex flex-col overflow-hidden w-full">
-                  {/* AI thinking bar (only during coding) */}
-                  <AnimatePresence>
-                    {phase === 'coding' && (
-                      <motion.div
-                        className="flex items-center gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/5 shrink-0"
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <ThinkingCaretIcon />
-                        <span className="text-[11px] text-stone-400 dark:text-white/40">
-                          {thinkingLabel}
-                        </span>
-                        <ThinkingDots />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <div className="flex flex-1 min-h-0">
-                    <AgentCodePane
-                      file="hero.liquid"
-                      agent="Liquid"
-                      color="bg-green-500"
-                      lines={liquidLines}
-                      isWriting={liquidLines.length < CODE_LINES.length}
-                      isDone={liquidLines.length >= CODE_LINES.length && CODE_LINES.length > 0}
-                    />
-                    <AgentCodePane
-                      file="hero.css"
-                      agent="CSS"
-                      color="bg-pink-400"
-                      lines={cssLines}
-                      isWriting={cssLines.length < CSS_LINES.length}
-                      isDone={cssLines.length >= CSS_LINES.length && CSS_LINES.length > 0}
-                    />
-                    <AgentCodePane
-                      file="hero.js"
-                      agent="JS"
-                      color="bg-amber-400"
-                      lines={jsLines}
-                      isWriting={jsLines.length < JS_LINES.length}
-                      isDone={jsLines.length >= JS_LINES.length && JS_LINES.length > 0}
-                    />
+            /* ── Sidebar + single editor (prompt / thinking / planning) ── */
+            <>
+              <div className="w-40 border-r border-stone-200 dark:border-white/5 bg-stone-50/50 dark:bg-transparent p-3 hidden sm:block">
+                <div className="text-[9px] text-stone-400 dark:text-white/30 tracking-widest uppercase mb-3">Files</div>
+                {FILES.map((f) => (
+                  <div
+                    key={f.name}
+                    className={`py-1.5 px-2 rounded text-[11px] ${
+                      f.active
+                        ? 'bg-blue-50 dark:bg-sky-500/10 text-blue-600 dark:text-sky-400 font-medium'
+                        : 'text-stone-400 dark:text-white/40'
+                    }`}
+                  >
+                    {f.name}
                   </div>
-                </div>
-              ) : (
-                /* ── Sidebar + single editor (prompt / thinking / planning) ── */
-                <>
-                  <div className="w-40 border-r border-stone-200 dark:border-white/5 bg-stone-50/50 dark:bg-transparent p-3 hidden sm:block">
-                    <div className="text-[9px] text-stone-400 dark:text-white/30 tracking-widest uppercase mb-3">Files</div>
-                    {FILES.map((f) => (
-                      <div
-                        key={f.name}
-                        className={`py-1.5 px-2 rounded text-[11px] ${
-                          f.active
-                            ? 'bg-blue-50 dark:bg-sky-500/10 text-blue-600 dark:text-sky-400 font-medium'
-                            : 'text-stone-400 dark:text-white/40'
-                        }`}
-                      >
-                        {f.name}
-                      </div>
-                    ))}
-                  </div>
+                ))}
+              </div>
 
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <AnimatePresence>
-                      {promptText && (
-                        <motion.div
-                          className="flex items-start gap-2 px-4 py-3 border-b border-stone-100 dark:border-white/5 bg-stone-50/50 dark:bg-white/[0.02] shrink-0"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <div className="w-5 h-5 rounded-full bg-stone-200 dark:bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-[9px] font-medium text-stone-500 dark:text-white/50">U</span>
-                          </div>
-                          <p className="text-[12px] text-stone-600 dark:text-white/60 leading-relaxed">
-                            {promptText}
-                            {phase === 'prompt' && (
-                              <motion.span
-                                className="inline-block w-[2px] h-[13px] bg-stone-400 dark:bg-white/40 ml-0.5 align-middle"
-                                animate={{ opacity: [1, 0] }}
-                                transition={{ duration: 0.6, repeat: Infinity }}
-                              />
-                            )}
-                          </p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                      {showThinking && (
-                        <motion.div
-                          className="flex items-center gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/5 shrink-0"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ThinkingCaretIcon />
-                          <span className="text-[11px] text-stone-400 dark:text-white/40">
-                            {thinkingLabel}
-                          </span>
-                          <ThinkingDots />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                      {planVisible.length > 0 && (
-                        <motion.div
-                          className="px-4 py-2 space-y-1 border-b border-stone-100 dark:border-white/5 shrink-0"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          {PLAN_STEPS.map((step, i) => (
-                            <motion.div
-                              key={step}
-                              className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-white/40"
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={planVisible.includes(i) ? { opacity: 1, x: 0 } : {}}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <span className="w-1 h-1 rounded-full bg-stone-300 dark:bg-white/20" />
-                              {step}
-                            </motion.div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <div
-                      ref={editorRef}
-                      className="flex-1 p-4 font-mono text-[12px] leading-6 overflow-y-auto overflow-x-hidden"
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <AnimatePresence>
+                  {promptText && (
+                    <motion.div
+                      className="flex items-start gap-2 px-4 py-3 border-b border-stone-100 dark:border-white/5 bg-stone-50/50 dark:bg-white/[0.02] shrink-0"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
                     >
-                      <div className="flex">
-                        <div className="text-stone-300 dark:text-white/20 select-none mr-4 text-right w-6 shrink-0">
-                          {liquidLines.map((_, i) => (
-                            <div key={i}>{i + 1}</div>
-                          ))}
-                        </div>
-                        <div className="flex-1 overflow-hidden text-stone-700 dark:text-white/60">
-                          {liquidLines.map((line, i) => (
-                            <motion.div
-                              key={i}
-                              initial={{ opacity: 0, y: 4 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.08 }}
-                            >
-                              <LiquidCodeLine line={line} compact={false} />
-                            </motion.div>
-                          ))}
-                          {lineCount === 0 && (phase === 'prompt' || phase === 'thinking' || phase === 'planning') && (
-                            <div className="text-stone-300 dark:text-white/15 italic text-[11px]">
-                              Waiting for instructions...
-                            </div>
-                          )}
-                        </div>
+                      <div className="w-5 h-5 rounded-full bg-stone-200 dark:bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-[9px] font-medium text-stone-500 dark:text-white/50">U</span>
                       </div>
+                      <p className="text-[12px] text-stone-600 dark:text-white/60 leading-relaxed">
+                        {promptText}
+                        {phase === 'prompt' && (
+                          <motion.span
+                            className="inline-block w-[2px] h-[13px] bg-stone-400 dark:bg-white/40 ml-0.5 align-middle"
+                            animate={{ opacity: [1, 0] }}
+                            transition={{ duration: 0.6, repeat: Infinity }}
+                          />
+                        )}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showThinking && (
+                    <motion.div
+                      className="flex items-center gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/5 shrink-0"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <ThinkingCaretIcon />
+                      <span className="text-[11px] text-stone-400 dark:text-white/40">
+                        {thinkingLabel}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {planVisible.length > 0 && (
+                    <motion.div
+                      className="px-4 py-2 space-y-1 border-b border-stone-100 dark:border-white/5 shrink-0"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      {PLAN_STEPS.map((step, i) => (
+                        <motion.div
+                          key={step}
+                          className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-white/40"
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={planVisible.includes(i) ? { opacity: 1, x: 0 } : {}}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <span className="w-1 h-1 rounded-full bg-stone-300 dark:bg-white/20" />
+                          {step}
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div
+                  ref={editorRef}
+                  className="flex-1 p-4 font-mono text-[12px] leading-6 overflow-y-auto overflow-x-hidden"
+                >
+                  <div className="flex">
+                    <div className="text-stone-300 dark:text-white/20 select-none mr-4 text-right w-6 shrink-0">
+                      {liquidLines.map((_, i) => (
+                        <div key={i}>{i + 1}</div>
+                      ))}
+                    </div>
+                    <div className="flex-1 overflow-hidden text-stone-700 dark:text-white/60">
+                      {liquidLines.map((line, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.08 }}
+                        >
+                          <LiquidCodeLine line={line} compact={false} />
+                        </motion.div>
+                      ))}
+                      {lineCount === 0 && (phase === 'prompt' || phase === 'thinking' || phase === 'planning') && (
+                        <div className="text-stone-300 dark:text-white/15 italic text-[11px]">
+                          Waiting for instructions...
+                        </div>
+                      )}
                     </div>
                   </div>
-                </>
-              )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Review overlay (during complete phase) ───────────────────── */}
+        <AnimatePresence>
+          {complete && !isPreview && (
+            <motion.div
+              className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 dark:bg-[#111]/80 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <motion.div
+                className="flex flex-col items-center gap-3"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                  <span className="text-[13px] font-medium text-stone-600 dark:text-white/70">Review Agent</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" className="text-green-600 dark:text-green-400">
+                      <path d="M2 5.5L4 7.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <span className="text-[13px] text-green-600 dark:text-green-400 font-medium">All checks passed</span>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Preview (slides up from bottom) ──────────────────────────── */}
+        <AnimatePresence>
+          {isPreview && (
+            <motion.div
+              className="absolute inset-x-0 bottom-0 z-20 h-full bg-white dark:bg-[#111]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <StorefrontPreview />
             </motion.div>
           )}
         </AnimatePresence>
@@ -771,56 +796,33 @@ export function CodeEditorMockup() {
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-/** 7-dot up-caret: one lit dot travels through positions; others dim. */
+/** Equilateral-triangle caret: 5 dots, animation sweeps bottom-left → apex → bottom-right. */
+const CARET_ORDER = [3, 1, 0, 2, 4]; // animation sequence
 function ThinkingCaretIcon() {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [step, setStep] = useState(0);
   useEffect(() => {
     const id = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % 7);
-    }, 140);
+      setStep((prev) => (prev + 1) % CARET_ORDER.length);
+    }, 400);
     return () => clearInterval(id);
   }, []);
-  const dotClass = (i: number) =>
-    i === activeIndex
-      ? 'bg-stone-600 dark:bg-white/80'
-      : 'bg-stone-300 dark:bg-white/25';
+  const activeDot = CARET_ORDER[step];
+  const dot = (i: number) =>
+    `w-1 h-1 rounded-full absolute transition-colors duration-200 ${
+      i === activeDot ? 'bg-stone-600 dark:bg-white/80' : 'bg-stone-300 dark:bg-white/20'
+    }`;
+  /* 16 x 14 px box — equilateral triangle positions (dot = 4px)
+   *        [0]          x:6  y:0
+   *      [1] [2]        x:3  y:5   x:9  y:5
+   *     [3]   [4]       x:0  y:10  x:12 y:10
+   */
   return (
-    <span className="inline-flex flex-col items-center gap-0.5" aria-hidden>
-      <span className="flex justify-center">
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(0)}`} />
-      </span>
-      <span className="flex gap-1">
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(1)}`} />
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(2)}`} />
-      </span>
-      <span className="flex gap-1">
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(3)}`} />
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(4)}`} />
-      </span>
-      <span className="flex gap-1">
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(5)}`} />
-        <span className={`w-1 h-1 rounded-full transition-colors duration-150 ${dotClass(6)}`} />
-      </span>
-    </span>
-  );
-}
-
-function ThinkingDots() {
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className="w-1 h-1 rounded-full bg-stone-400 dark:bg-white/40"
-          animate={{ opacity: [0.2, 1, 0.2] }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            delay: i * 0.2,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
+    <span className="relative inline-block" style={{ width: 16, height: 14 }} aria-hidden>
+      <span className={dot(0)} style={{ left: 6, top: 0 }} />
+      <span className={dot(1)} style={{ left: 3, top: 5 }} />
+      <span className={dot(2)} style={{ left: 9, top: 5 }} />
+      <span className={dot(3)} style={{ left: 0, top: 10 }} />
+      <span className={dot(4)} style={{ left: 12, top: 10 }} />
     </span>
   );
 }

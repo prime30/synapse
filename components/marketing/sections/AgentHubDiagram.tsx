@@ -160,12 +160,10 @@ function AgentCard({
 
   return (
     <div
-      className={`relative rounded-xl p-4 min-h-[88px] transition-all duration-500 ease-out ${
-        active ? 'border-2' : 'border'
-      } ${
+      className={`relative rounded-xl p-4 min-h-[88px] transition-all duration-500 ease-out border-2 ${
         active
           ? `${agent.activeBorder} ${agent.activeBg} ${agent.glowShadow}`
-          : 'border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm'
+          : 'border-stone-200/60 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm'
       }`}
     >
       <div className="relative">
@@ -189,8 +187,8 @@ function AgentCard({
 
         {/* Status row: separator above; shimmer when thinking, solid + check when completed */}
         <div
-          className={`mt-2 pt-2 min-h-[28px] flex items-center gap-1.5 ${
-            showTask ? 'border-t border-stone-100 dark:border-white/5' : ''
+          className={`mt-2 pt-2 min-h-[28px] flex items-center gap-1.5 border-t ${
+            showTask ? 'border-stone-100 dark:border-white/5' : 'border-transparent'
           }`}
         >
           {/* Lambda — only while actively thinking */}
@@ -401,10 +399,10 @@ export function AgentHubDiagram() {
         {/* Workflow diagram */}
         {inView && (
           <LayoutGroup>
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-2xl mx-auto min-h-[720px] md:min-h-[780px]">
               {isStacked ? (
                 /* ── Stacked phase: cards piled as a deck ─────────── */
-                <div className="flex justify-center items-center" style={{ minHeight: DIAGRAM_MIN_HEIGHT }}>
+                <div className="flex justify-center items-center">
                   <div className="relative w-full max-w-xs">
                     {ALL_AGENTS.map((agent, i) => (
                       <motion.div

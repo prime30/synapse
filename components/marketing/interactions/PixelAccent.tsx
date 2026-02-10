@@ -25,7 +25,7 @@ export function PixelAccent({
   return (
     <motion.span
       ref={ref}
-      className={`inline-block text-accent font-pixel-circle ${className ?? ''}`}
+      className={`inline-block text-accent font-pixel-circle leading-[1.05] ${className ?? ''}`}
       initial={{ opacity: 0, filter: 'blur(3px)' }}
       animate={inView ? { opacity: 1, filter: 'blur(0px)' } : {}}
       transition={{ duration: 0.6, delay, ease: 'easeOut' }}

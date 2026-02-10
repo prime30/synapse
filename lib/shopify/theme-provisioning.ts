@@ -13,6 +13,10 @@ export async function ensureDevTheme(connectionId: string): Promise<string> {
   const tokenManager = new ShopifyTokenManager();
   const connection = await tokenManager.getConnectionById(connectionId);
 
+  // #region agent log H3
+  fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H3',location:'lib/shopify/theme-provisioning.ts:17',message:'ensureDevTheme start',data:{connectionId,hasConnection:!!connection,hasExistingThemeId:!!connection?.theme_id,hasZipEnv:!!(process.env.SHOPIFY_DEV_THEME_ZIP_URL?.trim()||process.env.SHOPIFY_DEV_THEME_SRC?.trim())},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   if (!connection) {
     throw APIError.notFound('Shopify connection not found');
   }
@@ -36,6 +40,9 @@ export async function ensureDevTheme(connectionId: string): Promise<string> {
     process.env.SHOPIFY_DEV_THEME_ZIP_URL?.trim() ||
     process.env.SHOPIFY_DEV_THEME_SRC?.trim();
   if (!zipUrl) {
+    // #region agent log H3
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H3',location:'lib/shopify/theme-provisioning.ts:44',message:'ensureDevTheme missing zip env',data:{connectionId,projectId:connection.project_id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     throw new APIError(
       'Dev theme creation requires SHOPIFY_DEV_THEME_ZIP_URL (or SHOPIFY_DEV_THEME_SRC) to be set. Use a public URL to a Shopify theme ZIP.',
       'MISSING_DEV_THEME_ZIP',

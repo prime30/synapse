@@ -188,7 +188,7 @@ function LoginTransitionInner({
   const showFront = phase === 'reveal' || phase === 'toast' || phase === 'wipe';
   const showToast = phase === 'toast' || phase === 'wipe';
 
-  const CELL = 'inline-block w-[0.85em] text-center';
+  const CELL = 'inline-block w-[0.85em] text-center leading-none';
 
   return (
     <AnimatePresence mode="wait">
@@ -209,10 +209,23 @@ function LoginTransitionInner({
           />
 
           {/* Logo scramble → reveal */}
-          <span className="relative inline-flex text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-white z-10">
+          <span className="relative inline-flex items-center text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-white z-10">
+            {/* Invisible sizer: stable box across phases */}
+            <span className="inline-flex invisible pointer-events-none" aria-hidden="true">
+              {DISPLAY_CHARS.map((ch, i) => (
+                <span
+                  key={i}
+                  className={CELL}
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {ch}
+                </span>
+              ))}
+            </span>
+
             {/* Back layer: pixel font scramble */}
             {showBack && (
-              <span className="inline-flex" aria-hidden="true">
+              <span className="absolute inset-0 inline-flex items-center" aria-hidden="true">
                 {letters.map((letter, i) => (
                   <span
                     key={i}
@@ -228,11 +241,7 @@ function LoginTransitionInner({
             {/* Front layer: solid Geist Sans */}
             {showFront && (
               <span
-                className={`${
-                  isDone || phase === 'toast' || phase === 'wipe'
-                    ? 'relative'
-                    : 'absolute inset-0'
-                } inline-flex`}
+                className="absolute inset-0 inline-flex items-center"
                 style={
                   isDone || phase === 'toast' || phase === 'wipe'
                     ? undefined

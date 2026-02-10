@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useCallback } from 'react';
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProjects } from '@/hooks/useProjects';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
@@ -14,8 +14,32 @@ function ProjectsPageContent() {
   const { createProject, isCreating, getLastProjectId } = useProjects();
   const [error, setError] = useState<string | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const [autoRedirecting, setAutoRedirecting] = useState(true);
   const signedIn = searchParams.get('signed_in') === '1';
   const signedInSuffix = signedIn ? '?signed_in=1' : '';
+  const didAutoRedirect = useRef(false);
+
+  // Auto-redirect returning users to their most recent project
+  useEffect(() => {
+    // #region agent log H1
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H1',location:'app/projects/page.tsx:24',message:'auto-redirect effect entered',data:{didAutoRedirect:didAutoRedirect.current,signedInSuffix},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (didAutoRedirect.current) return;
+    didAutoRedirect.current = true;
+
+    const lastId = getLastProjectId();
+    if (lastId) {
+      // #region agent log H1
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H1',location:'app/projects/page.tsx:31',message:'auto-redirecting to last project',data:{lastId,target:`/projects/${lastId}${signedInSuffix}`},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      router.replace(`/projects/${lastId}${signedInSuffix}`);
+    } else {
+      // #region agent log H1
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H1',location:'app/projects/page.tsx:35',message:'no last project id; clearing autoRedirecting',data:{lastId:null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setAutoRedirecting(false);
+    }
+  }, [getLastProjectId, router, signedInSuffix]);
 
   const handleCreate = useCallback(async () => {
     setError(null);
@@ -61,6 +85,15 @@ function ProjectsPageContent() {
   }, [getLastProjectId, router, signedInSuffix]);
 
   const busy = isCreating || isOpening;
+
+  // Show loading state while checking for auto-redirect
+  if (autoRedirecting) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-6">
+        <div className="text-center text-gray-400 text-sm">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <>

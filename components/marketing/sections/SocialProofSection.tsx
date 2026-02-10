@@ -35,7 +35,7 @@ export function SocialProofSection() {
       className="relative py-24 md:py-32 overflow-hidden bg-stone-50 z-10"
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="relative max-w-7xl mx-auto px-6">
         <div className="text-center mb-16">

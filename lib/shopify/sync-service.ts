@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { ShopifyAdminAPIFactory } from './admin-api-factory';
 import type { ShopifyAsset } from './admin-api';
 import type { ThemeFile, ThemeFileSyncStatus } from '@/lib/types/shopify';
@@ -16,6 +17,14 @@ export interface SyncResult {
 }
 
 export class ThemeSyncService {
+  private async adminSupabase() {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey);
+    }
+    return createServerClient();
+  }
+
   /**
    * Pull theme files from Shopify and sync to local database.
    * Fetches all assets from the remote theme, compares hashes, and updates local files.
@@ -33,12 +42,16 @@ export class ThemeSyncService {
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
       // 2. Get connection to access project_id
-      const supabase = await createClient();
+      const supabase = await this.adminSupabase();
       const { data: connection, error: connError } = await supabase
         .from('shopify_connections')
         .select('project_id')
         .eq('id', connectionId)
         .single();
+
+      // #region agent log H1
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H1',location:'lib/shopify/sync-service.ts:43',message:'pullTheme connection lookup result',data:{connectionId,hasConnection:!!connection,connErrorCode:connError?.code??null,connErrorMessage:connError?.message??null,hasServiceRoleKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (connError || !connection) {
         throw APIError.notFound('Shopify connection not found');
@@ -57,18 +70,67 @@ export class ThemeSyncService {
 
       // 3. List all remote assets
       const remoteAssets = await api.listAssets(themeId);
+      let missingValueCount = 0;
+      let changedCandidateCount = 0;
+      let detailFetchAttempts = 0;
+      let detailFetchValueCount = 0;
+      let detailFetchErrorCount = 0;
+      let skippedNonTextCount = 0;
+      // #region agent log H10
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run3',hypothesisId:'H10',location:'lib/shopify/sync-service.ts:74',message:'pullTheme remote assets listed',data:{connectionId,themeId,remoteAssetsCount:remoteAssets.length,sampleKey:remoteAssets[0]?.key??null,sampleHasValue:!!remoteAssets[0]?.value},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       // 4. For each asset: fetch content, compute hash
       for (const asset of remoteAssets) {
         try {
-          // Skip binary assets (images, etc.) - only sync text files
-          if (!asset.value) {
-            continue;
+          const filePath = asset.key;
+          let content = asset.value;
+          if (!content) {
+            if (!this.shouldFetchAssetValue(filePath)) {
+              skippedNonTextCount++;
+              continue;
+            }
+            detailFetchAttempts++;
+            const shouldSampleDetailFetch = detailFetchAttempts <= 5;
+            const detailFetchStartedAt = Date.now();
+            if (shouldSampleDetailFetch) {
+              // #region agent log H12
+              fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:89',message:'detail asset fetch start',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+            }
+            try {
+              const detailedAsset = await api.getAsset(themeId, filePath);
+              content = detailedAsset.value;
+              if (content) {
+                detailFetchValueCount++;
+              }
+              if (shouldSampleDetailFetch) {
+                // #region agent log H12
+                fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:101',message:'detail asset fetch success',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts,hasValue:!!content,durationMs:Date.now()-detailFetchStartedAt},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+              }
+            } catch (detailError) {
+              detailFetchErrorCount++;
+              const detailErrorMessage =
+                detailError instanceof Error ? detailError.message : 'Unknown error';
+              if (shouldSampleDetailFetch) {
+                // #region agent log H12
+                fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:110',message:'detail asset fetch failed',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts,durationMs:Date.now()-detailFetchStartedAt,errorMessage:detailErrorMessage},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+              }
+              result.errors.push(`${filePath}: ${detailErrorMessage}`);
+              continue;
+            }
           }
 
-          const content = asset.value;
+          // Skip binary assets (images, etc.) - only sync text files
+          if (!content) {
+            missingValueCount++;
+            continue;
+          }
+          changedCandidateCount++;
+
           const contentHash = this.computeHash(content);
-          const filePath = asset.key;
 
           // 5. Compare with local theme_files records
           const { data: existingThemeFile } = await supabase
@@ -175,9 +237,15 @@ export class ThemeSyncService {
           result.errors.push(`${asset.key}: ${errorMessage}`);
         }
       }
+      // #region agent log H10
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run3',hypothesisId:'H10',location:'lib/shopify/sync-service.ts:194',message:'pullTheme loop summary',data:{connectionId,themeId,remoteAssetsCount:remoteAssets.length,skippedNonTextCount,detailFetchAttempts,detailFetchValueCount,detailFetchErrorCount,missingValueCount,changedCandidateCount,pulled:result.pulled,errorsCount:result.errors.length,conflictsCount:result.conflicts.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
+      // #region agent log H1
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H1',location:'lib/shopify/sync-service.ts:186',message:'pullTheme top-level failure',data:{connectionId,themeId,errorMessage},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       result.errors.push(`Pull failed: ${errorMessage}`);
     }
 
@@ -205,7 +273,7 @@ export class ThemeSyncService {
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
       // 2. Get connection to access project_id
-      const supabase = await createClient();
+      const supabase = await this.adminSupabase();
       const { data: connection, error: connError } = await supabase
         .from('shopify_connections')
         .select('project_id')
@@ -327,7 +395,7 @@ export class ThemeSyncService {
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
       // Get connection
-      const supabase = await createClient();
+      const supabase = await this.adminSupabase();
       const { data: connection, error: connError } = await supabase
         .from('shopify_connections')
         .select('project_id')
@@ -455,7 +523,7 @@ export class ThemeSyncService {
    * Get sync status for all theme files for a connection.
    */
   async getFileSyncStatus(connectionId: string): Promise<ThemeFile[]> {
-    const supabase = await createClient();
+    const supabase = await this.adminSupabase();
 
     const { data, error } = await supabase
       .from('theme_files')
@@ -479,5 +547,31 @@ export class ThemeSyncService {
    */
   private computeHash(content: string): string {
     return createHash('sha256').update(content, 'utf8').digest('hex');
+  }
+
+  /**
+   * Shopify theme asset list often includes binary assets without inline value.
+   * Only fetch per-asset value for text-like files to avoid long imports.
+   */
+  private shouldFetchAssetValue(filePath: string): boolean {
+    const lower = filePath.toLowerCase();
+    const textExtensions = [
+      '.liquid',
+      '.json',
+      '.js',
+      '.css',
+      '.scss',
+      '.sass',
+      '.less',
+      '.ts',
+      '.tsx',
+      '.mjs',
+      '.cjs',
+      '.txt',
+      '.md',
+      '.svg',
+      '.map',
+    ];
+    return textExtensions.some((ext) => lower.endsWith(ext));
   }
 }

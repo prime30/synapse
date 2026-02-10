@@ -14,7 +14,7 @@ export function TestimonialSection() {
       className="relative bg-[#0a0a0a] py-32 md:py-40"
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Manual crosshair marks (light on dark bg) */}
       <span

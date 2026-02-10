@@ -38,7 +38,7 @@ function initialLetters(): LetterState[] {
   }));
 }
 
-const LETTER_CELL = 'inline-block w-[0.85em] text-center';
+const LETTER_CELL = 'inline-block w-[0.85em] text-center leading-none';
 
 export function SynapseLogo({ className }: { className?: string }) {
   const [letters, setLetters] = useState<LetterState[]>(initialLetters);
@@ -119,12 +119,25 @@ export function SynapseLogo({ className }: { className?: string }) {
 
   return (
     <span
-      className={`relative inline-flex text-sm tracking-[0.2em] uppercase font-normal ${className ?? ''}`}
+      className={`relative inline-flex items-center text-base tracking-[0.2em] uppercase font-normal ${className ?? ''}`}
       aria-label="Synapse"
     >
+      {/* Invisible sizer: keeps the wrapper a stable size regardless of phase */}
+      <span className="inline-flex invisible pointer-events-none" aria-hidden="true">
+        {DISPLAY_CHARS.map((ch, i) => (
+          <span
+            key={i}
+            className={LETTER_CELL}
+            style={{ fontVariantNumeric: 'tabular-nums' }}
+          >
+            {ch}
+          </span>
+        ))}
+      </span>
+
       {/* Back layer: stippled pixel font text */}
       {showBackLayer && (
-        <span className="inline-flex">
+        <span className="absolute inset-0 inline-flex items-center">
           {letters.map((letter, i) => (
             <span
               key={i}
@@ -144,7 +157,7 @@ export function SynapseLogo({ className }: { className?: string }) {
       {/* Front layer: solid Geist Sans, revealed via clip-path */}
       {showFrontLayer && (
         <span
-          className={`${isDone ? 'relative' : 'absolute inset-0'} inline-flex`}
+          className="absolute inset-0 inline-flex items-center"
           style={
             isDone
               ? undefined

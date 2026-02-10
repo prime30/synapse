@@ -237,6 +237,10 @@ body {
   mask-size: 2.5px 2.5px;
   -webkit-mask-repeat: repeat;
   mask-repeat: repeat;
+  -webkit-mask-origin: content-box;
+  mask-origin: content-box;
+  -webkit-mask-position: 0.5px 0.5px;
+  mask-position: 0.5px 0.5px;
 }
 
 
@@ -370,4 +374,29 @@ body.cursor-none * {
 }
 .dark .content-frame {
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Synaptic section — first-paint fade-in for canvas layers */
+@keyframes synaptic-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .synaptic-layer-fade {
+    animation: synaptic-fade-in 0.3s ease-out both;
+  }
+  .synaptic-layer-fade-delay {
+    animation-delay: 0.08s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .synaptic-layer-fade,
+  .synaptic-layer-fade-delay {
+    animation: none;
+    opacity: 1;
+  }
 }

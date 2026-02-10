@@ -124,7 +124,7 @@ export default function HeroSection() {
 
           {/* Headline — single line, never wraps, scales down on small screens */}
           <motion.h1
-            className="relative whitespace-nowrap font-medium leading-[1.05] tracking-[-0.03em] text-[clamp(1.75rem,5.5vw,4.5rem)]"
+            className="relative whitespace-nowrap font-medium leading-[1.05] tracking-[-0.03em] text-[clamp(1.75rem,5.5vw,4.5rem)] h-[1.05em] overflow-hidden"
           >
             {['Ship', 'Shopify'].map((word, i) => (
               <span key={word} className="inline-block overflow-hidden">
@@ -143,14 +143,12 @@ export default function HeroSection() {
                 {'\u00A0'}
               </span>
             ))}
-            {/* Rotating accent word */}
-            <motion.span
-              className="inline-block overflow-hidden align-baseline"
-              layout
-              transition={{ layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
+            {/* Rotating accent word — width follows current word naturally */}
+            <span
+              className="inline-block overflow-hidden align-baseline relative"
               style={{ verticalAlign: 'baseline' }}
             >
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="popLayout">
                 <motion.span
                   key={ROTATING_WORDS[wordIndex]}
                   className="inline-block whitespace-nowrap"
@@ -162,7 +160,7 @@ export default function HeroSection() {
                   <PixelAccent>{ROTATING_WORDS[wordIndex]}</PixelAccent>
                 </motion.span>
               </AnimatePresence>
-            </motion.span>
+            </span>
             {'\u00A0'}
             <span className="inline-block overflow-hidden">
               <motion.span

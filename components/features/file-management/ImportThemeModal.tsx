@@ -149,9 +149,15 @@ export function ImportThemeModal({
     if (!selectedThemeId) return;
     setStoreError(null);
     setImportProgress('pull');
+    // #region agent log H5
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H5',location:'components/features/file-management/ImportThemeModal.tsx:152',message:'store import started',data:{projectId,selectedThemeId,createDevThemeForPreview},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     try {
       const result = await sync({ action: 'pull', themeId: selectedThemeId });
+      // #region agent log H5
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H5',location:'components/features/file-management/ImportThemeModal.tsx:158',message:'store import pull result',data:{projectId,selectedThemeId,pulled:result.pulled,pushed:result.pushed,errorsCount:result.errors.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (createDevThemeForPreview) {
         setImportProgress('setup');
@@ -508,7 +514,7 @@ export function ImportThemeModal({
                   {importProgress !== 'idle' && (
                     <p className="text-sm text-blue-400">
                       {importProgress === 'pull'
-                        ? '1. Importing theme…'
+                        ? '1. Importing theme… (large themes can take a few minutes)'
                         : '2. Setting up preview theme…'}
                     </p>
                   )}

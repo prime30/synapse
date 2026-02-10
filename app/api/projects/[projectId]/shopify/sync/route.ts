@@ -1,15 +1,26 @@
 import { NextRequest } from 'next/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createClient } from '@/lib/supabase/server';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
 import {
   buildSnapshotForConnection,
   recordPush,
 } from '@/lib/shopify/push-history';
+
+function getAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY required for Shopify operations');
+}
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -33,12 +44,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw APIError.badRequest('action must be "pull" or "push"');
     }
 
-    const supabase = await createClient();
+    const supabase = getAdminClient();
     const { data: connection } = await supabase
       .from('shopify_connections')
       .select('id, theme_id')
       .eq('project_id', projectId)
       .maybeSingle();
+
+    // #region agent log H2
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H2',location:'app/api/projects/[projectId]/shopify/sync/route.ts:54',message:'sync route connection lookup',data:{projectId,action,hasConnection:!!connection,connectionId:connection?.id??null,hasThemeId:!!connection?.theme_id,hasServiceRoleKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (!connection) {
       throw APIError.notFound('No Shopify connection found for this project');
@@ -100,6 +115,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       action === 'pull'
         ? await syncService.pullTheme(connection.id, themeId)
         : await syncService.pushTheme(connection.id, themeId);
+
+    // #region agent log H2
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H2',location:'app/api/projects/[projectId]/shopify/sync/route.ts:118',message:'sync route result',data:{projectId,action,themeId,pulled:result.pulled,pushed:result.pushed,errorsCount:result.errors.length,conflictsCount:result.conflicts.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (action === 'push' && result.pushed > 0 && snapshotBeforePush?.files.length) {
       await recordPush(connection.id, String(themeId), snapshotBeforePush, {

@@ -168,7 +168,9 @@ export function useWorkspacePresence(
           full_name = user.user_metadata.full_name ?? null;
           avatar_url = avatar_url ?? user.user_metadata.avatar_url ?? null;
         }
-        await ch.track({
+        const currentCh = channelRef.current;
+        if (!currentCh) return;
+        await currentCh.track({
           user_id: user.id,
           file_path: filePath,
           state,

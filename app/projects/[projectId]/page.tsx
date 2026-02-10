@@ -12,7 +12,7 @@ import { FileUploadModal } from '@/components/features/file-management/FileUploa
 import { ImportThemeModal } from '@/components/features/file-management/ImportThemeModal';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { ActiveUsersPanel } from '@/components/collaboration/ActiveUsersPanel';
-import { ProjectSwitcher } from '@/components/features/projects/ProjectSwitcher';
+import { ProjectTabs } from '@/components/features/projects/ProjectTabs';
 import { DesignTokenBrowser } from '@/components/features/design-system/DesignTokenBrowser';
 import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
 import { VersionHistoryPanel } from '@/components/features/versions/VersionHistoryPanel';
@@ -56,6 +56,7 @@ export default function ProjectPage() {
     projects,
     isLoading: isLoadingProjects,
     setLastProjectId,
+    createProject,
   } = useProjects();
   const { connected, connection } = useShopifyConnection(projectId);
 
@@ -94,18 +95,37 @@ export default function ProjectPage() {
   // 2) If user has no projects, auto-create an Untitled project
   // Note: only attempt recovery once per projectId to avoid loops
   useEffect(() => {
-    if (isLoadingProjects || recoveryAttemptedRef.current) return;
-    if (isCurrentProjectAccessible) return;
+    if (isLoadingProjects || recoveryAttemptedRef.current) {
+      // #region agent log H2
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:99',message:'recovery effect skipped (loading or already attempted)',data:{projectId,isLoadingProjects,recoveryAttempted:recoveryAttemptedRef.current,projectsCount:projects.length,isCurrentProjectAccessible},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
+    if (isCurrentProjectAccessible) {
+      // #region agent log H2
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:105',message:'current project is accessible; no recovery redirect',data:{projectId,projectsCount:projects.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
 
     recoveryAttemptedRef.current = true;
+    // #region agent log H2
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:112',message:'current project inaccessible; attempting recovery',data:{projectId,projectsCount:projects.length,nextProjectId:projects[0]?.id??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (projects.length > 0) {
+      // #region agent log H2
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:117',message:'recovery redirecting to first accessible project',data:{fromProjectId:projectId,toProjectId:projects[0].id},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       router.replace(`/projects/${projects[0].id}`);
       return;
     }
 
     // No projects found — but don't auto-create; we may have just
     // been redirected here from project creation. Just let the IDE load.
+    // #region agent log H2
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:125',message:'recovery found no projects; staying put',data:{projectId,projectsCount:0},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }, [
     isLoadingProjects,
     isCurrentProjectAccessible,
@@ -207,6 +227,15 @@ export default function ProjectPage() {
     router.push(`/projects/${newProjectId}`);
   };
 
+  const handleCreateProject = useCallback(async () => {
+    try {
+      const result = await createProject({ name: 'Untitled project' });
+      router.push(`/projects/${result.id}`);
+    } catch {
+      // Silently fail — project list will still be accessible
+    }
+  }, [createProject, router]);
+
   const handleOpenImport = () => {
     setImportModalOpen(true);
   };
@@ -269,45 +298,17 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="flex items-center gap-3 px-3 py-2 border-b border-gray-800 bg-gray-900/80">
-        {/* Left: navigation + project switcher */}
-        <div className="flex items-center gap-2">
-          <ProjectSwitcher
-            currentProjectId={projectId}
-            onSwitchProject={handleSwitchProject}
-            onImportTheme={handleOpenImport}
-          />
-        </div>
-
-        {/* Center: Upload Theme CTA */}
-        <button
-          type="button"
-          onClick={handleOpenImport}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className="w-4 h-4"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-            />
-          </svg>
-          Upload Theme
-        </button>
-
-        {/* Spacer */}
-        <div className="flex-1" />
+      {/* ── Header (project tabs + status) ────────────────────────────────── */}
+      <header className="flex items-center border-b border-gray-800 bg-gray-900/80">
+        {/* Project tabs */}
+        <ProjectTabs
+          currentProjectId={projectId}
+          onSwitchProject={handleSwitchProject}
+          onCreateProject={handleCreateProject}
+        />
 
         {/* Right: save / status / user menu */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 px-3 shrink-0">
           {toast && (
             <span className="text-sm text-green-400 animate-pulse">
               {toast}
@@ -327,28 +328,34 @@ export default function ProjectPage() {
         </div>
       </header>
 
-      {/* ── Tab bar ──────────────────────────────────────────────────────────── */}
-      <FileTabs
-        openTabs={tabs.openTabs}
-        activeFileId={tabs.activeFileId}
-        unsavedFileIds={tabs.unsavedFileIds}
-        fileMetaMap={fileMetaMap}
-        onTabSelect={tabs.switchTab}
-        onTabClose={handleTabClose}
-        onAddFile={handleAddFile}
-        onNextTab={tabs.nextTab}
-        onPrevTab={tabs.prevTab}
-        tabGroups={tabs.tabGroups}
-        activeGroupId={tabs.activeGroupId}
-        onGroupSelect={handleGroupSelect}
-        onGroupClose={tabs.closeGroup}
-      />
-
       {/* ── Main 3-pane layout ───────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
         {/* ── Left: File explorer ──────────────────────────────────────────── */}
         <aside className="w-64 border-r border-gray-800 flex-shrink-0 flex flex-col min-h-0">
           <ActiveUsersPanel presence={presence} />
+          {/* Import / Upload actions */}
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-800 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenImport}
+              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              Import Theme
+            </button>
+            <button
+              type="button"
+              onClick={handleAddFile}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors ml-auto"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M5 1v8M1 5h8" />
+              </svg>
+              Add File
+            </button>
+          </div>
           {hasFiles ? (
             <FileList
               projectId={projectId}
@@ -382,8 +389,23 @@ export default function ProjectPage() {
           )}
         </aside>
 
-        {/* ── Center: Editor ───────────────────────────────────────────────── */}
+        {/* ── Center: File tabs + Editor ─────────────────────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col">
+          <FileTabs
+            openTabs={tabs.openTabs}
+            activeFileId={tabs.activeFileId}
+            unsavedFileIds={tabs.unsavedFileIds}
+            fileMetaMap={fileMetaMap}
+            onTabSelect={tabs.switchTab}
+            onTabClose={handleTabClose}
+            onAddFile={handleAddFile}
+            onNextTab={tabs.nextTab}
+            onPrevTab={tabs.prevTab}
+            tabGroups={tabs.tabGroups}
+            activeGroupId={tabs.activeGroupId}
+            onGroupSelect={handleGroupSelect}
+            onGroupClose={tabs.closeGroup}
+          />
           {tabs.activeFileId ? (
             editMode ? (
               <FileEditor

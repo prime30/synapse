@@ -21,7 +21,13 @@ export function useProjects() {
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: async (): Promise<Project[]> => {
+      // #region agent log H4
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H4',location:'hooks/useProjects.ts:24',message:'projects query start',data:{queryKey:'projects'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const res = await fetch('/api/projects');
+      // #region agent log H4
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H4',location:'hooks/useProjects.ts:27',message:'projects query response',data:{ok:res.ok,status:res.status},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (!res.ok) throw new Error('Failed to fetch projects');
       const json = await res.json();
       return (json.data ?? []) as Project[];

@@ -33,6 +33,8 @@ interface ShopifyAssetResponse {
   asset: ShopifyAsset;
 }
 
+let assetValueRequestDebugSamples = 0;
+
 export class ShopifyAdminAPI {
   private storeDomain: string;
   private accessToken: string;
@@ -63,6 +65,16 @@ export class ShopifyAdminAPI {
     body?: unknown
   ): Promise<T> {
     const url = this.apiUrl(path);
+    const isAssetValueRequest =
+      method === 'GET' && path.includes('/assets?asset[key]=');
+    const sampledAssetValueRequest =
+      isAssetValueRequest && assetValueRequestDebugSamples < 5;
+    if (sampledAssetValueRequest) {
+      assetValueRequestDebugSamples++;
+      // #region agent log H11
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H11',location:'lib/shopify/admin-api.ts:77',message:'asset value request start',data:{method,path,url},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
     const headers: HeadersInit = {
       'X-Shopify-Access-Token': this.accessToken,
       'Content-Type': 'application/json',
@@ -106,6 +118,12 @@ export class ShopifyAdminAPI {
           500
         );
       }
+    }
+
+    if (sampledAssetValueRequest) {
+      // #region agent log H11
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H11',location:'lib/shopify/admin-api.ts:122',message:'asset value request response',data:{method,path,url,status:response.status,retryAfter:response.headers.get('Retry-After')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     }
 
     // Handle errors

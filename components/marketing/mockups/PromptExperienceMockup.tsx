@@ -12,12 +12,12 @@ const USER_PROMPT =
   'Add a hero banner with animated headline and shop-now CTA';
 
 const PLAN_STEPS = [
-  'Define schema with heading, subheading, and CTA settings',
-  'Build section markup with responsive layout',
-  'Wire CTA button with dynamic URL binding',
+  'Delegate hero.liquid to Liquid Agent',
+  'Delegate hero.css to CSS Agent',
+  'Delegate hero.js to JS Agent',
 ];
 
-const CODE_LINES = [
+const LIQUID_LINES = [
   '{% schema %}',
   '  { "name": "Hero Banner",',
   '    "tag": "section",',
@@ -38,6 +38,32 @@ const CODE_LINES = [
   '</section>',
 ];
 
+const CSS_LINES = [
+  '.hero {',
+  '  display: flex;',
+  '  flex-direction: column;',
+  '  align-items: center;',
+  '  padding: 4rem 2rem;',
+  '}',
+  '.btn--primary {',
+  '  background: var(--color-primary);',
+  '  padding: 0.75rem 2rem;',
+  '  border-radius: 9999px;',
+  '}',
+];
+
+const JS_LINES = [
+  'class HeroSection extends HTMLElement {',
+  '  connectedCallback() {',
+  '    this.observer = new',
+  '      IntersectionObserver(',
+  '        this.onIntersect.bind(this)',
+  '      );',
+  '    this.observer.observe(this);',
+  '  }',
+  '}',
+];
+
 type Phase =
   | 'prompt'
   | 'thinking'
@@ -52,22 +78,33 @@ type Phase =
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-function ThinkingDots() {
+/** Equilateral-triangle caret: 5 dots, animation sweeps bottom-left → apex → bottom-right. */
+const CARET_ORDER = [3, 1, 0, 2, 4]; // animation sequence
+function ThinkingCaretIcon() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setStep((prev) => (prev + 1) % CARET_ORDER.length);
+    }, 400);
+    return () => clearInterval(id);
+  }, []);
+  const activeDot = CARET_ORDER[step];
+  const dot = (i: number) =>
+    `w-1 h-1 rounded-full absolute transition-colors duration-200 ${
+      i === activeDot ? 'bg-stone-600 dark:bg-white/80' : 'bg-stone-300 dark:bg-white/20'
+    }`;
+  /* 16 x 14 px box — equilateral triangle positions (dot = 4px)
+   *        [0]          x:6  y:0
+   *      [1] [2]        x:3  y:5   x:9  y:5
+   *     [3]   [4]       x:0  y:10  x:12 y:10
+   */
   return (
-    <span className="inline-flex items-center gap-0.5 ml-1">
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className="w-1 h-1 rounded-full bg-stone-400 dark:bg-white/40"
-          animate={{ opacity: [0.2, 1, 0.2] }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            delay: i * 0.2,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
+    <span className="relative inline-block ml-1" style={{ width: 16, height: 14 }} aria-hidden>
+      <span className={dot(0)} style={{ left: 6, top: 0 }} />
+      <span className={dot(1)} style={{ left: 3, top: 5 }} />
+      <span className={dot(2)} style={{ left: 9, top: 5 }} />
+      <span className={dot(3)} style={{ left: 0, top: 10 }} />
+      <span className={dot(4)} style={{ left: 12, top: 10 }} />
     </span>
   );
 }
@@ -286,15 +323,25 @@ export function PromptExperienceMockup() {
   const [phase, setPhase] = useState<Phase>('prompt');
   const [promptText, setPromptText] = useState('');
   const [planChecked, setPlanChecked] = useState<number[]>([]);
-  const [codeVisible, setCodeVisible] = useState<string[]>([]);
+  const [liquidVisible, setLiquidVisible] = useState<string[]>([]);
+  const [cssVisible, setCssVisible] = useState<string[]>([]);
+  const [jsVisible, setJsVisible] = useState<string[]>([]);
   const [reviewPassed, setReviewPassed] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cssTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cssIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const jsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
+    if (cssTimerRef.current) clearTimeout(cssTimerRef.current);
+    if (jsTimerRef.current) clearTimeout(jsTimerRef.current);
+    if (cssIntervalRef.current) clearInterval(cssIntervalRef.current);
+    if (jsIntervalRef.current) clearInterval(jsIntervalRef.current);
   }, []);
 
   // Auto-scroll response panel
@@ -302,7 +349,7 @@ export function PromptExperienceMockup() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [codeVisible.length, planChecked.length, reviewPassed]);
+  }, [liquidVisible.length, cssVisible.length, jsVisible.length, planChecked.length, reviewPassed]);
 
   // ── Main animation loop ──────────────────────────────────────────
   useEffect(() => {
@@ -311,7 +358,9 @@ export function PromptExperienceMockup() {
     if (phase === 'prompt') {
       let charIdx = 0;
       setPromptText('');
-      setCodeVisible([]);
+      setLiquidVisible([]);
+      setCssVisible([]);
+      setJsVisible([]);
       setPlanChecked([]);
       setReviewPassed(false);
 
@@ -344,16 +393,44 @@ export function PromptExperienceMockup() {
     }
 
     if (phase === 'coding') {
-      let lineIdx = 0;
+      // Liquid starts immediately
+      let liquidIdx = 0;
       intervalRef.current = setInterval(() => {
-        if (lineIdx < CODE_LINES.length) {
-          setCodeVisible((prev) => [...prev, CODE_LINES[lineIdx]]);
-          lineIdx++;
+        if (liquidIdx < LIQUID_LINES.length) {
+          setLiquidVisible((prev) => [...prev, LIQUID_LINES[liquidIdx]]);
+          liquidIdx++;
         } else {
           clearInterval(intervalRef.current!);
-          timerRef.current = setTimeout(() => setPhase('review'), 300);
         }
-      }, 100);
+      }, 90);
+
+      // CSS starts after ~300ms
+      cssTimerRef.current = setTimeout(() => {
+        let cssIdx = 0;
+        cssIntervalRef.current = setInterval(() => {
+          if (cssIdx < CSS_LINES.length) {
+            setCssVisible((prev) => [...prev, CSS_LINES[cssIdx]]);
+            cssIdx++;
+          } else {
+            clearInterval(cssIntervalRef.current!);
+          }
+        }, 100);
+      }, 300);
+
+      // JS starts after ~600ms
+      jsTimerRef.current = setTimeout(() => {
+        let jsIdx = 0;
+        jsIntervalRef.current = setInterval(() => {
+          if (jsIdx < JS_LINES.length) {
+            setJsVisible((prev) => [...prev, JS_LINES[jsIdx]]);
+            jsIdx++;
+          } else {
+            clearInterval(jsIntervalRef.current!);
+            // All three done — move to review after a short pause
+            timerRef.current = setTimeout(() => setPhase('review'), 400);
+          }
+        }, 100);
+      }, 600);
     }
 
     if (phase === 'review') {
@@ -415,196 +492,240 @@ export function PromptExperienceMockup() {
       {/* Divider */}
       <div className="h-px bg-stone-200 dark:bg-white/[0.06]" />
 
-      {/* ── AI response panel ──────────────────────────────────────── */}
-      <div
-        ref={scrollRef}
-        className="px-5 py-4 space-y-4 max-h-[300px] overflow-y-auto scrollbar-none"
-      >
-        {/* PM Agent — thinking / planning */}
-        <AnimatePresence>
-          {(phase !== 'prompt') && (
-            <motion.div
-              className="space-y-3"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Agent header */}
-              <div className="flex items-center gap-2">
-                <AgentBadge
-                  name="PM Agent"
-                  color="bg-blue-400"
-                  active={phase === 'thinking' || phase === 'planning'}
-                />
-                {showThinking && phase !== 'coding' && <ThinkingDots />}
-              </div>
-
-              {/* Plan steps */}
-              {planChecked.length > 0 && (
-                <div className="ml-5 space-y-2">
-                  {PLAN_STEPS.map((step, i) => (
-                    <motion.div
-                      key={step}
-                      className="flex items-start gap-2"
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={
-                        planChecked.includes(i)
-                          ? { opacity: 1, x: 0 }
-                          : {}
-                      }
-                      transition={{ duration: 0.25 }}
-                    >
-                      <CheckIcon visible={planChecked.includes(i)} />
-                      <span className="text-[11px] text-stone-500 dark:text-white/50 leading-relaxed">
-                        {step}
-                      </span>
-                    </motion.div>
-                  ))}
+      {/* ── Fixed-height container for response + preview overlay ──── */}
+      <div className="relative h-[300px] overflow-hidden">
+        {/* ── AI response panel (scrollable) ─────────────────────────── */}
+        <div
+          ref={scrollRef}
+          className="px-5 py-4 space-y-4 h-full overflow-y-auto scrollbar-none"
+        >
+          {/* PM Agent — thinking / planning */}
+          <AnimatePresence>
+            {(phase !== 'prompt') && (
+              <motion.div
+                className="space-y-3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Agent header */}
+                <div className="flex items-center gap-2">
+                  <AgentBadge
+                    name="PM Agent"
+                    color="bg-blue-400"
+                    active={phase === 'thinking' || phase === 'planning'}
+                  />
+                  {showThinking && phase !== 'coding' && <ThinkingCaretIcon />}
                 </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
 
-        {/* Liquid Agent — coding */}
-        <AnimatePresence>
-          {(phase === 'coding' ||
-            phase === 'review' ||
-            phase === 'preview' ||
-            phase === 'hold') && (
-            <motion.div
-              className="space-y-3"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Agent header */}
-              <div className="flex items-center gap-2">
-                <AgentBadge
-                  name="Liquid Agent"
-                  color="bg-green-500"
-                  active={phase === 'coding'}
-                />
-                {phase === 'coding' && <ThinkingDots />}
-              </div>
+                {/* Plan steps */}
+                {planChecked.length > 0 && (
+                  <div className="ml-5 space-y-2">
+                    {PLAN_STEPS.map((step, i) => (
+                      <motion.div
+                        key={step}
+                        className="flex items-start gap-2"
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={
+                          planChecked.includes(i)
+                            ? { opacity: 1, x: 0 }
+                            : {}
+                        }
+                        transition={{ duration: 0.25 }}
+                      >
+                        <CheckIcon visible={planChecked.includes(i)} />
+                        <span className="text-[11px] text-stone-500 dark:text-white/50 leading-relaxed">
+                          {step}
+                        </span>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-              {/* Code block */}
-              {codeVisible.length > 0 && (
+          {/* Liquid Agent — coding */}
+          <AnimatePresence>
+            {(phase === 'coding' ||
+              phase === 'review' ||
+              phase === 'preview' ||
+              phase === 'hold') && (
+              <motion.div
+                className="space-y-3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-2">
+                  <AgentBadge name="Liquid Agent" color="bg-green-500" active={phase === 'coding' && liquidVisible.length < LIQUID_LINES.length} />
+                  {phase === 'coding' && liquidVisible.length < LIQUID_LINES.length && <ThinkingCaretIcon />}
+                </div>
+                {liquidVisible.length > 0 && (
+                  <div className="ml-5 rounded-lg bg-stone-50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-stone-200 dark:border-white/[0.06]">
+                      <span className="text-[9px] text-stone-400 dark:text-white/30 tracking-wide">hero.liquid</span>
+                    </div>
+                    <div className="p-2 font-mono text-[10px] leading-[16px] overflow-x-auto">
+                      <div className="flex">
+                        <div className="text-stone-300 dark:text-white/15 select-none mr-2 text-right w-4 shrink-0">
+                          {liquidVisible.map((_, i) => (<div key={i}>{i + 1}</div>))}
+                        </div>
+                        <div className="flex-1 text-stone-600 dark:text-white/60 overflow-hidden">
+                          {liquidVisible.map((line, i) => (
+                            <motion.div key={i} initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.06 }}>
+                              <LiquidCodeLine line={line} compact />
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* CSS Agent — coding */}
+          <AnimatePresence>
+            {cssVisible.length > 0 && (phase === 'coding' || phase === 'review' || phase === 'preview' || phase === 'hold') && (
+              <motion.div
+                className="space-y-3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-2">
+                  <AgentBadge name="CSS Agent" color="bg-pink-400" active={phase === 'coding' && cssVisible.length < CSS_LINES.length} />
+                  {phase === 'coding' && cssVisible.length < CSS_LINES.length && <ThinkingCaretIcon />}
+                </div>
                 <div className="ml-5 rounded-lg bg-stone-50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/[0.06] overflow-hidden">
                   <div className="flex items-center gap-2 px-3 py-1.5 border-b border-stone-200 dark:border-white/[0.06]">
-                    <span className="text-[9px] text-stone-400 dark:text-white/30 tracking-wide">
-                      hero-section.liquid
-                    </span>
+                    <span className="text-[9px] text-stone-400 dark:text-white/30 tracking-wide">hero.css</span>
                   </div>
-                  <div className="p-3 font-mono text-[11px] leading-[18px] overflow-x-auto">
+                  <div className="p-2 font-mono text-[10px] leading-[16px] overflow-x-auto">
                     <div className="flex">
-                      {/* Line numbers */}
-                      <div className="text-stone-300 dark:text-white/15 select-none mr-3 text-right w-5 shrink-0">
-                        {codeVisible.map((_, i) => (
-                          <div key={i}>{i + 1}</div>
-                        ))}
+                      <div className="text-stone-300 dark:text-white/15 select-none mr-2 text-right w-4 shrink-0">
+                        {cssVisible.map((_, i) => (<div key={i}>{i + 1}</div>))}
                       </div>
-                      {/* Code */}
                       <div className="flex-1 text-stone-600 dark:text-white/60 overflow-hidden">
-                        {codeVisible.map((line, i) => (
-                          <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 3 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.06 }}
-                          >
-                            <LiquidCodeLine line={line} compact />
-                            {i === codeVisible.length - 1 &&
-                              phase === 'coding' && (
-                                <motion.span
-                                  className="inline-block w-[2px] h-[12px] bg-green-400 ml-0.5 align-middle"
-                                  animate={{
-                                    opacity: [1, 1, 0, 0],
-                                  }}
-                                  transition={{
-                                    duration: 0.8,
-                                    repeat: Infinity,
-                                    times: [0, 0.5, 0.5, 1],
-                                  }}
-                                />
-                              )}
+                        {cssVisible.map((line, i) => (
+                          <motion.div key={i} initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.06 }}>
+                            <span>{line}</span>
                           </motion.div>
                         ))}
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Review Agent — validation */}
-        <AnimatePresence>
-          {reviewPassed && (
-            <motion.div
-              className="space-y-2"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="flex items-center gap-2">
-                <AgentBadge
-                  name="Review Agent"
-                  color="bg-purple-400"
-                  active={phase === 'review'}
-                />
-              </div>
-              <motion.div
-                className="ml-5 flex items-center gap-2"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{
-                  duration: 0.4,
-                  delay: 0.15,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-              >
-                <div className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    className="text-green-600 dark:text-green-400"
-                  >
-                    <path
-                      d="M2 5.5L4 7.5L8 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">
-                  All checks passed
-                </span>
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* JS Agent — coding */}
+          <AnimatePresence>
+            {jsVisible.length > 0 && (phase === 'coding' || phase === 'review' || phase === 'preview' || phase === 'hold') && (
+              <motion.div
+                className="space-y-3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-2">
+                  <AgentBadge name="JS Agent" color="bg-amber-400" active={phase === 'coding' && jsVisible.length < JS_LINES.length} />
+                  {phase === 'coding' && jsVisible.length < JS_LINES.length && <ThinkingCaretIcon />}
+                </div>
+                <div className="ml-5 rounded-lg bg-stone-50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-b border-stone-200 dark:border-white/[0.06]">
+                    <span className="text-[9px] text-stone-400 dark:text-white/30 tracking-wide">hero.js</span>
+                  </div>
+                  <div className="p-2 font-mono text-[10px] leading-[16px] overflow-x-auto">
+                    <div className="flex">
+                      <div className="text-stone-300 dark:text-white/15 select-none mr-2 text-right w-4 shrink-0">
+                        {jsVisible.map((_, i) => (<div key={i}>{i + 1}</div>))}
+                      </div>
+                      <div className="flex-1 text-stone-600 dark:text-white/60 overflow-hidden">
+                        {jsVisible.map((line, i) => (
+                          <motion.div key={i} initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.06 }}>
+                            <span>{line}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Review Agent — validation */}
+          <AnimatePresence>
+            {reviewPassed && (
+              <motion.div
+                className="space-y-2"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-2">
+                  <AgentBadge
+                    name="Review Agent"
+                    color="bg-purple-400"
+                    active={phase === 'review'}
+                  />
+                </div>
+                <motion.div
+                  className="ml-5 flex items-center gap-2"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{
+                    duration: 0.4,
+                    delay: 0.15,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  <div className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      fill="none"
+                      className="text-green-600 dark:text-green-400"
+                    >
+                      <path
+                        d="M2 5.5L4 7.5L8 3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                  <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">
+                    All checks passed
+                  </span>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ── Storefront preview (slides up over the response panel) ── */}
+        <AnimatePresence>
+          {showPreview && (
+            <motion.div
+              className="absolute inset-x-0 bottom-0 bg-white dark:bg-[#0a0a0a]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="h-px bg-stone-200 dark:bg-white/[0.06]" />
+              <StorefrontPreview />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-
-      {/* ── Storefront preview ──────────────────────────────────────── */}
-      <AnimatePresence>
-        {showPreview && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="h-px bg-stone-200 dark:bg-white/[0.06]" />
-            <StorefrontPreview />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
