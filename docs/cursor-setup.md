@@ -94,6 +94,23 @@ Cursor AI is configured with Synapse-specific context via `.cursorrules`. The AI
 - Reference existing files when asking for similar implementations
 - Cursor reads `.cursorrules` automatically on project open
 
+## AI modes and orchestration
+
+Cursor doesn’t have a built-in mode switcher (Plan / Agent / Ask / Debug). You can get the same effect by what you say. See the **Modes and single-agent** rule in `.cursor/rules/modes-and-single-agent.mdc` for a short table (plan vs agent vs ask vs debug).
+
+### Orchestration quick prompt (multi-agent plan execution)
+
+When you have a **plan with tasks and dependency tiers** and want the AI to act as PM and execute it (tiers, lint/test between tiers, then review):
+
+1. **Quick prompt** — Paste this into Chat:
+   ```
+   Act as PM: orchestrate the plan in this file [or @.cursor/plans/<name>.plan.md]. Execute tasks in dependency tiers (Tier 0 → 1 → 2 in parallel → 3 in parallel → 4). Lint and test after each tier. When all tiers are done, review the work (lint, test, spot-check acceptance criteria).
+   ```
+2. **Quick button / snippet** — In Cursor you can save the prompt as a **User Snippet** (Cursor Settings → Cursor Settings → Snippets, or a `.code-snippets` file) so one shortcut or keyword (e.g. `orchestrate`) inserts it into the chat.
+3. **Rule** — The project rule `.cursor/rules/orchestration-quick.mdc` applies when you’re in a plan file or say "orchestrate the plan"; the AI will follow the tiered execution and review steps.
+
+To **turn off orchestration** and work with a single agent, say: **"Single agent only"** or **"No orchestration — just do it yourself."** See `.cursor/rules/modes-and-single-agent.mdc`.
+
 ## Troubleshooting
 
 ### Missing Environment Variables

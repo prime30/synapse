@@ -1,0 +1,34 @@
+---
+description: PM orchestration quick prompt — use when executing a plan with multi-agent / tiered tasks
+globs: ["**/.cursor/plans/**", "**/*.plan.md"]
+alwaysApply: false
+---
+
+# Orchestration quick prompt (plan execution)
+
+Use this when the user wants to **execute a plan** with dependency-ordered tasks and (optionally) parallel work within tiers. The user may say "orchestrate the plan," "execute the plan," "run as PM," or use a quick button that injects this.
+
+## Quick prompt to run
+
+Copy-paste or inject this into the chat:
+
+```
+Act as PM: orchestrate the plan in this file [or: @.cursor/plans/<plan-name>.plan.md]. Execute tasks in dependency tiers (Tier 0 → Tier 1 → Tier 2 in parallel → Tier 3 in parallel → Tier 4). Lint and test after each tier. When all tiers are done, review the work (lint, test, spot-check acceptance criteria).
+```
+
+If the plan lives in the current conversation or is attached, reference it explicitly (e.g. "the plan we just reviewed" or @-mention the plan file).
+
+## What to do
+
+1. **Read the plan** — find the "Task breakdown" / dependency graph and acceptance criteria for each task (T1, T2, …).
+2. **Execute by tier** — Tier 0 first, then Tier 1, then Tier 2 (tasks in tier can be parallelized), then Tier 3, then Tier 4.
+3. **After each tier** — run `npm run lint` and `npm run test:run`; fix regressions before the next tier.
+4. **Review** — after all tiers, re-run tests and spot-check acceptance criteria.
+
+## When this rule applies
+
+- User asks to "orchestrate" or "execute" a plan.
+- User is in a plan file (e.g. under `.cursor/plans/` or `*.plan.md`) and says "execute" or "run this."
+- User uses a quick button or snippet that injects the orchestration prompt (see [Cursor setup](docs/cursor-setup.md) — AI modes and orchestration).
+
+Do **not** use orchestration when the user says "single agent only" or "no orchestration" — see [Modes and single-agent](modes-and-single-agent.mdc).

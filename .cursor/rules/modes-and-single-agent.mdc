@@ -1,0 +1,28 @@
+---
+description: AI modes (plan / agent / ask / debug) and how to turn off orchestration (single agent)
+alwaysApply: false
+---
+
+# AI modes and single-agent
+
+## Modes (plan / agent / ask / debug)
+
+Cursor does not ship a built-in "mode switcher" (Plan / Agent / Ask / Debug). You can get the same effect by phrasing what you want:
+
+| Intent | What to say (examples) |
+|--------|-------------------------|
+| **Plan** | "Create a plan for…" / "Break this into tasks and dependencies" / "Draft a plan; don't implement yet." |
+| **Agent (execute)** | "Implement this" / "Execute the plan" / "Orchestrate the plan" (see [Orchestration quick](orchestration-quick.mdc)). |
+| **Ask** | "Explain…" / "Why does…" / "What's the best way to…" (no code edits). |
+| **Debug** | "Debug this" / "Why is this failing?" / "Add logging and find the bug." |
+
+For **orchestration** (PM-style, tiers, parallel tasks), use the [orchestration quick prompt](orchestration-quick.mdc) or say "Act as PM and orchestrate the plan."
+
+## Single agent (turn off orchestration)
+
+To work with **one agent** and no tiered/sub-agent orchestration:
+
+- Say explicitly: **"Single agent only"** or **"No orchestration — just do it yourself"** or **"Don't break into sub-agents; implement this in one thread."**
+- The AI should then execute the work in a single flow (no task tiers, no "assign to sub-agents"), and may still break the work into steps but not into separate orchestration phases.
+
+When in doubt, the user's phrase wins: if they say "single agent," do not use the PM orchestration workflow.

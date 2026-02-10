@@ -57,8 +57,19 @@ See `.github/workflows/quality-gate.yml`.
 | `app/` | Next.js App Router pages and API |
 | `components/` | React components |
 | `lib/` | Shared logic, types, services |
-| `docs/` | Architecture (ADRs), deployment |
+| `docs/` | Architecture (ADRs), deployment, internal, user |
 | `supabase/migrations/` | Database schema |
+
+## Keeping documentation updated
+
+When you change behavior that affects users or other developers, update the docs in the same PR:
+
+- **User-facing behavior** (UI, flows, features) → update or add a guide under `docs/user/`. See [User docs](user/README.md).
+- **Internal/technical** (APIs, schema, safety, runbooks) → update or add under `docs/internal/`. See [Internal docs](internal/README.md).
+- **Architecture decisions** → add or update an ADR under `docs/architecture/`.
+- **Deployment/ops** (env vars, migrations, staging) → update `docs/deployment/` or `supabase/README.md`.
+
+After adding a new migration, run it in each environment (local, staging, prod). See [Migrations](deployment/migrations.md).
 
 ## Related
 
