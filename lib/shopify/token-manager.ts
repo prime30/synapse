@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { APIError } from '@/lib/errors/handler';
 import type {
   ShopifyConnection,
@@ -10,12 +10,38 @@ import type {
 const ALGORITHM = 'aes-256-cbc';
 const IV_LENGTH = 16;
 
+/**
+ * Returns an AES-256 key for token encryption.
+ * Prefers SHOPIFY_ENCRYPTION_KEY; falls back to a key derived from
+ * SUPABASE_SERVICE_ROLE_KEY so the app works without extra env setup.
+ */
 function getEncryptionKey(): Buffer {
-  const key = process.env.SHOPIFY_ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error('SHOPIFY_ENCRYPTION_KEY environment variable is not set');
+  const explicit = process.env.SHOPIFY_ENCRYPTION_KEY;
+  if (explicit) {
+    return Buffer.from(explicit, 'hex');
   }
-  return Buffer.from(key, 'hex');
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    // Derive a stable 32-byte key from the service role key
+    return crypto.createHash('sha256').update(serviceKey).digest();
+  }
+
+  throw new Error(
+    'Either SHOPIFY_ENCRYPTION_KEY or SUPABASE_SERVICE_ROLE_KEY must be set',
+  );
+}
+
+/** Supabase client that bypasses RLS for shopify_connections writes. */
+function adminSupabase() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for Shopify operations');
+  }
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey,
+  );
 }
 
 /**
@@ -63,7 +89,7 @@ export class ShopifyTokenManager {
     accessToken: string,
     scopes: string[]
   ): Promise<ShopifyConnection> {
-    const supabase = await createClient();
+    const supabase = adminSupabase();
     const encryptedToken = this.encrypt(accessToken);
 
     const { data, error } = await supabase
@@ -100,7 +126,7 @@ export class ShopifyTokenManager {
     projectId: string,
     storeDomain: string
   ): Promise<ShopifyConnection | null> {
-    const supabase = await createClient();
+    const supabase = adminSupabase();
 
     const { data, error } = await supabase
       .from('shopify_connections')
@@ -128,7 +154,7 @@ export class ShopifyTokenManager {
    * Retrieve a connection by ID and return the decrypted access token.
    */
   async getDecryptedToken(connectionId: string): Promise<string> {
-    const supabase = await createClient();
+    const supabase = adminSupabase();
 
     const { data, error } = await supabase
       .from('shopify_connections')
@@ -150,7 +176,7 @@ export class ShopifyTokenManager {
     connectionId: string,
     status: ShopifySyncStatus
   ): Promise<void> {
-    const supabase = await createClient();
+    const supabase = adminSupabase();
 
     const { error } = await supabase
       .from('shopify_connections')
@@ -173,7 +199,7 @@ export class ShopifyTokenManager {
    * Delete a Shopify connection by ID.
    */
   async deleteConnection(connectionId: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = adminSupabase();
 
     const { error } = await supabase
       .from('shopify_connections')

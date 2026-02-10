@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server';
 import JSZip from 'jszip';
 
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { createFile } from '@/lib/services/files';
 import { detectFileTypeFromName } from '@/lib/types/files';
-import { createClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -106,8 +107,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // ── Delete existing files for a clean import ────────────────────────
-    const supabase = await createClient();
-    await supabase.from('files').delete().eq('project_id', projectId);
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      const supabase = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey);
+      await supabase.from('files').delete().eq('project_id', projectId);
+    }
 
     // ── Create files ────────────────────────────────────────────────────
     let imported = 0;

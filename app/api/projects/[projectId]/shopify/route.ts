@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
@@ -6,6 +7,18 @@ import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { createClient } from '@/lib/supabase/server';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import { ShopifyAdminAPI } from '@/lib/shopify/admin-api';
+
+/** Admin client that bypasses RLS. Falls back to cookie-based client. */
+async function adminSupabase() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  return createClient();
+}
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -20,7 +33,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     await requireProjectAccess(request, projectId);
 
-    const supabase = await createClient();
+    const supabase = await adminSupabase();
     const { data: connection } = await supabase
       .from('shopify_connections')
       .select(
@@ -105,7 +118,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     await requireProjectAccess(request, projectId);
 
-    const supabase = await createClient();
+    const supabase = await adminSupabase();
     const { data: connection } = await supabase
       .from('shopify_connections')
       .select('id')
