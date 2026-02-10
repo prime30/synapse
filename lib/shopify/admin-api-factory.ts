@@ -1,8 +1,19 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { APIError } from '@/lib/errors/handler';
 import { decryptToken } from './token-manager';
 import { ShopifyAdminAPI } from './admin-api';
 import type { ShopifyConnection } from '@/lib/types/shopify';
+
+function getAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY required for Shopify operations');
+}
 
 export class ShopifyAdminAPIFactory {
   /**
@@ -10,7 +21,7 @@ export class ShopifyAdminAPIFactory {
    * Gets connection from DB, decrypts token, and creates API instance.
    */
   static async create(connectionId: string): Promise<ShopifyAdminAPI> {
-    const supabase = await createClient();
+    const supabase = getAdminClient();
 
     // Get connection from database with both store_domain and encrypted token
     const { data, error } = await supabase

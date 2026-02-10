@@ -5,13 +5,60 @@ import { handleAPIError } from '@/lib/errors/handler';
 import { validateBody } from '@/lib/middleware/validation';
 import { loginSchema } from '@/lib/api/validation';
 
-/** GET: redirect to Google OAuth; query param callbackUrl = where to send user after sign-in (default /). */
+function getCanonicalOrigin(request: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      console.warn(
+        '[auth/login] Invalid NEXT_PUBLIC_APP_URL, falling back to request origin.'
+      );
+    }
+  }
+  return request.nextUrl.origin;
+}
+
+function normalizeCallbackUrl(raw: string | null, appOrigin: string): string {
+  const fallback = '/projects?signed_in=1';
+  if (!raw) return fallback;
+  const value = raw.trim();
+  if (!value) return fallback;
+
+  // Keep relative in-app paths as-is.
+  if (value.startsWith('/')) return value;
+
+  // For absolute URLs, only allow same-origin callback targets.
+  try {
+    const parsed = new URL(value);
+    if (parsed.origin !== appOrigin) {
+      console.warn(
+        `[auth/login] Rejected cross-origin callbackUrl "${value}", using fallback.`
+      );
+      return fallback;
+    }
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    console.warn(
+      `[auth/login] Rejected invalid callbackUrl "${value}", using fallback.`
+    );
+    return fallback;
+  }
+}
+
+/**
+ * GET: redirect to Google OAuth; query param callbackUrl = where to send user after sign-in (default /projects?signed_in=1).
+ * Always returns 302 (redirect) so the browser navigates; never 200 with a body.
+ */
 export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = getCanonicalOrigin(request);
   const authErrorUrl = `${origin}/auth/error`;
   try {
     const { searchParams } = new URL(request.url);
-    const callbackUrl = searchParams.get('callbackUrl')?.trim() || '/';
+    const callbackUrl = normalizeCallbackUrl(
+      searchParams.get('callbackUrl'),
+      origin
+    );
     const redirectTo = `${origin}/auth/confirm?next=${encodeURIComponent(callbackUrl)}`;
 
     const supabase = await createClient();

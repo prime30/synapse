@@ -1,10 +1,21 @@
 import { NextRequest } from 'next/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createClient } from '@/lib/supabase/server';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
+
+function getAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY required for Shopify operations');
+}
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -19,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     await requireProjectAccess(request, projectId);
 
-    const supabase = await createClient();
+    const supabase = getAdminClient();
     const { data: connection } = await supabase
       .from('shopify_connections')
       .select('id')
@@ -30,8 +41,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw APIError.notFound('No Shopify connection found for this project');
     }
 
-    const api = await ShopifyAdminAPIFactory.create(connection.id);
-    const themes = await api.listThemes();
+    let themes;
+    try {
+      const api = await ShopifyAdminAPIFactory.create(connection.id);
+      themes = await api.listThemes();
+    } catch (err) {
+      console.error('[shopify/themes] Failed to list themes:', err);
+      throw APIError.internal(
+        err instanceof Error ? err.message : 'Failed to load themes from Shopify',
+      );
+    }
 
     return successResponse(themes);
   } catch (error) {
