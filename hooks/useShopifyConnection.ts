@@ -8,6 +8,8 @@ import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
 export interface ShopifyConnectionInfo {
   id: string;
   store_domain: string;
+  /** Persisted dev theme ID for preview (from theme provisioning). */
+  theme_id: string | null;
   sync_status: 'connected' | 'syncing' | 'error' | 'disconnected';
   scopes: string[];
   last_sync_at: string | null;
@@ -110,14 +112,19 @@ export function useShopifyConnection(projectId: string) {
     mutationFn: async ({
       action,
       themeId,
+      note,
     }: {
       action: 'pull' | 'push';
-      themeId: number;
+      themeId?: number;
+      note?: string;
     }): Promise<SyncResult> => {
+      const body: { action: 'pull' | 'push'; themeId?: number; note?: string } = { action };
+      if (themeId !== undefined && Number.isFinite(themeId)) body.themeId = themeId;
+      if (typeof note === 'string' && note.trim()) body.note = note.trim();
       const res = await fetch(`/api/projects/${projectId}/shopify/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, themeId }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const json = await res.json();
@@ -168,6 +175,7 @@ export function useShopifyConnection(projectId: string) {
     // Themes
     themes: themesQuery.data ?? [],
     isLoadingThemes: themesQuery.isLoading,
+    themesError: themesQuery.error,
     refetchThemes: themesQuery.refetch,
   };
 }

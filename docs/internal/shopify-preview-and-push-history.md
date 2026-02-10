@@ -47,4 +47,4 @@ npx supabase db push
 psql $DATABASE_URL -f supabase/migrations/024_theme_push_history.sql
 ```
 
-See [Deployment / migrations](https://github.com/your-org/synapse/blob/main/docs/deployment/merge-checklist.md) if your flow differs.
+See [Deployment / migrations](../deployment/migrations.md) or [merge checklist](../deployment/merge-checklist.md) if your flow differs.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
 
 interface ImportThemeModalProps {
@@ -36,6 +37,10 @@ export function ImportThemeModal({
   const [storeStep, setStoreStep] = useState<StoreStep>('connect');
   const [storeError, setStoreError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [createDevThemeForPreview, setCreateDevThemeForPreview] = useState(true);
+  const [previewNote, setPreviewNote] = useState('');
+  const [importProgress, setImportProgress] = useState<'idle' | 'pull' | 'setup'>('idle');
+  const queryClient = useQueryClient();
 
   const {
     connected,
@@ -143,16 +148,92 @@ export function ImportThemeModal({
   const handleStoreImport = async () => {
     if (!selectedThemeId) return;
     setStoreError(null);
+    setImportProgress('pull');
 
     try {
       const result = await sync({ action: 'pull', themeId: selectedThemeId });
-      setImportSuccess(
-        `Successfully pulled ${result.pulled} file${result.pulled !== 1 ? 's' : ''} from Shopify`
-      );
+
+      if (createDevThemeForPreview) {
+        setImportProgress('setup');
+        try {
+          const setupRes = await fetch(
+            `/api/projects/${projectId}/shopify/setup-preview-theme`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                note: previewNote.trim() || undefined,
+              }),
+            }
+          );
+          const setupJson = await setupRes.json().catch(() => ({}));
+          const data = setupJson.data ?? setupJson;
+
+          if (!setupRes.ok) {
+            setStoreError(
+              setupJson.error ?? data?.message ?? 'Preview setup failed'
+            );
+            setImportProgress('idle');
+            return;
+          }
+          if (data?.errors?.length) {
+            setImportSuccess(
+              `Imported ${result.pulled} files. Preview theme is ready. Some files had errors: ${data.errors.slice(0, 3).join(', ')}${data.errors.length > 3 ? '…' : ''}`
+            );
+          } else {
+            setImportSuccess(
+              `Imported ${result.pulled} file${result.pulled !== 1 ? 's' : ''}. Preview theme is ready. Only your preview theme was updated; your live store is not affected.`
+            );
+          }
+        } catch (setupErr) {
+          setStoreError(
+            setupErr instanceof Error ? setupErr.message : 'Preview setup failed'
+          );
+          setImportProgress('idle');
+          return;
+        }
+      } else {
+        setImportSuccess(
+          `Successfully pulled ${result.pulled} file${result.pulled !== 1 ? 's' : ''} from Shopify`
+        );
+      }
+
+      setImportProgress('idle');
+      await queryClient.invalidateQueries({ queryKey: ['shopify-connection', projectId] });
       onImportSuccess?.();
       setTimeout(() => onClose(), 1500);
     } catch (err) {
       setStoreError(err instanceof Error ? err.message : 'Import failed');
+      setImportProgress('idle');
+    }
+  };
+
+  const handleRetrySetupPreview = async () => {
+    setStoreError(null);
+    setImportProgress('setup');
+    try {
+      const setupRes = await fetch(
+        `/api/projects/${projectId}/shopify/setup-preview-theme`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: previewNote.trim() || undefined }),
+        }
+      );
+      const setupJson = await setupRes.json().catch(() => ({}));
+      if (!setupRes.ok) {
+        setStoreError(setupJson.error ?? 'Preview setup failed');
+        setImportProgress('idle');
+        return;
+      }
+      setImportSuccess('Preview theme is ready.');
+      setImportProgress('idle');
+      await queryClient.invalidateQueries({ queryKey: ['shopify-connection', projectId] });
+      onImportSuccess?.();
+      setTimeout(() => onClose(), 1500);
+    } catch (err) {
+      setStoreError(err instanceof Error ? err.message : 'Preview setup failed');
+      setImportProgress('idle');
     }
   };
 
@@ -392,6 +473,46 @@ export function ImportThemeModal({
                     ))}
                   </select>
 
+                  {/* Create dev theme for preview (From Store only) */}
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={createDevThemeForPreview}
+                      onChange={(e) => setCreateDevThemeForPreview(e.target.checked)}
+                      className="mt-1 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-300">
+                      Create a development theme for preview (recommended). Only your preview theme will be updated; your live store is not affected.
+                    </span>
+                  </label>
+                  {createDevThemeForPreview && (
+                    <div>
+                      <label
+                        htmlFor="preview-note"
+                        className="block text-xs font-medium text-gray-400 mb-1"
+                      >
+                        Preview note (optional)
+                      </label>
+                      <input
+                        id="preview-note"
+                        type="text"
+                        value={previewNote}
+                        onChange={(e) => setPreviewNote(e.target.value)}
+                        placeholder="e.g. Import from Live theme"
+                        className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  )}
+
+                  {/* Two-step progress */}
+                  {importProgress !== 'idle' && (
+                    <p className="text-sm text-blue-400">
+                      {importProgress === 'pull'
+                        ? '1. Importing theme…'
+                        : '2. Setting up preview theme…'}
+                    </p>
+                  )}
+
                   {/* Sync result feedback */}
                   {syncResult && (
                     <div className="text-xs p-3 rounded bg-gray-800 border border-gray-700 space-y-1">
@@ -413,8 +534,19 @@ export function ImportThemeModal({
                   )}
 
                   {storeError && (
-                    <div className="p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm">
-                      {storeError}
+                    <div className="space-y-2">
+                      <div className="p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm">
+                        {storeError}
+                      </div>
+                      {importProgress === 'idle' && createDevThemeForPreview && (
+                        <button
+                          type="button"
+                          onClick={handleRetrySetupPreview}
+                          className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+                        >
+                          Retry setup preview
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -455,10 +587,21 @@ export function ImportThemeModal({
             <button
               type="button"
               onClick={handleStoreImport}
-              disabled={!selectedThemeId || isSyncing}
+              disabled={
+                !selectedThemeId ||
+                isSyncing ||
+                importProgress === 'pull' ||
+                importProgress === 'setup'
+              }
               className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSyncing ? 'Importing…' : 'Import Theme'}
+              {importProgress === 'pull'
+                ? 'Importing…'
+                : importProgress === 'setup'
+                  ? 'Setting up preview…'
+                  : isSyncing
+                    ? 'Importing…'
+                    : 'Import Theme'}
             </button>
           )}
         </div>
