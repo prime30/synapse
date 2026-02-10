@@ -1,6 +1,18 @@
 import type { FileVersion } from "@/lib/types/version";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { ChangeDetector } from "./change-detector";
+
+async function getClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  return createClient();
+}
 
 export class VersionService {
   private changeDetector = new ChangeDetector();
@@ -11,7 +23,7 @@ export class VersionService {
     userId: string,
     changeSummary?: string
   ): Promise<FileVersion> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const latestVersion = await this.getLatestVersion(fileId);
     const nextVersionNumber = latestVersion
@@ -49,7 +61,7 @@ export class VersionService {
   }
 
   async getLatestVersion(fileId: string): Promise<FileVersion | null> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const { data, error } = await supabase
       .from("file_versions")
@@ -71,7 +83,7 @@ export class VersionService {
     limit?: number,
     offset?: number
   ): Promise<FileVersion[]> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     let query = supabase
       .from("file_versions")
@@ -98,7 +110,7 @@ export class VersionService {
   }
 
   async getVersion(versionId: string): Promise<FileVersion | null> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const { data, error } = await supabase
       .from("file_versions")

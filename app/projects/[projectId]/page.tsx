@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
@@ -13,7 +13,15 @@ import { ImportThemeModal } from '@/components/features/file-management/ImportTh
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { ActiveUsersPanel } from '@/components/collaboration/ActiveUsersPanel';
 import { ProjectSwitcher } from '@/components/features/projects/ProjectSwitcher';
+import { DesignTokenBrowser } from '@/components/features/design-system/DesignTokenBrowser';
+import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
+import { VersionHistoryPanel } from '@/components/features/versions/VersionHistoryPanel';
+import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
+import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
+import { UserMenu } from '@/components/features/auth/UserMenu';
 import { useFileTabs } from '@/hooks/useFileTabs';
+import { useAISidebar } from '@/hooks/useAISidebar';
+import { useVersionHistory } from '@/hooks/useVersionHistory';
 import { useProjectFiles } from '@/hooks/useProjectFiles';
 import { useProjects } from '@/hooks/useProjects';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
@@ -21,11 +29,17 @@ import { useWorkspacePresence } from '@/hooks/useWorkspacePresence';
 import { useRemoteCursors } from '@/hooks/useRemoteCursors';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
 
+/** MVP: map theme file path to storefront preview path; fallback to / for unsupported paths. */
+function previewPathFromFile(filePath: string | null | undefined): string {
+  if (!filePath) return '/';
+  if (filePath === 'templates/index.liquid') return '/';
+  // Follow-up: full template-to-route mapping (e.g. product, collection, page)
+  return '/';
+}
+
 export default function ProjectPage() {
   const params = useParams();
-  const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
 
@@ -33,6 +47,8 @@ export default function ProjectPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  type RightPanelTab = 'preview' | 'suggestions' | 'versions' | 'shopify' | 'design' | 'agent';
+  const [rightPanel, setRightPanel] = useState<RightPanelTab>('preview');
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
@@ -41,7 +57,25 @@ export default function ProjectPage() {
     isLoading: isLoadingProjects,
     setLastProjectId,
   } = useProjects();
-  const { connected, connection, themes } = useShopifyConnection(projectId);
+  const { connected, connection } = useShopifyConnection(projectId);
+
+  const activeFile = useMemo(
+    () => rawFiles.find((f) => f.id === tabs.activeFileId),
+    [rawFiles, tabs.activeFileId]
+  );
+  const sidebar = useAISidebar({
+    filePath: activeFile?.path ?? null,
+    fileLanguage: activeFile?.file_type ?? null,
+    selection: null,
+  });
+  const versionHistory = useVersionHistory(tabs.activeFileId ?? null);
+  useEffect(() => {
+    sidebar.updateContext({
+      filePath: activeFile?.path ?? null,
+      fileLanguage: activeFile?.file_type ?? null,
+      selection: null,
+    });
+  }, [activeFile?.path, activeFile?.file_type, sidebar.updateContext]);
 
   const recoveryAttemptedRef = useRef(false);
 
@@ -86,6 +120,18 @@ export default function ProjectPage() {
     }
   }, [projectId, isCurrentProjectAccessible, setLastProjectId]);
 
+  // Cmd/Ctrl+Shift+A: switch to Agent panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
+        e.preventDefault();
+        setRightPanel('agent');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const activeFilePath = useMemo(
     () =>
       tabs.activeFileId
@@ -106,26 +152,10 @@ export default function ProjectPage() {
     [allCursors, activeFilePath]
   );
 
-  const showPreview = connected && connection && themes.length > 0;
-  const mainTheme = useMemo(
-    () => themes.find((t) => t.role === 'main') ?? themes[0],
-    [themes]
-  );
+  const showPreview = connected && connection && !!connection.theme_id;
+  const previewThemeId = connection?.theme_id ?? null;
 
   const hasFiles = rawFiles.length > 0;
-
-  // ── Toasts ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (searchParams.get('signed_in') === '1') {
-      router.replace(pathname ?? `/projects/${projectId}`);
-      const t = setTimeout(() => setToast('Login successful!'), 0);
-      const t2 = setTimeout(() => setToast(null), 3000);
-      return () => {
-        clearTimeout(t);
-        clearTimeout(t2);
-      };
-    }
-  }, [searchParams, pathname, projectId, router]);
 
   // ── Presence heartbeat ────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,7 +306,7 @@ export default function ProjectPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Right: save / status */}
+        {/* Right: save / status / user menu */}
         <div className="flex items-center gap-3">
           {toast && (
             <span className="text-sm text-green-400 animate-pulse">
@@ -293,6 +323,7 @@ export default function ProjectPage() {
               'Up to date'
             )}
           </span>
+          <UserMenu />
         </div>
       </header>
 
@@ -389,39 +420,118 @@ export default function ProjectPage() {
           )}
         </main>
 
-        {/* ── Right: Preview ───────────────────────────────────────────────── */}
-        {showPreview && mainTheme ? (
-          <aside className="w-[420px] border-l border-gray-800 flex-shrink-0 flex flex-col min-h-0 p-3 overflow-auto">
-            <PreviewPanel
-              storeDomain={connection!.store_domain}
-              themeId={mainTheme.id}
-              projectId={projectId}
-              path={activeFilePath}
-            />
-          </aside>
-        ) : (
-          <aside className="w-[320px] border-l border-gray-800 flex-shrink-0 flex flex-col items-center justify-center text-center px-6">
-            <div className="w-14 h-14 mb-3 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-7 h-7 text-gray-500"
+        {/* ── Right: Preview / Suggestions / Versions / Shopify / Design / Agent ── */}
+        <aside className={`${showPreview && previewThemeId ? 'w-[420px]' : 'w-[360px]'} border-l border-gray-800 flex-shrink-0 flex flex-col min-h-0`}>
+          <div className="flex border-b border-gray-800 flex-shrink-0 flex-wrap gap-px">
+            {(
+              [
+                ['preview', 'Preview'],
+                ['suggestions', 'Suggestions'],
+                ['versions', 'Versions'],
+                ['shopify', 'Shopify'],
+                ['design', 'Design'],
+                ['agent', 'Agent'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRightPanel(key)}
+                className={`px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                  rightPanel === key
+                    ? 'text-gray-200 border-b-2 border-blue-500 bg-gray-800/30'
+                    : 'text-gray-500 hover:text-gray-400'
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z"
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {rightPanel === 'preview' && (
+              showPreview && previewThemeId ? (
+                <div className="flex-1 overflow-auto p-3">
+                  <PreviewPanel
+                    storeDomain={connection!.store_domain}
+                    themeId={previewThemeId}
+                    projectId={projectId}
+                    path={previewPathFromFile(activeFilePath)}
+                    syncStatus={connection!.sync_status}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                  <div className="w-14 h-14 mb-3 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
+                    <svg className="w-7 h-7 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-400 font-medium">
+                    {connected && !previewThemeId
+                      ? 'Setting up preview theme…'
+                      : 'Import a theme or connect Shopify to see preview'}
+                  </p>
+                </div>
+              )
+            )}
+            {rightPanel === 'suggestions' && (
+              <div className="flex-1 overflow-auto p-2">
+                <SuggestionPanel projectId={projectId} fileId={tabs.activeFileId ?? undefined} />
+              </div>
+            )}
+            {rightPanel === 'versions' && (
+              <div className="flex-1 overflow-auto p-2">
+                <VersionHistoryPanel
+                  versions={versionHistory.versions}
+                  currentVersion={
+                    versionHistory.versions.length > 0
+                      ? Math.max(
+                          ...versionHistory.versions.map((v) => v.version_number)
+                        )
+                      : 0
+                  }
+                  isLoading={versionHistory.isLoading}
+                  onUndo={(n) =>
+                    versionHistory.undo({ current_version_number: n })
+                  }
+                  onRedo={(n) =>
+                    versionHistory.redo({ current_version_number: n })
+                  }
+                  onRestore={(versionId) =>
+                    versionHistory.restore({
+                      version_id: versionId,
+                      current_version_number:
+                        versionHistory.versions.length > 0
+                          ? Math.max(
+                              ...versionHistory.versions.map(
+                                (v) => v.version_number
+                              )
+                            )
+                          : 0,
+                    })
+                  }
+                  isUndoing={versionHistory.isUndoing}
+                  isRedoing={versionHistory.isRedoing}
+                  isRestoring={versionHistory.isRestoring}
                 />
-              </svg>
-            </div>
-            <p className="text-sm text-gray-400 font-medium">
-              Import a theme to see preview
-            </p>
-          </aside>
-        )}
+              </div>
+            )}
+            {rightPanel === 'shopify' && (
+              <div className="flex-1 overflow-auto p-2">
+                <ShopifyConnectPanel projectId={projectId} />
+              </div>
+            )}
+            {rightPanel === 'design' && (
+              <DesignTokenBrowser projectId={projectId} />
+            )}
+            {rightPanel === 'agent' && (
+              <div className="flex-1 flex flex-col min-h-0 p-2">
+                <AgentPromptPanel projectId={projectId} context={sidebar.context} />
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}

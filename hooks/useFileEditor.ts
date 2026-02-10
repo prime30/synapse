@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useFile } from './useFile';
 import { useAutoSave } from './useAutoSave';
+import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
 
 export function useFileEditor(fileId: string | null) {
   const { file, isLoading, refetch } = useFile(fileId);
@@ -45,10 +46,17 @@ export function useFileEditor(fileId: string | null) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error('Save failed');
     clearDraft(fileId);
     setOriginalContent(content);
     await refetch();
+    if (json.data?.shopifyPushQueued && json.data?.project_id) {
+      setTimeout(
+        () => emitPreviewSyncComplete(json.data.project_id),
+        2000
+      );
+    }
   }, [fileId, content, clearDraft, refetch]);
 
   const cancel = useCallback(() => {

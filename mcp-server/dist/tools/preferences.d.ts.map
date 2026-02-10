@@ -1,0 +1,1 @@
+{"version":3,"file":"preferences.d.ts","sourceRoot":"","sources":["../../src/tools/preferences.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,SAAS,EAAE,MAAM,kBAAkB,CAAC;AAClD,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,oBAAoB,CAAC;AACtD,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,eAAe,CAAC;AAGlD,wBAAgB,wBAAwB,CACtC,QAAQ,EAAE,YAAY,EACtB,SAAS,EAAE,SAAS,EACpB,WAAW,EAAE,WAAW,GACvB,IAAI,CAoCN"}

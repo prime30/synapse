@@ -8,7 +8,7 @@ import { isPublicPath, getRedirectUrl } from '@/lib/auth/route-guard';
  * Checks Supabase Auth session for every request.
  * - Public paths (sign-in, auth API, static assets) pass through.
  * - Protected paths redirect unauthenticated users to /auth/signin.
- * - Authenticated users visiting /auth/signin are redirected to /.
+ * - Authenticated users visiting /auth/signin are redirected to /projects.
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Create a Supabase client that reads/writes cookies on the response
-  let response = NextResponse.next({ request });
+  const response = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from sign-in page
   if (isAuthenticated && pathname === '/auth/signin') {
     const callbackUrl =
-      request.nextUrl.searchParams.get('callbackUrl') ?? '/';
+      request.nextUrl.searchParams.get('callbackUrl') ?? '/projects';
     return NextResponse.redirect(new URL(callbackUrl, request.url));
   }
 

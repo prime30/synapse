@@ -106,7 +106,7 @@ When you have a **plan with tasks and dependency tiers** and want the AI to act 
    ```
    Act as PM: orchestrate the plan in this file [or @.cursor/plans/<name>.plan.md]. Execute tasks in dependency tiers (Tier 0 → 1 → 2 in parallel → 3 in parallel → 4). Lint and test after each tier. When all tiers are done, review the work (lint, test, spot-check acceptance criteria).
    ```
-2. **Quick button / snippet** — In Cursor you can save the prompt as a **User Snippet** (Cursor Settings → Cursor Settings → Snippets, or a `.code-snippets` file) so one shortcut or keyword (e.g. `orchestrate`) inserts it into the chat.
+2. **Quick snippet** — This repo includes a project snippet: in any file, type **`orchestrate`** and accept the suggestion to insert the prompt (from `.vscode/synapse.code-snippets`). Copy the result into Chat. You can also add a User Snippet in Cursor Settings → Snippets for the same text.
 3. **Rule** — The project rule `.cursor/rules/orchestration-quick.mdc` applies when you’re in a plan file or say "orchestrate the plan"; the AI will follow the tiered execution and review steps.
 
 To **turn off orchestration** and work with a single agent, say: **"Single agent only"** or **"No orchestration — just do it yourself."** See `.cursor/rules/modes-and-single-agent.mdc`.

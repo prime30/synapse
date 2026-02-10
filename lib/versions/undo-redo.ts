@@ -1,5 +1,17 @@
 import type { FileVersion } from "@/lib/types/version";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+async function getClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  return createClient();
+}
 
 export class UndoRedoManager {
   async undo(
@@ -66,7 +78,7 @@ export class UndoRedoManager {
     fileId: string,
     versionNumber: number
   ): Promise<FileVersion | null> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const { data, error } = await supabase
       .from("file_versions")

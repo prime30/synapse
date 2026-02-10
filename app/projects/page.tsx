@@ -1,34 +1,33 @@
 'use client';
 
 import { Suspense, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useProjects } from '@/hooks/useProjects';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 
 /**
- * /projects — Landing page after login.
- *
- * Renders instantly with two actions:
- *  1. Create Project — creates a new project and enters the IDE.
- *  2. Open Project — fetches existing projects and redirects to the most recent.
+ * Inner content that uses useSearchParams — must be inside Suspense for static export.
  */
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { createProject, isCreating, getLastProjectId } = useProjects();
   const [error, setError] = useState<string | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const signedIn = searchParams.get('signed_in') === '1';
+  const signedInSuffix = signedIn ? '?signed_in=1' : '';
 
   const handleCreate = useCallback(async () => {
     setError(null);
     try {
       const result = await createProject({ name: 'Untitled project' });
-      router.push(`/projects/${result.id}`);
+      router.push(`/projects/${result.id}${signedInSuffix}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to create project',
       );
     }
-  }, [createProject, router]);
+  }, [createProject, router, signedInSuffix]);
 
   const handleOpen = useCallback(async () => {
     setError(null);
@@ -37,7 +36,7 @@ export default function ProjectsPage() {
       // Check localStorage first for instant redirect
       const lastId = getLastProjectId();
       if (lastId) {
-        router.push(`/projects/${lastId}`);
+        router.push(`/projects/${lastId}${signedInSuffix}`);
         return;
       }
 
@@ -48,7 +47,7 @@ export default function ProjectsPage() {
       const projects = (json.data ?? []) as { id: string }[];
 
       if (projects.length > 0) {
-        router.push(`/projects/${projects[0].id}`);
+        router.push(`/projects/${projects[0].id}${signedInSuffix}`);
       } else {
         setError('No existing projects found. Create one to get started.');
         setIsOpening(false);
@@ -59,7 +58,7 @@ export default function ProjectsPage() {
       );
       setIsOpening(false);
     }
-  }, [getLastProjectId, router]);
+  }, [getLastProjectId, router, signedInSuffix]);
 
   const busy = isCreating || isOpening;
 
@@ -151,5 +150,24 @@ export default function ProjectsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * /projects — Landing page after login.
+ *
+ * Renders instantly with two actions:
+ *  1. Create Project — creates a new project and enters the IDE.
+ *  2. Open Project — fetches existing projects and redirects to the most recent.
+ */
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-6">
+        <div className="text-center text-gray-400 text-sm">Loading...</div>
+      </div>
+    }>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }

@@ -3,7 +3,7 @@ import { APIError } from '@/lib/errors/handler';
 export interface ShopifyTheme {
   id: number;
   name: string;
-  role: 'main' | 'unpublished' | 'demo';
+  role: 'main' | 'unpublished' | 'demo' | 'development';
   created_at: string;
   updated_at: string;
 }
@@ -183,6 +183,24 @@ export class ShopifyAdminAPI {
     const response = await this.request<ShopifyThemeResponse>(
       'GET',
       `themes/${themeId}`
+    );
+    return response.theme;
+  }
+
+  /**
+   * Create a theme from a public ZIP URL.
+   * POST /admin/api/2024-01/themes.json
+   * Requires theme src (public URL to theme zip). New theme is unpublished by default.
+   */
+  async createTheme(
+    name: string,
+    src: string,
+    role: 'unpublished' | 'development' = 'unpublished'
+  ): Promise<ShopifyTheme> {
+    const response = await this.request<ShopifyThemeResponse>(
+      'POST',
+      'themes',
+      { theme: { name, src, role } }
     );
     return response.theme;
   }

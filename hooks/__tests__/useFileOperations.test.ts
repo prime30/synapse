@@ -207,7 +207,7 @@ describe('useFileOperations', () => {
       
       const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
         if (tagName === 'a') {
-          return mockLink as any;
+          return mockLink as unknown as HTMLElement;
         }
         return originalCreateElement(tagName);
       });
@@ -242,7 +242,7 @@ describe('useFileOperations', () => {
       
       const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
         if (tagName === 'a') {
-          return mockLink as any;
+          return mockLink as unknown as HTMLElement;
         }
         return originalCreateElement(tagName);
       });

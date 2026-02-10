@@ -1,0 +1,1 @@
+{"version":3,"file":"apply-changes.d.ts","sourceRoot":"","sources":["../../src/tools/apply-changes.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,SAAS,EAAE,MAAM,kBAAkB,CAAC;AAClD,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,oBAAoB,CAAC;AACtD,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,eAAe,CAAC;AAIlD,wBAAgB,kBAAkB,CAChC,QAAQ,EAAE,YAAY,EACtB,SAAS,EAAE,SAAS,EACpB,WAAW,EAAE,WAAW,GACvB,IAAI,CAwEN"}

@@ -64,6 +64,10 @@ export interface AgentContext {
   files: FileContext[];
   userPreferences: UserPreference[];
   conversationHistory?: AgentMessage[];
+  /** Cross-file dependency summary from the context system (REQ-5) */
+  dependencyContext?: string;
+  /** Design system token context for design-aware code generation (REQ-52) */
+  designContext?: string;
 }
 
 /** A task delegated from the PM to a specialist */

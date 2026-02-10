@@ -21,7 +21,11 @@ export interface EnhancedSession {
   expires: string;
 }
 
-export function jwtCallback(params: { token: any; account?: any; profile?: any }): any {
+export function jwtCallback(params: {
+  token: EnhancedToken;
+  account?: { access_token?: string; refresh_token?: string };
+  profile?: { name?: string; picture?: string; image?: string };
+}): EnhancedToken {
   const { token, account, profile } = params;
   if (account) {
     token.accessToken = account.access_token;
@@ -34,7 +38,10 @@ export function jwtCallback(params: { token: any; account?: any; profile?: any }
   return token;
 }
 
-export function sessionCallback(params: { session: any; token: any }): any {
+export function sessionCallback(params: {
+  session: EnhancedSession;
+  token: EnhancedToken;
+}): EnhancedSession {
   const { session, token } = params;
   if (session.user) {
     session.user.id = token.sub;

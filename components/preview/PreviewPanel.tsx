@@ -9,6 +9,8 @@ interface PreviewPanelProps {
   themeId: string | number;
   projectId: string;
   path?: string;
+  /** When 'syncing', show "Syncing to store…" state. */
+  syncStatus?: 'connected' | 'syncing' | 'error' | 'disconnected';
 }
 
 export function PreviewPanel({
@@ -16,6 +18,7 @@ export function PreviewPanel({
   themeId,
   projectId,
   path,
+  syncStatus,
 }: PreviewPanelProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -27,13 +30,17 @@ export function PreviewPanel({
     setTimeout(() => setIsRefreshing(false), 1200);
   });
 
+  const isSyncing = syncStatus === 'syncing';
+
   return (
     <section className={`flex flex-col gap-3 ${isFullscreen ? 'fixed inset-0 z-50 bg-gray-950 p-4' : ''}`}>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-200">Preview</h2>
           <p className="text-xs text-gray-400">
-            Shopify native rendering (theme {String(themeId)})
+            {isSyncing
+              ? 'Syncing to store…'
+              : `Shopify native rendering (theme ${String(themeId)})`}
           </p>
         </div>
         <button
@@ -51,7 +58,7 @@ export function PreviewPanel({
         path={path}
         isFullscreen={isFullscreen}
         refreshToken={refreshToken}
-        isRefreshing={isRefreshing}
+        isRefreshing={isRefreshing || isSyncing}
       />
     </section>
   );

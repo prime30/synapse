@@ -10,6 +10,8 @@ Migrations live in `supabase/migrations/` and are applied in order (by filename)
 npx supabase db push
 ```
 
+If you see **"Cannot find project ref. Have you run supabase link?"**, either link the project (`npx supabase link`) or apply the migration SQL manually (see below).
+
 Or apply a single file:
 
 ```bash

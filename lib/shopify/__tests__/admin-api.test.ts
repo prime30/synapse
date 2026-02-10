@@ -6,6 +6,9 @@ import type { ShopifyTheme, ShopifyAsset } from '../admin-api';
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// Helper type to access private methods in tests
+type TestableAdminAPI = { apiUrl: (path: string) => string };
+
 describe('ShopifyAdminAPI', () => {
   const storeDomain = 'test-store.myshopify.com';
   const accessToken = 'shpat_test_token_12345';
@@ -21,7 +24,7 @@ describe('ShopifyAdminAPI', () => {
   describe('apiUrl', () => {
     it('builds correct URL with store domain', () => {
       // Access private method via type assertion
-      const url = (api as any).apiUrl('themes');
+      const url = (api as unknown as TestableAdminAPI).apiUrl('themes');
       expect(url).toBe(
         'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
       );
@@ -32,15 +35,15 @@ describe('ShopifyAdminAPI', () => {
         'https://test-store.myshopify.com',
         accessToken
       );
-      const url = (apiWithProtocol as any).apiUrl('themes');
+      const url = (apiWithProtocol as unknown as TestableAdminAPI).apiUrl('themes');
       expect(url).toBe(
         'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
       );
     });
 
     it('handles different API paths', () => {
-      const themesUrl = (api as any).apiUrl('themes');
-      const assetsUrl = (api as any).apiUrl('themes/123/assets');
+      const themesUrl = (api as unknown as TestableAdminAPI).apiUrl('themes');
+      const assetsUrl = (api as unknown as TestableAdminAPI).apiUrl('themes/123/assets');
       
       expect(themesUrl).toBe(
         'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
@@ -65,13 +68,13 @@ describe('ShopifyAdminAPI', () => {
 
       expect(typeof theme.id).toBe('number');
       expect(typeof theme.name).toBe('string');
-      expect(['main', 'unpublished', 'demo']).toContain(theme.role);
+      expect(['main', 'unpublished', 'demo', 'development']).toContain(theme.role);
       expect(typeof theme.created_at).toBe('string');
       expect(typeof theme.updated_at).toBe('string');
     });
 
     it('accepts all valid role values', () => {
-      const roles: ShopifyTheme['role'][] = ['main', 'unpublished', 'demo'];
+      const roles: ShopifyTheme['role'][] = ['main', 'unpublished', 'demo', 'development'];
 
       for (const role of roles) {
         const theme: ShopifyTheme = {
@@ -257,6 +260,68 @@ describe('ShopifyAdminAPI', () => {
       const [url] = mockFetch.mock.calls[0];
       
       expect(url).toContain('asset[key]=templates%2Fproduct%20with%20spaces.liquid');
+    });
+
+    it('createTheme sends POST with name, src, and role', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers(),
+        json: async () => ({
+          theme: {
+            id: 999,
+            name: 'Synapse Dev - proj-1',
+            role: 'unpublished',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        }),
+      });
+
+      const theme = await api.createTheme(
+        'Synapse Dev - proj-1',
+        'https://example.com/dawn.zip',
+        'unpublished'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe(
+        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+      );
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual({
+        theme: {
+          name: 'Synapse Dev - proj-1',
+          src: 'https://example.com/dawn.zip',
+          role: 'unpublished',
+        },
+      });
+      expect(theme.id).toBe(999);
+      expect(theme.name).toBe('Synapse Dev - proj-1');
+      expect(theme.role).toBe('unpublished');
+    });
+
+    it('createTheme defaults to unpublished role', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers(),
+        json: async () => ({
+          theme: {
+            id: 1000,
+            name: 'Dev Theme',
+            role: 'unpublished',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        }),
+      });
+
+      await api.createTheme('Dev Theme', 'https://example.com/theme.zip');
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.theme.role).toBe('unpublished');
     });
   });
 });

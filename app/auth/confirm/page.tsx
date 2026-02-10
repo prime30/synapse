@@ -4,6 +4,30 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+function normalizeNextPath(raw: string | null): string {
+  const fallback = '/projects?signed_in=1';
+  if (!raw) return fallback;
+  const value = raw.trim();
+  if (!value) return fallback;
+  if (value.startsWith('/')) return value;
+
+  // If an absolute URL sneaks in, only allow same-origin destinations.
+  try {
+    const parsed = new URL(value);
+    if (typeof window !== 'undefined' && parsed.origin === window.location.origin) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+    console.warn(
+      `[auth/confirm] Rejected cross-origin next "${value}", using fallback.`
+    );
+  } catch {
+    console.warn(
+      `[auth/confirm] Rejected invalid next "${value}", using fallback.`
+    );
+  }
+  return fallback;
+}
+
 /**
  * Auth confirmation page for email verification and password recovery.
  *
@@ -20,7 +44,7 @@ function ConfirmContent() {
 
   useEffect(() => {
     if (handled.current) return;
-    const next = searchParams.get('next') ?? '/projects?signed_in=1';
+    const next = normalizeNextPath(searchParams.get('next'));
 
     async function run() {
       // Capture type from URL before anything else (client may clear hash)

@@ -20,6 +20,8 @@ If you can’t use the CLI (e.g. no login yet), use the [Supabase Dashboard](htt
 - **Single run:** Open `supabase/run-all-migrations.sql`, copy its full contents, paste into the SQL Editor, and run it. That applies all migrations in order.
 - **Or run one by one:** Run each file in `supabase/migrations/` in numeric order (001, 002, 003, …). The `public.organizations` table is created in **002_create_organizations_table.sql**.
 
+**Applying migration 022 (agent orchestration) only:** Open `supabase/migrations/022_agent_orchestration.sql` in your editor, copy the **entire file contents** (all SQL inside the file), paste into the SQL Editor, and click Run. Do not type or paste the filename—only the SQL. (Pasting the filename causes: "trailing junk after numeric literal".)
+
 After new tables are created, the schema cache updates automatically. If anything still fails, run a simple query in the SQL Editor to refresh the cache.
 
 ## Backfill profiles (if you see an `organizations_owner_id_fkey` error)

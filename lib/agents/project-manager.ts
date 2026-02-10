@@ -43,6 +43,14 @@ export class ProjectManagerAgent extends Agent {
       THEME_STRUCTURE_DOC,
       themeContext.summary,
       '',
+      // Cross-file dependency context from REQ-5 context system
+      ...(task.context.dependencyContext
+        ? [task.context.dependencyContext, '']
+        : []),
+      // Design system token context from REQ-52
+      ...(task.context.designContext
+        ? [task.context.designContext, '']
+        : []),
       '## Project Files:',
       fileList,
       '',

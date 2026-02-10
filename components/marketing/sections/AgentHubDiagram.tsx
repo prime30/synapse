@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, startTransition } from 'react';
 import { motion, useInView, LayoutGroup } from 'framer-motion';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
 
@@ -36,10 +36,12 @@ const DIAGRAM_MIN_HEIGHT = 560;
 const FLOW_LINES_DELAY_MS = 350;
 
 function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(mq.matches);
     const handler = () => setReduced(mq.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -296,10 +298,10 @@ export function AgentHubDiagram() {
   useEffect(() => {
     const stacked = phase === 'stack' && !reducedMotion;
     if (stacked) {
-      setShowFlowLines(false);
+      startTransition(() => setShowFlowLines(false));
       return;
     }
-    const t = setTimeout(() => setShowFlowLines(true), FLOW_LINES_DELAY_MS);
+    const t = setTimeout(() => startTransition(() => setShowFlowLines(true)), FLOW_LINES_DELAY_MS);
     return () => clearTimeout(t);
   }, [phase, reducedMotion]);
 
@@ -309,12 +311,12 @@ export function AgentHubDiagram() {
   useEffect(() => {
     if (!inView) return;
     if (reducedMotion) {
-      setPhase('spread');
-      const t = setTimeout(() => setPhase('loop'), SPREAD_DURATION);
+      startTransition(() => setPhase('spread'));
+      const t = setTimeout(() => startTransition(() => setPhase('loop')), SPREAD_DURATION);
       return () => clearTimeout(t);
     }
-    const t1 = setTimeout(() => setPhase('spread'), STACK_DURATION);
-    const t2 = setTimeout(() => setPhase('loop'), STACK_DURATION + SPREAD_DURATION);
+    const t1 = setTimeout(() => startTransition(() => setPhase('spread')), STACK_DURATION);
+    const t2 = setTimeout(() => startTransition(() => setPhase('loop')), STACK_DURATION + SPREAD_DURATION);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);

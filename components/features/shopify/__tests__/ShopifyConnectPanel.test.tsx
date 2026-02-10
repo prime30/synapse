@@ -27,7 +27,7 @@ describe('ShopifyConnectPanel', () => {
     const connectButton = await screen.findByText('Connect');
     expect(connectButton).toBeDefined();
 
-    const input = screen.getByPlaceholderText('store-name.myshopify.com');
+    const input = screen.getByPlaceholderText('your-store-name');
     expect(input).toBeDefined();
 
     expect(screen.getByText('Shopify Store')).toBeDefined();

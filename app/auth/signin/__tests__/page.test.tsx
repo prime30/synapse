@@ -9,6 +9,14 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({
     get: (key: string) => mockSearchParams.get(key) ?? null,
   }),
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
 }));
 
 vi.mock('@/components/features/auth/GoogleSignInButton', () => ({
@@ -47,13 +55,13 @@ describe('SignInPage - REQ-8 TASK-2', () => {
     mockSearchParams.set('callbackUrl', '/dashboard');
     render(<SignInPage />);
     const button = screen.getByTestId('google-signin-button');
-    expect(button.getAttribute('data-callback-url')).toBe('/dashboard');
+    expect(button.getAttribute('data-callback-url')).toBe('/dashboard?signed_in=1');
   });
 
-  it('should default callbackUrl to / when not provided', () => {
+  it('should default callbackUrl to /projects?signed_in=1 when not provided', () => {
     render(<SignInPage />);
     const button = screen.getByTestId('google-signin-button');
-    expect(button.getAttribute('data-callback-url')).toBe('/');
+    expect(button.getAttribute('data-callback-url')).toBe('/projects?signed_in=1');
   });
 
   it('should show error message when error query param is present', () => {
@@ -61,9 +69,7 @@ describe('SignInPage - REQ-8 TASK-2', () => {
     render(<SignInPage />);
     const alert = screen.getByRole('alert');
     expect(alert).toBeDefined();
-    expect(alert.textContent).toContain(
-      'An error occurred during sign in. Please try again.',
-    );
+    expect(alert.textContent).toContain('SomeError');
   });
 
   it('should show specific message for OAuthAccountNotLinked error', () => {

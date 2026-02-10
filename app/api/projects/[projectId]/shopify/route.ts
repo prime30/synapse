@@ -7,6 +7,7 @@ import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { createClient } from '@/lib/supabase/server';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import { ShopifyAdminAPI } from '@/lib/shopify/admin-api';
+import { ensureDevTheme } from '@/lib/shopify/theme-provisioning';
 
 /** Admin client that bypasses RLS. Falls back to cookie-based client. */
 async function adminSupabase() {
@@ -37,14 +38,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { data: connection } = await supabase
       .from('shopify_connections')
       .select(
-        'id, store_domain, sync_status, scopes, last_sync_at, created_at, updated_at'
+        'id, store_domain, theme_id, sync_status, scopes, last_sync_at, created_at, updated_at'
       )
       .eq('project_id', projectId)
       .maybeSingle();
 
+    if (!connection) {
+      return successResponse({
+        connected: false,
+        connection: null,
+      });
+    }
+
+    // Guarantee a dev theme exists and is persisted (provision or reuse)
+    let themeId = connection.theme_id;
+    try {
+      themeId = await ensureDevTheme(connection.id);
+    } catch {
+      // Return connection as-is; theme_id may be null if provisioning failed (e.g. missing zip URL)
+      if (!themeId && connection.theme_id) themeId = connection.theme_id;
+    }
+
     return successResponse({
-      connected: !!connection,
-      connection: connection ?? null,
+      connected: true,
+      connection: {
+        ...connection,
+        theme_id: themeId ?? connection.theme_id,
+      },
     });
   } catch (error) {
     return handleAPIError(error);
@@ -92,11 +112,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ['read_themes', 'write_themes']
     );
 
+    // Provision a dev theme and persist theme_id
+    let themeId: string | null = connection.theme_id ?? null;
+    try {
+      themeId = await ensureDevTheme(connection.id);
+    } catch {
+      // Connection is stored; theme_id may be set later via GET (e.g. once zip URL is configured)
+    }
+
     return successResponse({
       connected: true,
       connection: {
         id: connection.id,
         store_domain: connection.store_domain,
+        theme_id: themeId,
         sync_status: connection.sync_status,
         scopes: connection.scopes,
         last_sync_at: connection.last_sync_at,

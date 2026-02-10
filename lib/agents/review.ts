@@ -24,6 +24,10 @@ export class ReviewAgent extends Agent {
     return [
       `Review the following proposed code changes for the request: "${task.context.userRequest}"`,
       '',
+      // Cross-file dependency context from REQ-5 context system
+      ...(task.context.dependencyContext
+        ? [task.context.dependencyContext, '']
+        : []),
       '## Proposed Changes:',
       task.instruction,
       '',

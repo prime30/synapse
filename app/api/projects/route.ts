@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
@@ -8,11 +9,11 @@ import { handleAPIError, APIError } from '@/lib/errors/handler';
  * GET /api/projects
  * List all projects accessible to the current user.
  * Tries the list_user_projects RPC first (avoids schema-cache issues);
- * falls back to direct .from('projects') query if the RPC doesn't exist.
+ * on any RPC error, falls back to listing via org membership with service role.
  */
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
     const supabase = await createClient();
 
     // Try RPC first
@@ -24,7 +25,37 @@ export async function GET(request: NextRequest) {
       return successResponse(rpcData ?? []);
     }
 
-    // If the RPC doesn't exist (migration not applied), fall back to direct query
+    // Fallback: use service role to list projects by org membership (bypasses RLS/schema cache)
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      const admin = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceKey,
+      );
+      const { data: members, error: memError } = await admin
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', userId);
+
+      if (memError || !members?.length) {
+        return successResponse([]);
+      }
+
+      const orgIds = [...new Set(members.map((m) => m.organization_id))];
+      const { data: projects, error: projError } = await admin
+        .from('projects')
+        .select('id, name, description, created_at, updated_at, organization_id, shopify_store_url')
+        .in('organization_id', orgIds)
+        .order('updated_at', { ascending: false });
+
+      if (projError) {
+        throw APIError.internal(projError.message);
+      }
+
+      return successResponse(projects ?? []);
+    }
+
+    // If the RPC doesn't exist and no service key, try direct query with anon client
     if (RPC_NOT_FOUND.test(rpcError.message ?? '')) {
       const { data: projects, error: projError } = await supabase
         .from('projects')

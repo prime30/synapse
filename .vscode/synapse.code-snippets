@@ -1,0 +1,9 @@
+{
+  "Orchestration quick prompt (PM plan execution)": {
+    "prefix": "orchestrate",
+    "body": [
+      "Act as PM: orchestrate the plan in this file [or @.cursor/plans/<name>.plan.md]. Execute tasks in dependency tiers (Tier 0 → 1 → 2 in parallel → 3 in parallel → 4). Lint and test after each tier. When all tiers are done, review the work (lint, test, spot-check acceptance criteria)."
+    ],
+    "description": "Paste into Chat to run plan with PM orchestration (tiers, lint/test, review)"
+  }
+}

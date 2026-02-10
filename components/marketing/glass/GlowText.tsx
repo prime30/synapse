@@ -11,6 +11,16 @@ interface GlowTextProps {
   color?: 'sky' | 'white' | 'warm-gray';
 }
 
+// Pre-build motion components outside render to avoid React Compiler static-component error
+const MOTION_TAGS = {
+  h1: motion.create('h1'),
+  h2: motion.create('h2'),
+  h3: motion.create('h3'),
+  h4: motion.create('h4'),
+  p: motion.create('p'),
+  span: motion.create('span'),
+};
+
 const colorMap = {
   sky: 'text-sky-400',
   white: 'text-white',
@@ -30,7 +40,7 @@ export function GlowText({
   animate = true,
   color = 'sky',
 }: GlowTextProps) {
-  const MotionTag = motion.create(Tag);
+  const MotionTag = MOTION_TAGS[Tag];
 
   return (
     <MotionTag

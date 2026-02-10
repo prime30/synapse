@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
+import { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -57,20 +57,22 @@ const CausticShader = {
 
 function CausticPlane({ intensity = 0.5 }: { intensity?: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const uniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-      uIntensity: { value: intensity },
-      uResolution: { value: new THREE.Vector2(1, 1) },
-    }),
-    [intensity]
-  );
+  const uniformsRef = useRef({
+    uTime: { value: 0 },
+    uIntensity: { value: intensity },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+  });
 
   useFrame(({ clock, size }) => {
-    uniforms.uTime.value = clock.getElapsedTime();
-    uniforms.uIntensity.value = intensity;
-    uniforms.uResolution.value.set(size.width, size.height);
+    uniformsRef.current.uTime.value = clock.getElapsedTime();
+    uniformsRef.current.uIntensity.value = intensity;
+    uniformsRef.current.uResolution.value.set(size.width, size.height);
   });
+
+  // Three.js shader uniforms require a stable object reference passed during render
+  // and in-place mutation inside useFrame — useRef is the correct primitive here.
+  // eslint-disable-next-line react-hooks/refs
+  const uniforms = uniformsRef.current;
 
   return (
     <mesh ref={meshRef}>

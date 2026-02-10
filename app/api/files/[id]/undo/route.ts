@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await requireAuth(request);
     const { id: fileId } = await params;
-    const body = (await request.json()) as UndoBody;
+    const body = (await request.json().catch(() => ({}))) as UndoBody;
 
     if (body.current_version_number === undefined) {
       throw APIError.badRequest('current_version_number is required');
@@ -28,6 +28,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return successResponse(version);
   } catch (error) {
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('No more undo') || msg.includes('undo available')) {
+      return handleAPIError(APIError.badRequest(msg || 'No more undo available'));
+    }
     return handleAPIError(error);
   }
 }

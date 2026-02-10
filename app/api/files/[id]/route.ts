@@ -5,6 +5,8 @@ import { handleAPIError } from '@/lib/errors/handler';
 import { getFile, updateFile, deleteFile } from '@/lib/services/files';
 import type { UpdateFileRequest } from '@/lib/types/files';
 import { APIError } from '@/lib/errors/handler';
+import { createClient } from '@/lib/supabase/server';
+import { schedulePushForProject } from '@/lib/shopify/push-queue';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -30,7 +32,43 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw APIError.badRequest('Use PATCH for rename; PUT is for content updates only');
     }
     const file = await updateFile(id, { content: body.content });
-    return successResponse(file);
+
+    let shopifyPushQueued = false;
+    const projectId = file.project_id as string;
+    if (projectId) {
+      const supabase = await createClient();
+      const { data: connection } = await supabase
+        .from('shopify_connections')
+        .select('id, theme_id')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      if (connection?.theme_id && file.path) {
+        const now = new Date().toISOString();
+        await supabase
+          .from('theme_files')
+          .upsert(
+            {
+              connection_id: connection.id,
+              file_path: file.path,
+              sync_status: 'pending',
+              created_at: now,
+              updated_at: now,
+            },
+            { onConflict: 'connection_id,file_path' }
+          );
+        schedulePushForProject(projectId);
+        shopifyPushQueued = true;
+      }
+    }
+
+    return successResponse({
+      ...file,
+      ...(shopifyPushQueued && {
+        shopifyPushQueued: true,
+        project_id: projectId,
+      }),
+    });
   } catch (error) {
     return handleAPIError(error);
   }

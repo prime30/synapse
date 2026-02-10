@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, startTransition } from 'react';
 import { motion, useSpring } from 'framer-motion';
 
 const CURSOR_SIZE = 10;
@@ -16,7 +16,7 @@ export function CustomCursor() {
   const y = useSpring(0, springCfg);
 
   useEffect(() => {
-    setMounted(true);
+    startTransition(() => setMounted(true));
   }, []);
 
   useEffect(() => {

@@ -126,7 +126,7 @@ describe('Middleware - REQ-8 TASK-3', () => {
       const response = await middleware(request);
       expect(response.status).toBe(307);
       const location = response.headers.get('location')!;
-      expect(new URL(location).pathname).toBe('/');
+      expect(new URL(location).pathname).toBe('/projects');
     });
 
     it('should redirect authenticated users from /auth/signin to callbackUrl', async () => {

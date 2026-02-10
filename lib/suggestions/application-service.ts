@@ -1,6 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { getFile, updateFile } from '@/lib/services/files';
 import type { Suggestion, SuggestionStatus } from '@/lib/types/suggestion';
+
+async function getClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  return createClient();
+}
 
 export interface ApplicationResult {
   success: boolean;
@@ -19,7 +31,7 @@ export class SuggestionApplicationService {
     suggestionId: string,
     editedCode?: string,
   ): Promise<ApplicationResult> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     // 1. Get suggestion from DB
     const suggestion = await this.getSuggestion(suggestionId);
@@ -119,7 +131,7 @@ export class SuggestionApplicationService {
    * @param suggestionId - The ID of the suggestion to reject
    */
   async rejectSuggestion(suggestionId: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const now = new Date().toISOString();
     const { error } = await supabase
@@ -140,7 +152,7 @@ export class SuggestionApplicationService {
    * @param suggestionId - The ID of the suggestion to undo
    */
   async undoSuggestion(suggestionId: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     // Get suggestion
     const suggestion = await this.getSuggestion(suggestionId);
@@ -206,7 +218,7 @@ export class SuggestionApplicationService {
    * @returns The suggestion or null if not found
    */
   async getSuggestion(suggestionId: string): Promise<Suggestion | null> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     const { data, error } = await supabase
       .from('suggestions')
@@ -239,7 +251,7 @@ export class SuggestionApplicationService {
     limit?: number,
     offset?: number,
   ): Promise<Suggestion[]> {
-    const supabase = await createClient();
+    const supabase = await getClient();
 
     let query = supabase
       .from('suggestions')

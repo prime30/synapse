@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMarkPageReady } from '@/components/marketing/PreloaderContext';
 
@@ -26,6 +27,7 @@ interface LetterState {
 }
 
 export function Preloader() {
+  const pathname = usePathname();
   const markReady = useMarkPageReady();
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(true);
@@ -44,15 +46,20 @@ export function Preloader() {
     setMounted(true);
   }, []);
 
-  // Skip if already seen this session
+  // Skip if already seen this session. On home page the Preloader only mounts on full page load
+  // (initial or hard refresh), so clear the flag when we're on home so the preloader always shows.
   useEffect(() => {
     if (!mounted) return;
+    const isHome = pathname === '/' || (typeof window !== 'undefined' && window.location.pathname === '/');
+    if (isHome) {
+      sessionStorage.removeItem(PRELOADER_KEY);
+    }
     const done = sessionStorage.getItem(PRELOADER_KEY);
     if (done === '1') {
       setVisible(false);
       markReady();
     }
-  }, [mounted]);
+  }, [mounted, pathname, markReady]);
 
   // ── Phase 1: Scramble — same as SynapseLogo header ──────────────
   useEffect(() => {

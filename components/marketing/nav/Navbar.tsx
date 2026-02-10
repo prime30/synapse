@@ -21,18 +21,18 @@ const NAV_LINKS = [
 export function Navbar() {
   const ready = usePageReady();
   const router = useRouter();
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem('synapse-theme');
+    if (stored === 'dark') {
+      document.documentElement.classList.add('dark');
+      return true;
+    }
+    return false;
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { authModal, openAuthModal, closeAuthModal } = useAuthModal();
-
-  useEffect(() => {
-    const stored = localStorage.getItem('synapse-theme');
-    if (stored === 'dark') {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
-  }, []);
 
   useEffect(() => {
     const supabase = createClient();

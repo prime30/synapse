@@ -170,6 +170,66 @@ export class ShopifyTokenManager {
   }
 
   /**
+   * Update the theme_id for a connection (e.g. after provisioning a dev theme).
+   */
+  async updateThemeId(
+    connectionId: string,
+    themeId: string
+  ): Promise<void> {
+    const supabase = adminSupabase();
+
+    const { error } = await supabase
+      .from('shopify_connections')
+      .update({
+        theme_id: themeId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connectionId);
+
+    if (error) {
+      throw new APIError(
+        `Failed to update theme_id: ${error.message}`,
+        'THEME_ID_UPDATE_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Get a connection by ID (without decrypted token). Used for provisioning.
+   */
+  async getConnectionById(
+    connectionId: string
+  ): Promise<Pick<
+    ShopifyConnection,
+    'id' | 'project_id' | 'store_domain' | 'theme_id' | 'sync_status' | 'scopes' | 'last_sync_at' | 'created_at' | 'updated_at'
+  > | null> {
+    const supabase = adminSupabase();
+
+    const { data, error } = await supabase
+      .from('shopify_connections')
+      .select('id, project_id, store_domain, theme_id, sync_status, scopes, last_sync_at, created_at, updated_at')
+      .eq('id', connectionId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw new APIError(
+        `Failed to get connection: ${error.message}`,
+        'CONNECTION_FETCH_FAILED',
+        500
+      );
+    }
+
+    return data as Pick<
+      ShopifyConnection,
+      'id' | 'project_id' | 'store_domain' | 'theme_id' | 'sync_status' | 'scopes' | 'last_sync_at' | 'created_at' | 'updated_at'
+    >;
+  }
+
+  /**
    * Update the sync status of a connection.
    */
   async updateSyncStatus(

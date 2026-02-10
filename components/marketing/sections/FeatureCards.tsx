@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, startTransition } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
@@ -154,10 +154,12 @@ function SyncStatusMockup({ inView }: { inView: boolean }) {
 
   useEffect(() => {
     if (!inView) return;
-    setConnected(false);
-    setDeployed(false);
-    const t1 = setTimeout(() => setConnected(true), 800);
-    const t2 = setTimeout(() => setDeployed(true), 2800);
+    startTransition(() => {
+      setConnected(false);
+      setDeployed(false);
+    });
+    const t1 = setTimeout(() => startTransition(() => setConnected(true)), 800);
+    const t2 = setTimeout(() => startTransition(() => setDeployed(true)), 2800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [inView]);
 

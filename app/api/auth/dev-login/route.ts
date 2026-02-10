@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const callbackUrl =
       typeof body.callbackUrl === 'string' && body.callbackUrl
         ? body.callbackUrl
-        : '/';
+        : '/projects?signed_in=1';
 
     const emailFromBody =
       typeof body.email === 'string' ? body.email.trim() : '';

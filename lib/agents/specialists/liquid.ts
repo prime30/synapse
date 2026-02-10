@@ -26,6 +26,14 @@ export class LiquidAgent extends Agent {
     return [
       `Task: ${task.instruction}`,
       '',
+      // Cross-file dependency context from REQ-5 context system
+      ...(task.context.dependencyContext
+        ? [task.context.dependencyContext, '']
+        : []),
+      // Design system token context from REQ-52
+      ...(task.context.designContext
+        ? [task.context.designContext, '']
+        : []),
       '## Liquid Files (you may modify these):',
       ...liquidFiles.map(
         (f) => `### ${f.fileName}\n\`\`\`liquid\n${f.content}\n\`\`\``

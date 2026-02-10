@@ -146,7 +146,15 @@ export async function fetchPreviewResources(
       throw APIError.badRequest('Unsupported resource type');
   }
 
-  const data = await queryGraphQL<Record<string, { edges: Array<{ node: any }> }>>(
+  interface ShopifyResourceNode {
+    id: string;
+    title: string;
+    handle: string;
+    featuredImage?: { url: string };
+    image?: { url: string };
+  }
+
+  const data = await queryGraphQL<Record<string, { edges: Array<{ node: ShopifyResourceNode }> }>>(
     connection.store_domain,
     accessToken,
     gql,

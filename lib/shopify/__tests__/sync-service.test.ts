@@ -4,6 +4,9 @@ import type { SyncResult } from '../sync-service';
 import type { ThemeFile, ThemeFileSyncStatus } from '@/lib/types/shopify';
 import { createHash } from 'crypto';
 
+// Helper type to access private methods in tests
+type TestableSyncService = { computeHash: (content: string) => string };
+
 describe('ThemeSyncService', () => {
   describe('computeHash', () => {
     it('should produce consistent SHA-256 hash for same input', () => {
@@ -11,8 +14,8 @@ describe('ThemeSyncService', () => {
       const content = 'test content';
 
       // Access private method via type assertion (testing only)
-      const hash1 = (service as any).computeHash(content);
-      const hash2 = (service as any).computeHash(content);
+      const hash1 = (service as unknown as TestableSyncService).computeHash(content);
+      const hash2 = (service as unknown as TestableSyncService).computeHash(content);
 
       expect(hash1).toBe(hash2);
       expect(hash1).toMatch(/^[a-f0-9]{64}$/); // SHA-256 produces 64 hex chars
@@ -20,8 +23,8 @@ describe('ThemeSyncService', () => {
 
     it('should produce different hashes for different inputs', () => {
       const service = new ThemeSyncService();
-      const hash1 = (service as any).computeHash('content1');
-      const hash2 = (service as any).computeHash('content2');
+      const hash1 = (service as unknown as TestableSyncService).computeHash('content1');
+      const hash2 = (service as unknown as TestableSyncService).computeHash('content2');
 
       expect(hash1).not.toBe(hash2);
     });
@@ -32,7 +35,7 @@ describe('ThemeSyncService', () => {
       const expectedHash = createHash('sha256')
         .update(content, 'utf8')
         .digest('hex');
-      const actualHash = (service as any).computeHash(content);
+      const actualHash = (service as unknown as TestableSyncService).computeHash(content);
 
       expect(actualHash).toBe(expectedHash);
     });

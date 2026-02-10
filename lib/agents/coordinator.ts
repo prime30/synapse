@@ -23,6 +23,86 @@ import { LiquidAgent } from './specialists/liquid';
 import { JavaScriptAgent } from './specialists/javascript';
 import { CSSAgent } from './specialists/css';
 import { ReviewAgent } from './review';
+import { DependencyDetector, ContextCache } from '@/lib/context';
+import type {
+  FileContext as ContextFileContext,
+  ProjectContext,
+  FileDependency,
+} from '@/lib/context/types';
+import { DesignSystemContextProvider } from '@/lib/design-tokens/agent-integration';
+
+// ── Cross-file context helpers (REQ-5) ────────────────────────────────
+
+/** Module-level singletons so cache persists across requests within the same process. */
+const contextCache = new ContextCache();
+const dependencyDetector = new DependencyDetector();
+const designContextProvider = new DesignSystemContextProvider();
+
+/**
+ * Detect cross-file dependencies and format a human-readable summary.
+ * Uses TTL-based caching to avoid recomputing on every request.
+ * Fails gracefully — returns empty string on error so agent execution is never blocked.
+ */
+function buildDependencyContext(
+  files: FileContext[],
+  projectId: string,
+): string {
+  try {
+    // Check cache first
+    const cached = contextCache.get(projectId);
+    if (cached) {
+      return formatDependencies(cached.dependencies, cached.files);
+    }
+
+    // Convert agent FileContext → context FileContext (adds required fields)
+    const contextFiles: ContextFileContext[] = files.map((f) => ({
+      fileId: f.fileId,
+      fileName: f.fileName,
+      fileType: f.fileType,
+      content: f.content,
+      sizeBytes: f.content.length,
+      lastModified: new Date(),
+      dependencies: { imports: [], exports: [], usedBy: [] },
+    }));
+
+    const dependencies = dependencyDetector.detectDependencies(contextFiles);
+
+    // Cache the full ProjectContext for the TTL window
+    const projectContext: ProjectContext = {
+      projectId,
+      files: contextFiles,
+      dependencies,
+      loadedAt: new Date(),
+      totalSizeBytes: contextFiles.reduce((sum, f) => sum + f.sizeBytes, 0),
+    };
+    contextCache.set(projectId, projectContext);
+
+    return formatDependencies(dependencies, contextFiles);
+  } catch (error) {
+    console.warn('[AgentCoordinator] Failed to build dependency context:', error);
+    return '';
+  }
+}
+
+/** Format dependency list using file names (not IDs) for AI readability. */
+function formatDependencies(
+  dependencies: FileDependency[],
+  files: ContextFileContext[],
+): string {
+  if (dependencies.length === 0) return '';
+
+  const nameMap = new Map(files.map((f) => [f.fileId, f.fileName]));
+  const lines: string[] = ['## Cross-File Dependencies\n'];
+
+  for (const dep of dependencies) {
+    const source = nameMap.get(dep.sourceFileId) ?? dep.sourceFileId;
+    const target = nameMap.get(dep.targetFileId) ?? dep.targetFileId;
+    const refs = dep.references.map((r) => r.symbol).join(', ');
+    lines.push(`- ${source} → ${target} (${dep.dependencyType}): ${refs}`);
+  }
+
+  return lines.join('\n');
+}
 
 /**
  * Message queue coordinator for multi-agent orchestration.
@@ -62,6 +142,19 @@ export class AgentCoordinator {
     createExecution(executionId, projectId, userId, userRequest);
     updateExecutionStatus(executionId, 'in_progress');
 
+    // Build cross-file dependency context (REQ-5).
+    // Gracefully degrades to empty string on failure.
+    const dependencyContext = buildDependencyContext(files, projectId);
+
+    // Build design-system context (REQ-52 Task 7).
+    // Gracefully degrades to empty string on failure.
+    let designContext = '';
+    try {
+      designContext = await designContextProvider.getDesignContext(projectId);
+    } catch {
+      // Never block agent execution if design tokens are unavailable
+    }
+
     const context: AgentContext = {
       executionId,
       projectId,
@@ -69,6 +162,8 @@ export class AgentCoordinator {
       userRequest,
       files,
       userPreferences,
+      dependencyContext: dependencyContext || undefined,
+      designContext: designContext || undefined,
     };
 
     try {

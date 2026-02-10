@@ -183,6 +183,40 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // ── Post-upload: run design system ingestion in background ──────────
+    // Extract tokens and detect components from the uploaded theme files.
+    // This is non-blocking — we return the upload result immediately.
+    // The ingestion writes to design_tokens and design_components tables.
+    const ingestionFiles: { id: string; path: string; content: string }[] = [];
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const batch = entries.slice(i, i + BATCH);
+      for (const { path, zipEntry } of batch) {
+        const ext = path.split('.').pop()?.toLowerCase() ?? '';
+        if (BINARY_EXTS.has(ext)) continue; // skip binary files
+        try {
+          const content = await zipEntry.async('string');
+          ingestionFiles.push({ id: path, path, content });
+        } catch {
+          // skip unreadable files
+        }
+      }
+    }
+
+    // Fire-and-forget ingestion (don't await — let it run in the background)
+    if (ingestionFiles.length > 0) {
+      import('@/lib/design-tokens/components/theme-ingestion')
+        .then(({ ingestTheme }) => ingestTheme(projectId, ingestionFiles))
+        .then((result) => {
+          console.log(
+            `[Theme Ingestion] Project ${projectId}: ${result.tokensCreated} tokens created, ` +
+            `${result.componentsDetected} components detected from ${result.totalFilesAnalyzed} files.`,
+          );
+        })
+        .catch((err) => {
+          console.warn('[Theme Ingestion] Failed:', err);
+        });
+    }
+
     return successResponse({
       imported,
       errors: errors.slice(0, 10),
