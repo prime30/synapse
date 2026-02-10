@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAnonClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
   shouldUseStorage,
   uploadToStorage,
@@ -8,8 +9,23 @@ import {
 import type { CreateFileInput, UpdateFileInput, FileFilter } from '@/lib/types/files';
 import { APIError } from '@/lib/errors/handler';
 
+/**
+ * Returns a Supabase client that bypasses RLS (service role).
+ * Falls back to the anon cookie-based client if the key isn't set.
+ */
+async function getClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey,
+    );
+  }
+  return createAnonClient();
+}
+
 export async function createFile(input: CreateFileInput) {
-  const supabase = await createClient();
+  const supabase = await getClient();
 
   // Check for duplicate filename per project (REQ-4)
   const { data: existing } = await supabase
@@ -53,7 +69,7 @@ export async function createFile(input: CreateFileInput) {
 }
 
 export async function getFile(fileId: string) {
-  const supabase = await createClient();
+  const supabase = await getClient();
 
   const { data: file, error } = await supabase
     .from('files')
@@ -72,7 +88,7 @@ export async function getFile(fileId: string) {
 }
 
 export async function updateFile(fileId: string, input: UpdateFileInput) {
-  const supabase = await createClient();
+  const supabase = await getClient();
 
   const updates: Record<string, unknown> = {};
 
@@ -139,7 +155,7 @@ export async function updateFile(fileId: string, input: UpdateFileInput) {
 }
 
 export async function deleteFile(fileId: string) {
-  const supabase = await createClient();
+  const supabase = await getClient();
 
   const { data: file } = await supabase
     .from('files')
@@ -163,7 +179,7 @@ export async function listProjectFiles(
   projectId: string,
   filter?: FileFilter
 ) {
-  const supabase = await createClient();
+  const supabase = await getClient();
 
   let query = supabase
     .from('files')
