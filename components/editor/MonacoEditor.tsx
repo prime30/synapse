@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
 import { getLiquidDiagnostics } from '@/lib/monaco/diagnostics-provider';
@@ -26,6 +26,8 @@ interface MonacoEditorProps {
   className?: string;
   /** Called when the user's text selection changes in the editor */
   onSelectionChange?: (selectedText: string | null) => void;
+  /** Called when user pastes an image – parent can handle "Add as asset" */
+  onImagePaste?: (file: File) => void;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -34,6 +36,78 @@ const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
   css: 'css',
   other: 'plaintext',
 };
+
+/* ── Feature 11: exclude '.' so double-click selects full Liquid object paths ── */
+const CUSTOM_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",<>/?';
+
+/* ── Feature 4 helpers: stack-based matching of Liquid block tags ─────────── */
+const LIQUID_OPEN_TO_CLOSE: Record<string, string> = {
+  if: 'endif',
+  for: 'endfor',
+  unless: 'endunless',
+  case: 'endcase',
+  capture: 'endcapture',
+};
+const LIQUID_CLOSE_TO_OPEN: Record<string, string> = Object.fromEntries(
+  Object.entries(LIQUID_OPEN_TO_CLOSE).map(([k, v]) => [v, k]),
+);
+
+function findMatchingLiquidTag(
+  content: string,
+  tagName: string,
+  tagOffset: number,
+): { start: number; end: number } | null {
+  const isClosing = tagName.startsWith('end');
+  const openTag = isClosing ? LIQUID_CLOSE_TO_OPEN[tagName] : tagName;
+  const closeTag = isClosing ? tagName : LIQUID_OPEN_TO_CLOSE[tagName];
+  if (!openTag || !closeTag) return null;
+
+  const re = new RegExp(`\\{%[-\\s]*(${openTag}|${closeTag})[\\s%-]*%\\}`, 'g');
+
+  if (!isClosing) {
+    re.lastIndex = tagOffset + 1;
+    let depth = 1;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      if (m[1] === openTag) depth++;
+      else if (m[1] === closeTag) {
+        depth--;
+        if (depth === 0) return { start: m.index, end: m.index + m[0].length };
+      }
+    }
+  } else {
+    const tags: { name: string; start: number; end: number }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      if (m.index >= tagOffset) break;
+      tags.push({ name: m[1], start: m.index, end: m.index + m[0].length });
+    }
+    let depth = 1;
+    for (let i = tags.length - 1; i >= 0; i--) {
+      const t = tags[i];
+      if (t.name === closeTag) depth++;
+      else if (t.name === openTag) {
+        depth--;
+        if (depth === 0) return { start: t.start, end: t.end };
+      }
+    }
+  }
+  return null;
+}
+
+/* ── Feature 8 helper: deterministic hash for unique CSS class names ──────── */
+function hashColor(color: string): string {
+  let h = 0;
+  for (let i = 0; i < color.length; i++) {
+    h = ((h << 5) - h) + color.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h).toString(36);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   Component
+   ═════════════════════════════════════════════════════════════════════════════ */
 
 export function MonacoEditor({
   value,
@@ -44,85 +118,409 @@ export function MonacoEditor({
   height = '100%',
   className,
   onSelectionChange,
+  onImagePaste,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+
+  /* Stable refs for callbacks consumed inside handleEditorDidMount */
   const onSaveKeyDownRef = useRef(onSaveKeyDown);
-  useEffect(() => {
-    onSaveKeyDownRef.current = onSaveKeyDown;
-  }, [onSaveKeyDown]);
+  useEffect(() => { onSaveKeyDownRef.current = onSaveKeyDown; }, [onSaveKeyDown]);
 
   const onSelectionChangeRef = useRef(onSelectionChange);
-  useEffect(() => {
-    onSelectionChangeRef.current = onSelectionChange;
-  }, [onSelectionChange]);
+  useEffect(() => { onSelectionChangeRef.current = onSelectionChange; }, [onSelectionChange]);
 
+  /* Feature 12 – paste-dialog state */
+  const [pasteDialog, setPasteDialog] = useState<{
+    file: File;
+    base64: string;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  /* Refs for decoration collections & injected <style> (cleaned up on unmount) */
+  const tagDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+  const colorDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+  const styleElRef = useRef<HTMLStyleElement | null>(null);
+
+  /* ── Main mount handler ────────────────────────────────────────────────── */
   const handleEditorDidMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
       editorRef.current = editorInstance;
       monacoRef.current = monaco;
 
+      /* Ctrl+S / Cmd+S save binding */
       if (onSaveKeyDownRef.current) {
         editorInstance.addCommand(
           monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-          () => { onSaveKeyDownRef.current?.(); }
+          () => { onSaveKeyDownRef.current?.(); },
         );
       }
 
-      // Selection change tracking (EPIC 1c: selection injection)
+      /* Selection change tracking (EPIC 1c: selection injection) */
       editorInstance.onDidChangeCursorSelection(() => {
         const model = editorInstance.getModel();
         if (!model || !onSelectionChangeRef.current) return;
-
         const selection = editorInstance.getSelection();
         if (!selection || selection.isEmpty()) {
           onSelectionChangeRef.current(null);
           return;
         }
-
         const text = model.getValueInRange(selection);
         onSelectionChangeRef.current(text || null);
       });
 
+      /* Liquid code-action provider */
       if (language === 'liquid') {
         monaco.languages.registerCodeActionProvider('html', {
           provideCodeActions: (
             model: editor.ITextModel,
             _range: Range,
             _context: languages.CodeActionContext,
-            _token: CancellationToken
+            _token: CancellationToken,
           ) => {
             const fixes = getLiquidCodeActions();
-            const actions = fixes.map((fix) => {
-              const start = model.getPositionAt(fix.range.start);
-              const end = model.getPositionAt(fix.range.end);
-              if (!start || !end) return null;
-              return {
-                title: fix.title,
-                kind: 'quickfix.liquid' as const,
-                edit: {
-                  edits: [
-                    {
-                      resource: model.uri,
-                      textEdit: {
-                        range: monaco.Range.fromPositions(start, end),
-                        text: fix.newText,
+            const actions = fixes
+              .map((fix) => {
+                const start = model.getPositionAt(fix.range.start);
+                const end = model.getPositionAt(fix.range.end);
+                if (!start || !end) return null;
+                return {
+                  title: fix.title,
+                  kind: 'quickfix.liquid' as const,
+                  edit: {
+                    edits: [
+                      {
+                        resource: model.uri,
+                        textEdit: {
+                          range: monaco.Range.fromPositions(start, end),
+                          text: fix.newText,
+                        },
+                        versionId: model.getVersionId(),
                       },
-                      versionId: model.getVersionId(),
-                    },
-                  ],
-                },
-              };
-            }).filter((x): x is NonNullable<typeof x> => x != null);
+                    ],
+                  },
+                };
+              })
+              .filter((x): x is NonNullable<typeof x> => x != null);
             return { actions, dispose: () => {} };
           },
         });
       }
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 4 – Matching Liquid Tag Highlights
+         ═══════════════════════════════════════════════════════════════════ */
+      const styleEl = document.createElement('style');
+      styleEl.setAttribute('data-synapse', 'monaco-extras');
+      styleEl.textContent =
+        '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}';
+      document.head.appendChild(styleEl);
+      styleElRef.current = styleEl;
+
+      const tagDecs = editorInstance.createDecorationsCollection([]);
+      tagDecorationsRef.current = tagDecs;
+
+      editorInstance.onDidChangeCursorPosition((e) => {
+        const model = editorInstance.getModel();
+        if (!model) {
+          tagDecs.clear();
+          return;
+        }
+
+        const { lineNumber, column } = e.position;
+        const lineContent = model.getLineContent(lineNumber);
+
+        const tagRe =
+          /\{%[-\s]*(if|elsif|else|endif|for|endfor|unless|endunless|case|when|endcase|capture|endcapture)[\s%-]*%\}/g;
+        let found: { name: string; colStart: number; colEnd: number } | null = null;
+        let m: RegExpExecArray | null;
+        while ((m = tagRe.exec(lineContent)) !== null) {
+          const cStart = m.index + 1; // 1-based column
+          const cEnd = m.index + m[0].length + 1;
+          if (column >= cStart && column <= cEnd) {
+            found = { name: m[1], colStart: cStart, colEnd: cEnd };
+            break;
+          }
+        }
+
+        // Skip middle tags (elsif, else, when) – nothing to pair
+        if (!found || ['elsif', 'else', 'when'].includes(found.name)) {
+          tagDecs.clear();
+          return;
+        }
+
+        const content = model.getValue();
+        const offset = model.getOffsetAt({ lineNumber, column: found.colStart });
+        const matchResult = findMatchingLiquidTag(content, found.name, offset);
+        if (!matchResult) {
+          tagDecs.clear();
+          return;
+        }
+
+        const mStart = model.getPositionAt(matchResult.start);
+        const mEnd = model.getPositionAt(matchResult.end);
+
+        tagDecs.set([
+          {
+            range: new monaco.Range(lineNumber, found.colStart, lineNumber, found.colEnd),
+            options: { isWholeLine: false, className: 'liquid-tag-highlight' },
+          },
+          {
+            range: new monaco.Range(mStart.lineNumber, mStart.column, mEnd.lineNumber, mEnd.column),
+            options: { isWholeLine: false, className: 'liquid-tag-highlight' },
+          },
+        ]);
+      });
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 5 – Schema Auto-Fold on Liquid File Open
+         ═══════════════════════════════════════════════════════════════════ */
+      if (language === 'liquid') {
+        setTimeout(() => {
+          const model = editorInstance.getModel();
+          if (!model) return;
+          const text = model.getValue();
+          const sStart = text.indexOf('{% schema %}');
+          const sEnd = text.indexOf('{% endschema %}');
+          if (sStart === -1 || sEnd === -1) return;
+
+          const startPos = model.getPositionAt(sStart);
+          const endPos = model.getPositionAt(sEnd + '{% endschema %}'.length);
+          editorInstance.setSelection(
+            new monaco.Selection(startPos.lineNumber, 1, endPos.lineNumber, 1),
+          );
+          editorInstance.trigger('keyboard', 'editor.createFoldingRangeFromSelection', null);
+          editorInstance.setPosition({ lineNumber: 1, column: 1 });
+          editorInstance.revealLine(1);
+        }, 150);
+      }
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 8 – Color Swatches Inline
+         ═══════════════════════════════════════════════════════════════════ */
+      const colorDecs = editorInstance.createDecorationsCollection([]);
+      colorDecorationsRef.current = colorDecs;
+      let colorTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const scanColors = () => {
+        const model = editorInstance.getModel();
+        if (!model) return;
+
+        const text = model.getValue();
+        const lines = text.split('\n');
+        const maxLines = Math.min(lines.length, 1000);
+        const colorRe =
+          /#[0-9a-fA-F]{3,8}\b|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|hsl\(\s*\d+\s*,\s*\d+%?\s*,\s*\d+%?\s*\)/g;
+
+        const decs: editor.IModelDeltaDecoration[] = [];
+        const cssRules: string[] = [];
+        const seen = new Set<string>();
+
+        for (let i = 0; i < maxLines; i++) {
+          colorRe.lastIndex = 0;
+          let cm: RegExpExecArray | null;
+          while ((cm = colorRe.exec(lines[i])) !== null) {
+            const color = cm[0];
+            const h = hashColor(color);
+            const cls = `color-swatch-${h}`;
+            if (!seen.has(h)) {
+              seen.add(h);
+              cssRules.push(
+                `.${cls}::before{content:'';display:inline-block;width:12px;height:12px;` +
+                `background-color:${color};border:1px solid rgba(255,255,255,.3);` +
+                `border-radius:2px;margin-right:4px;vertical-align:middle}`,
+              );
+            }
+            decs.push({
+              range: new monaco.Range(i + 1, cm.index + 1, i + 1, cm.index + color.length + 1),
+              options: { isWholeLine: false, beforeContentClassName: cls },
+            });
+          }
+        }
+
+        /* Merge: keep liquid-tag-highlight base rule + append swatch rules */
+        if (styleElRef.current) {
+          styleElRef.current.textContent =
+            '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}\n' +
+            cssRules.join('\n');
+        }
+        colorDecs.set(decs);
+      };
+
+      scanColors(); // initial pass
+      editorInstance.onDidChangeModelContent(() => {
+        if (colorTimer) clearTimeout(colorTimer);
+        colorTimer = setTimeout(scanColors, 300);
+      });
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 9 – Schema Setting Preview on Hover
+         ═══════════════════════════════════════════════════════════════════ */
+      monaco.languages.registerHoverProvider('html', {
+        provideHover(model, position) {
+          const text = model.getValue();
+          const sStartIdx = text.indexOf('{% schema %}');
+          const sEndIdx = text.indexOf('{% endschema %}');
+          if (sStartIdx === -1 || sEndIdx === -1) return null;
+
+          const sStartPos = model.getPositionAt(sStartIdx);
+          const sEndPos = model.getPositionAt(sEndIdx);
+          if (position.lineNumber < sStartPos.lineNumber || position.lineNumber > sEndPos.lineNumber)
+            return null;
+
+          const jsonText = text.substring(sStartIdx + '{% schema %}'.length, sEndIdx).trim();
+          let schema: Record<string, unknown>;
+          try {
+            schema = JSON.parse(jsonText);
+          } catch {
+            return null;
+          }
+
+          /* Gather all settings (top-level + inside blocks) */
+          const allSettings: Record<string, unknown>[] = [
+            ...((schema.settings as Record<string, unknown>[]) ?? []),
+          ];
+          for (const block of (schema.blocks as Record<string, unknown>[]) ?? []) {
+            if (Array.isArray(block.settings))
+              allSettings.push(...(block.settings as Record<string, unknown>[]));
+          }
+          if (allSettings.length === 0) return null;
+
+          const word = model.getWordAtPosition(position);
+          if (!word) return null;
+          const lineContent = model.getLineContent(position.lineNumber);
+
+          for (const setting of allSettings) {
+            const id = setting.id as string | undefined;
+            const type = setting.type as string | undefined;
+            if (!id && !type) continue;
+            if (
+              (id && !lineContent.includes(`"${id}"`)) &&
+              (type && !lineContent.includes(`"${type}"`))
+            )
+              continue;
+
+            let md = '';
+            switch (type) {
+              case 'color':
+                md = `**Color setting** — Renders a color picker${setting.default ? `\n\nDefault: \`${setting.default}\`` : ''}`;
+                break;
+              case 'range':
+                md =
+                  `**Range setting** — min: ${(setting.min as number) ?? '?'}, ` +
+                  `max: ${(setting.max as number) ?? '?'}, step: ${(setting.step as number) ?? 1}` +
+                  `${setting.default != null ? `\n\nDefault: \`${setting.default}\`` : ''}`;
+                break;
+              case 'select': {
+                const opts = (
+                  (setting.options as Array<string | { label?: string; value: string }>) ?? []
+                )
+                  .map((o) => (typeof o === 'string' ? o : o.label ?? o.value))
+                  .join(', ');
+                md = `**Select setting** — Options: ${opts || 'none'}`;
+                break;
+              }
+              default:
+                md =
+                  `**${type ?? 'Unknown'} setting**` +
+                  `${setting.info ? ` — ${setting.info}` : ''}` +
+                  `${setting.label ? `\n\nLabel: "${setting.label}"` : ''}`;
+            }
+
+            return {
+              range: new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn,
+              ),
+              contents: [{ value: md }],
+            };
+          }
+          return null;
+        },
+      });
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 12 – Paste Image Handler
+         ═══════════════════════════════════════════════════════════════════ */
+      const editorDomNode = editorInstance.getDomNode();
+      if (editorDomNode) {
+        editorDomNode.addEventListener('paste', (e: Event) => {
+          const ce = e as ClipboardEvent;
+          const items = ce.clipboardData?.items;
+          if (!items) return;
+
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith('image/')) {
+              ce.preventDefault();
+              const file = item.getAsFile();
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = () => {
+                const base64 = reader.result as string;
+                const pos = editorInstance.getPosition();
+                const coords = pos ? editorInstance.getScrolledVisiblePosition(pos) : null;
+                const rect = editorDomNode.getBoundingClientRect();
+                setPasteDialog({
+                  file,
+                  base64,
+                  position: {
+                    x: rect.left + (coords?.left ?? 100),
+                    y: rect.top + (coords?.top ?? 100) + 20,
+                  },
+                });
+              };
+              reader.readAsDataURL(file);
+              return;
+            }
+          }
+        });
+      }
+
+      /* ═══════════════════════════════════════════════════════════════════
+         Feature 13 – Right-Click "Find All References"
+         ═══════════════════════════════════════════════════════════════════ */
+      editorInstance.addAction({
+        id: 'synapse.findAllReferences',
+        label: 'Find All References',
+        contextMenuGroupId: '1_modification',
+        contextMenuOrder: 10,
+        keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.F12],
+        run: (ed) => {
+          const sel = ed.getSelection();
+          const mdl = ed.getModel();
+          if (!sel || !mdl) return;
+          const selectedText = mdl.getValueInRange(sel);
+          const word = selectedText || mdl.getWordAtPosition(ed.getPosition()!)?.word;
+          if (!word) return;
+
+          /* Pre-fill find widget with the word */
+          const fc = ed.getContribution('editor.contrib.findController') as
+            | { setSearchString: (s: string) => void }
+            | null;
+          if (fc) fc.setSearchString(word);
+          ed.trigger('keyboard', 'actions.find', null);
+          setTimeout(() => {
+            ed.trigger('keyboard', 'editor.action.nextMatchFindAction', null);
+          }, 50);
+        },
+      });
     },
-    [language]
+    [language],
   );
 
+  /* ── Cleanup injected <style> on unmount ────────────────────────────── */
+  useEffect(() => {
+    return () => {
+      styleElRef.current?.remove();
+      styleElRef.current = null;
+    };
+  }, []);
+
+  /* ── Liquid diagnostics ─────────────────────────────────────────────── */
   useEffect(() => {
     if (language !== 'liquid') return;
     const monaco = monacoRef.current;
@@ -133,7 +531,12 @@ export function MonacoEditor({
     getLiquidDiagnostics(value).then((diagnostics) => {
       if (cancelled) return;
       const markers = diagnostics.map((d) => ({
-        severity: d.severity === 'error' ? monaco.MarkerSeverity.Error : d.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info,
+        severity:
+          d.severity === 'error'
+            ? monaco.MarkerSeverity.Error
+            : d.severity === 'warning'
+              ? monaco.MarkerSeverity.Warning
+              : monaco.MarkerSeverity.Info,
         message: d.message,
         startLineNumber: d.line,
         startColumn: d.column,
@@ -151,26 +554,99 @@ export function MonacoEditor({
     };
   }, [value, language]);
 
+  /* ── Feature 12: paste dialog action handlers ───────────────────────── */
+  const handleInlineBase64 = useCallback(() => {
+    if (!pasteDialog || !editorRef.current || !monacoRef.current) return;
+    const ed = editorRef.current;
+    const pos = ed.getPosition();
+    if (pos) {
+      ed.executeEdits('paste-image', [
+        {
+          range: new monacoRef.current.Range(
+            pos.lineNumber,
+            pos.column,
+            pos.lineNumber,
+            pos.column,
+          ),
+          text: `<img src="${pasteDialog.base64}" alt="pasted image" />`,
+        },
+      ]);
+    }
+    setPasteDialog(null);
+  }, [pasteDialog]);
+
+  const handleAddAsAsset = useCallback(() => {
+    if (!pasteDialog) return;
+    if (onImagePaste) {
+      onImagePaste(pasteDialog.file);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('[Synapse] Add as asset not yet wired. File:', pasteDialog.file.name);
+    }
+    setPasteDialog(null);
+  }, [pasteDialog, onImagePaste]);
+
+  /* ═════════════════════════════════════════════════════════════════════
+     Render
+     ═════════════════════════════════════════════════════════════════════ */
   return (
-    <MonacoEditorReact
-      height={height}
-      language={MONACO_LANGUAGE_MAP[language]}
-      value={value}
-      onChange={(v) => onChange(v ?? '')}
-      onMount={handleEditorDidMount}
-      theme="vs-dark"
-      options={{
-        minimap: { enabled: settings.minimap },
-        fontSize: settings.fontSize,
-        tabSize: settings.tabSize,
-        wordWrap: settings.wordWrap ? 'on' : 'off',
-        lineNumbers: settings.lineNumbers ? 'on' : 'off',
-        bracketPairColorization: { enabled: settings.bracketMatching },
-        scrollBeyondLastLine: false,
-        padding: { top: 16 },
-        readOnly,
-      }}
-      className={className}
-    />
+    <div className="relative" style={{ height }}>
+      <MonacoEditorReact
+        height="100%"
+        language={MONACO_LANGUAGE_MAP[language]}
+        value={value}
+        onChange={(v) => onChange(v ?? '')}
+        onMount={handleEditorDidMount}
+        theme="vs-dark"
+        options={{
+          minimap: { enabled: settings.minimap },
+          fontSize: settings.fontSize,
+          tabSize: settings.tabSize,
+          wordWrap: settings.wordWrap ? 'on' : 'off',
+          lineNumbers: settings.lineNumbers ? 'on' : 'off',
+          bracketPairColorization: { enabled: settings.bracketMatching },
+          scrollBeyondLastLine: false,
+          padding: { top: 16 },
+          readOnly,
+          wordSeparators: CUSTOM_WORD_SEPARATORS, // Feature 11
+        }}
+        className={className}
+      />
+
+      {/* Feature 12 – Image-paste dialog */}
+      {pasteDialog && (
+        <div
+          className="fixed z-50 rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] p-4 shadow-2xl"
+          style={{ left: pasteDialog.position.x, top: pasteDialog.position.y, minWidth: 240 }}
+        >
+          <p className="mb-3 text-sm text-gray-300">
+            Image pasted &mdash; what would you like to do?
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleInlineBase64}
+              className="rounded border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs text-blue-300 transition hover:bg-blue-600/40"
+            >
+              Inline as base64
+            </button>
+            <button
+              type="button"
+              onClick={handleAddAsAsset}
+              className="rounded border border-green-600 bg-green-600/20 px-3 py-1.5 text-xs text-green-300 transition hover:bg-green-600/40"
+            >
+              Add as asset file
+            </button>
+            <button
+              type="button"
+              onClick={() => setPasteDialog(null)}
+              className="rounded border border-gray-600 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

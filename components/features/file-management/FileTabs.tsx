@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileTab } from './FileTab';
 import type { FileGroup } from '@/lib/shopify/theme-grouping';
 
@@ -13,6 +13,7 @@ interface FileTabsProps {
   openTabs: string[];
   activeFileId: string | null;
   unsavedFileIds: Set<string>;
+  lockedFileIds?: Set<string>;
   fileMetaMap: Map<string, FileMeta>;
   onTabSelect: (fileId: string) => void;
   onTabClose: (fileId: string) => void;
@@ -23,6 +24,7 @@ interface FileTabsProps {
   activeGroupId?: string | null;
   onGroupSelect?: (groupId: string) => void;
   onGroupClose?: (groupId: string) => void;
+  onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 }
 
 export function FileTabs({
@@ -39,7 +41,25 @@ export function FileTabs({
   activeGroupId,
   onGroupSelect,
   onGroupClose,
+  lockedFileIds,
+  onReorderTabs,
 }: FileTabsProps) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const handleDragStart = useCallback((index: number) => {
+    setDragIndex(index);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback((targetIndex: number) => {
+    if (dragIndex !== null && dragIndex !== targetIndex && onReorderTabs) {
+      onReorderTabs(dragIndex, targetIndex);
+    }
+    setDragIndex(null);
+  }, [dragIndex, onReorderTabs]);
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
@@ -124,7 +144,7 @@ export function FileTabs({
       )}
       <div className="flex items-stretch bg-gray-900 border-b border-gray-700 overflow-x-auto">
         <div className="flex flex-1 min-w-0">
-          {visibleTabs.map((fileId) => {
+          {visibleTabs.map((fileId, idx) => {
             const meta = fileMetaMap.get(fileId);
             const fileName = meta?.name ?? fileId;
             return (
@@ -134,8 +154,13 @@ export function FileTabs({
                 fileName={fileName}
                 isActive={activeFileId === fileId}
                 isUnsaved={unsavedFileIds.has(fileId)}
+                isLocked={lockedFileIds?.has(fileId) ?? false}
                 onSelect={() => onTabSelect(fileId)}
                 onClose={() => onTabClose(fileId)}
+                index={idx}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
               />
             );
           })}

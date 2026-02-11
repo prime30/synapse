@@ -18,6 +18,8 @@ interface FileEditorProps {
   onToggleLock?: () => void;
   /** Called when the user's text selection changes in the editor (EPIC 1c: selection injection) */
   onSelectionChange?: (selectedText: string | null) => void;
+  /** Called when file content changes (for breadcrumb, status bar) */
+  onContentChange?: (content: string) => void;
 }
 
 export function FileEditor({
@@ -29,6 +31,7 @@ export function FileEditor({
   locked = false,
   onToggleLock,
   onSelectionChange,
+  onContentChange,
 }: FileEditorProps) {
   const {
     content,
@@ -44,6 +47,11 @@ export function FileEditor({
   useEffect(() => {
     onMarkDirty?.(isDirty);
   }, [isDirty, onMarkDirty]);
+
+  // Pipe content up for breadcrumb / status bar
+  useEffect(() => {
+    onContentChange?.(content);
+  }, [content, onContentChange]);
 
   const handleSaveKeyDown = useCallback(() => {
     if (locked) return;

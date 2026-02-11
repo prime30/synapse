@@ -13,6 +13,7 @@ interface FileListProps {
   onFileClick: (fileId: string) => void;
   onAddFile?: () => void;
   presence?: WorkspacePresence[];
+  snippetUsageCounts?: Map<string, number>;
 }
 
 export function FileList({
@@ -20,6 +21,7 @@ export function FileList({
   onFileClick,
   onAddFile,
   presence = [],
+  snippetUsageCounts,
 }: FileListProps) {
   const {
     files,
@@ -119,6 +121,7 @@ export function FileList({
                 file={file}
                 onClick={() => onFileClick(file.id)}
                 presence={presence}
+                snippetUsageCount={snippetUsageCounts?.get(file.id)}
               />
             ))}
           </div>

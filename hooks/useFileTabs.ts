@@ -5,6 +5,12 @@ import type { FileGroup } from '@/lib/shopify/theme-grouping';
 
 const STORAGE_KEY_PREFIX = 'synapse-file-tabs-';
 const GROUPS_KEY_PREFIX = 'synapse-tab-groups-';
+const LOCKED_KEY_PREFIX = 'synapse-locked-files-';
+
+export interface RecentFile {
+  fileId: string;
+  openedAt: number; // Date.now()
+}
 
 interface UseFileTabsOptions {
   projectId: string;
@@ -13,6 +19,7 @@ interface UseFileTabsOptions {
 export function useFileTabs({ projectId }: UseFileTabsOptions) {
   const storageKey = `${STORAGE_KEY_PREFIX}${projectId}`;
   const groupsKey = `${GROUPS_KEY_PREFIX}${projectId}`;
+  const lockedKey = `${LOCKED_KEY_PREFIX}${projectId}`;
 
   const [openTabs, setOpenTabs] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -26,6 +33,7 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
 
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [unsavedFileIds, setUnsavedFileIds] = useState<Set<string>>(new Set());
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
 
   // ── Workset / group state ───────────────────────────────────────────────
   const [tabGroups, setTabGroups] = useState<FileGroup[]>(() => {
@@ -55,6 +63,37 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
         prev.includes(fileId) ? prev : [...prev, fileId]
       );
       setActiveFileId(fileId);
+
+      // Track recent files (max 10, most recent first, deduplicated)
+      setRecentFiles((prev) => {
+        const filtered = prev.filter((rf) => rf.fileId !== fileId);
+        return [{ fileId, openedAt: Date.now() }, ...filtered].slice(0, 10);
+      });
+    },
+    []
+  );
+
+  const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
+    setOpenTabs((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
+  /** Open multiple files at once. The last file in the array becomes active. */
+  const openMultiple = useCallback(
+    (fileIds: string[]) => {
+      if (fileIds.length === 0) return;
+      setOpenTabs((prev) => {
+        const combined = [...prev];
+        for (const id of fileIds) {
+          if (!combined.includes(id)) combined.push(id);
+        }
+        return combined;
+      });
+      setActiveFileId(fileIds[fileIds.length - 1]);
     },
     []
   );
@@ -106,6 +145,43 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
       return next;
     });
   }, []);
+
+  // ── Locked files state (persisted) ────────────────────────────────────────
+  const [lockedFileIds, setLockedFileIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem(lockedKey);
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(lockedKey, JSON.stringify([...lockedFileIds]));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [lockedFileIds, lockedKey]);
+
+  const toggleLock = useCallback((fileId: string) => {
+    setLockedFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) {
+        next.delete(fileId);
+      } else {
+        next.add(fileId);
+      }
+      return next;
+    });
+  }, []);
+
+  const isLocked = useCallback(
+    (fileId: string) => lockedFileIds.has(fileId),
+    [lockedFileIds]
+  );
 
   // ── Persist groups ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -188,12 +264,20 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
     openTabs,
     activeFileId,
     unsavedFileIds,
+    recentFiles,
     openTab,
+    openMultiple,
     closeTab,
     switchTab,
     nextTab,
     prevTab,
     markUnsaved,
+    reorderTabs,
+
+    // Lock support
+    lockedFileIds,
+    toggleLock,
+    isLocked,
 
     // Group / workset support
     tabGroups,

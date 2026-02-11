@@ -37,6 +37,9 @@ import { getLinkedFileIds, linkMultiple, isDismissed, dismissGroup } from '@/lib
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { ActivityBar } from '@/components/editor/ActivityBar';
 import { SettingsModal } from '@/components/editor/SettingsModal';
+import { FileBreadcrumb } from '@/components/editor/FileBreadcrumb';
+import { StatusBar } from '@/components/editor/StatusBar';
+import { CommandPalette } from '@/components/editor/CommandPalette';
 import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 
@@ -60,6 +63,8 @@ export default function ProjectPage() {
   const [activeActivity, setActiveActivity] = useState<import('@/components/editor/ActivityBar').ActivityPanel>('files');
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [activeFileContent, setActiveFileContent] = useState('');
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
@@ -163,13 +168,17 @@ export default function ProjectPage() {
     return previewRef.current.getDOMContext(3000);
   }, []);
 
-  // Cmd/Ctrl+Shift+A: focus agent chat (always visible in right panel)
+  // Cmd/Ctrl+Shift+A: focus agent chat; Ctrl+P: command palette
   const agentChatRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
         e.preventDefault();
         agentChatRef.current?.querySelector('textarea')?.focus();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handler);
@@ -361,6 +370,37 @@ export default function ProjectPage() {
     }, 1500);
   };
 
+  // ── EPIC 3: Active file content change handler ─────────────────────────────
+  const handleContentChange = useCallback((content: string) => {
+    setActiveFileContent(content);
+  }, []);
+
+  // ── EPIC 3: Snippet usage counting (path-based via theme grouping) ──────
+  const snippetUsageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const snippetFiles = rawFiles.filter((f) => f.path.startsWith('snippets/'));
+    if (snippetFiles.length === 0) return counts;
+
+    for (const snippet of snippetFiles) {
+      // Count non-snippet files that reference this snippet (via relatedFilesMap)
+      const related = relatedFilesMap.get(snippet.id) ?? [];
+      const refCount = related.filter((id) => {
+        const f = rawFiles.find((r) => r.id === id);
+        return f && !f.path.startsWith('snippets/');
+      }).length;
+      if (refCount > 0) {
+        counts.set(snippet.id, refCount);
+      }
+    }
+    return counts;
+  }, [rawFiles, relatedFilesMap]);
+
+  // ── EPIC 3: File list for command palette ─────────────────────────────────
+  const commandPaletteFiles = useMemo(
+    () => rawFiles.map((f) => ({ id: f.id, name: f.name, path: f.path })),
+    [rawFiles]
+  );
+
   // ── Group tab handlers ────────────────────────────────────────────────────
   const handleGroupSelect = (groupId: string) => {
     if (groupId === '__all__') {
@@ -486,6 +526,7 @@ export default function ProjectPage() {
                       onFileClick={handleFileClick}
                       onAddFile={handleAddFile}
                       presence={presence}
+                      snippetUsageCounts={snippetUsageCounts}
                     />
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
@@ -597,6 +638,7 @@ export default function ProjectPage() {
             activeGroupId={tabs.activeGroupId}
             onGroupSelect={handleGroupSelect}
             onGroupClose={tabs.closeGroup}
+            onReorderTabs={tabs.reorderTabs}
           />
 
           {/* Related files prompt */}
@@ -629,18 +671,35 @@ export default function ProjectPage() {
           )}
 
           {tabs.activeFileId ? (
-            <FileEditor
-              fileId={tabs.activeFileId}
-              fileType={
-                rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
-                'liquid'
-              }
-              onMarkDirty={handleMarkDirty}
-              cursors={cursorsForActiveFile}
-              locked={tabs.isLocked(tabs.activeFileId)}
-              onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
-              onSelectionChange={handleEditorSelectionChange}
-            />
+            <>
+              {/* EPIC 3: File breadcrumb */}
+              <FileBreadcrumb
+                filePath={activeFile?.path ?? null}
+                content={activeFileContent}
+              />
+
+              <FileEditor
+                fileId={tabs.activeFileId}
+                fileType={
+                  rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
+                  'liquid'
+                }
+                onMarkDirty={handleMarkDirty}
+                cursors={cursorsForActiveFile}
+                locked={tabs.isLocked(tabs.activeFileId)}
+                onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
+                onSelectionChange={handleEditorSelectionChange}
+                onContentChange={handleContentChange}
+              />
+
+              {/* EPIC 3: Status bar */}
+              <StatusBar
+                fileName={activeFile?.name ?? null}
+                content={activeFileContent}
+                language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
+                filePath={activeFile?.path ?? null}
+              />
+            </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
               <h2 className="text-lg font-medium text-gray-400 mb-1">
@@ -734,6 +793,18 @@ export default function ProjectPage() {
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      {/* EPIC 3: Command palette (Ctrl+P) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        files={commandPaletteFiles}
+        recentFiles={tabs.recentFiles}
+        onFileSelect={(fileId) => {
+          tabs.openTab(fileId);
+          setCommandPaletteOpen(false);
+        }}
       />
     </div>
     </EditorSettingsProvider>
