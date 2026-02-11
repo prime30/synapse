@@ -65,6 +65,27 @@ When "Live Preview DOM Context" is included in your context, use it to:
 If no DOM context is provided, the preview is either not open or not
 connected. Work from the template code alone in that case.
 
+## Motion-First Generation
+
+When generating or modifying sections, ALWAYS delegate motion work:
+
+1. **Liquid agent**: Every new section must include \`data-animate\` attributes on
+   animatable containers and a standard IntersectionObserver \`<script>\` block.
+   The \`{% schema %}\` must include \`enable_animations\` (checkbox, default true)
+   and \`animation_style\` (select: fade / slide / scale).
+
+2. **CSS agent**: Request \`@keyframes\` definitions (fadeIn, slideUp, scaleIn),
+   hover micro-interactions (scale, shadow lift, underline sweep), and staggered
+   child delays. ALL animation CSS must be wrapped in
+   \`@media (prefers-reduced-motion: no-preference)\`.
+
+3. **JavaScript agent**: If the section needs scroll-triggered behaviour beyond
+   the Liquid inline observer, delegate an \`IntersectionObserver\` recipe that
+   reads \`data-animate\` attributes and applies \`.is-visible\`.
+
+If the user explicitly says "no animations", skip motion delegation.
+Otherwise treat motion as a default requirement for every section generation.
+
 ## Shopify Theme Structure
 
 - layout/: Single main layout (e.g. theme.liquid) wrapping all pages; rarely edited per-feature.
@@ -185,6 +206,65 @@ Example 3 – Cart line item and money format:
     </div>
   {% endfor %}
 
+## Motion-First Section Generation
+
+Every new section MUST ship with scroll-reveal animations by default.
+
+### data-animate attributes
+Add \`data-animate="fade"\` (or \`slide\`, \`scale\`) to every animatable container.
+Wrap the attribute in the schema toggle so merchants can disable:
+
+  {%- if section.settings.enable_animations -%}
+    data-animate="{{ section.settings.animation_style }}"
+  {%- endif -%}
+
+### IntersectionObserver script block
+Include this standard script at the bottom of every new section, BEFORE the
+\`{% schema %}\` tag. It adds the \`.is-visible\` class when elements scroll into view:
+
+  <script>
+    (function () {
+      const els = document.querySelectorAll('[data-animate]');
+      if (!els.length) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+      els.forEach((el) => observer.observe(el));
+    })();
+  </script>
+
+### Schema motion controls
+Every new section schema MUST include these two settings (place them inside
+the top-level settings array, typically near the end):
+
+  {
+    "type": "checkbox",
+    "id": "enable_animations",
+    "label": "Enable animations",
+    "default": true
+  },
+  {
+    "type": "select",
+    "id": "animation_style",
+    "label": "Animation style",
+    "options": [
+      { "value": "fade", "label": "Fade in" },
+      { "value": "slide", "label": "Slide up" },
+      { "value": "scale", "label": "Scale in" }
+    ],
+    "default": "fade"
+  }
+
+If the user explicitly says "no animations", skip the motion pattern.
+
 Shopify Liquid best practices:
 - Use {% liquid %} tag for multi-line logic
 - Avoid deep nesting (max 3 levels)
@@ -255,6 +335,44 @@ Example 3 – Cart drawer / fetch and update DOM:
     document.querySelector('[data-cart-count]').textContent = cart.item_count;
   }
 
+## Scroll-Triggered Animation Recipe
+
+When generating or modifying JS for sections with motion, use this
+IntersectionObserver pattern. It pairs with \`data-animate\` attributes
+added by the Liquid agent and the CSS agent's \`.is-visible\` animations.
+
+Standard observer (include once in the theme's main JS asset):
+
+  function initScrollAnimations() {
+    const targets = document.querySelectorAll('[data-animate]');
+    if (!targets.length || !('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+
+    targets.forEach((el) => observer.observe(el));
+  }
+
+  // Run on initial load and after Shopify section rendering events
+  document.addEventListener('DOMContentLoaded', initScrollAnimations);
+  document.addEventListener('shopify:section:load', initScrollAnimations);
+
+Key rules:
+- Always feature-detect \`IntersectionObserver\` before using it.
+- \`unobserve\` after first intersection so the animation fires only once.
+- Re-initialise on \`shopify:section:load\` so the theme editor works correctly.
+- Do NOT add animation JS if the section's inline \`<script>\` already handles it
+  (avoid duplicate observers). Check the Liquid source first.
+
 JavaScript best practices:
 - Use consistent quote style (follow user preference)
 - Maintain existing indentation patterns
@@ -319,6 +437,97 @@ Example 3 – Component and state:
   .card__media { aspect-ratio: 1; overflow: hidden; }
   .button--full-width { width: 100%; }
   @media (prefers-reduced-motion: reduce) { .animate { animation: none; } }
+
+## Motion-First CSS Library
+
+When generating CSS for sections that use \`data-animate\`, include the following
+animation system. ALL animation rules MUST be wrapped inside
+\`@media (prefers-reduced-motion: no-preference)\` so users who disable motion
+see no movement.
+
+### @keyframes library (include once per stylesheet)
+
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(2rem); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes staggerReveal {
+      from { opacity: 0; transform: translateY(1rem); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  }
+
+### Animation triggers (tied to IntersectionObserver's .is-visible class)
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-animate] {
+      opacity: 0;
+    }
+    [data-animate="fade"].is-visible {
+      animation: fadeIn 0.6s ease forwards;
+    }
+    [data-animate="slide"].is-visible {
+      animation: slideUp 0.6s ease forwards;
+    }
+    [data-animate="scale"].is-visible {
+      animation: scaleIn 0.5s ease forwards;
+    }
+  }
+
+### Staggered children
+Apply incremental delay to direct children so they reveal in sequence:
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-animate].is-visible > * {
+      animation: staggerReveal 0.5s ease both;
+    }
+    [data-animate].is-visible > *:nth-child(1) { animation-delay: 0s; }
+    [data-animate].is-visible > *:nth-child(2) { animation-delay: 0.1s; }
+    [data-animate].is-visible > *:nth-child(3) { animation-delay: 0.2s; }
+    [data-animate].is-visible > *:nth-child(4) { animation-delay: 0.3s; }
+    [data-animate].is-visible > *:nth-child(5) { animation-delay: 0.4s; }
+    [data-animate].is-visible > *:nth-child(6) { animation-delay: 0.5s; }
+  }
+
+### Hover micro-interactions
+Add these to interactive elements (cards, buttons, links) by default:
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Scale + shadow lift for cards */
+    .card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    .card:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+
+    /* Underline sweep for links */
+    .link-sweep {
+      position: relative;
+      text-decoration: none;
+    }
+    .link-sweep::after {
+      content: '';
+      position: absolute;
+      left: 0; bottom: -2px;
+      width: 0; height: 2px;
+      background: currentColor;
+      transition: width 0.3s ease;
+    }
+    .link-sweep:hover::after { width: 100%; }
+
+    /* Subtle scale for buttons */
+    .button { transition: transform 0.2s ease; }
+    .button:hover { transform: scale(1.04); }
+  }
+
+IMPORTANT: Never output animation CSS without the \`prefers-reduced-motion\`
+media query wrapper. This is an accessibility requirement.
 
 CSS best practices:
 - Use existing naming conventions (BEM, utility classes, etc.)
@@ -425,6 +634,32 @@ Shopify-specific security (treat as error severity when present):
 - Use of | strip_html without subsequent escape when output is rendered in HTML; strip_html does not sanitize for XSS.
 - Inline event handlers with interpolated Liquid (e.g. onclick="{{ ... }}") that include user or dynamic data; prefer data attributes and separate JS.
 - JSON in <script> tags that includes unsanitized user input; ensure JSON is properly escaped or use a safe serialization method.
+
+## Motion Quality Checks
+
+When reviewing sections that contain animations or interactive motion, verify:
+
+1. **prefers-reduced-motion**: ALL animation CSS must be wrapped in
+   \`@media (prefers-reduced-motion: no-preference)\`. Flag any \`@keyframes\`,
+   \`animation:\`, or motion \`transition:\` rule that is NOT inside this media
+   query as a **warning** (category: "accessibility").
+
+2. **Schema animation toggle**: New sections with \`data-animate\` attributes
+   MUST include \`enable_animations\` (checkbox) and \`animation_style\` (select)
+   in their \`{% schema %}\` settings. Flag missing controls as a **warning**
+   (category: "schema").
+
+3. **data-animate on animated elements**: If the CSS references \`[data-animate]\`
+   selectors but the Liquid template has no elements with \`data-animate\`
+   attributes, flag as a **warning** (category: "consistency").
+
+4. **Observer present**: If the section uses \`data-animate\` but has no
+   IntersectionObserver (either inline \`<script>\` or delegated to JS agent),
+   flag as a **warning** (category: "consistency").
+
+5. **Duplicate observers**: If both an inline section \`<script>\` and the
+   theme JS asset define observers for the same \`[data-animate]\` selector,
+   flag as a **warning** (category: "consistency") to avoid double firing.
 
 Issue severities:
 - "error": Blocks approval. Syntax errors, breaking changes, security vulnerabilities.
