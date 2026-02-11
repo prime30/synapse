@@ -1,5 +1,5 @@
 import { Agent } from './base';
-import { PROJECT_MANAGER_PROMPT } from './prompts';
+import { PROJECT_MANAGER_PROMPT, SOLO_PM_PROMPT } from './prompts';
 import { getThemeContext, THEME_STRUCTURE_DOC } from '@/lib/shopify/theme-structure';
 import type {
   AgentTask,
@@ -20,6 +20,10 @@ export class ProjectManagerAgent extends Agent {
 
   getSystemPrompt(): string {
     return PROJECT_MANAGER_PROMPT;
+  }
+
+  getSoloSystemPrompt(): string {
+    return SOLO_PM_PROMPT;
   }
 
   formatPrompt(task: AgentTask): string {
@@ -51,6 +55,10 @@ export class ProjectManagerAgent extends Agent {
       ...(task.context.designContext
         ? [task.context.designContext, '']
         : []),
+      // Live DOM context from Shopify preview bridge
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
       '## Project Files:',
       fileList,
       '',
@@ -63,6 +71,55 @@ export class ProjectManagerAgent extends Agent {
       ),
       '',
       'Analyze the request and respond with your delegation plan as JSON.',
+    ].join('\n');
+  }
+
+  /**
+   * Format prompt for solo mode — single-pass code generation.
+   * Uses SOLO_PM_PROMPT instead of PROJECT_MANAGER_PROMPT.
+   */
+  formatSoloPrompt(task: AgentTask): string {
+    const fileList = task.context.files
+      .map((f) => `- ${f.fileName} (${f.fileType}, ${f.content.length} chars)`)
+      .join('\n');
+
+    const prefs = task.context.userPreferences
+      .map((p) => `- [${p.category}] ${p.key}: ${p.value}`)
+      .join('\n');
+
+    const themeFiles = task.context.files
+      .filter((f) => f.path ?? f.fileName.includes('/'))
+      .map((f) => ({ path: f.path ?? f.fileName }));
+    const themeContext = getThemeContext(themeFiles);
+
+    return [
+      `User Request: ${task.instruction}`,
+      '',
+      '## Shopify Theme Structure:',
+      THEME_STRUCTURE_DOC,
+      themeContext.summary,
+      '',
+      ...(task.context.dependencyContext
+        ? [task.context.dependencyContext, '']
+        : []),
+      ...(task.context.designContext
+        ? [task.context.designContext, '']
+        : []),
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
+      '## Project Files:',
+      fileList,
+      '',
+      '## User Preferences:',
+      prefs || '(No preferences recorded yet)',
+      '',
+      '## Full File Contents:',
+      ...task.context.files.map(
+        (f) => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``
+      ),
+      '',
+      'Analyze the request and respond with your changes as JSON. Include a referencedFiles array listing all files you examined.',
     ].join('\n');
   }
 
@@ -92,6 +149,7 @@ export class ProjectManagerAgent extends Agent {
         }>;
         learnedPatterns?: LearnedPattern[];
         standardizationOpportunities?: unknown[];
+        referencedFiles?: string[];
       };
 
       const delegations: DelegationTask[] = (parsed.delegations ?? [])
@@ -102,10 +160,16 @@ export class ProjectManagerAgent extends Agent {
           affectedFiles: d.affectedFiles ?? [],
         }));
 
+      const referencedFiles = parsed.referencedFiles ?? [];
+      const analysisWithRefs =
+        referencedFiles.length > 0
+          ? `${parsed.analysis ?? 'Analysis complete'}\n\nReferenced files: ${referencedFiles.join(', ')}`
+          : parsed.analysis ?? 'Analysis complete';
+
       return {
         agentType: 'project_manager',
         success: true,
-        analysis: parsed.analysis ?? 'Analysis complete',
+        analysis: analysisWithRefs,
         delegations,
       };
     } catch {
