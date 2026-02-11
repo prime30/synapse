@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils';
 
 export function GridDivider({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-40px' });
+  const inView = useInView(ref, { once: false, margin: '-40px' });
 
   return (
-    <div ref={ref} className={cn('relative w-full py-1', className)}>
+    <div ref={ref} className={cn('relative w-full', className)}>
       <motion.div
         className="h-px bg-stone-200 dark:bg-white/10 origin-center"
         initial={{ scaleX: 0 }}

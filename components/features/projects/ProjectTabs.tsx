@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useProjects, type Project } from '@/hooks/useProjects';
+import { useActiveStore } from '@/hooks/useActiveStore';
 
 const OPEN_PROJECTS_KEY = 'synapse-open-projects';
 
@@ -35,11 +36,12 @@ export function ProjectTabs({
   onSwitchProject,
   onCreateProject,
 }: ProjectTabsProps) {
-  const { projects } = useProjects();
+  // Filter projects by active store connection
+  const { connection } = useActiveStore();
+  const { projects } = useProjects(connection?.id ?? null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [openIds, setOpenIds] = useState<string[]>(() => {
     const stored = getOpenProjectIds();
-    // Always include the current project
     if (!stored.includes(currentProjectId)) {
       return [currentProjectId, ...stored];
     }
@@ -49,9 +51,6 @@ export function ProjectTabs({
   // Ensure current project is always in the open list
   useEffect(() => {
     setOpenIds((prev) => {
-      // #region agent log H3
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H3',location:'components/features/projects/ProjectTabs.tsx:52',message:'ensure-current-project effect running',data:{currentProjectId,prevCount:prev.length,hasCurrent:prev.includes(currentProjectId)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (prev.includes(currentProjectId)) return prev;
       const next = [...prev, currentProjectId];
       setOpenProjectIds(next);
@@ -64,10 +63,9 @@ export function ProjectTabs({
     setOpenProjectIds(openIds);
   }, [openIds]);
 
-  // Build tab data: only show projects that exist in the fetched list
+  // Build tab data: only show projects that exist in the fetched (store-filtered) list
   const tabs = useMemo(() => {
     if (projects.length === 0) {
-      // Projects haven't loaded yet — show current project ID as placeholder
       return openIds.map((id) => ({ id, name: id === currentProjectId ? 'Loading...' : id }));
     }
     const projectMap = new Map(projects.map((p) => [p.id, p]));
@@ -76,19 +74,12 @@ export function ProjectTabs({
       .map((id) => ({ id, name: projectMap.get(id)!.name }));
   }, [openIds, projects, currentProjectId]);
 
-  useEffect(() => {
-    // #region agent log H3
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H3',location:'components/features/projects/ProjectTabs.tsx:78',message:'project tabs snapshot',data:{currentProjectId,openIdsCount:openIds.length,projectsCount:projects.length,tabsCount:tabs.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [currentProjectId, openIds.length, projects.length, tabs.length]);
-
   const handleClose = useCallback(
     (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       const next = openIds.filter((oid) => oid !== id);
       setOpenIds(next);
 
-      // If closing the active tab, switch to the nearest remaining tab
       if (id === currentProjectId && next.length > 0) {
         const closedIndex = openIds.indexOf(id);
         const newIndex = Math.min(closedIndex, next.length - 1);
@@ -109,6 +100,19 @@ export function ProjectTabs({
 
   return (
     <div className="flex items-center min-w-0 flex-1">
+      {/* Store domain breadcrumb */}
+      {connection && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 shrink-0 border-r border-gray-700/50">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+          <span className="text-[11px] text-gray-500 font-mono truncate max-w-[120px]">
+            {connection.store_domain.replace('.myshopify.com', '')}
+          </span>
+          <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-gray-600">
+            <path d="M1 1l4 4-4 4" />
+          </svg>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         className="flex items-center gap-0 overflow-x-auto scrollbar-none min-w-0"
@@ -130,7 +134,6 @@ export function ProjectTabs({
               }`}
             >
               <span className="truncate max-w-[140px]">{tab.name}</span>
-              {/* Close button — always visible on active, on hover for others */}
               {tabs.length > 1 && (
                 <span
                   role="button"
@@ -154,12 +157,13 @@ export function ProjectTabs({
         })}
       </div>
 
-      {/* New project button */}
+      {/* Import theme button (replaces "new project") */}
       <button
         type="button"
         onClick={onCreateProject}
         className="flex items-center justify-center w-7 h-7 shrink-0 ml-0.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 rounded transition-colors"
-        aria-label="New project"
+        aria-label="Import theme"
+        title="Import theme"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
           <path d="M6 1v10M1 6h10" />

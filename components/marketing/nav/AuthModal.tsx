@@ -213,10 +213,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
   );
 
   const inputClass =
-    'w-full rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-white/30 focus:border-sky-500/50 focus:outline-none transition-colors';
+    'w-full rounded-lg border px-4 py-3 text-sm focus:outline-none transition-colors border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:border-accent/50 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder:text-white/30';
 
   const primaryBtnClass =
-    'w-full rounded-lg bg-sky-500 py-2.5 text-sm font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+    'w-full rounded-lg bg-accent py-3 text-sm font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
   return (
     <AnimatePresence>
@@ -224,7 +224,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-md dark:bg-black/60 dark:backdrop-blur-lg"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -235,23 +235,26 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
           {/* Modal container */}
           <div className="fixed inset-0 z-[61] flex items-center justify-center p-4" onClick={onClose}>
             <motion.div
-              className="relative w-full max-w-sm rounded-2xl border border-stone-200 dark:border-white/10 bg-white dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl"
+              className="relative w-full max-w-sm rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden border-stone-200 bg-white/95 shadow-stone-200/20 dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/20"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6">
+              {/* Subtle accent glow */}
+              <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[300px] h-[200px] rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl pointer-events-none" aria-hidden="true" />
+
+              <div className="relative p-6">
                 {/* Tabs */}
-                <div className="mb-6 flex rounded-xl bg-stone-100 dark:bg-white/5 p-1">
+                <div className="mb-6 flex rounded-xl p-1 bg-stone-100 dark:bg-white/5">
                   <button
                     type="button"
                     onClick={() => switchView('login')}
                     className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
                       view === 'login'
-                        ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white shadow-sm'
-                        : 'text-stone-500 dark:text-white/50 hover:text-stone-700 dark:hover:text-white/70'
+                        ? 'bg-white text-stone-900 shadow-sm dark:bg-white/10 dark:text-white'
+                        : 'text-stone-500 hover:text-stone-700 dark:text-white/50 dark:hover:text-white/70'
                     }`}
                   >
                     Sign in
@@ -261,8 +264,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                     onClick={() => switchView('signup')}
                     className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
                       view === 'signup'
-                        ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white shadow-sm'
-                        : 'text-stone-500 dark:text-white/50 hover:text-stone-700 dark:hover:text-white/70'
+                        ? 'bg-white text-stone-900 shadow-sm dark:bg-white/10 dark:text-white'
+                        : 'text-stone-500 hover:text-stone-700 dark:text-white/50 dark:hover:text-white/70'
                     }`}
                   >
                     Create account
@@ -271,13 +274,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
 
                 {/* Error banner */}
                 {errorMessage && (
-                  <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">
+                  <div className="mb-4 rounded-lg px-4 py-2.5 text-sm bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400">
                     {errorMessage}
                   </div>
                 )}
                 {/* Info banner */}
                 {infoMessage && (
-                  <div className="mb-4 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">
+                  <div className="mb-4 rounded-lg border px-4 py-2.5 text-sm bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300">
                     {infoMessage}
                   </div>
                 )}
@@ -291,14 +294,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                           ? `${pathname}?signed_in=1`
                           : '/projects?signed_in=1'
                       }
-                      className="rounded-lg border-stone-200 dark:border-white/10 bg-white dark:bg-gray-800 text-stone-900 dark:text-white hover:bg-stone-50 dark:hover:bg-white/10"
+                      className="rounded-lg border-stone-200 bg-white text-stone-900 hover:bg-stone-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                     />
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center">
                         <span className="w-full border-t border-stone-200 dark:border-white/10" />
                       </div>
                       <div className="relative flex justify-center text-xs">
-                        <span className="bg-white dark:bg-gray-900/95 px-2 text-stone-500 dark:text-white/50">
+                        <span className="bg-white px-2 text-stone-500 dark:bg-[#0a0a0a] dark:text-white/50">
                           or continue with email
                         </span>
                       </div>
@@ -332,7 +335,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                         type="button"
                         disabled={loading}
                         onClick={handleDevLogin}
-                        className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 py-2.5 text-sm font-medium text-sky-300 transition-colors hover:bg-sky-500/20 disabled:opacity-50"
+                        className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
                       >
                         {loading ? 'Signing in...' : 'Dev quick sign-in'}
                       </button>
@@ -348,7 +351,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                           setErrorMessage('');
                           setInfoMessage('');
                         }}
-                        className="text-sky-400 hover:underline"
+                        className="text-accent hover:text-accent-hover"
                       >
                         Reset it
                       </button>
@@ -377,7 +380,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                             setResetEmailSent(false);
                             setShowForgotPassword(false);
                           }}
-                          className="mt-4 text-xs text-sky-400 hover:underline"
+                          className="mt-4 text-xs text-accent hover:text-accent-hover"
                         >
                           Back to password sign-in
                         </button>
@@ -406,7 +409,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                               setShowForgotPassword(false);
                               setErrorMessage('');
                             }}
-                            className="text-sky-500 dark:text-sky-400 hover:underline"
+                            className="text-accent hover:text-accent-hover"
                           >
                             Back to password sign-in
                           </button>

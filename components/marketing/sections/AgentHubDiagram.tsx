@@ -285,12 +285,11 @@ function FlowLine({
 
 export function AgentHubDiagram() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
   const reducedMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('stack');
   const [step, setStep] = useState<Step>('idle');
   const [showFlowLines, setShowFlowLines] = useState(false);
-  const [replayCounter, setReplayCounter] = useState(0);
 
   // Show connector lines after spread (with delay); hide when stacked
   useEffect(() => {
@@ -305,7 +304,7 @@ export function AgentHubDiagram() {
 
   const isStacked = phase === 'stack' && !reducedMotion;
 
-  // Phase progression: stack -> spread -> loop (skip stack when reduced motion; re-run on replay)
+  // Phase progression: stack -> spread -> loop (skip stack when reduced motion)
   useEffect(() => {
     if (!inView) return;
     if (reducedMotion) {
@@ -319,14 +318,7 @@ export function AgentHubDiagram() {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [inView, reducedMotion, replayCounter]);
-
-  function handleReplay() {
-    setPhase('stack');
-    setStep('idle');
-    setShowFlowLines(false);
-    setReplayCounter((c) => c + 1);
-  }
+  }, [inView, reducedMotion]);
 
   // Workflow step loop (only during loop phase)
   useEffect(() => {
@@ -402,23 +394,31 @@ export function AgentHubDiagram() {
             <div className="max-w-2xl mx-auto min-h-[720px] md:min-h-[780px]">
               {isStacked ? (
                 /* ── Stacked phase: cards piled as a deck ─────────── */
-                <div className="flex justify-center items-center">
+                <div className="flex justify-center items-center py-12">
                   <div className="relative w-full max-w-xs">
-                    {ALL_AGENTS.map((agent, i) => (
-                      <motion.div
-                        key={agent.name}
-                        layoutId={agent.name}
-                        className={i === 0 ? 'relative' : 'absolute inset-0'}
-                        style={{ zIndex: ALL_AGENTS.length - i }}
-                        transition={layoutTransition}
-                      >
-                        <AgentCard
-                          agent={agent}
-                          active={false}
-                          completed={false}
-                        />
-                      </motion.div>
-                    ))}
+                    {ALL_AGENTS.map((agent, i) => {
+                      const offset = i * 6;
+                      const xShift = i * 2;
+                      return (
+                        <motion.div
+                          key={agent.name}
+                          layoutId={agent.name}
+                          className={i === 0 ? 'relative' : 'absolute left-0 right-0 top-0'}
+                          style={{
+                            zIndex: ALL_AGENTS.length - i,
+                            transform: `translateY(-${offset}px) translateX(${xShift}px)`,
+                            filter: `drop-shadow(0 ${4 + i * 3}px ${8 + i * 4}px rgba(0,0,0,${0.04 + i * 0.02}))`,
+                          }}
+                          transition={layoutTransition}
+                        >
+                          <AgentCard
+                            agent={agent}
+                            active={false}
+                            completed={false}
+                          />
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -556,17 +556,6 @@ export function AgentHubDiagram() {
                 </div>
               )}
             </div>
-            {inView && !reducedMotion && (
-              <div className="flex justify-center mt-6">
-                <button
-                  type="button"
-                  onClick={handleReplay}
-                  className="text-[12px] font-medium text-stone-500 dark:text-white/50 hover:text-stone-700 dark:hover:text-white/80 transition-colors"
-                >
-                  Replay
-                </button>
-              </div>
-            )}
           </LayoutGroup>
         )}
       </div>

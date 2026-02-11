@@ -5,6 +5,7 @@ import { CustomCursor } from './cursor';
 import { PreloaderProvider } from './PreloaderContext';
 import { AuthModalProvider } from './AuthModalContext';
 import { CursorRevealCode } from './textures/CursorRevealCode';
+import { BreakpointIndicator } from './dev/BreakpointIndicator';
 
 export function MarketingShell({ children }: { children: React.ReactNode }) {
   return (
@@ -16,6 +17,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <CursorRevealCode />
           {children}
         </div>
+        <BreakpointIndicator />
       </AuthModalProvider>
     </PreloaderProvider>
   );

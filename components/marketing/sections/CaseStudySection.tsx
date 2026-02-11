@@ -1,17 +1,37 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
+
+type Phase = 'initial' | 'push' | 'strike' | 'surprised' | 'blown';
+
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export function CaseStudySection() {
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
-  const [hourCount, setHourCount] = useState(24);
 
+  // Phase state machine
+  const [phase, setPhase] = useState<Phase>('initial');
+  const [hourCount, setHourCount] = useState(19);
+
+  // Phase timers
   useEffect(() => {
     if (!inView) return;
-    let current = 24;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    timers.push(setTimeout(() => setPhase('push'), 1000));
+    timers.push(setTimeout(() => setPhase('strike'), 1600));
+    timers.push(setTimeout(() => setPhase('surprised'), 2200));
+    timers.push(setTimeout(() => setPhase('blown'), 3000));
+    return () => timers.forEach(clearTimeout);
+  }, [inView]);
+
+  // Countdown — starts when strike phase begins
+  const strikeReached = phase === 'strike' || phase === 'surprised' || phase === 'blown';
+  useEffect(() => {
+    if (!strikeReached) return;
+    let current = 19;
     let timeoutId: ReturnType<typeof setTimeout>;
     const run = () => {
       if (current <= 1) {
@@ -20,12 +40,15 @@ export function CaseStudySection() {
       }
       current -= 1;
       setHourCount(current);
-      const delay = Math.max(40, 200 - (24 - current) * 7);
+      const delay = Math.max(40, 200 - (19 - current) * 7);
       timeoutId = setTimeout(run, delay);
     };
     timeoutId = setTimeout(run, 400);
     return () => clearTimeout(timeoutId);
-  }, [inView]);
+  }, [strikeReached]);
+
+  const isPushed = phase !== 'initial';
+  const isStrike = phase === 'strike' || phase === 'surprised' || phase === 'blown';
 
   return (
     <section
@@ -45,8 +68,8 @@ export function CaseStudySection() {
           {/* Left column — story */}
           <motion.div
             initial={{ opacity: 0, x: -24 }}
-            animate={inView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -24 }}
+            transition={{ duration: 0.6, ease: EASE }}
           >
             <span className="section-badge">
               CASE STUDY
@@ -87,36 +110,106 @@ export function CaseStudySection() {
           <motion.div
             className="relative flex flex-col items-center justify-center text-center lg:items-end lg:text-right"
             initial={{ opacity: 0, x: 24 }}
-            animate={inView ? { opacity: 1, x: 0 } : {}}
-            transition={{
-              duration: 0.6,
-              delay: 0.15,
-              ease: [0.22, 1, 0.36, 1],
-            }}
+            animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: 24 }}
+            transition={{ duration: 0.6, delay: 0.15, ease: EASE }}
           >
-            {/* Old estimate — animated strikethrough */}
-            <p className="relative inline-block text-5xl md:text-6xl font-medium text-stone-300 dark:text-white/15">
-              <span>3 years</span>
-              <motion.span
-                className="absolute left-0 top-1/2 w-full h-[2px] -translate-y-1/2 bg-stone-400/50 dark:bg-white/20 origin-left"
-                initial={{ scaleX: 0 }}
-                animate={inView ? { scaleX: 1 } : {}}
-                transition={{
-                  duration: 0.8,
-                  delay: 0.6,
-                  ease: [0.22, 1, 0.36, 1],
+            {/* "3 years" — starts bold/dark, transitions to small/light with strikethrough */}
+            <div className="relative">
+              {/* Bold version — visible initially, fades out + pushes up */}
+              <motion.p
+                className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-[-0.03em] leading-none text-stone-900 dark:text-white"
+                animate={{
+                  opacity: isPushed ? 0 : 1,
+                  y: isPushed ? -20 : 0,
+                  scale: isPushed ? 0.6 : 1,
                 }}
-              />
-            </p>
+                transition={{ duration: 0.6, ease: EASE }}
+                style={{ originX: 1 }}
+              >
+                3 years
+              </motion.p>
 
-            {/* Actual time — countdown from 24 to 1 */}
-            <p className="text-7xl md:text-8xl lg:text-9xl font-bold text-stone-900 dark:text-white tracking-[-0.03em] mt-2 leading-none">
-              {hourCount} hour{hourCount !== 1 ? 's' : ''}
-            </p>
+              {/* Light version — fades in at final position with strikethrough */}
+              <motion.p
+                className="absolute top-0 right-0 lg:right-0 text-3xl md:text-4xl font-medium text-stone-300 dark:text-white/15 whitespace-nowrap"
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: isPushed ? 1 : 0,
+                }}
+                transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
+              >
+                <span>3 years</span>
+                <motion.span
+                  className="absolute left-0 top-1/2 w-full h-[2px] -translate-y-1/2 bg-stone-400/50 dark:bg-white/20 origin-left"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: isStrike ? 1 : 0 }}
+                  transition={{ duration: 0.8, ease: EASE }}
+                />
+              </motion.p>
+            </div>
 
-            <p className="text-sm text-stone-500 dark:text-white/40 mt-4 tracking-wide uppercase">
+            {/* Actual time — countdown from 19 to 1, fades in at strike phase */}
+            <motion.p
+              className="text-5xl md:text-6xl lg:text-7xl font-bold text-stone-900 dark:text-white tracking-[-0.03em] mt-1 leading-none whitespace-nowrap"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{
+                opacity: isStrike ? 1 : 0,
+                y: isStrike ? 0 : 12,
+              }}
+              transition={{ duration: 0.5, ease: EASE }}
+            >
+              {hourCount} hour
+              {/* Fixed-width inline slot for "s" or emoji — prevents reflow */}
+              <span className="inline-block w-[0.6em] text-left align-baseline">
+                <AnimatePresence mode="wait">
+                  {hourCount > 1 && (
+                    <motion.span
+                      key="s"
+                      className="inline-block"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      s
+                    </motion.span>
+                  )}
+                  {hourCount === 1 && phase === 'surprised' && (
+                    <motion.span
+                      key="surprised"
+                      className="inline-block text-[0.45em] leading-none align-middle"
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      transition={{ duration: 0.3, ease: EASE }}
+                    >
+                      😮
+                    </motion.span>
+                  )}
+                  {hourCount === 1 && phase === 'blown' && (
+                    <motion.span
+                      key="blown"
+                      className="inline-block text-[0.45em] leading-none align-middle"
+                      initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                      animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4, ease: EASE }}
+                    >
+                      🤯
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </span>
+            </motion.p>
+
+            <motion.p
+              className="text-sm text-stone-500 dark:text-white/40 mt-4 tracking-wide uppercase"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isStrike ? 1 : 0 }}
+              transition={{ duration: 0.4, delay: 0.2, ease: EASE }}
+            >
               Actual implementation time
-            </p>
+            </motion.p>
           </motion.div>
         </div>
 
@@ -124,12 +217,8 @@ export function CaseStudySection() {
         <motion.div
           className="mt-16 md:mt-20 pt-8 md:pt-10 border-t border-stone-200 dark:border-white/10 overflow-hidden"
           initial={{ opacity: 0, y: 12 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{
-            duration: 0.5,
-            delay: 0.3,
-            ease: [0.22, 1, 0.36, 1],
-          }}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+          transition={{ duration: 0.5, delay: 0.3, ease: EASE }}
         >
           <div className="flex w-max animate-case-study-marquee gap-2">
             {[...Array(2)].map((_, copy) =>

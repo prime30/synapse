@@ -33,13 +33,17 @@ export function CounterStat({
   className,
 }: CounterStatProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-50px' });
+  const inView = useInView(ref, { once: false, margin: '-50px' });
   const [displayValue, setDisplayValue] = useState('0');
+  const [shimmer, setShimmer] = useState(false);
 
   const isWholeTarget = Number.isInteger(value);
 
   useEffect(() => {
-    if (!inView) return;
+    if (!inView) {
+      setShimmer(false);
+      return;
+    }
 
     const durationMs = duration * 1000;
     let startTime: number | null = null;
@@ -56,6 +60,8 @@ export function CounterStat({
 
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
+      } else {
+        setShimmer(true);
       }
     }
 
@@ -66,7 +72,13 @@ export function CounterStat({
 
   return (
     <div ref={ref} className={cn('text-center', className)}>
-      <div className="text-4xl md:text-5xl font-light text-stone-900 dark:text-white tabular-nums">
+      <div
+        className={cn(
+          'text-4xl md:text-5xl font-light text-stone-900 dark:text-white tabular-nums relative overflow-hidden',
+          shimmer && 'counter-shimmer',
+        )}
+        onAnimationEnd={() => setShimmer(false)}
+      >
         {prefix}
         {displayValue}
         {suffix}

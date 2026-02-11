@@ -58,7 +58,7 @@ describe('ensureDevTheme', () => {
     });
     mocks.createTheme.mockResolvedValue({
       id: 999,
-      name: 'Synapse Dev - proj-1',
+      name: 'Synapse Dev - store',
       role: 'unpublished',
     });
 
@@ -66,7 +66,7 @@ describe('ensureDevTheme', () => {
 
     expect(result).toBe('999');
     expect(mocks.createTheme).toHaveBeenCalledWith(
-      'Synapse Dev - proj-1',
+      'Synapse Dev - store',
       'https://example.com/theme.zip',
       'unpublished'
     );

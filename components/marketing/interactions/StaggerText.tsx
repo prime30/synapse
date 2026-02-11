@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
@@ -18,7 +18,7 @@ export function StaggerText({
   staggerDelay = 0.08,
 }: StaggerTextProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   const words = children.split(' ');
 

@@ -12,6 +12,7 @@ describe('Shopify Types', () => {
     it('should have correct fields', () => {
       const connection: ShopifyConnection = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
@@ -19,6 +20,7 @@ describe('Shopify Types', () => {
         last_sync_at: '2026-02-07T00:00:00Z',
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes'],
+        is_active: true,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -36,6 +38,7 @@ describe('Shopify Types', () => {
     it('should allow null theme_id', () => {
       const connection: ShopifyConnection = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
@@ -43,6 +46,7 @@ describe('Shopify Types', () => {
         last_sync_at: null,
         sync_status: 'disconnected',
         scopes: [],
+        is_active: true,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -53,6 +57,7 @@ describe('Shopify Types', () => {
     it('should allow null last_sync_at', () => {
       const connection: ShopifyConnection = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
@@ -60,6 +65,7 @@ describe('Shopify Types', () => {
         last_sync_at: null,
         sync_status: 'disconnected',
         scopes: [],
+        is_active: true,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -70,6 +76,7 @@ describe('Shopify Types', () => {
     it('should support empty scopes array', () => {
       const connection: ShopifyConnection = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
@@ -77,6 +84,7 @@ describe('Shopify Types', () => {
         last_sync_at: null,
         sync_status: 'disconnected',
         scopes: [],
+        is_active: true,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -87,6 +95,7 @@ describe('Shopify Types', () => {
     it('should support multiple scopes', () => {
       const connection: ShopifyConnection = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
@@ -94,6 +103,7 @@ describe('Shopify Types', () => {
         last_sync_at: '2026-02-07T00:00:00Z',
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes', 'read_content', 'write_content'],
+        is_active: true,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -203,10 +213,12 @@ describe('Shopify Types', () => {
     it('should work with all status types in ShopifyConnection', () => {
       const baseConnection: Omit<ShopifyConnection, 'sync_status'> = {
         id: '123e4567-e89b-12d3-a456-426614174000',
+        user_id: 'user-123',
         project_id: '123e4567-e89b-12d3-a456-426614174001',
         store_domain: 'mystore.myshopify.com',
         access_token_encrypted: 'encrypted_token_123',
         theme_id: '123456789',
+        is_active: true,
         last_sync_at: null,
         scopes: [],
         created_at: '2026-02-07T00:00:00Z',

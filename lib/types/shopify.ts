@@ -3,10 +3,13 @@ export type ThemeFileSyncStatus = 'synced' | 'pending' | 'conflict' | 'error';
 
 export interface ShopifyConnection {
   id: string;
-  project_id: string;
+  user_id: string;
+  /** @deprecated Use shopify_connection_id on projects instead */
+  project_id: string | null;
   store_domain: string;
   access_token_encrypted: string;
   theme_id: string | null;
+  is_active: boolean;
   last_sync_at: string | null;
   sync_status: ShopifySyncStatus;
   scopes: string[];

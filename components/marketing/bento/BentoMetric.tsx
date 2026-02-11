@@ -44,7 +44,7 @@ export function BentoMetric({
   className = '',
 }: BentoMetricProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { once: true, margin: '-100px' });
+  const isInView = useInView(ref, { once: false, margin: '-100px' });
   const count = useCounter(value, duration, isInView);
 
   return (
@@ -53,7 +53,7 @@ export function BentoMetric({
       className={`flex flex-col items-center justify-center text-center ${className}`}
       initial={{ opacity: 0, scale: 0.8 }}
       whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
+      viewport={{ once: false }}
       transition={{ type: 'spring', stiffness: 200, damping: 20 }}
     >
       <span className="font-semibold text-5xl md:text-7xl text-stone-900 mb-2">

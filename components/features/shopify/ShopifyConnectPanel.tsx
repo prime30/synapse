@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useActiveStore } from '@/hooks/useActiveStore';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
 import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
 
@@ -51,6 +52,22 @@ const TRIGGER_LABELS: Record<string, string> = {
   rollback: 'Rollback',
 };
 
+const ROLE_BADGE: Record<string, { label: string; cls: string }> = {
+  main: { label: 'Live', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
+  development: { label: 'Dev', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+  demo: { label: 'Demo', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
+  unpublished: { label: 'Unpublished', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/40' },
+};
+
+function themeRelativeTime(iso: string): string {
+  const sec = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (sec < 60) return 'Just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 interface PushHistoryRow {
   id: string;
   pushed_at: string;
@@ -62,12 +79,13 @@ interface PushHistoryRow {
 export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
   const queryClient = useQueryClient();
   const {
-    connection,
-    connected,
-    isLoading,
-    connectOAuth,
-    disconnect,
-    isDisconnecting,
+    connection: activeConnection,
+    isLoading: storeLoading,
+    connectStore,
+    isConnecting,
+    connectError,
+  } = useActiveStore(projectId);
+  const {
     sync,
     isSyncing,
     syncResult,
@@ -77,12 +95,30 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
   } = useShopifyConnection(projectId);
 
   const [shopDomain, setShopDomain] = useState('');
+  const [adminToken, setAdminToken] = useState('');
   const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [pushNote, setPushNote] = useState('');
   const [rollbackPushId, setRollbackPushId] = useState<string | null>(null);
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [rollbackMessage, setRollbackMessage] = useState<string | null>(null);
+  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+  const themeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (themeDropdownRef.current && !themeDropdownRef.current.contains(e.target as Node)) {
+        setThemeDropdownOpen(false);
+      }
+    }
+    if (themeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [themeDropdownOpen]);
+
+  const connected = !!activeConnection;
+  const connection = activeConnection;
 
   const { data: pushHistory = [] } = useQuery({
     queryKey: ['shopify-push-history', projectId],
@@ -99,21 +135,23 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     selectedThemeId ??
     (connection?.theme_id ? Number(connection.theme_id) : null);
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
     const domain = shopDomain.trim();
-    if (!domain) return;
-    // Append .myshopify.com if the user only typed the store name
+    const token = adminToken.trim();
+    if (!domain || !token) return;
+
     const fullDomain = domain.includes('.myshopify.com')
       ? domain
       : `${domain}.myshopify.com`;
-    connectOAuth(fullDomain);
-  };
 
-  const handleDisconnect = async () => {
     try {
-      await disconnect();
+      await connectStore({
+        storeDomain: fullDomain,
+        adminApiToken: token,
+        projectId,
+      });
     } catch (error) {
-      console.error('Failed to disconnect:', error);
+      console.error('Failed to connect:', error);
     }
   };
 
@@ -160,7 +198,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
       const dateLabel = dateStr ? relativeTime(dateStr) : 'that push';
       if (errors?.length) {
         setRollbackMessage(
-          `Restored ${restored} files. Some files could not be restored: ${errors.slice(0, 2).join('; ')}${errors.length > 2 ? '…' : ''}`
+          `Restored ${restored} files. Some files could not be restored: ${errors.slice(0, 2).join('; ')}${errors.length > 2 ? '...' : ''}`
         );
       } else {
         setRollbackMessage(`Preview restored to push from ${dateLabel}.`);
@@ -177,8 +215,8 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     }
   };
 
-  // ── Loading skeleton ──────────────────────────────────────────────────────
-  if (isLoading) {
+  // Loading skeleton
+  if (storeLoading) {
     return (
       <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4 animate-pulse">
         <div className="h-5 bg-gray-700 rounded w-40" />
@@ -188,19 +226,17 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     );
   }
 
-  // ── Disconnected state ────────────────────────────────────────────────────
+  // Disconnected state
   if (!connected || !connection) {
     return (
       <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <StatusDot status="disconnected" />
-          <h3 className="text-sm font-semibold text-gray-200">
-            Shopify Store
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-200">Shopify Store</h3>
         </div>
 
         <p className="text-xs text-gray-400">
-          Connect a Shopify store to sync theme files with this project.
+          Connect a Shopify store to sync theme files.
         </p>
 
         <div className="space-y-2">
@@ -218,40 +254,42 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             </span>
           </div>
 
-          <div className="flex items-start gap-2">
-            <button
-              type="button"
-              onClick={handleConnect}
-              disabled={!shopDomain.trim()}
-              className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Connect
-            </button>
-          </div>
+          <input
+            type="password"
+            value={adminToken}
+            onChange={(e) => setAdminToken(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+            placeholder="Admin API token (shpat_...)"
+            className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+          />
 
-          <p className="text-[11px] text-gray-500 leading-relaxed">
-            Find your store name in Shopify Admin &rarr; <span className="text-gray-400">Settings</span> &rarr; <span className="text-gray-400">Domains</span>, or in the URL bar when logged in:
-            <span className="ml-1 font-mono text-gray-400">admin.shopify.com/store/<span className="text-blue-400 underline decoration-dotted">your-store-name</span></span>
-          </p>
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={!shopDomain.trim() || !adminToken.trim() || isConnecting}
+            className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isConnecting ? 'Connecting...' : 'Connect'}
+          </button>
+
+          {connectError && (
+            <p className="text-xs text-red-400">{connectError.message}</p>
+          )}
         </div>
       </div>
     );
   }
 
-  // ── Connected state ───────────────────────────────────────────────────────
+  // Connected state
   return (
     <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <StatusDot status={connection.sync_status} />
-          <h3 className="text-sm font-semibold text-gray-200">
-            Shopify Store
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-200">Shopify Store</h3>
         </div>
-        <span className="text-xs text-gray-400 font-mono">
-          {connection.store_domain}
-        </span>
+        <span className="text-xs text-gray-400 font-mono">{connection.store_domain}</span>
       </div>
 
       {/* Last sync */}
@@ -261,50 +299,72 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Theme selector */}
       <div className="space-y-2">
-        <label
-          htmlFor="theme-select"
-          className="block text-xs font-medium text-gray-400"
-        >
+        <label className="block text-xs font-medium text-gray-400">
           Theme
         </label>
-        <select
-          id="theme-select"
-          value={effectiveThemeId ?? ''}
-          onChange={(e) =>
-            setSelectedThemeId(e.target.value ? Number(e.target.value) : null)
-          }
-          disabled={isLoadingThemes}
-          className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
-        >
-          <option value="">
-            {isLoadingThemes
-              ? 'Loading themes…'
-              : themesError
-                ? 'Failed to load themes'
-                : themes.length === 0
-                  ? 'No themes found'
-                  : 'Select a theme'}
-          </option>
-          {themes.map((theme) => (
-            <option key={theme.id} value={theme.id}>
-              {theme.name}
-              {theme.role === 'main' ? ' (Live)' : ''}
-            </option>
-          ))}
-        </select>
-        {themesError && (
-          <p className="text-xs text-red-400">
-            {themesError instanceof Error ? themesError.message : 'Failed to load themes'}
-          </p>
-        )}
+        <div ref={themeDropdownRef} className="relative">
+          <button
+            type="button"
+            onClick={() => !isLoadingThemes && setThemeDropdownOpen((o) => !o)}
+            disabled={isLoadingThemes}
+            className="w-full flex items-center justify-between px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+          >
+            <span className="truncate">
+              {isLoadingThemes
+                ? 'Loading themes...'
+                : themesError
+                  ? 'Failed to load themes'
+                  : effectiveThemeId
+                    ? themes.find((t) => t.id === effectiveThemeId)?.name ?? 'Select a theme'
+                    : themes.length === 0
+                      ? 'No themes found'
+                      : 'Select a theme'}
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${themeDropdownOpen ? 'rotate-180' : ''}`}>
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          {themeDropdownOpen && themes.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded bg-gray-800 border border-gray-600 shadow-lg">
+              {themes.map((theme) => {
+                const badge = ROLE_BADGE[theme.role] ?? ROLE_BADGE.unpublished;
+                const isSelected = theme.id === effectiveThemeId;
+                return (
+                  <li key={theme.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedThemeId(theme.id);
+                        setThemeDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm transition-colors ${
+                        isSelected
+                          ? 'bg-blue-600/20 text-white'
+                          : 'text-gray-200 hover:bg-gray-700'
+                      }`}
+                    >
+                      <span className="flex-1 min-w-0 truncate">{theme.name}</span>
+                      <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded border ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                      {theme.updated_at && (
+                        <span className="shrink-0 text-[10px] text-gray-500 tabular-nums">
+                          {themeRelativeTime(theme.updated_at)}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
 
-      {/* Optional note for manual push */}
+      {/* Push note */}
       <div>
-        <label
-          htmlFor="push-note"
-          className="block text-xs font-medium text-gray-400 mb-1"
-        >
+        <label htmlFor="push-note" className="block text-xs font-medium text-gray-400 mb-1">
           Note (optional, for manual push)
         </label>
         <input
@@ -317,25 +377,23 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
         />
       </div>
 
-      {/* Sync buttons: use selected theme or connection dev theme_id */}
+      {/* Sync buttons */}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => handleSync('pull')}
           disabled={!effectiveThemeId || isSyncing}
-          title={!effectiveThemeId ? 'Select a theme first' : undefined}
           className="flex-1 px-3 py-2 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isSyncing ? 'Syncing…' : 'Pull from Shopify'}
+          {isSyncing ? 'Syncing...' : 'Pull from Shopify'}
         </button>
         <button
           type="button"
           onClick={() => handleSync('push')}
           disabled={!effectiveThemeId || isSyncing}
-          title={!effectiveThemeId ? 'Select a theme first' : undefined}
           className="flex-1 px-3 py-2 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isSyncing ? 'Syncing…' : 'Push to Shopify'}
+          {isSyncing ? 'Syncing...' : 'Push to Shopify'}
         </button>
       </div>
 
@@ -346,35 +404,22 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             Pulled: {syncResult.pulled} &middot; Pushed: {syncResult.pushed}
           </p>
           {syncResult.conflicts.length > 0 && (
-            <p className="text-yellow-400">
-              Conflicts: {syncResult.conflicts.join(', ')}
-            </p>
+            <p className="text-yellow-400">Conflicts: {syncResult.conflicts.join(', ')}</p>
           )}
           {syncResult.errors.length > 0 && (
-            <p className="text-red-400">
-              Errors: {syncResult.errors.join(', ')}
-            </p>
+            <p className="text-red-400">Errors: {syncResult.errors.join(', ')}</p>
           )}
         </div>
       )}
 
-      {syncError && (
-        <p className="text-xs text-red-400">{syncError}</p>
-      )}
-
-      {rollbackMessage && (
-        <p className="text-xs text-green-400">
-          {rollbackMessage}
-        </p>
-      )}
+      {syncError && <p className="text-xs text-red-400">{syncError}</p>}
+      {rollbackMessage && <p className="text-xs text-green-400">{rollbackMessage}</p>}
 
       {/* Push history */}
       <div className="space-y-2">
         <h4 className="text-xs font-medium text-gray-400">Push history</h4>
         {pushHistory.length === 0 ? (
-          <p className="text-xs text-gray-500">
-            No pushes yet. Push from here or save a file to see history.
-          </p>
+          <p className="text-xs text-gray-500">No pushes yet.</p>
         ) : (
           <ul className="space-y-1.5 max-h-48 overflow-y-auto">
             {pushHistory.map((row, index) => (
@@ -386,18 +431,16 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                   <span className="text-gray-400">{relativeTime(row.pushed_at)}</span>
                   {row.note && (
                     <span className="ml-2 text-gray-500 truncate block" title={row.note}>
-                      {row.note.length > 24 ? `${row.note.slice(0, 24)}…` : row.note}
+                      {row.note.length > 24 ? `${row.note.slice(0, 24)}...` : row.note}
                     </span>
                   )}
                   <span className="text-gray-500">
-                    {TRIGGER_LABELS[row.trigger] ?? row.trigger} · {row.file_count} files
+                    {TRIGGER_LABELS[row.trigger] ?? row.trigger} &middot; {row.file_count} files
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {index === 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-gray-600 text-gray-300 text-[10px]">
-                      Current
-                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-gray-600 text-gray-300 text-[10px]">Current</span>
                   )}
                   <button
                     type="button"
@@ -416,51 +459,24 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Rollback confirmation dialog */}
       {rollbackPushId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm rollback"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setRollbackPushId(null);
-          }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Confirm rollback"
+          onKeyDown={(e) => { if (e.key === 'Escape') setRollbackPushId(null); }}
         >
           <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
             <p className="text-sm text-gray-200">
-              Restore preview theme to this push? Current preview state will be overwritten. Your live store is not affected.
+              Restore preview theme to this push? Current preview state will be overwritten.
             </p>
             <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setRollbackPushId(null)}
-                className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-              >
+              <button type="button" onClick={() => setRollbackPushId(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={confirmRollback}
-                disabled={isRollingBack}
-                className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isRollingBack ? 'Rolling back…' : 'Restore'}
+              <button type="button" onClick={confirmRollback} disabled={isRollingBack} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                {isRollingBack ? 'Rolling back...' : 'Restore'}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Disconnect */}
-      <div className="pt-2 border-t border-gray-700">
-        <button
-          type="button"
-          onClick={handleDisconnect}
-          disabled={isDisconnecting}
-          className="px-3 py-1.5 text-xs rounded text-red-400 hover:text-red-300 hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isDisconnecting ? 'Disconnecting…' : 'Disconnect Store'}
-        </button>
-      </div>
     </div>
   );
 }

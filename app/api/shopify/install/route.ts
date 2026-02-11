@@ -7,13 +7,13 @@ import { ShopifyOAuthService } from '@/lib/shopify/oauth';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
 
     const shop = request.nextUrl.searchParams.get('shop');
-    const projectId = request.nextUrl.searchParams.get('projectId');
+    const projectId = request.nextUrl.searchParams.get('projectId'); // optional legacy compat
 
-    if (!shop || !projectId) {
-      throw APIError.badRequest('shop and projectId query parameters are required');
+    if (!shop) {
+      throw APIError.badRequest('shop query parameter is required');
     }
 
     // Validate shop domain format (must be *.myshopify.com)
@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
     const oauth = new ShopifyOAuthService();
     const nonce = oauth.generateState();
 
-    // Encode projectId into the state so the callback knows which project to link
-    const state = Buffer.from(JSON.stringify({ nonce, projectId })).toString('base64url');
+    // Encode userId (and optional projectId) into the state
+    const state = Buffer.from(JSON.stringify({ nonce, userId, projectId })).toString('base64url');
 
     // Store nonce in httpOnly cookie for CSRF validation on callback
     const cookieStore = await cookies();

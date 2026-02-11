@@ -1,14 +1,48 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, useInView } from 'framer-motion';
 import { PromptExperienceMockup } from '../mockups/PromptExperienceMockup';
 import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
+import { useAuthModal } from '@/components/marketing/AuthModalContext';
+import { createClient } from '@/lib/supabase/client';
 
 export function CTASection() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
+  const router = useRouter();
+  const { openAuthModal } = useAuthModal();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+
+    const syncSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!cancelled) setIsAuthenticated(!!session);
+    };
+    syncSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!cancelled) setIsAuthenticated(!!session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleCtaAction = useCallback(() => {
+    if (isAuthenticated) {
+      router.push('/projects');
+      return;
+    }
+    openAuthModal('signup');
+  }, [isAuthenticated, openAuthModal, router]);
 
   return (
     <section
@@ -25,37 +59,49 @@ export function CTASection() {
 
       <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left column — text + CTA */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <h2 className="text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight">
+          {/* Left column — text + CTA (staggered children) */}
+          <div>
+            <motion.h2
+              className="text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight"
+              initial={{ opacity: 0, y: 24 }}
+              animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            >
               Start <PixelAccent>shipping</PixelAccent>.
-            </h2>
-            <p className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-md">
+            </motion.h2>
+            <motion.p
+              className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-md"
+              initial={{ opacity: 0, y: 20 }}
+              animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+            >
               No credit card. Free for solo projects. Your first theme deploys
               today.
-            </p>
+            </motion.p>
 
-            <div className="mt-10">
+            <motion.div
+              className="mt-10"
+              initial={{ opacity: 0, y: 16 }}
+              animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
               <MagneticElement strength={6} radius={120}>
                 <button
                   type="button"
+                  onClick={handleCtaAction}
                   className="h-12 px-8 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
                 >
-                  Sign up
+                  {isAuthenticated ? 'See Projects' : 'Sign up'}
                 </button>
               </MagneticElement>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
 
           {/* Right column — prompting experience mockup */}
           <motion.div
             className="hidden lg:block"
             initial={{ opacity: 0, x: 40 }}
-            animate={inView ? { opacity: 1, x: 0 } : {}}
+            animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             <PromptExperienceMockup />

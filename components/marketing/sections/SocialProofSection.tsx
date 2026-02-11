@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { GlassCard } from '../glass/GlassCard';
+import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 
 const TESTIMONIALS = [
   {
@@ -27,14 +28,14 @@ const TESTIMONIALS = [
 
 export function SocialProofSection() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   return (
     <motion.section
       ref={ref}
       className="relative py-24 md:py-32 overflow-hidden bg-stone-50 z-10"
       initial={{ opacity: 0, y: 30 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
       transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="relative max-w-7xl mx-auto px-6">
@@ -71,12 +72,14 @@ export function SocialProofSection() {
 
         {/* Bottom CTA */}
         <div className="text-center mt-16">
-          <a
-            href="/signup"
-            className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
-          >
-            Start Free
-          </a>
+          <MagneticElement strength={6} radius={120}>
+            <a
+              href="/signup"
+              className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+            >
+              Start Free
+            </a>
+          </MagneticElement>
           <p className="text-stone-500 text-sm mt-4">No credit card required</p>
         </div>
       </div>

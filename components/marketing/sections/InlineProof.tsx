@@ -5,7 +5,7 @@ import { motion, useInView } from 'framer-motion';
 
 export function InlineProof() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   return (
     <section
@@ -17,7 +17,7 @@ export function InlineProof() {
         <motion.blockquote
           className="text-2xl md:text-3xl font-light text-stone-600 dark:text-white/60 leading-relaxed"
           initial={{ opacity: 0, y: 16 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
           transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
         >
           {'\u201C'}Synapse transformed how our agency builds Shopify themes. What
@@ -27,7 +27,7 @@ export function InlineProof() {
         <motion.p
           className="mt-8 text-sm text-stone-400 dark:text-white/30"
           initial={{ opacity: 0, y: 16 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
           transition={{
             duration: 0.6,
             delay: 0.2,

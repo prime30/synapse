@@ -12,26 +12,31 @@ export interface Project {
   created_at: string;
   updated_at: string;
   organization_id: string;
+  shopify_connection_id?: string | null;
+  shopify_theme_id?: string | null;
+  shopify_theme_name?: string | null;
 }
 
-export function useProjects() {
+/**
+ * @param connectionId - Optional: filter projects by store connection ID.
+ *   When provided, only projects imported from that store are returned.
+ */
+export function useProjects(connectionId?: string | null) {
   const queryClient = useQueryClient();
 
   // ── List projects ─────────────────────────────────────────────────────────
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: connectionId ? ['projects', connectionId] : ['projects'],
     queryFn: async (): Promise<Project[]> => {
-      // #region agent log H4
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H4',location:'hooks/useProjects.ts:24',message:'projects query start',data:{queryKey:'projects'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      const res = await fetch('/api/projects');
-      // #region agent log H4
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H4',location:'hooks/useProjects.ts:27',message:'projects query response',data:{ok:res.ok,status:res.status},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      const url = connectionId
+        ? `/api/projects?connectionId=${encodeURIComponent(connectionId)}`
+        : '/api/projects';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch projects');
       const json = await res.json();
       return (json.data ?? []) as Project[];
     },
+    retry: false,
   });
 
   // ── Create project ────────────────────────────────────────────────────────

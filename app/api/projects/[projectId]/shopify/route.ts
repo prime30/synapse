@@ -25,23 +25,29 @@ interface RouteParams {
   params: Promise<{ projectId: string }>;
 }
 
+function isMissingIsActiveColumn(error: unknown): boolean {
+  const err = error as { code?: string; message?: string };
+  const message = (err?.message ?? '').toLowerCase();
+  return (
+    err?.code === 'PGRST204' ||
+    err?.code === '42703' ||
+    (message.includes('is_active') &&
+      (message.includes('column') || message.includes('schema cache')))
+  );
+}
+
 /**
  * GET /api/projects/[projectId]/shopify
  * Returns the Shopify connection status for the project.
+ * Resolves from the user's active store connection (user-scoped).
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
+    const userId = await requireProjectAccess(request, projectId);
 
-    const supabase = await adminSupabase();
-    const { data: connection } = await supabase
-      .from('shopify_connections')
-      .select(
-        'id, store_domain, theme_id, sync_status, scopes, last_sync_at, created_at, updated_at'
-      )
-      .eq('project_id', projectId)
-      .maybeSingle();
+    const tokenManager = new ShopifyTokenManager();
+    const connection = await tokenManager.getActiveConnection(userId, { projectId });
 
     if (!connection) {
       return successResponse({
@@ -55,15 +61,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
       themeId = await ensureDevTheme(connection.id);
     } catch {
-      // Return connection as-is; theme_id may be null if provisioning failed (e.g. missing zip URL)
+      // Return connection as-is; theme_id may be null if provisioning failed
       if (!themeId && connection.theme_id) themeId = connection.theme_id;
     }
 
     return successResponse({
       connected: true,
       connection: {
-        ...connection,
+        id: connection.id,
+        store_domain: connection.store_domain,
         theme_id: themeId ?? connection.theme_id,
+        is_active: connection.is_active,
+        sync_status: connection.sync_status,
+        scopes: connection.scopes,
+        last_sync_at: connection.last_sync_at,
+        created_at: connection.created_at,
+        updated_at: connection.updated_at,
       },
     });
   } catch (error) {
@@ -73,12 +86,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * POST /api/projects/[projectId]/shopify
- * Manually connect a Shopify store using a store domain and Admin API access token.
+ * Connect a Shopify store using Admin API token (user-scoped, auto-activates).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
+    const userId = await requireProjectAccess(request, projectId);
 
     const body = await request.json().catch(() => ({}));
     const storeDomain = typeof body.storeDomain === 'string' ? body.storeDomain.trim() : '';
@@ -103,21 +116,29 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Store the connection (encrypted)
+    // Store the connection (user-scoped, encrypted, auto-activates)
     const tokenManager = new ShopifyTokenManager();
     const connection = await tokenManager.storeConnection(
-      projectId,
+      userId,
       fullDomain,
       adminApiToken,
-      ['read_themes', 'write_themes']
+      ['read_themes', 'write_themes'],
+      { projectId }
     );
+
+    // Link the project to this connection
+    const supabase = await adminSupabase();
+    await supabase
+      .from('projects')
+      .update({ shopify_connection_id: connection.id })
+      .eq('id', projectId);
 
     // Provision a dev theme and persist theme_id
     let themeId: string | null = connection.theme_id ?? null;
     try {
       themeId = await ensureDevTheme(connection.id);
     } catch {
-      // Connection is stored; theme_id may be set later via GET (e.g. once zip URL is configured)
+      // Connection is stored; theme_id may be set later
     }
 
     return successResponse({
@@ -126,6 +147,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         id: connection.id,
         store_domain: connection.store_domain,
         theme_id: themeId,
+        is_active: connection.is_active,
         sync_status: connection.sync_status,
         scopes: connection.scopes,
         last_sync_at: connection.last_sync_at,
@@ -140,26 +162,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/projects/[projectId]/shopify
- * Disconnect the Shopify store from the project.
+ * Deactivate the store connection (preserves projects).
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
-
-    const supabase = await adminSupabase();
-    const { data: connection } = await supabase
-      .from('shopify_connections')
-      .select('id')
-      .eq('project_id', projectId)
-      .maybeSingle();
-
-    if (!connection) {
-      throw APIError.notFound('No Shopify connection found for this project');
-    }
+    const userId = await requireProjectAccess(request, projectId);
 
     const tokenManager = new ShopifyTokenManager();
-    await tokenManager.deleteConnection(connection.id);
+    const connection = await tokenManager.getActiveConnection(userId, { projectId });
+
+    if (!connection) {
+      throw APIError.notFound('No active Shopify connection found');
+    }
+
+    // Deactivate (don't delete — preserves projects linked to this store)
+    await tokenManager.updateSyncStatus(connection.id, 'disconnected');
+
+    // Clear the active flag
+    const supabase = await adminSupabase();
+    const { error: deactivateError } = await supabase
+      .from('shopify_connections')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', connection.id);
+    if (deactivateError && !isMissingIsActiveColumn(deactivateError)) {
+      throw new APIError(
+        `Failed to disconnect Shopify store: ${deactivateError.message}`,
+        'DISCONNECT_FAILED',
+        500
+      );
+    }
 
     return successResponse({ disconnected: true });
   } catch (error) {

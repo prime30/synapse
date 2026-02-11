@@ -98,9 +98,6 @@ export async function recordPush(
 ): Promise<string> {
   const supabase = await adminSupabase();
   const trigger = options?.trigger ?? 'manual';
-  // #region agent log H6
-  fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run2',hypothesisId:'H6',location:'lib/shopify/push-history.ts:92',message:'recordPush start',data:{connectionId,themeId,trigger,snapshotFiles:Array.isArray(snapshot?.files)?snapshot.files.length:0,hasServiceRoleKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!PUSH_TRIGGERS.includes(trigger)) {
     throw APIError.badRequest(`Invalid trigger: ${trigger}`);
   }
@@ -118,23 +115,18 @@ export async function recordPush(
     .single();
 
   if (error) {
-    // #region agent log H6
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run2',hypothesisId:'H6',location:'lib/shopify/push-history.ts:111',message:'recordPush insert failed',data:{connectionId,themeId,errorCode:(error as {code?:string})?.code??null,errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new APIError(
       `Failed to record push: ${error.message}`,
       'INSERT_ERROR',
       500
     );
   }
-  // #region agent log H6
-  fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run2',hypothesisId:'H6',location:'lib/shopify/push-history.ts:119',message:'recordPush insert succeeded',data:{connectionId,themeId,historyId:data.id},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return data.id;
 }
 
 /**
  * List push history for a project (no snapshot body). Ordered by pushed_at desc.
+ * Looks up the connection via the project's shopify_connection_id (store-first architecture).
  */
 export async function listPushHistory(
   projectId: string,
@@ -142,20 +134,21 @@ export async function listPushHistory(
 ): Promise<PushHistoryRow[]> {
   const supabase = await adminSupabase();
 
-  const { data: connection, error: connError } = await supabase
-    .from('shopify_connections')
-    .select('id')
-    .eq('project_id', projectId)
+  // Store-first: project stores the connection reference
+  const { data: project, error: projError } = await supabase
+    .from('projects')
+    .select('shopify_connection_id')
+    .eq('id', projectId)
     .maybeSingle();
 
-  if (connError || !connection) {
+  if (projError || !project?.shopify_connection_id) {
     return [];
   }
 
   const { data: rows, error } = await supabase
     .from('theme_push_history')
     .select('id, pushed_at, note, trigger, snapshot')
-    .eq('connection_id', connection.id)
+    .eq('connection_id', project.shopify_connection_id)
     .order('pushed_at', { ascending: false })
     .limit(Math.min(limit, 100));
 
@@ -202,14 +195,14 @@ export async function rollbackToPush(
     throw APIError.notFound('Push record not found');
   }
 
-  const { data: connection, error: connError } = await supabase
-    .from('shopify_connections')
-    .select('id')
-    .eq('id', row.connection_id)
-    .eq('project_id', projectId)
+  // Verify the push belongs to this project (store-first: project stores connection ref)
+  const { data: project, error: projError } = await supabase
+    .from('projects')
+    .select('shopify_connection_id')
+    .eq('id', projectId)
     .single();
 
-  if (connError || !connection) {
+  if (projError || !project?.shopify_connection_id || project.shopify_connection_id !== row.connection_id) {
     throw APIError.forbidden('Push does not belong to this project');
   }
 

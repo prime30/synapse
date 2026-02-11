@@ -1,7 +1,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { ShopifyAdminAPIFactory } from './admin-api-factory';
-import type { ShopifyAsset } from './admin-api';
+import type { ShopifyAsset, ShopifyAdminAPI } from './admin-api';
 import type { ThemeFile, ThemeFileSyncStatus } from '@/lib/types/shopify';
 import { createHash } from 'crypto';
 import { APIError } from '@/lib/errors/handler';
@@ -17,6 +17,9 @@ export interface SyncResult {
 }
 
 export class ThemeSyncService {
+  private readonly PREFETCH_CONCURRENCY = 25;
+  private readonly PROCESS_CONCURRENCY = 20;
+
   private async adminSupabase() {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (serviceKey) {
@@ -28,8 +31,11 @@ export class ThemeSyncService {
   /**
    * Pull theme files from Shopify and sync to local database.
    * Fetches all assets from the remote theme, compares hashes, and updates local files.
+   * @param connectionId - The Shopify connection ID.
+   * @param themeId - The Shopify theme ID to pull from.
+   * @param projectId - The project to sync files into (explicit, not derived from connection).
    */
-  async pullTheme(connectionId: string, themeId: number): Promise<SyncResult> {
+  async pullTheme(connectionId: string, themeId: number, projectId?: string): Promise<SyncResult> {
     const result: SyncResult = {
       pulled: 0,
       pushed: 0,
@@ -41,27 +47,30 @@ export class ThemeSyncService {
       // 1. Get API client via factory
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
-      // 2. Get connection to access project_id
+      // 2. Resolve project_id: prefer explicit param, fall back to connection's legacy project_id
       const supabase = await this.adminSupabase();
-      const { data: connection, error: connError } = await supabase
-        .from('shopify_connections')
-        .select('project_id')
-        .eq('id', connectionId)
-        .single();
 
-      // #region agent log H1
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H1',location:'lib/shopify/sync-service.ts:43',message:'pullTheme connection lookup result',data:{connectionId,hasConnection:!!connection,connErrorCode:connError?.code??null,connErrorMessage:connError?.message??null,hasServiceRoleKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      let resolvedProjectId: string;
+      if (projectId) {
+        resolvedProjectId = projectId;
+      } else {
+        const { data: connection, error: connError } = await supabase
+          .from('shopify_connections')
+          .select('project_id')
+          .eq('id', connectionId)
+          .single();
 
-      if (connError || !connection) {
-        throw APIError.notFound('Shopify connection not found');
+        if (connError || !connection?.project_id) {
+          throw APIError.notFound('Shopify connection not found or no project linked');
+        }
+        resolvedProjectId = connection.project_id;
       }
 
       // Get project to access owner_id for created_by
       const { data: project, error: projError } = await supabase
         .from('projects')
         .select('owner_id')
-        .eq('id', connection.project_id)
+        .eq('id', resolvedProjectId)
         .single();
 
       if (projError || !project) {
@@ -70,182 +79,197 @@ export class ThemeSyncService {
 
       // 3. List all remote assets
       const remoteAssets = await api.listAssets(themeId);
-      let missingValueCount = 0;
-      let changedCandidateCount = 0;
-      let detailFetchAttempts = 0;
-      let detailFetchValueCount = 0;
-      let detailFetchErrorCount = 0;
-      let skippedNonTextCount = 0;
-      // #region agent log H10
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run3',hypothesisId:'H10',location:'lib/shopify/sync-service.ts:74',message:'pullTheme remote assets listed',data:{connectionId,themeId,remoteAssetsCount:remoteAssets.length,sampleKey:remoteAssets[0]?.key??null,sampleHasValue:!!remoteAssets[0]?.value},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      const prefetchedAssetValues = await this.prefetchMissingAssetValues(
+        api,
+        themeId,
+        remoteAssets,
+        result,
+        this.PREFETCH_CONCURRENCY
+      );
+      const { data: existingThemeFiles, error: existingThemeFilesError } =
+        await supabase
+          .from('theme_files')
+          .select('*')
+          .eq('connection_id', connectionId);
+      if (existingThemeFilesError) {
+        throw new APIError(
+          `Failed to load theme files: ${existingThemeFilesError.message}`,
+          'QUERY_ERROR',
+          500
+        );
+      }
+      const existingThemeFileByPath = new Map(
+        (existingThemeFiles ?? []).map((row) => [row.file_path, row])
+      );
 
-      // 4. For each asset: fetch content, compute hash
-      for (const asset of remoteAssets) {
-        try {
-          const filePath = asset.key;
-          let content = asset.value;
-          if (!content) {
-            if (!this.shouldFetchAssetValue(filePath)) {
-              skippedNonTextCount++;
+      const { data: existingProjectFiles, error: existingProjectFilesError } =
+        await supabase
+          .from('files')
+          .select('id, path')
+          .eq('project_id', resolvedProjectId);
+      if (existingProjectFilesError) {
+        throw new APIError(
+          `Failed to load project files: ${existingProjectFilesError.message}`,
+          'QUERY_ERROR',
+          500
+        );
+      }
+      const existingFileIdByPath = new Map(
+        (existingProjectFiles ?? []).map((row) => [row.path, row.id])
+      );
+
+      let assetCursor = 0;
+      const workerCount = Math.min(this.PROCESS_CONCURRENCY, remoteAssets.length);
+
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (assetCursor < remoteAssets.length) {
+          const index = assetCursor++;
+          const asset = remoteAssets[index];
+          try {
+            const filePath = asset.key;
+            let content = asset.value;
+            if (!content && prefetchedAssetValues.has(filePath)) {
+              content = prefetchedAssetValues.get(filePath);
+            }
+            if (!content) {
+              if (!this.shouldFetchAssetValue(filePath)) {
+                continue;
+              }
+              try {
+                const detailedAsset = await api.getAsset(themeId, filePath);
+                content = detailedAsset.value;
+              } catch (detailError) {
+                const detailErrorMessage =
+                  detailError instanceof Error ? detailError.message : 'Unknown error';
+                result.errors.push(`${filePath}: ${detailErrorMessage}`);
+                continue;
+              }
+            }
+
+            if (!content) {
               continue;
             }
-            detailFetchAttempts++;
-            const shouldSampleDetailFetch = detailFetchAttempts <= 5;
-            const detailFetchStartedAt = Date.now();
-            if (shouldSampleDetailFetch) {
-              // #region agent log H12
-              fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:89',message:'detail asset fetch start',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-            }
-            try {
-              const detailedAsset = await api.getAsset(themeId, filePath);
-              content = detailedAsset.value;
-              if (content) {
-                detailFetchValueCount++;
-              }
-              if (shouldSampleDetailFetch) {
-                // #region agent log H12
-                fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:101',message:'detail asset fetch success',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts,hasValue:!!content,durationMs:Date.now()-detailFetchStartedAt},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-              }
-            } catch (detailError) {
-              detailFetchErrorCount++;
-              const detailErrorMessage =
-                detailError instanceof Error ? detailError.message : 'Unknown error';
-              if (shouldSampleDetailFetch) {
-                // #region agent log H12
-                fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run4',hypothesisId:'H12',location:'lib/shopify/sync-service.ts:110',message:'detail asset fetch failed',data:{connectionId,themeId,filePath,attempt:detailFetchAttempts,durationMs:Date.now()-detailFetchStartedAt,errorMessage:detailErrorMessage},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-              }
-              result.errors.push(`${filePath}: ${detailErrorMessage}`);
-              continue;
-            }
-          }
 
-          // Skip binary assets (images, etc.) - only sync text files
-          if (!content) {
-            missingValueCount++;
-            continue;
-          }
-          changedCandidateCount++;
-
-          const contentHash = this.computeHash(content);
-
-          // 5. Compare with local theme_files records
-          const { data: existingThemeFile } = await supabase
-            .from('theme_files')
-            .select('*')
-            .eq('connection_id', connectionId)
-            .eq('file_path', filePath)
-            .maybeSingle();
-
-          const now = new Date().toISOString();
-          const remoteUpdatedAt = asset.updated_at;
-
-          // Check if file has changed
-          const hasChanged =
-            !existingThemeFile ||
-            existingThemeFile.content_hash !== contentHash;
-
-          // Check for conflicts (local was modified after last remote update)
-          if (
-            existingThemeFile &&
-            existingThemeFile.local_updated_at &&
-            existingThemeFile.remote_updated_at &&
-            new Date(existingThemeFile.local_updated_at) >
-              new Date(existingThemeFile.remote_updated_at) &&
-            existingThemeFile.content_hash !== contentHash
-          ) {
-            result.conflicts.push(filePath);
-            // Update theme_file record with conflict status
-            await supabase
-              .from('theme_files')
-              .update({
-                content_hash: contentHash,
-                remote_updated_at: remoteUpdatedAt,
-                sync_status: 'conflict',
-                updated_at: now,
-              })
-              .eq('id', existingThemeFile.id);
-            continue;
-          }
-
-          // 6. If new or changed: upsert theme_file record, update local file
-          if (hasChanged) {
-            // Upsert theme_file record
-            const themeFileData = {
-              connection_id: connectionId,
-              file_path: filePath,
-              content_hash: contentHash,
-              remote_updated_at: remoteUpdatedAt,
-              sync_status: 'synced' as ThemeFileSyncStatus,
-              updated_at: now,
-            };
-
-            if (existingThemeFile) {
-              await supabase
-                .from('theme_files')
-                .update(themeFileData)
-                .eq('id', existingThemeFile.id);
-            } else {
-              await supabase.from('theme_files').insert(themeFileData);
-            }
-
-            // Update or create file in files table
+            const contentHash = this.computeHash(content);
+            const now = new Date().toISOString();
+            const remoteUpdatedAt = asset.updated_at;
+            const existingThemeFile = existingThemeFileByPath.get(filePath) ?? null;
             const fileName = filePath.split('/').pop() || filePath;
             const fileType = detectFileTypeFromName(fileName);
+            const existingFileId = existingFileIdByPath.get(filePath);
 
-            // Check if file exists in files table by path
-            const { data: existingFile } = await supabase
-              .from('files')
-              .select('id')
-              .eq('project_id', connection.project_id)
-              .eq('path', filePath)
-              .maybeSingle();
+            const hasChanged =
+              !existingThemeFile || existingThemeFile.content_hash !== contentHash;
 
-            if (existingFile) {
-              await updateFile(existingFile.id, {
-                content,
-                path: filePath,
-              });
-            } else {
-              await createFile({
-                project_id: connection.project_id,
-                name: fileName,
-                path: filePath,
-                file_type: fileType,
-                content,
-                created_by: project.owner_id,
-              });
+            if (
+              existingThemeFile &&
+              existingThemeFile.local_updated_at &&
+              existingThemeFile.remote_updated_at &&
+              new Date(existingThemeFile.local_updated_at) >
+                new Date(existingThemeFile.remote_updated_at) &&
+              existingThemeFile.content_hash !== contentHash
+            ) {
+              result.conflicts.push(filePath);
+              await supabase
+                .from('theme_files')
+                .update({
+                  content_hash: contentHash,
+                  remote_updated_at: remoteUpdatedAt,
+                  sync_status: 'conflict',
+                  updated_at: now,
+                })
+                .eq('id', existingThemeFile.id);
+              continue;
             }
 
-            result.pulled++;
-          } else if (existingThemeFile) {
-            // File hasn't changed, but update remote_updated_at if needed
-            await supabase
-              .from('theme_files')
-              .update({
+            if (hasChanged) {
+              const themeFileData = {
+                connection_id: connectionId,
+                file_path: filePath,
+                content_hash: contentHash,
                 remote_updated_at: remoteUpdatedAt,
+                sync_status: 'synced' as ThemeFileSyncStatus,
                 updated_at: now,
-              })
-              .eq('id', existingThemeFile.id);
+              };
+
+              if (existingThemeFile) {
+                await supabase
+                  .from('theme_files')
+                  .update(themeFileData)
+                  .eq('id', existingThemeFile.id);
+                existingThemeFileByPath.set(filePath, {
+                  ...existingThemeFile,
+                  ...themeFileData,
+                });
+              } else {
+                const { data: insertedThemeFile, error: insertThemeFileError } =
+                  await supabase
+                    .from('theme_files')
+                    .insert(themeFileData)
+                    .select('*')
+                    .single();
+                if (insertThemeFileError || !insertedThemeFile) {
+                  throw new APIError(
+                    `Failed to insert theme file: ${insertThemeFileError?.message ?? 'Unknown error'}`,
+                    'QUERY_ERROR',
+                    500
+                  );
+                }
+                existingThemeFileByPath.set(filePath, insertedThemeFile);
+              }
+
+              if (existingFileId) {
+                await updateFile(existingFileId, {
+                  content,
+                  path: filePath,
+                });
+              } else {
+                const createdFile = await this.createProjectFile({
+                  project_id: resolvedProjectId,
+                  name: fileName,
+                  path: filePath,
+                  file_type: fileType,
+                  content,
+                  created_by: project.owner_id,
+                });
+                existingFileIdByPath.set(filePath, createdFile.id);
+              }
+
+              result.pulled++;
+            } else if (existingThemeFile) {
+              // Recover from prior partial syncs where theme_files row exists but local file creation failed.
+              if (!existingFileId) {
+                const createdFile = await this.createProjectFile({
+                  project_id: resolvedProjectId,
+                  name: fileName,
+                  path: filePath,
+                  file_type: fileType,
+                  content,
+                  created_by: project.owner_id,
+                });
+                existingFileIdByPath.set(filePath, createdFile.id);
+                result.pulled++;
+              }
+
+              await supabase
+                .from('theme_files')
+                .update({
+                  remote_updated_at: remoteUpdatedAt,
+                  updated_at: now,
+                })
+                .eq('id', existingThemeFile.id);
+            }
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : 'Unknown error';
+            result.errors.push(`${asset.key}: ${errorMessage}`);
           }
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error';
-          result.errors.push(`${asset.key}: ${errorMessage}`);
         }
-      }
-      // #region agent log H10
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run3',hypothesisId:'H10',location:'lib/shopify/sync-service.ts:194',message:'pullTheme loop summary',data:{connectionId,themeId,remoteAssetsCount:remoteAssets.length,skippedNonTextCount,detailFetchAttempts,detailFetchValueCount,detailFetchErrorCount,missingValueCount,changedCandidateCount,pulled:result.pulled,errorsCount:result.errors.length,conflictsCount:result.conflicts.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      });
+      await Promise.all(workers);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      // #region agent log H1
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H1',location:'lib/shopify/sync-service.ts:186',message:'pullTheme top-level failure',data:{connectionId,themeId,errorMessage},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       result.errors.push(`Pull failed: ${errorMessage}`);
     }
 
@@ -255,11 +279,16 @@ export class ThemeSyncService {
   /**
    * Push local theme files to Shopify.
    * Pushes files with status 'pending' to Shopify via putAsset.
+   * @param connectionId - The Shopify connection ID.
+   * @param themeId - The Shopify theme ID to push to.
+   * @param filePaths - Optional list of file paths to push (defaults to all pending).
+   * @param projectId - The project to read files from (explicit, not derived from connection).
    */
   async pushTheme(
     connectionId: string,
     themeId: number,
-    filePaths?: string[]
+    filePaths?: string[],
+    projectId?: string
   ): Promise<SyncResult> {
     const result: SyncResult = {
       pulled: 0,
@@ -272,16 +301,23 @@ export class ThemeSyncService {
       // 1. Get API client via factory
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
-      // 2. Get connection to access project_id
+      // 2. Resolve project_id: prefer explicit param, fall back to connection's legacy project_id
       const supabase = await this.adminSupabase();
-      const { data: connection, error: connError } = await supabase
-        .from('shopify_connections')
-        .select('project_id')
-        .eq('id', connectionId)
-        .single();
 
-      if (connError || !connection) {
-        throw APIError.notFound('Shopify connection not found');
+      let resolvedProjectId: string;
+      if (projectId) {
+        resolvedProjectId = projectId;
+      } else {
+        const { data: connection, error: connError } = await supabase
+          .from('shopify_connections')
+          .select('project_id')
+          .eq('id', connectionId)
+          .single();
+
+        if (connError || !connection?.project_id) {
+          throw APIError.notFound('Shopify connection not found or no project linked');
+        }
+        resolvedProjectId = connection.project_id;
       }
 
       // 3. Query local theme_files with status 'pending'
@@ -316,7 +352,7 @@ export class ThemeSyncService {
           const { data: file } = await supabase
             .from('files')
             .select('id, content, storage_path')
-            .eq('project_id', connection.project_id)
+            .eq('project_id', resolvedProjectId)
             .eq('path', themeFile.file_path)
             .maybeSingle();
 
@@ -385,32 +421,44 @@ export class ThemeSyncService {
 
   /**
    * Sync a single file from Shopify to local.
+   * @param connectionId - The Shopify connection ID.
+   * @param themeId - The Shopify theme ID to sync from.
+   * @param filePath - The theme file path to sync.
+   * @param projectId - The project to sync the file into (explicit, not derived from connection).
    */
   async syncFile(
     connectionId: string,
     themeId: number,
-    filePath: string
+    filePath: string,
+    projectId?: string
   ): Promise<ThemeFileSyncStatus> {
     try {
       const api = await ShopifyAdminAPIFactory.create(connectionId);
 
-      // Get connection
+      // Resolve project_id
       const supabase = await this.adminSupabase();
-      const { data: connection, error: connError } = await supabase
-        .from('shopify_connections')
-        .select('project_id')
-        .eq('id', connectionId)
-        .single();
 
-      if (connError || !connection) {
-        throw APIError.notFound('Shopify connection not found');
+      let resolvedProjectId: string;
+      if (projectId) {
+        resolvedProjectId = projectId;
+      } else {
+        const { data: connection, error: connError } = await supabase
+          .from('shopify_connections')
+          .select('project_id')
+          .eq('id', connectionId)
+          .single();
+
+        if (connError || !connection?.project_id) {
+          throw APIError.notFound('Shopify connection not found or no project linked');
+        }
+        resolvedProjectId = connection.project_id;
       }
 
       // Get project
       const { data: project, error: projError } = await supabase
         .from('projects')
         .select('owner_id')
-        .eq('id', connection.project_id)
+        .eq('id', resolvedProjectId)
         .single();
 
       if (projError || !project) {
@@ -487,7 +535,7 @@ export class ThemeSyncService {
       const { data: existingFile } = await supabase
         .from('files')
         .select('id')
-        .eq('project_id', connection.project_id)
+        .eq('project_id', resolvedProjectId)
         .eq('path', filePath)
         .maybeSingle();
 
@@ -498,7 +546,7 @@ export class ThemeSyncService {
         });
       } else {
         await createFile({
-          project_id: connection.project_id,
+          project_id: resolvedProjectId,
           name: fileName,
           path: filePath,
           file_type: fileType,
@@ -573,5 +621,70 @@ export class ThemeSyncService {
       '.map',
     ];
     return textExtensions.some((ext) => lower.endsWith(ext));
+  }
+
+  private async createProjectFile(
+    input: Parameters<typeof createFile>[0]
+  ): Promise<{ id: string; usedPathAsNameFallback: boolean }> {
+    try {
+      const created = await createFile(input);
+      return { id: created.id, usedPathAsNameFallback: false };
+    } catch (error) {
+      const isDuplicateNameConflict =
+        error instanceof APIError &&
+        error.code === 'CONFLICT' &&
+        /already exists/i.test(error.message);
+
+      if (!isDuplicateNameConflict || input.name === input.path) {
+        throw error;
+      }
+
+      const created = await createFile({
+        ...input,
+        name: input.path,
+      });
+      return { id: created.id, usedPathAsNameFallback: true };
+    }
+  }
+
+  /**
+   * Fetch missing text-like asset values with bounded concurrency so imports
+   * don't block for several minutes on fully sequential API calls.
+   */
+  private async prefetchMissingAssetValues(
+    api: ShopifyAdminAPI,
+    themeId: number,
+    remoteAssets: ShopifyAsset[],
+    result: SyncResult,
+    concurrency = 10
+  ): Promise<Map<string, string>> {
+    const values = new Map<string, string>();
+    const candidates = remoteAssets.filter(
+      (asset) => !asset.value && this.shouldFetchAssetValue(asset.key)
+    );
+
+    if (candidates.length === 0) return values;
+
+    let cursor = 0;
+    const workerCount = Math.min(concurrency, candidates.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (cursor < candidates.length) {
+        const index = cursor++;
+        const asset = candidates[index];
+        try {
+          const detailed = await api.getAsset(themeId, asset.key);
+          if (detailed.value) {
+            values.set(asset.key, detailed.value);
+          }
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          result.errors.push(`${asset.key}: ${errorMessage}`);
+        }
+      }
+    });
+
+    await Promise.all(workers);
+    return values;
   }
 }

@@ -10,6 +10,7 @@ export interface ShopifyConnectionInfo {
   store_domain: string;
   /** Persisted dev theme ID for preview (from theme provisioning). */
   theme_id: string | null;
+  is_active: boolean;
   sync_status: 'connected' | 'syncing' | 'error' | 'disconnected';
   scopes: string[];
   last_sync_at: string | null;
@@ -25,7 +26,7 @@ export interface ConnectionStatus {
 export interface ShopifyTheme {
   id: number;
   name: string;
-  role: 'main' | 'unpublished' | 'demo';
+  role: 'main' | 'unpublished' | 'demo' | 'development';
   created_at: string;
   updated_at: string;
 }

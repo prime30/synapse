@@ -83,7 +83,7 @@ function CardContent({ type }: { type: CardType }) {
 
 export function IsometricHeroGrid() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(containerRef, { once: true, margin: '-40px' });
+  const inView = useInView(containerRef, { once: false, margin: '-40px' });
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start end', 'end start'],
@@ -107,7 +107,7 @@ export function IsometricHeroGrid() {
           className="grid grid-cols-4 gap-2 md:gap-3"
           style={{ transform: 'rotateX(55deg) rotateZ(-35deg)', transformStyle: 'preserve-3d' }}
           initial={{ opacity: 0, y: 24 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         >
           {CARDS.map((card, i) => (
@@ -115,7 +115,7 @@ export function IsometricHeroGrid() {
               key={i}
               className="rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm min-h-[72px] md:min-h-[88px] overflow-hidden flex items-center justify-center"
               initial={{ opacity: 0, scale: 0.9 }}
-              animate={inView ? { opacity: 1, scale: 1 } : {}}
+              animate={inView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.4, delay: 0.1 + i * 0.03, ease: [0.22, 1, 0.36, 1] }}
             >
               {card.type === 'blank' ? (

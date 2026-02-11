@@ -48,7 +48,7 @@ function FeatureRow({
   index: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   const isReversed = index === 1;
 
@@ -57,7 +57,7 @@ function FeatureRow({
       ref={ref}
       className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center"
       initial={{ opacity: 0, y: 30 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
       transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className={isReversed ? 'lg:order-last' : undefined}>

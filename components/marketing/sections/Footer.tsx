@@ -1,33 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Github, Twitter, MessageCircle } from 'lucide-react';
+import { motion, useInView } from 'framer-motion';
 import { SynapseLogo } from '@/components/marketing/nav/SynapseLogo';
 
 const FOOTER_LINKS = {
   Product: [
-    { label: 'Features', href: '#features' },
+    { label: 'Features', href: '/features' },
     { label: 'Pricing', href: '/pricing' },
-    { label: 'Changelog', href: '/blog' },
-    { label: 'Roadmap', href: '#' },
+    { label: 'Changelog', href: '/changelog' },
+    { label: 'Roadmap', href: '/roadmap' },
   ],
   Resources: [
     { label: 'Documentation', href: '/docs' },
-    { label: 'Getting Started', href: '/docs' },
-    { label: 'API Reference', href: '/docs' },
-    { label: 'Examples', href: '#' },
+    { label: 'Getting Started', href: '/docs/getting-started' },
+    { label: 'API Reference', href: '/docs/api-reference' },
+    { label: 'Examples', href: '/examples' },
   ],
   Company: [
-    { label: 'About', href: '#' },
+    { label: 'About', href: '/about' },
     { label: 'Blog', href: '/blog' },
-    { label: 'Careers', href: '#' },
-    { label: 'Contact', href: '#' },
+    { label: 'Careers', href: '/careers' },
+    { label: 'Contact', href: '/contact' },
   ],
   Legal: [
-    { label: 'Privacy', href: '#' },
-    { label: 'Terms', href: '#' },
-    { label: 'Security', href: '#' },
+    { label: 'Privacy', href: '/privacy' },
+    { label: 'Terms', href: '/terms' },
+    { label: 'Security', href: '/security' },
   ],
 };
 
@@ -64,22 +64,35 @@ function FooterWatermark() {
 }
 
 export function Footer() {
+  const footerRef = useRef<HTMLElement>(null);
+  const inView = useInView(footerRef, { once: false, margin: '-60px' });
+
   return (
     <footer
+      ref={footerRef}
       className="relative bg-white dark:bg-[#0a0a0a] border-t border-stone-200 dark:border-white/5 overflow-hidden"
       aria-label="Site footer"
     >
       {/* Green gradient ellipse — bottom-left */}
       <div
-        className="absolute -bottom-32 -left-32 w-[500px] h-[400px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(40,205,86,0.15) 0%, transparent 70%)' }}
+        className="absolute w-[500px] h-[400px] pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse, rgba(40, 205, 86, 0.15) -1%, transparent 60%)',
+          left: '-241px',
+          bottom: '-236px',
+        }}
         aria-hidden="true"
       />
 
       {/* SYNAPSE wordmark — half-hidden off bottom, animated dot density */}
       <FooterWatermark />
 
-      <div className="relative max-w-6xl mx-auto px-8 md:px-10 pt-24 pb-12">
+      <motion.div
+        className="relative max-w-6xl mx-auto px-8 md:px-10 pt-24 pb-12"
+        initial={{ opacity: 0, y: 20 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      >
         {/* Main footer content */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-16">
           {/* Brand column */}
@@ -93,26 +106,6 @@ export function Footer() {
             <p className="text-stone-500 dark:text-white/50 text-[15px] leading-relaxed mb-8">
               AI-powered Shopify theme development. Ship faster, ship better.
             </p>
-
-            {/* Newsletter */}
-            <div className="space-y-3">
-              <label className="text-xs tracking-widest uppercase text-stone-400 block">
-                Stay Updated
-              </label>
-              <div className="flex">
-                <input
-                  type="email"
-                  placeholder="you@email.com"
-                  className="flex-1 bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 rounded-l-lg px-4 py-2.5 text-[15px] text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-white/30 focus:outline-none focus:border-accent/50 transition-colors"
-                />
-                <button
-                  className="px-4 py-2.5 bg-accent text-white text-sm rounded-r-lg hover:bg-accent-hover transition-colors flex items-center justify-center"
-                  aria-label="Subscribe"
-                >
-                  <ArrowRight size={16} strokeWidth={2} />
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Link columns */}
@@ -138,35 +131,12 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-stone-200 dark:border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="border-t border-stone-200 dark:border-white/5 pt-8 flex items-center justify-center">
           <p className="text-xs tracking-widest uppercase text-stone-400 dark:text-white/30">
             Synapse Inc. &copy; {new Date().getFullYear()}
           </p>
-          <div className="flex gap-4">
-            <a
-              href="#"
-              className="w-9 h-9 rounded-full bg-stone-100 dark:bg-white/5 flex items-center justify-center text-stone-400 dark:text-white/40 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-white/10 transition-colors"
-              aria-label="GitHub"
-            >
-              <Github size={18} strokeWidth={1.5} />
-            </a>
-            <a
-              href="#"
-              className="w-9 h-9 rounded-full bg-stone-100 dark:bg-white/5 flex items-center justify-center text-stone-400 dark:text-white/40 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-white/10 transition-colors"
-              aria-label="Twitter"
-            >
-              <Twitter size={18} strokeWidth={1.5} />
-            </a>
-            <a
-              href="#"
-              className="w-9 h-9 rounded-full bg-stone-100 dark:bg-white/5 flex items-center justify-center text-stone-400 dark:text-white/40 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-white/10 transition-colors"
-              aria-label="Discord"
-            >
-              <MessageCircle size={18} strokeWidth={1.5} />
-            </a>
-          </div>
         </div>
-      </div>
+      </motion.div>
     </footer>
   );
 }

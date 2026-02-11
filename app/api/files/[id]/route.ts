@@ -37,28 +37,38 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const projectId = file.project_id as string;
     if (projectId) {
       const supabase = await createClient();
-      const { data: connection } = await supabase
-        .from('shopify_connections')
-        .select('id, theme_id')
-        .eq('project_id', projectId)
+
+      // Store-first: look up connection via project's shopify_connection_id
+      const { data: project } = await supabase
+        .from('projects')
+        .select('shopify_connection_id')
+        .eq('id', projectId)
         .maybeSingle();
 
-      if (connection?.theme_id && file.path) {
-        const now = new Date().toISOString();
-        await supabase
-          .from('theme_files')
-          .upsert(
-            {
-              connection_id: connection.id,
-              file_path: file.path,
-              sync_status: 'pending',
-              created_at: now,
-              updated_at: now,
-            },
-            { onConflict: 'connection_id,file_path' }
-          );
-        schedulePushForProject(projectId);
-        shopifyPushQueued = true;
+      if (project?.shopify_connection_id) {
+        const { data: connection } = await supabase
+          .from('shopify_connections')
+          .select('id, theme_id')
+          .eq('id', project.shopify_connection_id)
+          .maybeSingle();
+
+        if (connection?.theme_id && file.path) {
+          const now = new Date().toISOString();
+          await supabase
+            .from('theme_files')
+            .upsert(
+              {
+                connection_id: connection.id,
+                file_path: file.path,
+                sync_status: 'pending',
+                created_at: now,
+                updated_at: now,
+              },
+              { onConflict: 'connection_id,file_path' }
+            );
+          schedulePushForProject(projectId);
+          shopifyPushQueued = true;
+        }
       }
     }
 

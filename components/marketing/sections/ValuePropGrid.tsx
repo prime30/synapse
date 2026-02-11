@@ -12,6 +12,10 @@ import {
 } from 'lucide-react';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
 
+/* ------------------------------------------------------------------ */
+/*  Data                                                               */
+/* ------------------------------------------------------------------ */
+
 const ITEMS = [
   {
     icon: Code,
@@ -51,31 +55,40 @@ const ITEMS = [
   },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Main component                                                     */
+/* ------------------------------------------------------------------ */
+
 export function ValuePropGrid() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   return (
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="bg-[#fafaf9] dark:bg-[#111] group relative py-20 md:py-28 overflow-hidden"
+      className="bg-[#fafaf9] dark:bg-[#111] group relative pt-20 md:pt-28 pb-0 overflow-hidden"
     >
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-[0.03] transition-opacity duration-700 pointer-events-none font-mono text-[9px] leading-[13px] text-stone-900 dark:text-white whitespace-pre overflow-hidden select-none"
-        aria-hidden="true"
-      >
-        {`{% schema %}\n  { "name": "capabilities", "tag": "section" }\n{% endschema %}\n{% for block in section.blocks %}\n  {{ block.settings.title }}\n{% endfor %}\n`.repeat(8)}
-      </div>
-      <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden="true">
+      {/* ── Vertical frame lines + green ellipse (clipped to content width) */}
+      <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none overflow-hidden" aria-hidden="true">
         <div className="relative h-full">
           <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
           <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
         </div>
+        {/* Top-right blurred green ellipse — clipped to content band */}
+        <div
+          className="absolute w-[700px] h-[600px] opacity-[0.25] dark:opacity-[0.12]"
+          style={{
+            top: '-200px',
+            right: '-243px',
+            background: 'radial-gradient(rgb(40, 205, 86) 0%, transparent 87%)',
+            filter: 'blur(117px)',
+          }}
+        />
       </div>
 
-      <div className="relative max-w-6xl mx-auto px-8 md:px-10">
-        {/* Section header */}
+      {/* ── Section header ─────────────────────────────────────────── */}
+      <div className="relative z-[2] max-w-6xl mx-auto px-8 md:px-10">
         <div>
           <span className="section-badge">CAPABILITIES</span>
           <h2 className="text-left max-w-xl text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
@@ -84,7 +97,7 @@ export function ValuePropGrid() {
                 <motion.span
                   className="inline-block"
                   initial={{ opacity: 0, y: '100%' }}
-                  animate={inView ? { opacity: 1, y: 0 } : {}}
+                  animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
                   transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
                 >{word}</motion.span>
                 {'\u00A0'}
@@ -94,7 +107,7 @@ export function ValuePropGrid() {
               <motion.span
                 className="inline-block"
                 initial={{ opacity: 0, y: '100%' }}
-                animate={inView ? { opacity: 1, y: 0 } : {}}
+                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
                 transition={{ duration: 0.5, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
               ><PixelAccent>Zero</PixelAccent></motion.span>
               {'\u00A0'}
@@ -103,7 +116,7 @@ export function ValuePropGrid() {
               <motion.span
                 className="inline-block"
                 initial={{ opacity: 0, y: '100%' }}
-                animate={inView ? { opacity: 1, y: 0 } : {}}
+                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
                 transition={{ duration: 0.5, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
               >bottlenecks.</motion.span>
             </span>
@@ -113,30 +126,56 @@ export function ValuePropGrid() {
             of theme development, orchestrated.
           </p>
         </div>
+      </div>
 
-        {/* Grid */}
-        <div className="mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-10">
+      {/* ── Swiss grid ─────────────────────────────────────────────── */}
+      <div className="relative z-[2] max-w-6xl mx-auto mt-20 border-t border-stone-200 dark:border-white/10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {ITEMS.map((item, index) => {
             const Icon = item.icon;
+            const col = index % 3;
+            const row = Math.floor(index / 3);
+            const isLastCol = col === 2;
+            const isLastRow = row === 1;
+
+            // Rotate gradient positions per card for variety
+            const offset = index * 17;
+            const meshBg = [
+              `radial-gradient(circle at ${(20 + offset) % 100}% ${(30 + offset * 0.7) % 100}%, rgba(40,205,86,0.6) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(80 - offset * 0.5) % 100}% ${(20 + offset * 1.2) % 100}%, rgba(59,130,246,0.5) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(60 + offset * 0.8) % 100}% ${(80 - offset * 0.6) % 100}%, rgba(168,85,247,0.4) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(30 + offset * 0.4) % 100}% ${(70 - offset * 0.3) % 100}%, rgba(40,205,86,0.3) 0%, transparent 50%)`,
+            ].join(', ');
+
             return (
               <motion.div
                 key={item.title}
-                className="relative"
+                className={`group/card relative overflow-hidden p-8 md:p-10 ${
+                  !isLastCol ? 'border-r border-stone-200 dark:border-white/10' : ''
+                } ${!isLastRow ? 'border-b border-stone-200 dark:border-white/10' : ''}`}
                 initial={{ opacity: 0, y: 16 }}
-                animate={inView ? { opacity: 1, y: 0 } : {}}
+                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
                 transition={{
                   duration: 0.5,
                   delay: index * 0.1,
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
-                <Icon size={24} className="text-stone-400 dark:text-white/40" />
-                <h3 className="text-base font-medium text-stone-900 dark:text-white mt-3">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-stone-500 dark:text-white/50 mt-1 leading-relaxed">
-                  {item.description}
-                </p>
+                {/* Gradient mesh overlay */}
+                <div
+                  className="absolute -inset-10 z-0 opacity-0 group-hover/card:opacity-[0.25] dark:group-hover/card:opacity-[0.30] transition-opacity duration-500 pointer-events-none"
+                  style={{ background: meshBg }}
+                  aria-hidden="true"
+                />
+                <div className="relative z-[1]">
+                  <Icon size={24} className="text-stone-400 dark:text-white/40" />
+                  <h3 className="text-base font-medium text-stone-900 dark:text-white mt-3">
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-stone-500 dark:text-white/50 mt-1 leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
               </motion.div>
             );
           })}

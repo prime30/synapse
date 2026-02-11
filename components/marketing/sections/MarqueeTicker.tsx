@@ -20,7 +20,7 @@ interface MarqueeTickerProps {
 
 export function MarqueeTicker({ className = '' }: MarqueeTickerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
   const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
 
   return (
@@ -28,7 +28,7 @@ export function MarqueeTicker({ className = '' }: MarqueeTickerProps) {
       ref={ref}
       className={`relative overflow-hidden py-5 gradient-accent ${className}`}
       initial={{ opacity: 0 }}
-      animate={inView ? { opacity: 1 } : {}}
+      animate={inView ? { opacity: 1 } : { opacity: 0 }}
       transition={{ duration: 0.5, delay: 0.15 }}
     >
       {/* Code grid texture */}

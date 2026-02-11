@@ -1,21 +1,10 @@
 import { NextRequest } from 'next/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
-
-function getAdminClient() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceKey) {
-    return createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceKey,
-    );
-  }
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY required for Shopify operations');
-}
+import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -23,34 +12,22 @@ interface RouteParams {
 
 /**
  * GET /api/projects/[projectId]/shopify/themes
- * List all themes from the connected Shopify store.
+ * List all themes from the user's active Shopify store.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
+    const userId = await requireProjectAccess(request, projectId);
 
-    const supabase = getAdminClient();
-    const { data: connection } = await supabase
-      .from('shopify_connections')
-      .select('id')
-      .eq('project_id', projectId)
-      .maybeSingle();
+    const tokenManager = new ShopifyTokenManager();
+    const connection = await tokenManager.getActiveConnection(userId);
 
     if (!connection) {
-      throw APIError.notFound('No Shopify connection found for this project');
+      throw APIError.notFound('No active Shopify store connection');
     }
 
-    let themes;
-    try {
-      const api = await ShopifyAdminAPIFactory.create(connection.id);
-      themes = await api.listThemes();
-    } catch (err) {
-      console.error('[shopify/themes] Failed to list themes:', err);
-      throw APIError.internal(
-        err instanceof Error ? err.message : 'Failed to load themes from Shopify',
-      );
-    }
+    const api = await ShopifyAdminAPIFactory.create(connection.id);
+    const themes = await api.listThemes();
 
     return successResponse(themes);
   } catch (error) {

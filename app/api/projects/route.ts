@@ -42,11 +42,20 @@ export async function GET(request: NextRequest) {
       }
 
       const orgIds = [...new Set(members.map((m) => m.organization_id))];
-      const { data: projects, error: projError } = await admin
+      // Optional: filter by store connection
+      const connectionId = request.nextUrl.searchParams.get('connectionId');
+
+      let projectsQuery = admin
         .from('projects')
-        .select('id, name, description, created_at, updated_at, organization_id, shopify_store_url')
+        .select('id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name')
         .in('organization_id', orgIds)
         .order('updated_at', { ascending: false });
+
+      if (connectionId) {
+        projectsQuery = projectsQuery.eq('shopify_connection_id', connectionId);
+      }
+
+      const { data: projects, error: projError } = await projectsQuery;
 
       if (projError) {
         throw APIError.internal(projError.message);

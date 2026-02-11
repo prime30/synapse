@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, startTransition } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
+import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 import { LiquidCodeLine } from '@/components/marketing/utils/LiquidCodeLine';
 
 /* ------------------------------------------------------------------ */
@@ -47,6 +48,7 @@ function CodeMockup({ inView }: { inView: boolean }) {
   const [visibleLines, setVisibleLines] = useState(0);
   const [activeAgent, setActiveAgent] = useState(-1);
   const [checksPassed, setChecksPassed] = useState(false);
+  const codeScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!inView) return;
@@ -69,15 +71,22 @@ function CodeMockup({ inView }: { inView: boolean }) {
     return () => clearInterval(id);
   }, [inView]);
 
+  // Auto-scroll code area to bottom as new lines appear
+  useEffect(() => {
+    if (codeScrollRef.current) {
+      codeScrollRef.current.scrollTop = codeScrollRef.current.scrollHeight;
+    }
+  }, [visibleLines]);
+
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden">
-      <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5">
+    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[400px] flex flex-col">
+      <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5 shrink-0">
         <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
         <div className="w-2 h-2 rounded-full bg-[#febc2e]" />
         <div className="w-2 h-2 rounded-full bg-[#28c840]" />
         <span className="ml-3 text-[10px] text-stone-400 dark:text-white/40">hero-section.liquid</span>
       </div>
-      <div className="p-3 font-mono text-[10px] leading-5 min-h-[180px]">
+      <div ref={codeScrollRef} className="flex-1 min-h-0 p-3 font-mono text-[10px] leading-5 overflow-y-auto">
         {CODE_CARD_LINES.slice(0, visibleLines).map((lineContent, i) => (
           <motion.div
             key={i}
@@ -135,7 +144,7 @@ function ContextMockup({ inView }: { inView: boolean }) {
           key={dep.from + dep.to}
           className="flex items-center gap-2 text-[10px]"
           initial={{ opacity: 0, x: -8 }}
-          animate={inView ? { opacity: 1, x: 0 } : {}}
+          animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -8 }}
           transition={{ duration: 0.3, delay: 0.2 + i * 0.15, ease: 'easeOut' }}
         >
           <span className="text-purple-600 dark:text-cyan-400">{dep.from}</span>
@@ -316,13 +325,13 @@ function LiquidValidationMockup({ inView }: { inView: boolean }) {
           key={check.label}
           className="flex items-center gap-2"
           initial={{ opacity: 0, scale: 0.95 }}
-          animate={inView ? { opacity: 1, scale: 1 } : {}}
+          animate={inView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.3, delay: 0.15 * i, ease: 'easeOut' }}
         >
           <motion.div
             className="w-3.5 h-3.5 rounded border border-green-500/50 flex items-center justify-center"
             initial={{ scale: 0.8 }}
-            animate={inView ? { scale: 1 } : {}}
+            animate={inView ? { scale: 1 } : { scale: 0.8 }}
             transition={{ duration: 0.3, delay: 0.15 * i + 0.1, ease: [0.22, 1, 0.36, 1] }}
           >
             <span className="text-[8px] text-green-500">&#10003;</span>
@@ -412,7 +421,7 @@ function SecondaryFeatureCard({
     <motion.div
       className="p-5 md:p-6 border border-stone-200 dark:border-white/10 rounded-xl bg-[#fafaf9] dark:bg-[#111]"
       initial={{ opacity: 0, y: 12 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
       transition={{ duration: 0.4, delay: 0.2 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
     >
       <span className="text-[10px] font-medium tracking-widest uppercase text-stone-400 dark:text-white/40">
@@ -447,7 +456,7 @@ function CardCell({
     <motion.div
       className="group/card relative p-6 md:p-8 overflow-hidden"
       initial={{ opacity: 0, y: 20 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
       transition={{ duration: 0.5, delay: 0.1 + index * 0.1, ease: [0.22, 1, 0.36, 1] as const }}
     >
       {/* Hover gradient overlay */}
@@ -468,20 +477,145 @@ function CardCell({
           {card.description}
         </p>
         {large && (
-          <a
-            href="#"
-            className="inline-flex items-center gap-1 text-sm text-accent hover:text-accent-hover mt-4 transition-colors"
-          >
-            Learn more <ArrowRight size={14} />
-          </a>
+          <MagneticElement strength={4} radius={80}>
+            <a
+              href="#"
+              className="inline-flex items-center gap-1 text-sm text-accent hover:text-accent-hover mt-4 transition-colors"
+            >
+              Learn more <ArrowRight size={14} />
+            </a>
+          </MagneticElement>
         )}
       </div>
 
-      {/* Mockup with contrasting background — no rounded corners */}
-      <div className={`relative ${large ? 'mt-6' : 'mt-4'} -mx-6 md:-mx-8 px-6 md:px-8 py-4 ${large ? 'md:py-5' : ''} bg-[#fafaf9] dark:bg-[#111]`}>
+      {/* Mockup — no background fill, inherits parent */}
+      <div className={`relative ${large ? 'mt-6' : 'mt-4'} -mx-6 md:-mx-8 px-6 md:px-8 py-4 ${large ? 'md:py-5' : ''}`}>
         <card.Mockup inView={inView} />
       </div>
     </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Section header — typewriter with cursor                            */
+/* ------------------------------------------------------------------ */
+
+const TYPEWRITER_TEXT = 'Built for speed. Designed for craft.';
+const TYPEWRITER_SPEED = 40; // ms per character
+
+function FeatureSectionHeader({ inView }: { inView: boolean }) {
+  const [charCount, setCharCount] = useState(0);
+  const [started, setStarted] = useState(false);
+  const [showSubtext, setShowSubtext] = useState(false);
+
+  // Start typing when section comes into view
+  useEffect(() => {
+    if (inView && !started) {
+      setStarted(true);
+      setCharCount(0);
+      setShowSubtext(false);
+    }
+    if (!inView) {
+      setStarted(false);
+      setCharCount(0);
+      setShowSubtext(false);
+    }
+  }, [inView, started]);
+
+  // Type characters one by one
+  useEffect(() => {
+    if (!started) return;
+    if (charCount >= TYPEWRITER_TEXT.length) {
+      const t = setTimeout(() => setShowSubtext(true), 300);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setCharCount((c) => c + 1), TYPEWRITER_SPEED);
+    return () => clearTimeout(t);
+  }, [started, charCount]);
+
+  const visible = TYPEWRITER_TEXT.slice(0, charCount);
+  const done = charCount >= TYPEWRITER_TEXT.length;
+
+  // Split visible text to inject PixelAccent on "speed" and "craft"
+  function renderTyped() {
+    const speedStart = TYPEWRITER_TEXT.indexOf('speed');
+    const speedEnd = speedStart + 5;
+    const craftStart = TYPEWRITER_TEXT.indexOf('craft');
+    const craftEnd = craftStart + 5;
+
+    const parts: React.ReactNode[] = [];
+    let i = 0;
+
+    // Helper to push a plain text segment
+    const pushPlain = (end: number) => {
+      if (i < end && i < charCount) {
+        parts.push(<span key={`t-${i}`}>{visible.slice(i, Math.min(end, charCount))}</span>);
+        i = Math.min(end, charCount);
+      }
+    };
+
+    // Helper to push an accented segment
+    const pushAccent = (start: number, end: number) => {
+      if (charCount > start) {
+        const accentText = visible.slice(start, Math.min(end, charCount));
+        parts.push(<PixelAccent key={`a-${start}`}>{accentText}</PixelAccent>);
+        i = Math.min(end, charCount);
+      }
+    };
+
+    pushPlain(speedStart);
+    pushAccent(speedStart, speedEnd);
+    pushPlain(craftStart);
+    pushAccent(craftStart, craftEnd);
+    pushPlain(TYPEWRITER_TEXT.length);
+
+    return parts;
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24 pb-16">
+      {/* Badge */}
+      <motion.span
+        className="section-badge inline-block"
+        initial={{ opacity: 0, y: 8 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        PLATFORM
+      </motion.span>
+
+      {/* Headline with typewriter */}
+      <h2 className="text-left max-w-xl text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] mt-0">
+        {started && renderTyped()}
+        {/* Blinking cursor */}
+        {started && !done && (
+          <motion.span
+            className="inline-block w-[3px] h-[0.85em] bg-accent align-baseline ml-0.5 -mb-0.5"
+            animate={{ opacity: [1, 1, 0, 0] }}
+            transition={{ duration: 0.8, repeat: Infinity, times: [0, 0.5, 0.5, 1] }}
+          />
+        )}
+        {/* Cursor fades out when done */}
+        {started && done && (
+          <motion.span
+            className="inline-block w-[3px] h-[0.85em] bg-accent align-baseline ml-0.5 -mb-0.5"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          />
+        )}
+      </h2>
+
+      {/* Subtext fades in after typing completes */}
+      <motion.p
+        className="text-left max-w-lg text-lg text-stone-500 dark:text-white/50 mt-6"
+        initial={{ opacity: 0, y: 10 }}
+        animate={showSubtext ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
+        Production-ready tools that understand Shopify at the code level.
+      </motion.p>
+    </div>
   );
 }
 
@@ -491,7 +625,7 @@ function CardCell({
 
 export function FeatureCards() {
   const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const inView = useInView(ref, { once: false, margin: '-80px' });
 
   return (
     <section
@@ -506,16 +640,8 @@ export function FeatureCards() {
         </div>
       </div>
 
-      {/* Section header */}
-      <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24 pb-16">
-        <span className="section-badge">PLATFORM</span>
-        <h2 className="text-left max-w-xl text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
-          Built for <PixelAccent>speed</PixelAccent>. Designed for <PixelAccent delay={0.5}>craft</PixelAccent>.
-        </h2>
-        <p className="text-left max-w-lg text-lg text-stone-500 dark:text-white/50 mt-6">
-          Production-ready tools that understand Shopify at the code level.
-        </p>
-      </div>
+      {/* Section header — typewriter entrance */}
+      <FeatureSectionHeader inView={inView} />
 
       {/* Divider */}
       <RowDivider />

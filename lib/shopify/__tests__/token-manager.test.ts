@@ -75,10 +75,12 @@ describe('ShopifyTokenManager', () => {
     it('has all required fields with correct types', () => {
       const connection: ShopifyConnection = {
         id: 'conn-1',
+        user_id: 'user-123',
         project_id: 'proj-1',
         store_domain: 'test.myshopify.com',
         access_token_encrypted: 'iv:encrypted',
         theme_id: null,
+        is_active: true,
         last_sync_at: null,
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes'],
@@ -109,10 +111,12 @@ describe('ShopifyTokenManager', () => {
       for (const status of statuses) {
         const conn: ShopifyConnection = {
           id: 'conn-1',
+          user_id: 'user-123',
           project_id: 'proj-1',
           store_domain: 'test.myshopify.com',
           access_token_encrypted: 'encrypted',
           theme_id: 'theme-1',
+          is_active: true,
           last_sync_at: new Date().toISOString(),
           sync_status: status,
           scopes: ['read_themes'],
@@ -126,10 +130,12 @@ describe('ShopifyTokenManager', () => {
     it('allows nullable fields', () => {
       const connection: ShopifyConnection = {
         id: 'conn-2',
+        user_id: 'user-123',
         project_id: 'proj-2',
         store_domain: 'shop.myshopify.com',
         access_token_encrypted: 'encrypted',
         theme_id: null,
+        is_active: true,
         last_sync_at: null,
         sync_status: 'disconnected',
         scopes: [],

@@ -6,7 +6,7 @@ import { FiberField } from '@/components/marketing/interactions/FiberField';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
 
 const SENTENCE =
-  'Five AI agents write, review, and ship production-ready Shopify themes while you sleep.';
+  'Five AI agents write, review, and ship production-ready Shopify themes.';
 const WORDS = SENTENCE.split(' ');
 
 export function ScrollRevealSection() {
@@ -84,7 +84,7 @@ export function ScrollRevealSection() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a]"
+      className="relative isolate bg-[#fafaf9] dark:bg-[#0a0a0a]"
       style={{ height: '300vh' }}
     >
       {/* Vertical frame lines (max-w-6xl) */}
@@ -99,7 +99,7 @@ export function ScrollRevealSection() {
       <div
         ref={stickyRef}
         data-synaptic-sticky
-        className="sticky top-0 h-screen flex items-center justify-center overflow-hidden relative"
+        className="sticky top-0 z-0 h-screen flex items-center justify-center overflow-hidden relative"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onTouchStart={handleTouchStart}
@@ -141,8 +141,6 @@ export function ScrollRevealSection() {
                 style={{ opacity: getWordOpacity(i) }}
               >
                 {word === 'production-ready' ? (
-                  <PixelAccent>{word}</PixelAccent>
-                ) : word === 'sleep.' ? (
                   <PixelAccent>{word}</PixelAccent>
                 ) : (
                   <span

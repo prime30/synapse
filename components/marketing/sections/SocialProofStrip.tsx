@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { CounterStat } from '@/components/marketing/interactions/CounterStat';
 
@@ -14,6 +14,14 @@ const STATS: { value: number; suffix: string; prefix?: string; label: string }[]
 export function SocialProofStrip() {
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
+  const [showShimmer, setShowShimmer] = useState(false);
+
+  // Trigger shimmer after counters finish (~1.8s: 1.5s duration + 0.3s last stat delay)
+  useEffect(() => {
+    if (!inView) return;
+    const t = setTimeout(() => setShowShimmer(true), 1800);
+    return () => clearTimeout(t);
+  }, [inView]);
 
   return (
     <section
@@ -38,13 +46,13 @@ export function SocialProofStrip() {
 
       {/* Stats content */}
       <div className="relative max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-20">
-        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+        <div className="relative grid grid-cols-2 gap-8 md:grid-cols-4">
           {STATS.map((stat, index) => (
             <motion.div
               key={stat.label}
               className="text-center"
               initial={{ opacity: 0, y: 16 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
+              animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
               transition={{
                 duration: 0.5,
                 delay: index * 0.1,
@@ -59,8 +67,33 @@ export function SocialProofStrip() {
               />
             </motion.div>
           ))}
+
+          {/* Green shimmer sweep — triggers once after counters finish */}
+          {showShimmer && (
+            <div
+              className="absolute left-0 right-0 top-0 h-[60%] pointer-events-none overflow-hidden"
+              aria-hidden="true"
+              style={{ mixBlendMode: 'overlay' }}
+            >
+              <div
+                className="absolute inset-0"
+                style={{
+                  width: '400%',
+                  background: 'linear-gradient(105deg, transparent 0%, transparent 30%, #28CD56 42%, #28CD56 58%, transparent 70%, transparent 100%)',
+                  animation: 'stats-shimmer 3s ease-in-out forwards',
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes stats-shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
     </section>
   );
 }

@@ -64,7 +64,9 @@ export async function createFile(input: CreateFileInput) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   return data;
 }
 

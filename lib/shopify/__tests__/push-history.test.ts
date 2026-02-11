@@ -10,7 +10,7 @@ import {
 const mocks = vi.hoisted(() => ({
   getTheme: vi.fn(),
   putAsset: vi.fn(),
-  mockFromImpl: vi.fn(() => ({})),
+  mockFromImpl: vi.fn((_table: string) => ({} as Record<string, unknown>)),
 }));
 
 vi.mock('../admin-api-factory', () => ({
@@ -36,7 +36,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.mockFromImpl.mockImplementation(() => ({}));
+  mocks.mockFromImpl.mockImplementation((_table: string) => ({}));
 });
 
 describe('push-history', () => {
@@ -108,7 +108,7 @@ describe('push-history', () => {
   describe('listPushHistory', () => {
     it('returns empty array when no connection', async () => {
       mocks.mockFromImpl.mockImplementation((table: string) => {
-        if (table === 'shopify_connections') {
+        if (table === 'projects') {
           return {
             select: () => ({
               eq: () => ({
@@ -127,12 +127,12 @@ describe('push-history', () => {
 
     it('returns rows with file_count from snapshot', async () => {
       mocks.mockFromImpl.mockImplementation((table: string) => {
-        if (table === 'shopify_connections') {
+        if (table === 'projects') {
           return {
             select: () => ({
               eq: () => ({
                 maybeSingle: () =>
-                  Promise.resolve({ data: { id: 'conn-1' }, error: null }),
+                  Promise.resolve({ data: { shopify_connection_id: 'conn-1' }, error: null }),
               }),
             }),
           };
@@ -218,14 +218,12 @@ describe('push-history', () => {
             }),
           };
         }
-        if (table === 'shopify_connections') {
+        if (table === 'projects') {
           return {
             select: () => ({
               eq: () => ({
-                eq: () => ({
-                  single: () =>
-                    Promise.resolve({ data: null, error: { message: 'no match' } }),
-                }),
+                single: () =>
+                  Promise.resolve({ data: { shopify_connection_id: 'conn-other' }, error: null }),
               }),
             }),
           };
@@ -256,14 +254,12 @@ describe('push-history', () => {
             }),
           };
         }
-        if (table === 'shopify_connections') {
+        if (table === 'projects') {
           return {
             select: () => ({
               eq: () => ({
-                eq: () => ({
-                  single: () =>
-                    Promise.resolve({ data: { id: 'conn-1' }, error: null }),
-                }),
+                single: () =>
+                  Promise.resolve({ data: { shopify_connection_id: 'conn-1' }, error: null }),
               }),
             }),
           };
@@ -306,14 +302,12 @@ describe('push-history', () => {
             }),
           };
         }
-        if (table === 'shopify_connections') {
+        if (table === 'projects') {
           return {
             select: () => ({
               eq: () => ({
-                eq: () => ({
-                  single: () =>
-                    Promise.resolve({ data: { id: 'conn-1' }, error: null }),
-                }),
+                single: () =>
+                  Promise.resolve({ data: { shopify_connection_id: 'conn-1' }, error: null }),
               }),
             }),
           };

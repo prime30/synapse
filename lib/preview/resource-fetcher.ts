@@ -15,10 +15,22 @@ function cacheKey(projectId: string, type: PreviewResourceType, query: string) {
 
 async function getShopifyConnection(projectId: string) {
   const supabase = await createClient();
+
+  // Store-first: look up the connection via project's shopify_connection_id
+  const { data: project, error: projError } = await supabase
+    .from('projects')
+    .select('shopify_connection_id')
+    .eq('id', projectId)
+    .maybeSingle();
+
+  if (projError || !project?.shopify_connection_id) {
+    throw APIError.notFound('Shopify connection not found for this project');
+  }
+
   const { data, error } = await supabase
     .from('shopify_connections')
     .select('store_domain, access_token_encrypted')
-    .eq('project_id', projectId)
+    .eq('id', project.shopify_connection_id)
     .maybeSingle();
 
   if (error || !data) {

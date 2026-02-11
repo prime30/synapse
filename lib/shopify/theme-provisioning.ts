@@ -9,13 +9,12 @@ const DEV_THEME_NAME_PREFIX = 'Synapse Dev';
  * otherwise create one from the configured theme zip URL and persist theme_id.
  * Returns the theme ID (string) for the connection.
  */
-export async function ensureDevTheme(connectionId: string): Promise<string> {
+export async function ensureDevTheme(
+  connectionId: string,
+  options?: { themeName?: string }
+): Promise<string> {
   const tokenManager = new ShopifyTokenManager();
   const connection = await tokenManager.getConnectionById(connectionId);
-
-  // #region agent log H3
-  fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H3',location:'lib/shopify/theme-provisioning.ts:17',message:'ensureDevTheme start',data:{connectionId,hasConnection:!!connection,hasExistingThemeId:!!connection?.theme_id,hasZipEnv:!!(process.env.SHOPIFY_DEV_THEME_ZIP_URL?.trim()||process.env.SHOPIFY_DEV_THEME_SRC?.trim())},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   if (!connection) {
     throw APIError.notFound('Shopify connection not found');
@@ -36,13 +35,13 @@ export async function ensureDevTheme(connectionId: string): Promise<string> {
     }
   }
 
-  const zipUrl =
+  const rawZipUrl =
     process.env.SHOPIFY_DEV_THEME_ZIP_URL?.trim() ||
     process.env.SHOPIFY_DEV_THEME_SRC?.trim();
+  const zipUrl = rawZipUrl
+    ? rawZipUrl.replace(/^['"]+|['"]+$/g, '').trim()
+    : '';
   if (!zipUrl) {
-    // #region agent log H3
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H3',location:'lib/shopify/theme-provisioning.ts:44',message:'ensureDevTheme missing zip env',data:{connectionId,projectId:connection.project_id},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new APIError(
       'Dev theme creation requires SHOPIFY_DEV_THEME_ZIP_URL (or SHOPIFY_DEV_THEME_SRC) to be set. Use a public URL to a Shopify theme ZIP.',
       'MISSING_DEV_THEME_ZIP',
@@ -50,9 +49,24 @@ export async function ensureDevTheme(connectionId: string): Promise<string> {
     );
   }
 
-  const name = `${DEV_THEME_NAME_PREFIX} - ${connection.project_id}`;
-  const theme = await api.createTheme(name, zipUrl, 'unpublished');
+  const startsWithHttp = /^https?:\/\//i.test(zipUrl);
+  if (!startsWithHttp) {
+    throw new APIError(
+      'Dev theme source URL must start with http:// or https://',
+      'INVALID_DEV_THEME_ZIP_URL',
+      500
+    );
+  }
 
-  await tokenManager.updateThemeId(connectionId, String(theme.id));
-  return String(theme.id);
+  const name =
+    options?.themeName?.trim() ||
+    `${DEV_THEME_NAME_PREFIX} - ${connection.store_domain.replace('.myshopify.com', '')}`;
+  try {
+    const theme = await api.createTheme(name, zipUrl, 'unpublished');
+
+    await tokenManager.updateThemeId(connectionId, String(theme.id));
+    return String(theme.id);
+  } catch (error) {
+    throw error;
+  }
 }

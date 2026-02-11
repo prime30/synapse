@@ -6,6 +6,7 @@ import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
+import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import {
   buildSnapshotForConnection,
   recordPush,
@@ -29,13 +30,13 @@ interface RouteParams {
 /**
  * POST /api/projects/[projectId]/shopify/sync
  * Pull or push theme files between the project and the connected Shopify store.
+ * Uses the user's active store connection (user-scoped).
  * Body: { action: 'pull' | 'push', themeId?: number, note?: string }.
- * For push: always uses connection.theme_id (dev theme only); themeId in body is ignored.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
+    const userId = await requireProjectAccess(request, projectId);
 
     const body = await request.json().catch(() => ({}));
     const { action, themeId: bodyThemeId, note: bodyNote } = body;
@@ -44,19 +45,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw APIError.badRequest('action must be "pull" or "push"');
     }
 
-    const supabase = getAdminClient();
-    const { data: connection } = await supabase
-      .from('shopify_connections')
-      .select('id, theme_id')
-      .eq('project_id', projectId)
-      .maybeSingle();
-
-    // #region agent log H2
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H2',location:'app/api/projects/[projectId]/shopify/sync/route.ts:54',message:'sync route connection lookup',data:{projectId,action,hasConnection:!!connection,connectionId:connection?.id??null,hasThemeId:!!connection?.theme_id,hasServiceRoleKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    // Resolve connection from user's active store
+    const tokenManager = new ShopifyTokenManager();
+    const connection = await tokenManager.getActiveConnection(userId, { projectId });
 
     if (!connection) {
-      throw APIError.notFound('No Shopify connection found for this project');
+      throw APIError.notFound('No active Shopify store connection. Connect a store first.');
     }
 
     const themeId =
@@ -93,6 +87,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const supabase = getAdminClient();
+
     // Update status to 'syncing' while in progress
     await supabase
       .from('shopify_connections')
@@ -113,12 +109,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const syncService = new ThemeSyncService();
     const result =
       action === 'pull'
-        ? await syncService.pullTheme(connection.id, themeId)
-        : await syncService.pushTheme(connection.id, themeId);
-
-    // #region agent log H2
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'import-theme-debug-run1',hypothesisId:'H2',location:'app/api/projects/[projectId]/shopify/sync/route.ts:118',message:'sync route result',data:{projectId,action,themeId,pulled:result.pulled,pushed:result.pushed,errorsCount:result.errors.length,conflictsCount:result.conflicts.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+        ? await syncService.pullTheme(connection.id, themeId, projectId)
+        : await syncService.pushTheme(connection.id, themeId, undefined, projectId);
 
     if (action === 'push' && result.pushed > 0 && snapshotBeforePush?.files.length) {
       await recordPush(connection.id, String(themeId), snapshotBeforePush, {
@@ -127,7 +119,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Update last_sync_at and reset status to 'connected'
+    // Update last_sync_at and reset status
     await supabase
       .from('shopify_connections')
       .update({

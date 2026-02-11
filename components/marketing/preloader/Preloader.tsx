@@ -171,18 +171,27 @@ export function Preloader() {
               ))}
             </span>
 
-            {/* Back layer: pixel font scramble */}
+            {/* Back layer: pixel font scramble — fades per-letter in sync with reveal clip */}
             {showBack && (
               <span className="absolute inset-0 inline-flex items-center" aria-hidden="true">
-                {letters.map((letter, i) => (
-                  <span
-                    key={i}
-                    className={`${CELL} ${letter.font} pixel-stipple`}
-                    style={{ fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {letter.char}
-                  </span>
-                ))}
+                {letters.map((letter, i) => {
+                  const count = DISPLAY_CHARS.length;
+                  const letterStart = (i / count) * 100;
+                  const letterEnd = ((i + 1) / count) * 100;
+                  const letterOpacity =
+                    phase === 'reveal'
+                      ? 1 - Math.min(1, Math.max(0, (revealProgress - letterStart) / (letterEnd - letterStart)))
+                      : 1;
+                  return (
+                    <span
+                      key={i}
+                      className={`${CELL} ${letter.font} pixel-stipple`}
+                      style={{ fontVariantNumeric: 'tabular-nums', opacity: letterOpacity }}
+                    >
+                      {letter.char}
+                    </span>
+                  );
+                })}
               </span>
             )}
 

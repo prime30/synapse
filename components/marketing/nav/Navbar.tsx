@@ -9,6 +9,7 @@ import { AuthModal } from './AuthModal';
 import { SynapseLogo } from './SynapseLogo';
 import { usePageReady } from '@/components/marketing/PreloaderContext';
 import { useAuthModal } from '@/components/marketing/AuthModalContext';
+import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 import { createClient } from '@/lib/supabase/client';
 
 const NAV_LINKS = [
@@ -120,33 +121,38 @@ export function Navbar() {
             {/* Desktop links — center */}
             <nav className="hidden md:flex items-center gap-8">
               {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.label}
-                  href={link.href}
-                  className="text-[15px] text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
-                >
-                  {link.label}
-                </Link>
+                <MagneticElement key={link.label} strength={4} radius={80}>
+                  <Link
+                    href={link.href}
+                    className="text-[15px] text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </MagneticElement>
               ))}
             </nav>
 
             {/* Right side — Log in, CTA, theme toggle, hamburger */}
             <div className="flex items-center gap-3 md:gap-4">
-              <button
-                type="button"
-                onClick={() => void handlePrimaryAuthAction()}
-                className="hidden md:inline-flex text-sm text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
-              >
-                {isAuthenticated ? 'Log out' : 'Log in'}
-              </button>
+              <MagneticElement strength={4} radius={80} className="hidden md:inline-flex">
+                <button
+                  type="button"
+                  onClick={() => void handlePrimaryAuthAction()}
+                  className="text-sm text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
+                >
+                  {isAuthenticated ? 'Log out' : 'Log in'}
+                </button>
+              </MagneticElement>
 
-              <button
-                type="button"
-                onClick={handleCtaAction}
-                className="hidden md:inline-flex px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
-              >
-                {isAuthenticated ? 'See Projects' : 'Start Free'}
-              </button>
+              <MagneticElement strength={5} radius={100} className="hidden md:inline-flex">
+                <button
+                  type="button"
+                  onClick={handleCtaAction}
+                  className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
+                >
+                  {isAuthenticated ? 'See Projects' : 'Start Free'}
+                </button>
+              </MagneticElement>
 
               <ThemeToggle
                 isDark={isDark}

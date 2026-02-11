@@ -110,118 +110,271 @@ type Phase = 'prompt' | 'thinking' | 'planning' | 'coding' | 'complete' | 'previ
 /*  Storefront Preview — rendered output of the hero section           */
 /* ------------------------------------------------------------------ */
 
-function PerfumeBottleSvg() {
-  return (
-    <svg viewBox="0 0 80 180" fill="none" className="w-full h-full drop-shadow-2xl">
-      {/* Spray nozzle */}
-      <rect x="35" y="0" width="10" height="6" rx="1.5" fill="#b8c4b0" />
-      <rect x="33" y="6" width="14" height="4" rx="1" fill="#94a88a" />
-      {/* Cap band */}
-      <rect x="28" y="10" width="24" height="14" rx="2" fill="#5a6b50" />
-      <rect x="30" y="12" width="20" height="2" rx="1" fill="rgba(255,255,255,0.15)" />
-      {/* Neck */}
-      <rect x="32" y="24" width="16" height="12" rx="2" fill="#6b7f60" />
-      <rect x="34" y="26" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.1)" />
-      {/* Shoulder taper */}
-      <path d="M32 36 L20 52 L20 52 L60 52 L48 36 Z" fill="#4a6340" />
-      <path d="M32 36 L24 48 L24 48 L34 48 L34 36 Z" fill="rgba(255,255,255,0.07)" />
-      {/* Main body */}
-      <rect x="18" y="50" width="44" height="110" rx="6" fill="url(#bottleGrad)" />
-      {/* Body highlight — left edge */}
-      <rect x="20" y="54" width="6" height="90" rx="3" fill="rgba(255,255,255,0.1)" />
-      {/* Body shadow — right edge */}
-      <rect x="54" y="54" width="5" height="90" rx="2.5" fill="rgba(0,0,0,0.12)" />
-      {/* Label area */}
-      <rect x="24" y="80" width="32" height="46" rx="3" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
-      {/* Label text lines */}
-      <rect x="30" y="88" width="20" height="2" rx="1" fill="rgba(255,255,255,0.35)" />
-      <rect x="32" y="94" width="16" height="1.5" rx="0.75" fill="rgba(255,255,255,0.2)" />
-      <rect x="34" y="99" width="12" height="1" rx="0.5" fill="rgba(255,255,255,0.12)" />
-      {/* Decorative line on label */}
-      <rect x="30" y="108" width="20" height="0.5" rx="0.25" fill="rgba(255,255,255,0.15)" />
-      <rect x="33" y="112" width="14" height="1" rx="0.5" fill="rgba(255,255,255,0.1)" />
-      {/* Bottom edge */}
-      <rect x="18" y="154" width="44" height="6" rx="3" fill="#3a5230" />
-      {/* Gradient defs */}
-      <defs>
-        <linearGradient id="bottleGrad" x1="18" y1="50" x2="62" y2="160" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#5a7a4c" />
-          <stop offset="0.4" stopColor="#4a6340" />
-          <stop offset="1" stopColor="#3a5230" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
+const STOREFRONT_PRODUCTS = [
+  { name: 'Botanical Serum', price: '$48', img: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=200&h=200&fit=crop&crop=center&q=80' },
+  { name: 'Rose Hip Oil', price: '$36', img: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=200&h=200&fit=crop&crop=center&q=80' },
+  { name: 'Hydra Cream', price: '$52', img: 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=200&h=200&fit=crop&crop=center&q=80' },
+  { name: 'Aloe Mist', price: '$28', img: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=200&h=200&fit=crop&crop=center&q=80' },
+  { name: 'Night Repair', price: '$64', img: 'https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?w=200&h=200&fit=crop&crop=center&q=80' },
+  { name: 'Glow Drops', price: '$42', img: 'https://images.unsplash.com/photo-1617897903246-719242758050?w=200&h=200&fit=crop&crop=center&q=80' },
+];
+
+const HERO_SLIDES = [
+  {
+    tag: 'Summer 2026',
+    title: ['The Art of', 'Natural Beauty'],
+    desc: 'Botanical extracts blended with modern science for radiant, healthy skin.',
+    cta: 'Shop Now',
+    bgImg: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=900&h=500&fit=crop&crop=center&q=80',
+  },
+  {
+    tag: 'New Arrivals',
+    title: ['Fresh', 'Botanicals'],
+    desc: 'Discover our newest formulations crafted from rare plant extracts.',
+    cta: 'Explore',
+    bgImg: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=900&h=500&fit=crop&crop=center&q=80',
+  },
+  {
+    tag: 'Limited Edition',
+    title: ['Summer', 'Collection'],
+    desc: 'Seasonal essentials for sun-kissed, hydrated skin all day long.',
+    cta: 'Shop Collection',
+    bgImg: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=900&h=500&fit=crop&crop=center&q=80',
+  },
+];
 
 function StorefrontPreview() {
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
+  const [pulseIndex, setPulseIndex] = useState(-1);
+  const [scrollY, setScrollY] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDark, setIsDark] = useState(false);
+
+  // Detect theme
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains('dark'));
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const heroTimer = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, 2500);
+
+    const scrollDown = setTimeout(() => setScrollY(50), 800);
+    const scrollBack = setTimeout(() => setScrollY(0), 1800);
+
+    const pulseTimer = setTimeout(() => {
+      setPulseIndex(0);
+      setCartCount(1);
+      setTimeout(() => setPulseIndex(-1), 400);
+    }, 1200);
+
+    const pulse2 = setTimeout(() => {
+      setPulseIndex(3);
+      setCartCount(2);
+      setTimeout(() => setPulseIndex(-1), 400);
+    }, 3000);
+
+    return () => {
+      clearInterval(heroTimer);
+      clearTimeout(scrollDown);
+      clearTimeout(scrollBack);
+      clearTimeout(pulseTimer);
+      clearTimeout(pulse2);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollY, behavior: 'smooth' });
+    }
+  }, [scrollY]);
+
+  const slide = HERO_SLIDES[heroIndex];
+
+  // Track scroll for nav glass effect
+  const [navScrolled, setNavScrolled] = useState(false);
+  const handleContentScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setNavScrolled(e.currentTarget.scrollTop > 20);
+  }, []);
+
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Store nav — over dark bg */}
-      <div className="flex items-center justify-between px-6 py-2.5 bg-[#1a1a1a] border-b border-white/[0.06]">
-        <span className="text-[11px] font-bold text-white/90 tracking-[0.12em]">BOTANIQ</span>
-        <div className="flex items-center gap-4">
-          {['Shop', 'Collections', 'About'].map((item) => (
-            <span key={item} className="text-[10px] text-white/50">{item}</span>
-          ))}
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="text-white/40">
-            <path d="M1 1h2l1.5 8h8L15 3H4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="6" cy="13" r="1" fill="currentColor" />
-            <circle cx="12" cy="13" r="1" fill="currentColor" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Hero section — dark gradient with perfume bottle */}
-      <div className="flex-1 relative bg-gradient-to-br from-[#1c2a18] via-[#243320] to-[#0f1a0d] overflow-hidden">
-        {/* Subtle radial glow behind bottle */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_65%_55%,rgba(90,122,76,0.25),transparent)]" />
-
-        {/* Content grid: text left, bottle right */}
-        <div className="relative h-full flex items-center px-6 gap-2">
-          {/* Left — text */}
+    <div className={`h-full flex flex-col overflow-hidden relative ${isDark ? 'bg-[#0f1a0d]' : 'bg-[#fafaf9]'}`}>
+      {/* Everything in one relative container */}
+      <div className="flex-1 min-h-0 relative">
+        {/* Floating announcement + nav — pinned over content */}
+        <div className="absolute top-0 left-0 right-0 z-20">
+          {/* Announcement bar — slim */}
           <motion.div
-            className="flex-1 min-w-0"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className={`pt-0 pb-px text-center ${isDark ? 'bg-[#2a3a24]/90' : 'bg-[#3a5230]/90'} backdrop-blur-sm`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            <div className="text-[8px] text-emerald-400/70 tracking-[0.2em] uppercase font-medium mb-2">
-              Summer 2026
+            <span className="text-[6px] text-white/70 tracking-wider uppercase">
+              Free shipping on orders over $75
+            </span>
+          </motion.div>
+          {/* Nav — transparent, glass on scroll */}
+          <div
+            className={`flex items-center justify-between px-6 py-2 transition-all duration-300 ${
+              navScrolled
+                ? isDark
+                  ? 'bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/[0.08]'
+                  : 'bg-white/80 backdrop-blur-md border-b border-stone-200/60'
+                : 'bg-transparent border-b border-transparent'
+            }`}
+          >
+          <span className={`text-[11px] font-bold tracking-[0.12em] transition-colors duration-300 ${
+            navScrolled && !isDark ? 'text-stone-900' : 'text-white'
+          }`}>
+            BOTANIQ
+          </span>
+          <div className="flex items-center gap-4">
+            {['Shop', 'Collections', 'About'].map((item) => (
+              <span key={item} className={`text-[10px] transition-colors duration-300 ${
+                navScrolled
+                  ? isDark ? 'text-white/60' : 'text-stone-600'
+                  : 'text-white/70'
+              }`}>{item}</span>
+            ))}
+            <div className="relative">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className={`transition-colors duration-300 ${
+                navScrolled
+                  ? isDark ? 'text-white/50' : 'text-stone-500'
+                  : 'text-white/60'
+              }`}>
+                <path d="M1 1h2l1.5 8h8L15 3H4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="6" cy="13" r="1" fill="currentColor" />
+                <circle cx="12" cy="13" r="1" fill="currentColor" />
+              </svg>
+              <AnimatePresence>
+                {cartCount > 0 && (
+                  <motion.span
+                    key={cartCount}
+                    className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-emerald-500 text-white text-[6px] font-bold flex items-center justify-center"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                  >
+                    {cartCount}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
-            <h2 className="text-[18px] md:text-[20px] font-semibold text-white leading-[1.15] tracking-[-0.02em]">
-              The Art of
-              <br />
-              Natural Beauty
-            </h2>
-            <p className="text-[9px] text-white/40 mt-2 leading-relaxed max-w-[140px]">
-              Botanical extracts blended with modern science for radiant, healthy skin.
-            </p>
-            <motion.div
-              className="mt-4"
-              initial={{ opacity: 0, scale: 0.95 }}
+          </div>
+          </div>
+        </div>
+
+        {/* Scrollable content — starts behind the nav */}
+        <div ref={scrollRef} className="h-full overflow-y-auto overflow-x-hidden" onScroll={handleContentScroll}>
+          {/* Hero banner — full-bleed background image */}
+          <div className="relative h-[240px] overflow-hidden bg-black">
+          {/* Full-bleed background image with cross-fade */}
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={`bg-${heroIndex}`}
+              src={slide.bgImg}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              initial={{ opacity: 0, scale: 1.05 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              loading="eager"
+            />
+          </AnimatePresence>
+
+          {/* Dark overlay for text legibility */}
+          <div className="absolute inset-0 bg-black/40" />
+
+          {/* Text overlay */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`text-${heroIndex}`}
+              className="absolute inset-0 flex flex-col justify-end px-6 pb-6"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
-              <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 text-white text-[8px] font-medium rounded-full hover:bg-white/15 transition-colors">
-                Shop Now
+              <div className="text-[8px] text-emerald-300/80 tracking-[0.2em] uppercase font-medium mb-1.5">
+                {slide.tag}
+              </div>
+              <h2 className="text-[22px] md:text-[26px] font-semibold text-white leading-[1.1] tracking-[-0.02em]">
+                {slide.title[0]}<br />{slide.title[1]}
+              </h2>
+              <p className="text-[9px] text-white/60 mt-2 leading-relaxed max-w-[180px]">
+                {slide.desc}
+              </p>
+              <span className="inline-block mt-3 px-4 py-1.5 bg-white text-stone-900 text-[8px] font-semibold rounded-full w-fit">
+                {slide.cta}
               </span>
             </motion.div>
-          </motion.div>
+          </AnimatePresence>
 
-          {/* Right — perfume bottle */}
-          <motion.div
-            className="w-[80px] h-[160px] shrink-0"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <PerfumeBottleSvg />
-          </motion.div>
+          {/* Slide dots */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+            {HERO_SLIDES.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1 rounded-full transition-all duration-300 ${
+                  i === heroIndex ? 'w-3 bg-white/90' : 'w-1 bg-white/30'
+                }`}
+              />
+            ))}
+          </div>
         </div>
 
-        {/* Bottom fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0f1a0d] to-transparent" />
+        {/* Section heading */}
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between">
+            <span className={`text-[9px] font-medium ${isDark ? 'text-white/70' : 'text-stone-700'}`}>
+              Featured Products
+            </span>
+            <span className={`text-[7px] ${isDark ? 'text-emerald-400/60' : 'text-emerald-600/70'}`}>
+              View all
+            </span>
+          </div>
+        </div>
+
+        {/* Product grid */}
+        <div className="px-4 pb-4 grid grid-cols-3 gap-2">
+          {STOREFRONT_PRODUCTS.map((product, i) => (
+            <motion.div
+              key={product.name}
+              className={`rounded-md overflow-hidden transition-all duration-200 ${
+                isDark
+                  ? `bg-white/[0.04] border border-white/[0.06] ${pulseIndex === i ? 'ring-1 ring-emerald-400/50 scale-[1.03]' : ''}`
+                  : `bg-white border border-stone-200 shadow-sm ${pulseIndex === i ? 'ring-1 ring-emerald-500/50 scale-[1.03]' : ''}`
+              }`}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.35,
+                delay: 0.3 + i * 0.08,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+            >
+              <img
+                src={product.img}
+                alt={product.name}
+                className="h-[42px] w-full object-cover"
+                loading="eager"
+              />
+              <div className="p-1.5">
+                <div className={`text-[7px] truncate ${isDark ? 'text-white/60' : 'text-stone-700'}`}>{product.name}</div>
+                <div className={`text-[7px] ${isDark ? 'text-white/40' : 'text-stone-500'}`}>{product.price}</div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
       </div>
     </div>
   );
@@ -334,9 +487,9 @@ export function CodeEditorMockup() {
     if (jsIntervalRef.current) clearInterval(jsIntervalRef.current);
   }, []);
 
-  // Auto-scroll single editor to bottom when in prompt/thinking/planning (single-pane uses liquidLines for "waiting")
+  // Auto-scroll single editor to bottom as new lines appear
   useEffect(() => {
-    if (editorRef.current && phase !== 'coding' && phase !== 'complete') {
+    if (editorRef.current) {
       editorRef.current.scrollTop = editorRef.current.scrollHeight;
     }
   }, [liquidLines.length, phase]);
@@ -454,7 +607,7 @@ export function CodeEditorMockup() {
     }
 
     if (phase === 'preview') {
-      timerRef.current = setTimeout(() => setPhase('pause'), 2500);
+      timerRef.current = setTimeout(() => setPhase('pause'), 5000);
     }
 
     if (phase === 'pause') {
@@ -483,7 +636,7 @@ export function CodeEditorMockup() {
   ];
 
   return (
-    <div className="rounded-2xl bg-white dark:bg-[#111] border border-stone-200 dark:border-white/10 overflow-hidden min-h-[400px]">
+    <div className="rounded-2xl bg-white dark:bg-[#111] border border-stone-200 dark:border-white/10 overflow-hidden h-[400px] flex flex-col">
       {/* Title bar */}
       <div className="h-10 bg-stone-50 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-4 gap-2">
         <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
@@ -516,12 +669,12 @@ export function CodeEditorMockup() {
       </div>
 
       {/* Body — editor base layer + review overlay + slide-up preview */}
-      <div className="h-[320px] relative overflow-hidden">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
         {/* ── Editor (always rendered) ─────────────────────────────────── */}
         <div className="absolute inset-0 flex">
           {isCodingOrComplete ? (
             /* ── 3-pane layout during coding/complete ── */
-            <div className="flex-1 flex flex-col overflow-hidden w-full">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
               {/* AI thinking bar (only during coding) */}
               <AnimatePresence>
                 {phase === 'coding' && (
@@ -586,7 +739,7 @@ export function CodeEditorMockup() {
                 ))}
               </div>
 
-              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <AnimatePresence>
                   {promptText && (
                     <motion.div
@@ -657,7 +810,7 @@ export function CodeEditorMockup() {
 
                 <div
                   ref={editorRef}
-                  className="flex-1 p-4 font-mono text-[12px] leading-6 overflow-y-auto overflow-x-hidden"
+                  className="flex-1 min-h-0 p-4 font-mono text-[12px] leading-6 overflow-y-auto overflow-x-hidden"
                 >
                   <div className="flex">
                     <div className="text-stone-300 dark:text-white/20 select-none mr-4 text-right w-6 shrink-0">

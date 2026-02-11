@@ -29,10 +29,24 @@ export function schedulePushForProject(projectId: string): void {
 async function runPushForProject(projectId: string): Promise<void> {
   const supabase = await createClient();
 
+  // Store-first: look up the connection from the project's shopify_connection_id
+  const { data: project, error: projError } = await supabase
+    .from('projects')
+    .select('shopify_connection_id')
+    .eq('id', projectId)
+    .maybeSingle();
+
+  if (projError || !project?.shopify_connection_id) {
+    if (projError) {
+      console.warn('[Shopify push-queue] Project lookup failed:', projectId, projError.message);
+    }
+    return;
+  }
+
   const { data: connection, error: connError } = await supabase
     .from('shopify_connections')
     .select('id, theme_id')
-    .eq('project_id', projectId)
+    .eq('id', project.shopify_connection_id)
     .maybeSingle();
 
   if (connError || !connection?.theme_id) {
@@ -53,7 +67,7 @@ async function runPushForProject(projectId: string): Promise<void> {
 
   try {
     const syncService = new ThemeSyncService();
-    const result = await syncService.pushTheme(connection.id, themeId);
+    const result = await syncService.pushTheme(connection.id, themeId, undefined, projectId);
     if (result.errors.length > 0) {
       console.warn('[Shopify push-queue] Push had errors:', projectId, result.errors);
     }

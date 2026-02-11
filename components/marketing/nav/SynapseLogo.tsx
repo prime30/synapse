@@ -45,6 +45,7 @@ export function SynapseLogo({ className }: { className?: string }) {
   const [phase, setPhase] = useState<'scramble' | 'reveal' | 'done'>('scramble');
   const [maskSize, setMaskSize] = useState('2.5px 2.5px');
   const [revealProgress, setRevealProgress] = useState(0);
+  const [aDotted, setADotted] = useState(false);
   const rafRef = useRef<number>(0);
 
   // ── Phase 1: Scramble — fast ticks, tight left-to-right stagger ────
@@ -113,6 +114,28 @@ export function SynapseLogo({ className }: { className?: string }) {
     };
   }, [phase]);
 
+  // ── Phase 3: Periodic pixel-dot toggle on the A letter ───────────────
+  useEffect(() => {
+    if (phase !== 'done') return;
+
+    let timeout: ReturnType<typeof setTimeout>;
+
+    function schedule(dotted: boolean) {
+      // Solid: 4-6s, Dotted: 2-3s
+      const duration = dotted
+        ? 2000 + Math.random() * 1000
+        : 4000 + Math.random() * 2000;
+      timeout = setTimeout(() => {
+        const next = !dotted;
+        setADotted(next);
+        schedule(next);
+      }, duration);
+    }
+
+    schedule(false);
+    return () => clearTimeout(timeout);
+  }, [phase]);
+
   const isDone = phase === 'done';
   const showBackLayer = !isDone;
   const showFrontLayer = phase === 'reveal' || isDone;
@@ -165,13 +188,41 @@ export function SynapseLogo({ className }: { className?: string }) {
           }
         >
           {DISPLAY_CHARS.map((ch, i) => (
-            <span
-              key={i}
-              className={LETTER_CELL}
-              style={{ fontVariantNumeric: 'tabular-nums' }}
-            >
-              {ch}
-            </span>
+            i === 3 ? (
+              /* A letter: stack solid + pixel versions, crossfade between them */
+              <span key={i} className={`${LETTER_CELL} relative`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {/* Solid version (fades out when dotted) */}
+                <span
+                  className="inline-block w-full text-center"
+                  style={{
+                    transition: 'opacity 0.6s ease-in-out',
+                    opacity: aDotted ? 0 : 1,
+                  }}
+                  aria-hidden={aDotted}
+                >
+                  {ch}
+                </span>
+                {/* Pixel-dot version (fades in when dotted) */}
+                <span
+                  className={`absolute inset-0 inline-flex items-center justify-center ${LANDED_FONT} pixel-stipple`}
+                  style={{
+                    transition: 'opacity 0.6s ease-in-out',
+                    opacity: aDotted ? 0.85 : 0,
+                  }}
+                  aria-hidden={!aDotted}
+                >
+                  {ch}
+                </span>
+              </span>
+            ) : (
+              <span
+                key={i}
+                className={LETTER_CELL}
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {ch}
+              </span>
+            )
           ))}
         </span>
       )}

@@ -27,18 +27,20 @@ export async function GET(request: NextRequest) {
       throw APIError.unauthorized('Invalid HMAC signature');
     }
 
-    // Decode state to retrieve nonce and projectId
+    // Decode state to retrieve nonce and userId
     let nonce: string;
-    let projectId: string;
+    let userId: string;
+    let projectId: string | undefined;
     try {
       const decoded = JSON.parse(Buffer.from(state, 'base64url').toString());
       nonce = decoded.nonce;
-      projectId = decoded.projectId;
+      userId = decoded.userId;
+      projectId = decoded.projectId; // legacy compat
     } catch {
       throw APIError.badRequest('Invalid state parameter');
     }
 
-    if (!nonce || !projectId) {
+    if (!nonce || !userId) {
       throw APIError.badRequest('Malformed state parameter');
     }
 
@@ -55,18 +57,19 @@ export async function GET(request: NextRequest) {
     // Exchange authorization code for a permanent access token
     const accessToken = await oauth.exchangeCodeForToken(shop, code);
 
-    // Store the encrypted connection
+    // Store the encrypted connection (user-scoped, auto-activates)
     const tokenManager = new ShopifyTokenManager();
-    await tokenManager.storeConnection(projectId, shop, accessToken, [
+    await tokenManager.storeConnection(userId, shop, accessToken, [
       'read_themes',
       'write_themes',
     ]);
 
-    // Redirect to the project page with success indicator
+    // Redirect to the projects page with success indicator
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-    return NextResponse.redirect(
-      `${appUrl}/projects/${projectId}?shopify=connected`
-    );
+    const redirectPath = projectId
+      ? `/projects/${projectId}?shopify=connected`
+      : '/projects?shopify=connected';
+    return NextResponse.redirect(`${appUrl}${redirectPath}`);
   } catch (error) {
     // For OAuth callback errors, redirect with error param instead of returning JSON
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';

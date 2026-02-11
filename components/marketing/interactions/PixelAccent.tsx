@@ -20,7 +20,7 @@ export function PixelAccent({
   delay = 0,
 }: PixelAccentProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-40px' });
+  const inView = useInView(ref, { once: false, margin: '-40px' });
 
   return (
     <motion.span

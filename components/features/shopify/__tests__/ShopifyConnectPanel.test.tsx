@@ -33,7 +33,7 @@ describe('ShopifyConnectPanel', () => {
     expect(screen.getByText('Shopify Store')).toBeDefined();
     expect(
       screen.getByText(
-        'Connect a Shopify store to sync theme files with this project.'
+        'Connect a Shopify store to sync theme files.'
       )
     ).toBeDefined();
   });
