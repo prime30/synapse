@@ -6,28 +6,39 @@ import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
 import { FileList } from '@/components/features/file-management/FileList';
-import { FileViewer } from '@/components/features/file-management/FileViewer';
+
 import { FileEditor } from '@/components/features/file-management/FileEditor';
 import { FileUploadModal } from '@/components/features/file-management/FileUploadModal';
 import { ImportThemeModal } from '@/components/features/file-management/ImportThemeModal';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
+import type { PreviewPanelHandle } from '@/components/preview/PreviewPanel';
 import { ActiveUsersPanel } from '@/components/collaboration/ActiveUsersPanel';
 import { ProjectTabs } from '@/components/features/projects/ProjectTabs';
 import { DesignTokenBrowser } from '@/components/features/design-system/DesignTokenBrowser';
 import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
 import { VersionHistoryPanel } from '@/components/features/versions/VersionHistoryPanel';
+import { DiagnosticsPanel } from '@/components/diagnostics/DiagnosticsPanel';
 import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
 import { UserMenu } from '@/components/features/auth/UserMenu';
 import { useFileTabs } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
+import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useVersionHistory } from '@/hooks/useVersionHistory';
+import { useWorkspaceDiagnostics } from '@/hooks/useWorkspaceDiagnostics';
 import { useProjectFiles } from '@/hooks/useProjectFiles';
 import { useProjects } from '@/hooks/useProjects';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
 import { useWorkspacePresence } from '@/hooks/useWorkspacePresence';
 import { useRemoteCursors } from '@/hooks/useRemoteCursors';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
+import { RelatedFilesPrompt, type RelatedFileInfo } from '@/components/features/file-management/RelatedFilesPrompt';
+import { getLinkedFileIds, linkMultiple, isDismissed, dismissGroup } from '@/lib/file-linking';
+import { ResizeHandle } from '@/components/ui/ResizeHandle';
+import { ActivityBar } from '@/components/editor/ActivityBar';
+import { SettingsModal } from '@/components/editor/SettingsModal';
+import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
+import type { SelectedElement } from '@/components/preview/PreviewPanel';
 
 /** MVP: map theme file path to storefront preview path; fallback to / for unsupported paths. */
 function previewPathFromFile(filePath: string | null | undefined): string {
@@ -45,10 +56,10 @@ export default function ProjectPage() {
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  type RightPanelTab = 'preview' | 'suggestions' | 'versions' | 'shopify' | 'design' | 'agent';
-  const [rightPanel, setRightPanel] = useState<RightPanelTab>('preview');
+  const [activeActivity, setActiveActivity] = useState<import('@/components/editor/ActivityBar').ActivityPanel>('files');
+  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
@@ -69,14 +80,34 @@ export default function ProjectPage() {
     fileLanguage: activeFile?.file_type ?? null,
     selection: null,
   });
+
+  const leftResize = useResizablePanel({
+    storageKey: 'synapse-left-sidebar-width',
+    defaultWidth: 256,
+    minWidth: 180,
+    maxWidth: 400,
+  });
+
+  const rightResize = useResizablePanel({
+    storageKey: 'synapse-right-sidebar-width',
+    defaultWidth: 360,
+    minWidth: 280,
+    maxWidth: 700,
+  });
+
   const versionHistory = useVersionHistory(tabs.activeFileId ?? null);
+  const diagnostics = useWorkspaceDiagnostics();
   useEffect(() => {
     sidebar.updateContext({
       filePath: activeFile?.path ?? null,
       fileLanguage: activeFile?.file_type ?? null,
-      selection: null,
     });
   }, [activeFile?.path, activeFile?.file_type, sidebar.updateContext]);
+
+  // EPIC 1c: Selection injection — track editor selection for AI context
+  const handleEditorSelectionChange = useCallback((selectedText: string | null) => {
+    sidebar.updateContext({ selection: selectedText });
+  }, [sidebar]);
 
   const recoveryAttemptedRef = useRef(false);
 
@@ -96,36 +127,21 @@ export default function ProjectPage() {
   // Note: only attempt recovery once per projectId to avoid loops
   useEffect(() => {
     if (isLoadingProjects || recoveryAttemptedRef.current) {
-      // #region agent log H2
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:99',message:'recovery effect skipped (loading or already attempted)',data:{projectId,isLoadingProjects,recoveryAttempted:recoveryAttemptedRef.current,projectsCount:projects.length,isCurrentProjectAccessible},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
     if (isCurrentProjectAccessible) {
-      // #region agent log H2
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:105',message:'current project is accessible; no recovery redirect',data:{projectId,projectsCount:projects.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
 
     recoveryAttemptedRef.current = true;
-    // #region agent log H2
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:112',message:'current project inaccessible; attempting recovery',data:{projectId,projectsCount:projects.length,nextProjectId:projects[0]?.id??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     if (projects.length > 0) {
-      // #region agent log H2
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:117',message:'recovery redirecting to first accessible project',data:{fromProjectId:projectId,toProjectId:projects[0].id},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       router.replace(`/projects/${projects[0].id}`);
       return;
     }
 
     // No projects found — but don't auto-create; we may have just
     // been redirected here from project creation. Just let the IDE load.
-    // #region agent log H2
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'reload-stuck-run1',hypothesisId:'H2',location:'app/projects/[projectId]/page.tsx:125',message:'recovery found no projects; staying put',data:{projectId,projectsCount:0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }, [
     isLoadingProjects,
     isCurrentProjectAccessible,
@@ -140,16 +156,42 @@ export default function ProjectPage() {
     }
   }, [projectId, isCurrentProjectAccessible, setLastProjectId]);
 
-  // Cmd/Ctrl+Shift+A: switch to Agent panel
+  // EPIC 1a: Ref for PreviewPanel to get DOM context for agent pipeline
+  const previewRef = useRef<PreviewPanelHandle>(null);
+  const getPreviewSnapshot = useCallback(async () => {
+    if (!previewRef.current) return '';
+    return previewRef.current.getDOMContext(3000);
+  }, []);
+
+  // Cmd/Ctrl+Shift+A: focus agent chat (always visible in right panel)
+  const agentChatRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
         e.preventDefault();
-        setRightPanel('agent');
+        agentChatRef.current?.querySelector('textarea')?.focus();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Listen for element-selected messages from the preview bridge
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (
+        msg?.type === 'synapse-bridge-response' &&
+        msg?.action === 'element-selected' &&
+        msg?.data
+      ) {
+        setSelectedElement(msg.data as SelectedElement);
+        // Auto-focus agent chat so the user can type a command
+        agentChatRef.current?.querySelector('textarea')?.focus();
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, []);
 
   const activeFilePath = useMemo(
@@ -199,6 +241,36 @@ export default function ProjectPage() {
     queryClient.invalidateQueries({ queryKey: ['project-files', projectId] });
   }, [projectId, queryClient]);
 
+  // ── Smart file opening: related files map ──────────────────────────────
+  const relatedFilesMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    // Auto-detected groups from theme structure (exclude catch-all "Other files" group)
+    const groups = generateFileGroups(rawFiles.map((f) => ({ id: f.id, name: f.name, path: f.path })));
+    for (const group of groups) {
+      if (group.id === 'group-other') continue; // skip the catch-all
+      for (const fid of group.fileIds) {
+        const others = group.fileIds.filter((id) => id !== fid);
+        const existing = map.get(fid) ?? [];
+        map.set(fid, [...new Set([...existing, ...others])]);
+      }
+    }
+    // Merge manual links
+    for (const f of rawFiles) {
+      const manual = getLinkedFileIds(projectId, f.id);
+      if (manual.length > 0) {
+        const existing = map.get(f.id) ?? [];
+        map.set(f.id, [...new Set([...existing, ...manual])]);
+      }
+    }
+    return map;
+  }, [rawFiles, projectId]);
+
+  const [relatedPrompt, setRelatedPrompt] = useState<{
+    triggerFileId: string;
+    triggerFileName: string;
+    relatedFiles: RelatedFileInfo[];
+  } | null>(null);
+
   const handleAddFile = () => setUploadModalOpen(true);
   const handleUploadSuccess = () => {
     refreshFiles();
@@ -208,6 +280,29 @@ export default function ProjectPage() {
 
   const handleFileClick = (fileId: string) => {
     tabs.openTab(fileId);
+
+    // Smart open: check for related files
+    const related = relatedFilesMap.get(fileId) ?? [];
+    const notYetOpen = related.filter((id) => !tabs.openTabs.includes(id));
+    if (notYetOpen.length > 0) {
+      const clickedFile = rawFiles.find((f) => f.id === fileId);
+      const groupKey = clickedFile?.path ?? fileId;
+      if (!isDismissed(projectId, groupKey)) {
+        const relatedInfo: RelatedFileInfo[] = notYetOpen
+          .map((id) => rawFiles.find((f) => f.id === id))
+          .filter(Boolean)
+          .map((f) => ({ id: f!.id, name: f!.name, path: f!.path }));
+        if (relatedInfo.length > 0) {
+          setRelatedPrompt({
+            triggerFileId: fileId,
+            triggerFileName: clickedFile?.name ?? 'file',
+            relatedFiles: relatedInfo,
+          });
+        }
+      }
+    } else {
+      setRelatedPrompt(null);
+    }
   };
 
   const handleMarkDirty = useCallback(
@@ -276,6 +371,7 @@ export default function ProjectPage() {
   };
 
   return (
+    <EditorSettingsProvider>
     <div className="flex h-screen flex-col bg-gray-950 text-gray-200">
       {/* Login transition overlay (activates when ?signed_in=1 is present) */}
       <Suspense fallback={null}>
@@ -328,73 +424,169 @@ export default function ProjectPage() {
         </div>
       </header>
 
-      {/* ── Main 3-pane layout ───────────────────────────────────────────────── */}
+      {/* ── Main 4-column layout ──────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
-        {/* ── Left: File explorer ──────────────────────────────────────────── */}
-        <aside className="w-64 border-r border-gray-800 flex-shrink-0 flex flex-col min-h-0">
-          <ActiveUsersPanel presence={presence} />
-          {/* Import / Upload actions */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-800 shrink-0">
-            <button
-              type="button"
-              onClick={handleOpenImport}
-              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              Import Theme
-            </button>
-            <button
-              type="button"
-              onClick={handleAddFile}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors ml-auto"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M5 1v8M1 5h8" />
-              </svg>
-              Add File
-            </button>
-          </div>
-          {hasFiles ? (
-            <FileList
-              projectId={projectId}
-              onFileClick={handleFileClick}
-              onAddFile={handleAddFile}
-              presence={presence}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
-              <div className="w-12 h-12 mb-3 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-6 h-6 text-gray-500"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-gray-400 font-medium">No theme loaded</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Import a theme to get started
-              </p>
-            </div>
-          )}
-        </aside>
+        {/* ── Col 1: Activity Bar (icon rail) ────────────────────────────── */}
+        <ActivityBar
+          activePanel={activeActivity}
+          onPanelChange={setActiveActivity}
+          onSettingsClick={() => setSettingsOpen(true)}
+        />
 
-        {/* ── Center: File tabs + Editor ─────────────────────────────────── */}
+        {/* ── Col 2: Left Panel (dynamic by activeActivity) ──────────────── */}
+        {activeActivity !== null && (
+          <aside
+            className="relative border-r border-gray-800 flex-shrink-0 flex flex-col min-h-0"
+            style={{ width: leftResize.width }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-800 shrink-0">
+              <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide select-none">
+                {activeActivity === 'files' && 'Explorer'}
+                {activeActivity === 'suggestions' && 'Suggestions'}
+                {activeActivity === 'versions' && 'Version History'}
+                {activeActivity === 'shopify' && 'Shopify'}
+                {activeActivity === 'design' && 'Design Tokens'}
+                {activeActivity === 'diagnostics' && 'Diagnostics'}
+              </span>
+              {activeActivity === 'files' && (
+                <div className="flex items-center gap-1 ml-auto">
+                  <button
+                    type="button"
+                    onClick={handleOpenImport}
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Import
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddFile}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M5 1v8M1 5h8" />
+                    </svg>
+                    Add
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Panel content */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {activeActivity === 'files' && (
+                <>
+                  <ActiveUsersPanel presence={presence} />
+                  {hasFiles ? (
+                    <FileList
+                      projectId={projectId}
+                      onFileClick={handleFileClick}
+                      onAddFile={handleAddFile}
+                      presence={presence}
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
+                      <div className="w-12 h-12 mb-3 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="w-6 h-6 text-gray-500"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-gray-400 font-medium">No theme loaded</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Import a theme to get started
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+              {activeActivity === 'suggestions' && (
+                <div className="flex-1 overflow-auto p-2">
+                  <SuggestionPanel projectId={projectId} fileId={tabs.activeFileId ?? undefined} />
+                </div>
+              )}
+              {activeActivity === 'versions' && (
+                <div className="flex-1 overflow-auto p-2">
+                  <VersionHistoryPanel
+                    versions={versionHistory.versions}
+                    currentVersion={
+                      versionHistory.versions.length > 0
+                        ? Math.max(
+                            ...versionHistory.versions.map((v) => v.version_number)
+                          )
+                        : 0
+                    }
+                    isLoading={versionHistory.isLoading}
+                    onUndo={(n) =>
+                      versionHistory.undo({ current_version_number: n })
+                    }
+                    onRedo={(n) =>
+                      versionHistory.redo({ current_version_number: n })
+                    }
+                    onRestore={(versionId) =>
+                      versionHistory.restore({
+                        version_id: versionId,
+                        current_version_number:
+                          versionHistory.versions.length > 0
+                            ? Math.max(
+                                ...versionHistory.versions.map(
+                                  (v) => v.version_number
+                                )
+                              )
+                            : 0,
+                      })
+                    }
+                    isUndoing={versionHistory.isUndoing}
+                    isRedoing={versionHistory.isRedoing}
+                    isRestoring={versionHistory.isRestoring}
+                  />
+                </div>
+              )}
+              {activeActivity === 'shopify' && (
+                <div className="flex-1 overflow-auto p-2">
+                  <ShopifyConnectPanel projectId={projectId} />
+                </div>
+              )}
+              {activeActivity === 'design' && (
+                <DesignTokenBrowser projectId={projectId} />
+              )}
+              {activeActivity === 'diagnostics' && (
+                <div className="flex-1 overflow-auto p-2">
+                  <DiagnosticsPanel files={diagnostics.files} />
+                </div>
+              )}
+            </div>
+
+            <ResizeHandle
+              side="right"
+              minWidth={leftResize.minWidth}
+              maxWidth={leftResize.maxWidth}
+              onResize={leftResize.setWidth}
+              onDoubleClick={leftResize.resetWidth}
+            />
+          </aside>
+        )}
+
+        {/* ── Col 3: Center — File tabs + Editor ─────────────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col">
           <FileTabs
             openTabs={tabs.openTabs}
             activeFileId={tabs.activeFileId}
             unsavedFileIds={tabs.unsavedFileIds}
+            lockedFileIds={tabs.lockedFileIds}
             fileMetaMap={fileMetaMap}
             onTabSelect={tabs.switchTab}
             onTabClose={handleTabClose}
@@ -406,28 +598,49 @@ export default function ProjectPage() {
             onGroupSelect={handleGroupSelect}
             onGroupClose={tabs.closeGroup}
           />
-          {tabs.activeFileId ? (
-            editMode ? (
-              <FileEditor
-                fileId={tabs.activeFileId}
-                fileType={
-                  rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
-                  'liquid'
-                }
-                onSave={() => setEditMode(false)}
-                onMarkDirty={handleMarkDirty}
-                cursors={cursorsForActiveFile}
-              />
-            ) : (
-              <FileViewer
-                fileId={tabs.activeFileId}
-                onEdit={() => setEditMode(true)}
-                onCopy={() => {
-                  setToast('Copied!');
-                  setTimeout(() => setToast(null), 2000);
+
+          {/* Related files prompt */}
+          {relatedPrompt && (
+            <div className="px-2 pt-1">
+              <RelatedFilesPrompt
+                triggerFileName={relatedPrompt.triggerFileName}
+                relatedFiles={relatedPrompt.relatedFiles}
+                onOpenFile={(fid) => {
+                  tabs.openTab(fid);
+                  setRelatedPrompt(null);
+                }}
+                onOpenAll={(fids) => {
+                  tabs.openMultiple(fids);
+                  setRelatedPrompt(null);
+                }}
+                onDismiss={() => {
+                  const clickedFile = rawFiles.find((f) => f.id === relatedPrompt.triggerFileId);
+                  if (clickedFile) dismissGroup(projectId, clickedFile.path);
+                  setRelatedPrompt(null);
+                }}
+                onLinkFiles={() => {
+                  const allIds = [relatedPrompt.triggerFileId, ...relatedPrompt.relatedFiles.map((f) => f.id)];
+                  linkMultiple(projectId, allIds);
+                  tabs.openMultiple(relatedPrompt.relatedFiles.map((f) => f.id));
+                  setRelatedPrompt(null);
                 }}
               />
-            )
+            </div>
+          )}
+
+          {tabs.activeFileId ? (
+            <FileEditor
+              fileId={tabs.activeFileId}
+              fileType={
+                rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
+                'liquid'
+              }
+              onMarkDirty={handleMarkDirty}
+              cursors={cursorsForActiveFile}
+              locked={tabs.isLocked(tabs.activeFileId)}
+              onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
+              onSelectionChange={handleEditorSelectionChange}
+            />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
               <h2 className="text-lg font-medium text-gray-400 mb-1">
@@ -442,116 +655,63 @@ export default function ProjectPage() {
           )}
         </main>
 
-        {/* ── Right: Preview / Suggestions / Versions / Shopify / Design / Agent ── */}
-        <aside className={`${showPreview && previewThemeId ? 'w-[420px]' : 'w-[360px]'} border-l border-gray-800 flex-shrink-0 flex flex-col min-h-0`}>
-          <div className="flex border-b border-gray-800 flex-shrink-0 flex-wrap gap-px">
-            {(
-              [
-                ['preview', 'Preview'],
-                ['suggestions', 'Suggestions'],
-                ['versions', 'Versions'],
-                ['shopify', 'Shopify'],
-                ['design', 'Design'],
-                ['agent', 'Agent'],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setRightPanel(key)}
-                className={`px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                  rightPanel === key
-                    ? 'text-gray-200 border-b-2 border-blue-500 bg-gray-800/30'
-                    : 'text-gray-500 hover:text-gray-400'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        {/* ── Col 4: Right — Preview (top) + Agent Chat (bottom) ─────────── */}
+        <aside
+          className="relative border-l border-gray-800 flex-shrink-0 flex flex-col min-h-0"
+          style={{ width: rightResize.width }}
+        >
+          <ResizeHandle
+            side="left"
+            minWidth={rightResize.minWidth}
+            maxWidth={rightResize.maxWidth}
+            onResize={rightResize.setWidth}
+            onDoubleClick={rightResize.resetWidth}
+          />
 
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {rightPanel === 'preview' && (
-              showPreview && previewThemeId ? (
-                <div className="flex-1 overflow-auto p-3">
-                  <PreviewPanel
-                    storeDomain={connection!.store_domain}
-                    themeId={previewThemeId}
-                    projectId={projectId}
-                    path={previewPathFromFile(activeFilePath)}
-                    syncStatus={connection!.sync_status}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                  <div className="w-14 h-14 mb-3 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
-                    <svg className="w-7 h-7 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-400 font-medium">
-                    {connected && !previewThemeId
-                      ? 'Setting up preview theme…'
-                      : 'Import a theme or connect Shopify to see preview'}
-                  </p>
-                </div>
-              )
-            )}
-            {rightPanel === 'suggestions' && (
-              <div className="flex-1 overflow-auto p-2">
-                <SuggestionPanel projectId={projectId} fileId={tabs.activeFileId ?? undefined} />
-              </div>
-            )}
-            {rightPanel === 'versions' && (
-              <div className="flex-1 overflow-auto p-2">
-                <VersionHistoryPanel
-                  versions={versionHistory.versions}
-                  currentVersion={
-                    versionHistory.versions.length > 0
-                      ? Math.max(
-                          ...versionHistory.versions.map((v) => v.version_number)
-                        )
-                      : 0
-                  }
-                  isLoading={versionHistory.isLoading}
-                  onUndo={(n) =>
-                    versionHistory.undo({ current_version_number: n })
-                  }
-                  onRedo={(n) =>
-                    versionHistory.redo({ current_version_number: n })
-                  }
-                  onRestore={(versionId) =>
-                    versionHistory.restore({
-                      version_id: versionId,
-                      current_version_number:
-                        versionHistory.versions.length > 0
-                          ? Math.max(
-                              ...versionHistory.versions.map(
-                                (v) => v.version_number
-                              )
-                            )
-                          : 0,
-                    })
-                  }
-                  isUndoing={versionHistory.isUndoing}
-                  isRedoing={versionHistory.isRedoing}
-                  isRestoring={versionHistory.isRestoring}
+          {/* Top half: Preview */}
+          <div className="flex-1 flex flex-col min-h-0 border-b border-gray-800">
+            {showPreview && previewThemeId ? (
+              <div className="flex-1 overflow-auto p-3">
+                <PreviewPanel
+                  ref={previewRef}
+                  storeDomain={connection!.store_domain}
+                  themeId={previewThemeId}
+                  projectId={projectId}
+                  path={previewPathFromFile(activeFilePath)}
+                  syncStatus={connection!.sync_status}
+                  onElementSelected={(el) => {
+                    setSelectedElement(el);
+                    agentChatRef.current?.querySelector('textarea')?.focus();
+                  }}
                 />
               </div>
-            )}
-            {rightPanel === 'shopify' && (
-              <div className="flex-1 overflow-auto p-2">
-                <ShopifyConnectPanel projectId={projectId} />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                <div className="w-14 h-14 mb-3 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
+                  <svg className="w-7 h-7 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-gray-400 font-medium">
+                  {connected && !previewThemeId
+                    ? 'Setting up preview theme…'
+                    : 'Import a theme or connect Shopify to see preview'}
+                </p>
               </div>
             )}
-            {rightPanel === 'design' && (
-              <DesignTokenBrowser projectId={projectId} />
-            )}
-            {rightPanel === 'agent' && (
-              <div className="flex-1 flex flex-col min-h-0 p-2">
-                <AgentPromptPanel projectId={projectId} context={sidebar.context} />
-              </div>
-            )}
+          </div>
+
+          {/* Bottom half: Agent Chat */}
+          <div ref={agentChatRef} className="flex-1 flex flex-col min-h-0 p-2">
+            <AgentPromptPanel
+              projectId={projectId}
+              context={sidebar.context}
+              selectedElement={selectedElement}
+              onDismissElement={() => setSelectedElement(null)}
+              hasShopifyConnection={connected}
+              fileCount={rawFiles.length}
+              getPreviewSnapshot={getPreviewSnapshot}
+            />
           </div>
         </aside>
       </div>
@@ -570,6 +730,12 @@ export default function ProjectPage() {
         onClose={() => setImportModalOpen(false)}
         onImportSuccess={handleImportSuccess}
       />
+
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
+    </EditorSettingsProvider>
   );
 }

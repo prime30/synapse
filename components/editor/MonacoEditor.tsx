@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
 import { getLiquidDiagnostics } from '@/lib/monaco/diagnostics-provider';
 import { getLiquidCodeActions } from '@/lib/monaco/code-action-provider';
+import { useEditorSettings } from '@/hooks/useEditorSettings';
 
 const MonacoEditorReact = dynamic(
   () => import('@monaco-editor/react').then((mod) => mod.Editor),
@@ -19,8 +20,12 @@ interface MonacoEditorProps {
   language: EditorLanguage;
   /** Called when user presses Cmd+S / Ctrl+S (handled inside Monaco) */
   onSaveKeyDown?: () => void;
+  /** When true, the editor is read-only (file locked) */
+  readOnly?: boolean;
   height?: string | number;
   className?: string;
+  /** Called when the user's text selection changes in the editor */
+  onSelectionChange?: (selectedText: string | null) => void;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -35,15 +40,23 @@ export function MonacoEditor({
   onChange,
   language,
   onSaveKeyDown,
+  readOnly = false,
   height = '100%',
   className,
+  onSelectionChange,
 }: MonacoEditorProps) {
+  const { settings } = useEditorSettings();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
   const onSaveKeyDownRef = useRef(onSaveKeyDown);
   useEffect(() => {
     onSaveKeyDownRef.current = onSaveKeyDown;
   }, [onSaveKeyDown]);
+
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
 
   const handleEditorDidMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
@@ -56,6 +69,21 @@ export function MonacoEditor({
           () => { onSaveKeyDownRef.current?.(); }
         );
       }
+
+      // Selection change tracking (EPIC 1c: selection injection)
+      editorInstance.onDidChangeCursorSelection(() => {
+        const model = editorInstance.getModel();
+        if (!model || !onSelectionChangeRef.current) return;
+
+        const selection = editorInstance.getSelection();
+        if (!selection || selection.isEmpty()) {
+          onSelectionChangeRef.current(null);
+          return;
+        }
+
+        const text = model.getValueInRange(selection);
+        onSelectionChangeRef.current(text || null);
+      });
 
       if (language === 'liquid') {
         monaco.languages.registerCodeActionProvider('html', {
@@ -132,12 +160,15 @@ export function MonacoEditor({
       onMount={handleEditorDidMount}
       theme="vs-dark"
       options={{
-        minimap: { enabled: false },
-        fontSize: 14,
-        tabSize: 2,
-        wordWrap: 'on',
+        minimap: { enabled: settings.minimap },
+        fontSize: settings.fontSize,
+        tabSize: settings.tabSize,
+        wordWrap: settings.wordWrap ? 'on' : 'off',
+        lineNumbers: settings.lineNumbers ? 'on' : 'off',
+        bracketPairColorization: { enabled: settings.bracketMatching },
         scrollBeyondLastLine: false,
         padding: { top: 16 },
+        readOnly,
       }}
       className={className}
     />
