@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
@@ -42,6 +42,15 @@ import { StatusBar } from '@/components/editor/StatusBar';
 import { CommandPalette } from '@/components/editor/CommandPalette';
 import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
+import type { TokenUsage } from '@/components/features/agents/AgentPromptPanel';
+import { useCanvasData } from '@/hooks/useCanvasData';
+
+// EPIC 15: Lazy-load canvas (zero bundle cost for non-canvas users)
+const CanvasView = React.lazy(() =>
+  import('@/components/canvas/CanvasView').then((mod) => ({ default: mod.CanvasView }))
+);
+
+type ViewMode = 'editor' | 'canvas';
 
 /** MVP: map theme file path to storefront preview path; fallback to / for unsupported paths. */
 function previewPathFromFile(filePath: string | null | undefined): string {
@@ -65,6 +74,10 @@ export default function ProjectPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [activeFileContent, setActiveFileContent] = useState('');
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+
+  // EPIC 15: View mode toggle (Editor / Canvas)
+  const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
@@ -102,6 +115,9 @@ export default function ProjectPage() {
 
   const versionHistory = useVersionHistory(tabs.activeFileId ?? null);
   const diagnostics = useWorkspaceDiagnostics();
+
+  // EPIC 15: Canvas dependency data (lazy-fetched only when canvas is active)
+  const canvasData = useCanvasData(viewMode === 'canvas' ? projectId : null);
   useEffect(() => {
     sidebar.updateContext({
       filePath: activeFile?.path ?? null,
@@ -375,6 +391,18 @@ export default function ProjectPage() {
     setActiveFileContent(content);
   }, []);
 
+  // EPIC 2: Provide active file content for [RETRY_WITH_FULL_CONTEXT]
+  const activeFileContentRef = useRef('');
+  activeFileContentRef.current = activeFileContent;
+  const getActiveFileContent = useCallback(() => {
+    return activeFileContentRef.current || null;
+  }, []);
+
+  // EPIC 2: Token usage handler
+  const handleTokenUsage = useCallback((usage: TokenUsage) => {
+    setTokenUsage(usage);
+  }, []);
+
   // ── EPIC 3: Snippet usage counting (path-based via theme grouping) ──────
   const snippetUsageCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -621,76 +649,132 @@ export default function ProjectPage() {
           </aside>
         )}
 
-        {/* ── Col 3: Center — File tabs + Editor ─────────────────────────── */}
+        {/* ── Col 3: Center — File tabs + Editor / Canvas ────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col">
-          <FileTabs
-            openTabs={tabs.openTabs}
-            activeFileId={tabs.activeFileId}
-            unsavedFileIds={tabs.unsavedFileIds}
-            lockedFileIds={tabs.lockedFileIds}
-            fileMetaMap={fileMetaMap}
-            onTabSelect={tabs.switchTab}
-            onTabClose={handleTabClose}
-            onAddFile={handleAddFile}
-            onNextTab={tabs.nextTab}
-            onPrevTab={tabs.prevTab}
-            tabGroups={tabs.tabGroups}
-            activeGroupId={tabs.activeGroupId}
-            onGroupSelect={handleGroupSelect}
-            onGroupClose={tabs.closeGroup}
-            onReorderTabs={tabs.reorderTabs}
-          />
+          {/* EPIC 15: View mode toggle + file tabs */}
+          <div className="flex items-center border-b border-gray-800 bg-gray-900/40">
+            {viewMode === 'editor' && (
+              <div className="flex-1 min-w-0">
+                <FileTabs
+                  openTabs={tabs.openTabs}
+                  activeFileId={tabs.activeFileId}
+                  unsavedFileIds={tabs.unsavedFileIds}
+                  lockedFileIds={tabs.lockedFileIds}
+                  fileMetaMap={fileMetaMap}
+                  onTabSelect={tabs.switchTab}
+                  onTabClose={handleTabClose}
+                  onAddFile={handleAddFile}
+                  onNextTab={tabs.nextTab}
+                  onPrevTab={tabs.prevTab}
+                  tabGroups={tabs.tabGroups}
+                  activeGroupId={tabs.activeGroupId}
+                  onGroupSelect={handleGroupSelect}
+                  onGroupClose={tabs.closeGroup}
+                  onReorderTabs={tabs.reorderTabs}
+                />
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div className="flex-1 min-w-0" />
+            )}
 
-          {/* Related files prompt */}
-          {relatedPrompt && (
-            <div className="px-2 pt-1">
-              <RelatedFilesPrompt
-                triggerFileName={relatedPrompt.triggerFileName}
-                relatedFiles={relatedPrompt.relatedFiles}
-                onOpenFile={(fid) => {
-                  tabs.openTab(fid);
-                  setRelatedPrompt(null);
-                }}
-                onOpenAll={(fids) => {
-                  tabs.openMultiple(fids);
-                  setRelatedPrompt(null);
-                }}
-                onDismiss={() => {
-                  const clickedFile = rawFiles.find((f) => f.id === relatedPrompt.triggerFileId);
-                  if (clickedFile) dismissGroup(projectId, clickedFile.path);
-                  setRelatedPrompt(null);
-                }}
-                onLinkFiles={() => {
-                  const allIds = [relatedPrompt.triggerFileId, ...relatedPrompt.relatedFiles.map((f) => f.id)];
-                  linkMultiple(projectId, allIds);
-                  tabs.openMultiple(relatedPrompt.relatedFiles.map((f) => f.id));
-                  setRelatedPrompt(null);
-                }}
-              />
+            {/* Editor / Canvas toggle */}
+            <div className="flex items-center gap-0.5 px-2 py-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('editor')}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                  viewMode === 'editor'
+                    ? 'bg-gray-700/80 text-gray-200'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                }`}
+                title="Editor view"
+              >
+                <span className="flex items-center gap-1.5">
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 18 22 12 16 6" />
+                    <polyline points="8 6 2 12 8 18" />
+                  </svg>
+                  Editor
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('canvas')}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                  viewMode === 'canvas'
+                    ? 'bg-gray-700/80 text-gray-200'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                }`}
+                title="Canvas view — dependency graph"
+              >
+                <span className="flex items-center gap-1.5">
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="6" cy="6" r="3" />
+                    <circle cx="18" cy="18" r="3" />
+                    <circle cx="18" cy="6" r="3" />
+                    <line x1="8.5" y1="7.5" x2="15.5" y2="16.5" />
+                    <line x1="15" y1="6" x2="9" y2="6" />
+                  </svg>
+                  Canvas
+                </span>
+              </button>
             </div>
-          )}
+          </div>
 
-          {tabs.activeFileId ? (
+          {/* ── Editor view ────────────────────────────────────────────── */}
+          {viewMode === 'editor' && (
             <>
-              {/* EPIC 3: File breadcrumb */}
-              <FileBreadcrumb
-                filePath={activeFile?.path ?? null}
-                content={activeFileContent}
-              />
+              {/* Related files prompt */}
+              {relatedPrompt && (
+                <div className="px-2 pt-1">
+                  <RelatedFilesPrompt
+                    triggerFileName={relatedPrompt.triggerFileName}
+                    relatedFiles={relatedPrompt.relatedFiles}
+                    onOpenFile={(fid) => {
+                      tabs.openTab(fid);
+                      setRelatedPrompt(null);
+                    }}
+                    onOpenAll={(fids) => {
+                      tabs.openMultiple(fids);
+                      setRelatedPrompt(null);
+                    }}
+                    onDismiss={() => {
+                      const clickedFile = rawFiles.find((f) => f.id === relatedPrompt.triggerFileId);
+                      if (clickedFile) dismissGroup(projectId, clickedFile.path);
+                      setRelatedPrompt(null);
+                    }}
+                    onLinkFiles={() => {
+                      const allIds = [relatedPrompt.triggerFileId, ...relatedPrompt.relatedFiles.map((f) => f.id)];
+                      linkMultiple(projectId, allIds);
+                      tabs.openMultiple(relatedPrompt.relatedFiles.map((f) => f.id));
+                      setRelatedPrompt(null);
+                    }}
+                  />
+                </div>
+              )}
 
-              <FileEditor
-                fileId={tabs.activeFileId}
-                fileType={
-                  rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
-                  'liquid'
-                }
-                onMarkDirty={handleMarkDirty}
-                cursors={cursorsForActiveFile}
-                locked={tabs.isLocked(tabs.activeFileId)}
-                onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
-                onSelectionChange={handleEditorSelectionChange}
-                onContentChange={handleContentChange}
-              />
+              {tabs.activeFileId ? (
+                <>
+                  {/* EPIC 3: File breadcrumb */}
+                  <FileBreadcrumb
+                    filePath={activeFile?.path ?? null}
+                    content={activeFileContent}
+                  />
+
+                  <FileEditor
+                    fileId={tabs.activeFileId}
+                    fileType={
+                      rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
+                      'liquid'
+                    }
+                    onMarkDirty={handleMarkDirty}
+                    cursors={cursorsForActiveFile}
+                    locked={tabs.isLocked(tabs.activeFileId)}
+                    onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
+                    onSelectionChange={handleEditorSelectionChange}
+                    onContentChange={handleContentChange}
+                  />
 
               {/* EPIC 3: Status bar */}
               <StatusBar
@@ -698,19 +782,51 @@ export default function ProjectPage() {
                 content={activeFileContent}
                 language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
                 filePath={activeFile?.path ?? null}
+                tokenUsage={tokenUsage}
               />
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                  <h2 className="text-lg font-medium text-gray-400 mb-1">
+                    No file selected
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {hasFiles
+                      ? 'Select a file from the explorer to start editing'
+                      : 'Import a theme or upload files to begin'}
+                  </p>
+                </div>
+              )}
             </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-              <h2 className="text-lg font-medium text-gray-400 mb-1">
-                No file selected
-              </h2>
-              <p className="text-sm text-gray-500">
-                {hasFiles
-                  ? 'Select a file from the explorer to start editing'
-                  : 'Import a theme or upload files to begin'}
-              </p>
-            </div>
+          )}
+
+          {/* ── Canvas view (EPIC 15) ──────────────────────────────────── */}
+          {viewMode === 'canvas' && (
+            <Suspense
+              fallback={
+                <div className="flex-1 flex items-center justify-center bg-gray-950">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-gray-500">Loading canvas…</span>
+                  </div>
+                </div>
+              }
+            >
+              <CanvasView
+                files={canvasData.files}
+                dependencies={canvasData.dependencies}
+                activeFileId={tabs.activeFileId}
+                modifiedFileIds={tabs.unsavedFileIds}
+                onFileClick={(fileId) => {
+                  tabs.openTab(fileId);
+                  setViewMode('editor');
+                }}
+                onCanvasChat={(message, contextFileIds) => {
+                  // Send message to agent with only canvas-selected file context
+                  console.log('[Canvas chat]', message, contextFileIds);
+                }}
+              />
+            </Suspense>
           )}
         </main>
 
@@ -770,6 +886,8 @@ export default function ProjectPage() {
               hasShopifyConnection={connected}
               fileCount={rawFiles.length}
               getPreviewSnapshot={getPreviewSnapshot}
+              getActiveFileContent={getActiveFileContent}
+              onTokenUsage={handleTokenUsage}
             />
           </div>
         </aside>
