@@ -14,6 +14,10 @@ interface StatusBarProps {
   filePath?: string | null;
   /** EPIC 2: Token usage from last AI response */
   tokenUsage?: TokenUsageDisplay | null;
+  /** EPIC 7: Whether the app is online */
+  isOnline?: boolean;
+  /** EPIC 7: Whether there are queued offline changes */
+  hasOfflineChanges?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -50,7 +54,7 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, tokenUsage }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -80,6 +84,25 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage }:
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* EPIC 7: Offline indicator */}
+      {!isOnline && (
+        <>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-400" title="You are offline — changes are saved locally">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+              <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+              <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+              <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+              <line x1="12" y1="20" x2="12.01" y2="20" />
+            </svg>
+            Offline {hasOfflineChanges ? '— changes saved locally' : ''}
+          </span>
+          <Divider />
+        </>
+      )}
 
       {/* EPIC 2: Token count display */}
       {tokenUsage && (

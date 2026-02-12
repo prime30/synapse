@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useEditorSettings, type Preset } from '@/hooks/useEditorSettings';
 import { useChromaticSettings } from '@/hooks/useChromaticSettings';
+import { loadKeybindings, saveKeybindings, resetKeybindings, getEffectiveKey, type KeyBinding } from '@/lib/editor/keyboard-config';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -178,10 +179,58 @@ function SettingRow({
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+const CATEGORY_ORDER: KeyBinding['category'][] = ['editor', 'navigation', 'ai', 'general'];
+const CATEGORY_LABELS: Record<KeyBinding['category'], string> = {
+  editor: 'Editor',
+  navigation: 'Navigation',
+  ai: 'AI',
+  general: 'General',
+};
+
+function formatKeyCombo(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.metaKey) parts.push('Meta');
+  const keyMap: Record<string, string> = { ' ': 'Space' };
+  const key = keyMap[e.key] ?? e.key;
+  if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+    parts.push(key);
+  }
+  return parts.length > 0 ? parts.join('+') : e.key;
+}
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { settings, updateSetting, applyPreset, resetToDefaults } = useEditorSettings();
   const chromatic = useChromaticSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
+  const [keybindings, setKeybindings] = useState<KeyBinding[]>(loadKeybindings);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+
+  const handleKeyCapture = useCallback(
+    (e: KeyboardEvent) => {
+      if (!recordingId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const combo = formatKeyCombo(e);
+      setKeybindings((prev) => {
+        const next = prev.map((b) =>
+          b.id === recordingId ? { ...b, customKeys: combo } : b
+        );
+        saveKeybindings(next);
+        return next;
+      });
+      setRecordingId(null);
+    },
+    [recordingId]
+  );
+
+  useEffect(() => {
+    if (!recordingId) return;
+    window.addEventListener('keydown', handleKeyCapture, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyCapture, { capture: true });
+  }, [recordingId, handleKeyCapture]);
 
   if (!isOpen) return null;
 
@@ -465,8 +514,83 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           )}
 
           {activeTab === 'keys' && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm text-gray-500">Keyboard shortcut customization coming soon.</p>
+            <div className="space-y-6">
+              {CATEGORY_ORDER.map((cat) => {
+                const bindings = keybindings.filter((b) => b.category === cat);
+                if (bindings.length === 0) return null;
+                return (
+                  <div key={cat}>
+                    <p className="text-xs font-medium tracking-widest uppercase text-gray-500 mb-3">
+                      {CATEGORY_LABELS[cat]}
+                    </p>
+                    <div className="divide-y divide-gray-800">
+                      {bindings.map((binding) => {
+                        const effectiveKey = getEffectiveKey(binding);
+                        const isCustom = binding.customKeys !== null;
+                        const isRecording = recordingId === binding.id;
+                        return (
+                          <SettingRow
+                            key={binding.id}
+                            label={binding.label}
+                            description={binding.description}
+                          >
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setRecordingId(isRecording ? null : binding.id)}
+                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 min-w-[100px] justify-center ${
+                                  isRecording
+                                    ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                                    : isCustom
+                                      ? 'border-blue-500/60 bg-blue-500/10 text-blue-300'
+                                      : 'border-gray-600 bg-gray-800 text-gray-400'
+                                }`}
+                              >
+                                {isRecording ? 'Press keys...' : effectiveKey}
+                              </button>
+                              {isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKeybindings((prev) => {
+                                      const next = prev.map((b) =>
+                                        b.id === binding.id ? { ...b, customKeys: null } : b
+                                      );
+                                      saveKeybindings(next);
+                                      return next;
+                                    });
+                                  }}
+                                  className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                                  title="Reset to default"
+                                  aria-label="Reset to default"
+                                >
+                                  <span className="text-sm">↺</span>
+                                </button>
+                              )}
+                            </div>
+                          </SettingRow>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeybindings(resetKeybindings());
+                    setRecordingId(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                  Reset All
+                </button>
+              </div>
             </div>
           )}
         </div>
