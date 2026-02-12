@@ -28,13 +28,13 @@ todos:
     status: pending
   - id: epic-6
     content: "EPIC 6: Language Intelligence -- object-aware completions, schema completions, go-to-definition, translation completions, auto-close tags, unused detection, deprecated warnings, HTML auto-rename, rule-based Liquid formatting"
-    status: pending
+    status: completed
   - id: epic-7
     content: "EPIC 7: Platform Resilience -- offline fallback queue, keyboard workflow (Ctrl+D, keybindings), theme console panel"
-    status: pending
+    status: completed
   - id: epic-8
     content: "EPIC 8: Advanced AI -- multi-modal input, theme-wide review, batch operations, undo safety net (per-file + batch), split-diff preview, deploy pre-flight wiring"
-    status: pending
+    status: completed
   - id: epic-9
     content: "EPIC 9: 1.0 Completeness -- asset browser, template composer + block reorderer, mock preview data, inline comments, deploy approval with AI pre-flight gate, metafield CRUD, performance scoring, image optimization + UI panel, a11y checker, locale preview"
     status: pending

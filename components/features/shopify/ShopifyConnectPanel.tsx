@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
+import { setAutoSyncEnabled } from '@/hooks/useFileEditor';
 import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
+import type { QuickScanResult, QuickScanIssue } from '@/lib/ai/theme-reviewer';
 
 interface ShopifyConnectPanelProps {
   projectId: string;
@@ -85,6 +88,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     isConnecting,
     connectError,
   } = useActiveStore(projectId);
+  const router = useRouter();
   const {
     sync,
     isSyncing,
@@ -92,6 +96,19 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     themes,
     isLoadingThemes,
     themesError,
+    deleteTheme,
+    isDeletingTheme,
+    renameTheme,
+    isRenamingTheme,
+    cloneTheme,
+    isCloningTheme,
+    publishTheme,
+    isPublishingTheme,
+    diffTheme,
+    isDiffingTheme,
+    diffResult,
+    cloneProject,
+    isCloningProject,
   } = useShopifyConnection(projectId);
 
   const [shopDomain, setShopDomain] = useState('');
@@ -105,17 +122,39 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Theme management state
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+  const [renameInput, setRenameInput] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
+  const [deleteInputValue, setDeleteInputValue] = useState('');
+  const [cloneModal, setCloneModal] = useState<'shopify' | 'project' | null>(null);
+  const [cloneNameInput, setCloneNameInput] = useState('');
+  const [publishConfirmStep, setPublishConfirmStep] = useState<0 | 1 | 2>(0);
+  const [publishInput, setPublishInput] = useState('');
+  const [scanResult, setScanResult] = useState<QuickScanResult | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const [autoSyncOn, setAutoSyncOn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem(`synapse-auto-sync-${projectId}`) === '1'; } catch { return false; }
+  });
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (themeDropdownRef.current && !themeDropdownRef.current.contains(e.target as Node)) {
         setThemeDropdownOpen(false);
       }
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setActionMenuOpen(false);
+      }
     }
-    if (themeDropdownOpen) {
+    if (themeDropdownOpen || actionMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [themeDropdownOpen]);
+  }, [themeDropdownOpen, actionMenuOpen]);
 
   const connected = !!activeConnection;
   const connection = activeConnection;
@@ -173,6 +212,71 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
       }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'Sync failed');
+    }
+  };
+
+  const handlePushWithPreflight = async () => {
+    if (effectiveThemeId === null) return;
+    setSyncError(null);
+    setScanResult(null);
+
+    try {
+      // Run the push which now includes pre-flight scan
+      const response = await fetch(`/api/projects/${projectId}/shopify/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'push',
+          note: pushNote.trim() || undefined,
+        }),
+      });
+
+      const json = await response.json().catch(() => ({}));
+      const data = json.data ?? json;
+
+      if (data.blocked) {
+        setScanResult(data.scanResult);
+        setSyncError(`Push blocked: ${data.message}`);
+        return;
+      }
+
+      if (data.scanResult) {
+        setScanResult(data.scanResult);
+      }
+
+      setPushNote('');
+      await queryClient.invalidateQueries({
+        queryKey: ['shopify-push-history', projectId],
+      });
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Push failed');
+    }
+  };
+
+  const handleReviewTheme = async () => {
+    if (!effectiveThemeId) return;
+    setIsReviewing(true);
+    setReviewError(null);
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/shopify/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'review' }),
+      });
+
+      const json = await response.json().catch(() => ({}));
+      const data = json.data ?? json;
+
+      // For now, just show scan results since full AI review
+      // will be handled by ThemeReviewReport component in the sidebar
+      if (data.scanResult) {
+        setScanResult(data.scanResult);
+      }
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'Review failed');
+    } finally {
+      setIsReviewing(false);
     }
   };
 
@@ -362,6 +466,127 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
         </div>
       </div>
 
+      {/* Theme actions */}
+      {effectiveThemeId && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Action menu */}
+          <div ref={actionMenuRef} className="relative">
+            <button type="button" onClick={() => setActionMenuOpen((o) => !o)} className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
+              Actions ▾
+            </button>
+            {actionMenuOpen && (
+              <ul className="absolute z-20 mt-1 w-48 rounded bg-gray-800 border border-gray-600 shadow-lg text-xs">
+                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setRenameInput(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setActionMenuOpen(false); }}>Rename</button></li>
+                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setCloneNameInput(`Copy of ${themes.find((t) => t.id === effectiveThemeId)?.name ?? 'theme'}`); setCloneModal('shopify'); setActionMenuOpen(false); }}>Clone on Shopify</button></li>
+                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setCloneNameInput(`Copy of project`); setCloneModal('project'); setActionMenuOpen(false); }}>Clone as new project</button></li>
+                {themes.find((t) => t.id === effectiveThemeId)?.role !== 'main' && (
+                  <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setPublishConfirmStep(1); setActionMenuOpen(false); }}>Publish to live</button></li>
+                )}
+                <li><a href={`/api/projects/${projectId}/export`} download className="block px-3 py-2 text-gray-200 hover:bg-gray-700">Export JSON</a></li>
+                {themes.find((t) => t.id === effectiveThemeId)?.role !== 'main' && (
+                  <li><button type="button" className="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-700" onClick={() => { setDeleteConfirmName(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setDeleteInputValue(''); setActionMenuOpen(false); }}>Delete theme</button></li>
+                )}
+              </ul>
+            )}
+          </div>
+
+          {/* Review changes button */}
+          <button type="button" onClick={() => effectiveThemeId && diffTheme(effectiveThemeId)} disabled={isDiffingTheme || !effectiveThemeId} className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-50 transition-colors">
+            {isDiffingTheme ? 'Loading...' : 'Review changes'}
+          </button>
+
+          {/* Review Theme button (full AI review) */}
+          <button
+            type="button"
+            onClick={handleReviewTheme}
+            disabled={isReviewing || !effectiveThemeId}
+            className="px-2 py-1.5 text-xs rounded bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 disabled:opacity-50 transition-colors"
+          >
+            {isReviewing ? 'Reviewing...' : 'Review Theme'}
+          </button>
+
+          {/* Auto-sync toggle */}
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+            <input type="checkbox" checked={autoSyncOn} onChange={(e) => { setAutoSyncOn(e.target.checked); setAutoSyncEnabled(projectId, e.target.checked); }} className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 w-3.5 h-3.5" />
+            Auto-push on save
+          </label>
+        </div>
+      )}
+
+      {/* Inline rename */}
+      {renameInput !== null && effectiveThemeId && (
+        <div className="flex gap-2">
+          <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="flex-1 px-3 py-1.5 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500" autoFocus />
+          <button type="button" disabled={!renameInput.trim() || isRenamingTheme} onClick={async () => { await renameTheme({ themeId: effectiveThemeId, name: renameInput.trim() }); setRenameInput(null); }} className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">{isRenamingTheme ? 'Saving...' : 'Save'}</button>
+          <button type="button" onClick={() => setRenameInput(null)} className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+        </div>
+      )}
+
+      {/* Diff results */}
+      {diffResult && diffResult.files.length > 0 && (
+        <div className="text-xs p-3 rounded bg-gray-800 border border-gray-700 space-y-1 max-h-48 overflow-y-auto">
+          <p className="text-gray-300 font-medium mb-2">{diffResult.files.length} pending changes</p>
+          {diffResult.files.map((f) => (
+            <div key={f.path} className="flex items-center gap-2 py-0.5">
+              <span className={`shrink-0 px-1 py-0.5 rounded text-[10px] ${f.status === 'added' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{f.status}</span>
+              <span className="text-gray-400 truncate">{f.path}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {diffResult && diffResult.files.length === 0 && (
+        <p className="text-xs text-gray-500">No pending changes to push.</p>
+      )}
+
+      {/* Pre-flight scan results */}
+      {scanResult && (
+        <div className={`text-xs p-3 rounded border space-y-2 ${
+          scanResult.passed
+            ? 'bg-green-900/20 border-green-700/30'
+            : 'bg-red-900/20 border-red-700/30'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`font-medium ${scanResult.passed ? 'text-green-400' : 'text-red-400'}`}>
+              {scanResult.passed ? 'Pre-flight passed' : 'Pre-flight failed'}
+            </span>
+            <span className="text-gray-500">
+              {scanResult.scannedFiles} files in {scanResult.scanTimeMs}ms
+            </span>
+          </div>
+
+          {scanResult.issues.length > 0 && (
+            <ul className="space-y-1 max-h-40 overflow-y-auto">
+              {scanResult.issues.map((issue: QuickScanIssue, i: number) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className={`shrink-0 px-1 py-0.5 rounded text-[10px] font-medium ${
+                    issue.severity === 'critical'
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {issue.severity}
+                  </span>
+                  <span className="text-gray-400">
+                    <span className="text-gray-500">{issue.file}</span>
+                    {issue.line && <span className="text-gray-600">:{issue.line}</span>}
+                    {' — '}{issue.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setScanResult(null)}
+            className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {reviewError && <p className="text-xs text-red-400">{reviewError}</p>}
+
       {/* Push note */}
       <div>
         <label htmlFor="push-note" className="block text-xs font-medium text-gray-400 mb-1">
@@ -389,7 +614,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
         </button>
         <button
           type="button"
-          onClick={() => handleSync('push')}
+          onClick={handlePushWithPreflight}
           disabled={!effectiveThemeId || isSyncing}
           className="flex-1 px-3 py-2 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -474,6 +699,72 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                 {isRollingBack ? 'Rolling back...' : 'Restore'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete theme confirmation dialog */}
+      {deleteConfirmName !== null && effectiveThemeId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
+          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
+            <p className="text-sm text-gray-200">Delete theme <strong>&ldquo;{deleteConfirmName}&rdquo;</strong>? This will remove it from Shopify permanently.</p>
+            <p className="text-xs text-gray-400">Type the theme name to confirm:</p>
+            <input type="text" value={deleteInputValue} onChange={(e) => setDeleteInputValue(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-red-500" placeholder={deleteConfirmName} autoFocus />
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setDeleteConfirmName(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+              <button type="button" disabled={deleteInputValue !== deleteConfirmName || isDeletingTheme} onClick={async () => { await deleteTheme(effectiveThemeId); setDeleteConfirmName(null); }} className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{isDeletingTheme ? 'Deleting...' : 'Delete'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clone modal */}
+      {cloneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
+          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
+            <p className="text-sm text-gray-200">{cloneModal === 'shopify' ? 'Clone theme on Shopify' : 'Clone as new project'}</p>
+            <input type="text" value={cloneNameInput} onChange={(e) => setCloneNameInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500" placeholder="Name" autoFocus />
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setCloneModal(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+              <button type="button" disabled={!cloneNameInput.trim() || isCloningTheme || isCloningProject} onClick={async () => {
+                if (cloneModal === 'shopify' && effectiveThemeId) {
+                  await cloneTheme({ themeId: effectiveThemeId, name: cloneNameInput.trim() });
+                } else {
+                  const result = await cloneProject({ name: cloneNameInput.trim() });
+                  router.push(`/projects/${result.projectId}`);
+                }
+                setCloneModal(null);
+              }} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                {isCloningTheme || isCloningProject ? 'Cloning...' : 'Clone'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish confirmation (two-step) */}
+      {publishConfirmStep > 0 && effectiveThemeId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
+          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
+            {publishConfirmStep === 1 && (
+              <>
+                <p className="text-sm text-gray-200">This will make this theme <strong>live</strong> on your store. The current live theme will be replaced.</p>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+                  <button type="button" onClick={() => { setPublishConfirmStep(2); setPublishInput(''); }} className="px-3 py-1.5 text-sm rounded bg-yellow-600 text-white hover:bg-yellow-500 transition-colors">Continue</button>
+                </div>
+              </>
+            )}
+            {publishConfirmStep === 2 && (
+              <>
+                <p className="text-sm text-gray-200">Type <strong>PUBLISH</strong> to confirm:</p>
+                <input type="text" value={publishInput} onChange={(e) => setPublishInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-yellow-500" placeholder="PUBLISH" autoFocus />
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+                  <button type="button" disabled={publishInput !== 'PUBLISH' || isPublishingTheme} onClick={async () => { await publishTheme(effectiveThemeId); setPublishConfirmStep(0); }} className="px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{isPublishingTheme ? 'Publishing...' : 'Publish to live'}</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

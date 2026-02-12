@@ -11,6 +11,7 @@ import {
   buildSnapshotForConnection,
   recordPush,
 } from '@/lib/shopify/push-history';
+import { quickScanTheme, type QuickScanResult } from '@/lib/ai/theme-reviewer';
 
 function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -106,6 +107,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Run rule-based quick scan before pushing to catch critical issues
+    let scanResult: QuickScanResult | undefined;
+    if (action === 'push') {
+      const { data: projectFiles } = await supabase
+        .from('files')
+        .select('name, path, content')
+        .eq('project_id', projectId);
+
+      const themeFiles = (projectFiles ?? []).map(f => ({
+        path: f.path ?? f.name,
+        content: f.content ?? '',
+      }));
+
+      scanResult = quickScanTheme(themeFiles);
+
+      if (!scanResult.passed) {
+        // Reset syncing status
+        await supabase
+          .from('shopify_connections')
+          .update({ sync_status: 'connected' })
+          .eq('id', connection.id);
+
+        return successResponse({
+          blocked: true,
+          scanResult,
+          message: `Push blocked: ${scanResult.issues.filter(i => i.severity === 'critical').length} critical issue(s) found`,
+        }, 200);
+      }
+    }
+
     const syncService = new ThemeSyncService();
     const result =
       action === 'pull'
@@ -128,7 +159,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       })
       .eq('id', connection.id);
 
-    return successResponse(result);
+    return successResponse({
+      ...result,
+      scanResult: scanResult ?? undefined,
+    });
   } catch (error) {
     return handleAPIError(error);
   }

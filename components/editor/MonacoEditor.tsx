@@ -5,6 +5,12 @@ import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
 import { getLiquidDiagnostics } from '@/lib/monaco/diagnostics-provider';
 import { getLiquidCodeActions } from '@/lib/monaco/code-action-provider';
+import { createLiquidCompletionProvider } from '@/lib/monaco/liquid-completion-provider';
+import { createLiquidDefinitionProvider, type FileResolver } from '@/lib/monaco/liquid-definition-provider';
+import { createTranslationProvider } from '@/lib/monaco/translation-provider';
+import { createLinkedEditingProvider } from '@/lib/monaco/linked-editing-provider';
+import { formatLiquid } from '@/lib/liquid/formatter';
+import { detectUnusedVariables } from '@/lib/liquid/unused-detector';
 import { useEditorSettings } from '@/hooks/useEditorSettings';
 
 const MonacoEditorReact = dynamic(
@@ -32,6 +38,12 @@ interface MonacoEditorProps {
   onFixWithAI?: (message: string, line: number) => void;
   /** EPIC 5: Called with selection position info for quick actions toolbar */
   onSelectionPosition?: (position: { top: number; left: number; text: string } | null) => void;
+  /** EPIC 6: File resolver for go-to-definition (render/section/asset references) */
+  fileResolver?: FileResolver;
+  /** EPIC 6: Getter for locale entries (for translation completions inside {{ 'key' | t }}) */
+  getLocaleEntries?: () => Array<{ key: string; value: string }>;
+  /** EPIC 7: Called when Ctrl+backtick is pressed to toggle console */
+  onToggleConsole?: () => void;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -55,6 +67,33 @@ const LIQUID_OPEN_TO_CLOSE: Record<string, string> = {
 const LIQUID_CLOSE_TO_OPEN: Record<string, string> = Object.fromEntries(
   Object.entries(LIQUID_OPEN_TO_CLOSE).map(([k, v]) => [v, k]),
 );
+
+/* ── Feature: Auto-close Liquid block tags ─────────────────────────────── */
+const AUTO_CLOSE_TAGS: Record<string, string> = {
+  if: 'endif',
+  for: 'endfor',
+  unless: 'endunless',
+  case: 'endcase',
+  capture: 'endcapture',
+  form: 'endform',
+  paginate: 'endpaginate',
+  tablerow: 'endtablerow',
+  comment: 'endcomment',
+  raw: 'endraw',
+};
+
+/* ── Deprecated tags/filters (EPIC 6 feature 7) ───────────────────────── */
+const DEPRECATED_TAGS: Record<string, string> = {
+  include: 'Deprecated: Use {% render %} instead of {% include %}',
+};
+
+const DEPRECATED_FILTERS: Record<string, string> = {
+  img_tag: 'Deprecated: Use the image_tag filter or manual <img> tag instead of | img_tag',
+  img_url: 'Deprecated: Use the image_url filter instead of | img_url',
+  currency_selector: 'Deprecated: Use the localization form instead of | currency_selector',
+  script_tag: 'Deprecated: Use a <script> tag instead of | script_tag',
+  stylesheet_tag: 'Deprecated: Use a <link> tag instead of | stylesheet_tag',
+};
 
 function findMatchingLiquidTag(
   content: string,
@@ -125,6 +164,9 @@ export function MonacoEditor({
   onImagePaste,
   onFixWithAI,
   onSelectionPosition,
+  fileResolver,
+  getLocaleEntries,
+  onToggleConsole,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -166,6 +208,28 @@ export function MonacoEditor({
         editorInstance.addCommand(
           monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
           () => { onSaveKeyDownRef.current?.(); },
+        );
+      }
+
+      /* ═══════════════════════════════════════════════════════════════════
+         EPIC 7 – Keyboard Workflow
+         ═══════════════════════════════════════════════════════════════════ */
+
+      /* Ctrl+D: Select next occurrence */
+      editorInstance.addAction({
+        id: 'synapse.selectNextOccurrence',
+        label: 'Select Next Occurrence',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD],
+        run: (ed) => {
+          ed.trigger('keyboard', 'editor.action.addSelectionToNextFindMatch', null);
+        },
+      });
+
+      /* Ctrl+Backtick: Toggle theme console */
+      if (onToggleConsole) {
+        editorInstance.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.Backquote,
+          () => { onToggleConsole(); },
         );
       }
 
@@ -574,8 +638,111 @@ export function MonacoEditor({
           }, 50);
         },
       });
+
+      /* ═══════════════════════════════════════════════════════════════════
+         EPIC 6 – Language Intelligence Providers
+         ═══════════════════════════════════════════════════════════════════ */
+      if (language === 'liquid') {
+        /* 1. Object-aware + schema-setting completions */
+        monaco.languages.registerCompletionItemProvider(
+          'html',
+          createLiquidCompletionProvider(monaco),
+        );
+
+        /* 2. Go-to-definition (render, section, include, asset_url) */
+        if (fileResolver) {
+          monaco.languages.registerDefinitionProvider(
+            'html',
+            createLiquidDefinitionProvider(monaco, fileResolver),
+          );
+        }
+
+        /* 3. Translation completions {{ 'key' | t }} */
+        if (getLocaleEntries) {
+          monaco.languages.registerCompletionItemProvider(
+            'html',
+            createTranslationProvider(monaco, getLocaleEntries),
+          );
+        }
+
+        /* 5. Auto-close Liquid block pairs on typing %} */
+        editorInstance.onDidType((text) => {
+          if (!text.endsWith('}')) return;
+          const model = editorInstance.getModel();
+          const pos = editorInstance.getPosition();
+          if (!model || !pos) return;
+
+          const lineContent = model.getLineContent(pos.lineNumber);
+          const beforeCursor = lineContent.substring(0, pos.column - 1);
+
+          /* Match opening block tag: {% if ... %} or {%- for ... -%} */
+          const tagMatch = beforeCursor.match(
+            /\{%-?\s*(if|for|unless|case|capture|form|paginate|tablerow|comment|raw)\b[^%]*[-%]?\}$/,
+          );
+          if (!tagMatch) return;
+
+          const tagName = tagMatch[1];
+          const closeTag = AUTO_CLOSE_TAGS[tagName];
+          if (!closeTag) return;
+
+          /* Don't auto-close if there's already content after cursor on this line */
+          const afterCursor = lineContent.substring(pos.column - 1).trim();
+          if (afterCursor.length > 0) return;
+
+          /* Insert newline + cursor position + closing tag */
+          const insertText = `\n\n{% ${closeTag} %}`;
+          editorInstance.executeEdits('auto-close-liquid', [
+            {
+              range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+              text: insertText,
+            },
+          ]);
+          /* Move cursor to the blank line between tags */
+          editorInstance.setPosition({
+            lineNumber: pos.lineNumber + 1,
+            column: 1,
+          });
+        });
+
+        /* 10. Liquid formatting (Format Document action) */
+        editorInstance.addAction({
+          id: 'synapse.formatLiquid',
+          label: 'Format Liquid Document',
+          keybindings: [
+            monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF,
+          ],
+          contextMenuGroupId: '1_modification',
+          contextMenuOrder: 15,
+          run: (ed) => {
+            const model = ed.getModel();
+            if (!model) return;
+            const source = model.getValue();
+            const formatted = formatLiquid(source, { tabSize: settings.tabSize });
+            if (formatted !== source) {
+              ed.pushUndoStop();
+              model.pushEditOperations(
+                [],
+                [
+                  {
+                    range: model.getFullModelRange(),
+                    text: formatted,
+                  },
+                ],
+                () => null,
+              );
+              ed.pushUndoStop();
+            }
+          },
+        });
+      }
+
+      /* 9. HTML tag auto-rename (linked editing) – works for all languages with HTML */
+      monaco.languages.registerLinkedEditingRangeProvider(
+        'html',
+        createLinkedEditingProvider(monaco),
+      );
     },
-    [language],
+    [language, fileResolver, getLocaleEntries, settings.tabSize, onToggleConsole],
   );
 
   /* ── Cleanup injected <style> on unmount ────────────────────────────── */
@@ -586,7 +753,7 @@ export function MonacoEditor({
     };
   }, []);
 
-  /* ── Liquid diagnostics ─────────────────────────────────────────────── */
+  /* ── Liquid diagnostics (+ EPIC 6: deprecated warnings, unused vars) ── */
   useEffect(() => {
     if (language !== 'liquid') return;
     const monaco = monacoRef.current;
@@ -609,6 +776,56 @@ export function MonacoEditor({
         endLineNumber: d.line,
         endColumn: Math.max(d.column, 1),
       }));
+
+      /* EPIC 6 Feature 7: Deprecated tag warnings */
+      const lines = value.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        /* Deprecated tags */
+        for (const [tag, message] of Object.entries(DEPRECATED_TAGS)) {
+          const tagRe = new RegExp(`\\{%-?\\s*${tag}\\b`, 'g');
+          let m: RegExpExecArray | null;
+          while ((m = tagRe.exec(line)) !== null) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Warning,
+              message,
+              startLineNumber: i + 1,
+              startColumn: m.index + 1,
+              endLineNumber: i + 1,
+              endColumn: m.index + m[0].length + 1,
+            });
+          }
+        }
+        /* Deprecated filters */
+        for (const [filter, message] of Object.entries(DEPRECATED_FILTERS)) {
+          const filterRe = new RegExp(`\\|\\s*${filter}\\b`, 'g');
+          let m: RegExpExecArray | null;
+          while ((m = filterRe.exec(line)) !== null) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Warning,
+              message,
+              startLineNumber: i + 1,
+              startColumn: m.index + 1,
+              endLineNumber: i + 1,
+              endColumn: m.index + m[0].length + 1,
+            });
+          }
+        }
+      }
+
+      /* EPIC 6 Feature 6: Unused variable detection (yellow warnings) */
+      const unusedVars = detectUnusedVariables(value);
+      for (const uv of unusedVars) {
+        markers.push({
+          severity: monaco.MarkerSeverity.Warning,
+          message: `Unused variable: "${uv.name}" is assigned but never used`,
+          startLineNumber: uv.line,
+          startColumn: uv.column,
+          endLineNumber: uv.line,
+          endColumn: uv.column + uv.name.length + 10, // approximate width of {% assign VAR
+        });
+      }
+
       monaco.editor.setModelMarkers(model, 'liquid', markers);
     });
 

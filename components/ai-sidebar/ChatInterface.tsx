@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { CodeBlock } from './CodeBlock';
+import { DiffPreview } from '@/components/features/suggestions/DiffPreview';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
@@ -9,7 +10,7 @@ import type { Suggestion } from '@/lib/ai/prompt-suggestions';
 import type { AgentMode } from '@/hooks/useAgentSettings';
 import type { OutputMode } from '@/lib/ai/signal-detector';
 import { PlanApprovalModal, parsePlanSteps, type PlanStep } from './PlanApprovalModal';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2 } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload } from 'lucide-react';
 
 export interface ChatMessage {
   id: string;
@@ -66,15 +67,62 @@ interface ChatInterfaceProps {
   showRetryChip?: boolean;
   /** EPIC 5: Output rendering mode based on signal detection */
   outputMode?: OutputMode;
+  /** EPIC 8: Called when user pastes/drops an image — uploads and returns AI analysis */
+  onImageUpload?: (file: File) => Promise<string>;
+  /** EPIC 8: Project ID for image upload context */
+  projectId?: string;
 }
 
 // ── Content renderer with CodeBlock support ────────────────────────────────────
 
 interface ContentSegment {
-  type: 'text' | 'code';
+  type: 'text' | 'code' | 'diff';
   content: string;
   language?: string;
   fileName?: string;
+  /** For diff segments: the original code (lines starting with -) */
+  originalCode?: string;
+  /** For diff segments: the suggested code (lines starting with +) */
+  suggestedCode?: string;
+}
+
+/** Detect if a code block contains diff-formatted content. */
+function isDiffContent(code: string, language?: string): boolean {
+  if (language === 'diff') return true;
+  const lines = code.split('\n');
+  const diffLines = lines.filter(l => l.startsWith('+') || l.startsWith('-'));
+  // Consider it a diff if >30% of non-empty lines are diff markers
+  const nonEmpty = lines.filter(l => l.trim().length > 0);
+  return nonEmpty.length > 2 && diffLines.length / nonEmpty.length > 0.3;
+}
+
+/** Parse diff content into original and suggested code. */
+function parseDiffContent(code: string): { original: string; suggested: string } {
+  const lines = code.split('\n');
+  const originalLines: string[] = [];
+  const suggestedLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
+      // Skip diff headers
+      continue;
+    }
+    if (line.startsWith('-')) {
+      originalLines.push(line.slice(1));
+    } else if (line.startsWith('+')) {
+      suggestedLines.push(line.slice(1));
+    } else {
+      // Context line (no prefix or space prefix)
+      const clean = line.startsWith(' ') ? line.slice(1) : line;
+      originalLines.push(clean);
+      suggestedLines.push(clean);
+    }
+  }
+
+  return {
+    original: originalLines.join('\n'),
+    suggested: suggestedLines.join('\n'),
+  };
 }
 
 function parseContentSegments(text: string): ContentSegment[] {
@@ -91,7 +139,21 @@ function parseContentSegments(text: string): ContentSegment[] {
     // Code block
     const language = match[1] || undefined;
     const code = match[2].replace(/\n$/, ''); // trim trailing newline
-    segments.push({ type: 'code', content: code, language });
+
+    // EPIC 8: Detect diff-formatted code blocks and render as split-diff
+    if (isDiffContent(code, language)) {
+      const { original, suggested } = parseDiffContent(code);
+      segments.push({
+        type: 'diff',
+        content: code,
+        language,
+        originalCode: original,
+        suggestedCode: suggested,
+      });
+    } else {
+      segments.push({ type: 'code', content: code, language });
+    }
+
     lastIndex = match.index + match[0].length;
   }
 
@@ -244,6 +306,11 @@ function generateSessionSummary(msgs: ChatMessage[]): string {
   return parts.length > 0 ? parts.join('\n\n') : 'No key items found in this session.';
 }
 
+// ── EPIC 8: Image upload constants ────────────────────────────────────────────
+
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
 // ── ChatInterface component ───────────────────────────────────────────────────
 
 export function ChatInterface({
@@ -273,6 +340,7 @@ export function ChatInterface({
   onSessionSummary,
   showRetryChip = false,
   outputMode,
+  onImageUpload,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -283,6 +351,12 @@ export function ChatInterface({
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
   // EPIC 5: track the plan key the user has dismissed so modal won't re-show
   const [planDismissedKey, setPlanDismissedKey] = useState('');
+
+  // EPIC 8: Image attachment state
+  const [attachedImage, setAttachedImage] = useState<{ file: File; preview: string } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -379,13 +453,90 @@ export function ChatInterface({
     setPinnedMessageIds(new Set());
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ── EPIC 8: Image handling ────────────────────────────────────────────────
+
+  const handleImageAttach = useCallback((file: File) => {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) return;
+    if (file.size > MAX_IMAGE_SIZE) return;
+    const preview = URL.createObjectURL(file);
+    setAttachedImage({ file, preview });
+  }, []);
+
+  const handleRemoveImage = useCallback(() => {
+    if (attachedImage?.preview) URL.revokeObjectURL(attachedImage.preview);
+    setAttachedImage(null);
+  }, [attachedImage]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    if (!onImageUpload) return;
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleImageAttach(file);
+          return;
+        }
+      }
+    }
+  }, [onImageUpload, handleImageAttach]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (onImageUpload) setIsDraggingOver(true);
+  }, [onImageUpload]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (!onImageUpload) return;
+    const files = e.dataTransfer.files;
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type.startsWith('image/')) {
+        handleImageAttach(files[i]);
+        return;
+      }
+    }
+  }, [onImageUpload, handleImageAttach]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleImageAttach(file);
+    // Reset so same file can be re-selected
+    if (e.target) e.target.value = '';
+  }, [handleImageAttach]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const raw = inputRef.current?.value?.trim();
-    if (!raw || isLoading) return;
+    if ((!raw && !attachedImage) || isLoading) return;
 
+    let messageText = raw || '';
     const prefix = selectedElement ? `[${selectedElement.selector}]: ` : '';
-    onSend(prefix + raw);
+
+    // If image is attached, upload first and include analysis
+    if (attachedImage && onImageUpload) {
+      setIsUploadingImage(true);
+      try {
+        const analysis = await onImageUpload(attachedImage.file);
+        messageText = prefix + (raw ? `${raw}\n\n[Image analysis]: ${analysis}` : `[Image analysis]: ${analysis}`);
+      } catch {
+        messageText = prefix + (raw || '[Image attached but analysis failed]');
+      } finally {
+        setIsUploadingImage(false);
+        handleRemoveImage();
+      }
+    } else {
+      messageText = prefix + messageText;
+    }
+
+    if (messageText) onSend(messageText);
     if (inputRef.current) inputRef.current.value = '';
     setInputHasText(false);
     onDismissElement?.();
@@ -514,7 +665,14 @@ export function ChatInterface({
               {m.role === 'assistant' ? (
                 <>
                   {parseContentSegments(m.content).map((seg, i) =>
-                    seg.type === 'code' ? (
+                    seg.type === 'diff' && seg.originalCode !== undefined && seg.suggestedCode !== undefined ? (
+                      <div key={`diff-${i}`} className="my-2">
+                        <DiffPreview
+                          originalCode={seg.originalCode}
+                          suggestedCode={seg.suggestedCode}
+                        />
+                      </div>
+                    ) : seg.type === 'code' ? (
                       <CodeBlock
                         key={`code-${i}`}
                         code={seg.content}
@@ -603,22 +761,76 @@ export function ChatInterface({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="px-3 py-2">
-          <textarea
-            ref={inputRef}
-            name="message"
-            rows={2}
-            placeholder={placeholder}
-            disabled={isLoading}
-            className="w-full rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 resize-none"
-            onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
+        {/* EPIC 8: Image attachment preview */}
+        {attachedImage && (
+          <div className="px-3 py-1.5 border-b border-gray-800/50">
+            <div className="inline-flex items-center gap-2 rounded-lg bg-gray-800/60 border border-gray-700 px-2 py-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob URL, not optimizable */}
+              <img
+                src={attachedImage.preview}
+                alt="Attached"
+                className="h-10 w-10 rounded object-cover"
+              />
+              <div className="text-xs">
+                <p className="text-gray-300 truncate max-w-[140px]">{attachedImage.file.name}</p>
+                <p className="text-gray-500">{(attachedImage.file.size / 1024).toFixed(0)} KB</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/60 transition-colors"
+                title="Remove image"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="px-3 py-2"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Hidden file input for image attachment */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={handleFileSelect}
           />
+
+          <div className={`relative ${isDraggingOver ? 'ring-2 ring-blue-500/50 rounded-lg' : ''}`}>
+            <textarea
+              ref={inputRef}
+              name="message"
+              rows={2}
+              placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
+              disabled={isLoading || isUploadingImage}
+              className="w-full rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 resize-none"
+              onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+              onPaste={handlePaste}
+            />
+
+            {/* Drag-drop overlay */}
+            {isDraggingOver && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-blue-600/10 border-2 border-dashed border-blue-500/40 pointer-events-none">
+                <div className="flex items-center gap-2 text-sm text-blue-400">
+                  <Upload className="h-4 w-4" />
+                  Drop image here
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Action bar */}
           <div className="flex items-center justify-between mt-2">
@@ -669,6 +881,24 @@ export function ChatInterface({
                   {agentMode === 'solo' ? 'Solo' : 'Team'}
                 </button>
               )}
+
+              {/* EPIC 8: Image attachment button */}
+              {onImageUpload && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors ${
+                    attachedImage
+                      ? 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                      : 'text-gray-400 bg-gray-800 border-gray-700 hover:border-gray-600'
+                  }`}
+                  title="Attach image for AI analysis"
+                >
+                  <ImageIcon className="h-3 w-3" />
+                  {isUploadingImage ? 'Uploading...' : attachedImage ? '1 image' : ''}
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -716,10 +946,10 @@ export function ChatInterface({
               {/* Send button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isUploadingImage}
                 className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
               >
-                {isLoading ? 'Running…' : 'Send'}
+                {isUploadingImage ? 'Uploading…' : isLoading ? 'Running…' : 'Send'}
               </button>
             </div>
           </div>
