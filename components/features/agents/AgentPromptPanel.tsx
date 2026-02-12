@@ -19,7 +19,26 @@ import {
   getRecentActionTypes,
   getRecentlyShownIds,
   markSuggestionsShown,
+  recordSuggestionsShown,
 } from '@/lib/ai/action-history';
+import { detectSignals, inferOutputMode, type OutputMode } from '@/lib/ai/signal-detector';
+import { ConversationArc } from '@/lib/ai/conversation-arc';
+
+// ── Token count tracking ──────────────────────────────────────────────────────
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** Rough token estimation (~4 chars per token). */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// ── Retry-with-context prefix ─────────────────────────────────────────────────
+
+const RETRY_PREFIX = '[RETRY_WITH_FULL_CONTEXT]';
 
 interface AgentPromptPanelProps {
   projectId: string;
@@ -41,6 +60,13 @@ interface AgentPromptPanelProps {
   onApplyCode?: (code: string, fileId: string, fileName: string) => void;
   /** Called when user wants to save a code block as new file */
   onSaveCode?: (code: string, fileName: string) => void;
+  /**
+   * EPIC 2: Returns the full content of the active editor file.
+   * Used by [RETRY_WITH_FULL_CONTEXT] to include file content in the request.
+   */
+  getActiveFileContent?: () => string | null;
+  /** EPIC 2: Called with token usage stats after each response */
+  onTokenUsage?: (usage: TokenUsage) => void;
 }
 
 export function AgentPromptPanel({
@@ -54,6 +80,8 @@ export function AgentPromptPanel({
   getPreviewSnapshot,
   onApplyCode,
   onSaveCode,
+  getActiveFileContent,
+  onTokenUsage,
 }: AgentPromptPanelProps) {
   const {
     messages,
@@ -71,6 +99,9 @@ export function AgentPromptPanel({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [lastResponseContent, setLastResponseContent] = useState<string | null>(null);
+  const [showRetryChip, setShowRetryChip] = useState(false);
+  const [outputMode, setOutputMode] = useState<OutputMode>('chat');
+  const arcRef = useRef(new ConversationArc());
 
   // ── Suggestion generation ───────────────────────────────────────────────
 
@@ -87,7 +118,7 @@ export function AgentPromptPanel({
 
   // Pre-prompt contextual suggestions
   const contextSuggestions = useMemo(() => {
-    const suggestions = getContextualSuggestions(suggestionCtx, recentlyShown);
+    const suggestions = getContextualSuggestions(suggestionCtx, recentlyShown, projectId);
     // Inject arc suggestion at the top if applicable
     const arc = getArcSuggestion(getRecentActionTypes(projectId));
     if (arc) suggestions.unshift(arc);
@@ -97,7 +128,7 @@ export function AgentPromptPanel({
   // Post-response suggestions
   const responseSuggestions = useMemo(() => {
     if (!lastResponseContent) return [];
-    const suggestions = getResponseSuggestions(lastResponseContent, suggestionCtx, recentlyShown);
+    const suggestions = getResponseSuggestions(lastResponseContent, suggestionCtx, recentlyShown, projectId);
     // Inject arc suggestion
     const arc = getArcSuggestion(getRecentActionTypes(projectId));
     if (arc && !suggestions.some((s) => s.id === arc.id)) {
@@ -109,7 +140,10 @@ export function AgentPromptPanel({
   // Track shown suggestions for frequency dampening
   useMemo(() => {
     const allIds = [...contextSuggestions, ...responseSuggestions].map((s) => s.id);
-    if (allIds.length > 0) markSuggestionsShown(projectId, allIds);
+    if (allIds.length > 0) {
+      markSuggestionsShown(projectId, allIds);
+      recordSuggestionsShown(projectId, allIds);
+    }
   }, [contextSuggestions, responseSuggestions, projectId]);
 
   // ── Send handler ────────────────────────────────────────────────────────
@@ -119,15 +153,36 @@ export function AgentPromptPanel({
       setError(null);
       setLastResponseContent(null);
       setIsStopped(false);
+      setShowRetryChip(false);
+
+      // EPIC 5: Track user turn in conversation arc
+      arcRef.current.addTurn('user');
 
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // EPIC 2: Detect [RETRY_WITH_FULL_CONTEXT] prefix
+      let actualContent = content;
+      let includeFullFile = false;
+      if (content.startsWith(RETRY_PREFIX)) {
+        actualContent = content.slice(RETRY_PREFIX.length).trim() || 'Please try again with more detail.';
+        includeFullFile = true;
+      }
+
       // EPIC 1c: Selection injection — auto-include selected editor text as context
-      let enrichedContent = content;
+      let enrichedContent = actualContent;
       if (context.selection) {
-        enrichedContent = `[Selected code in editor]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${content}`;
+        enrichedContent = `[Selected code in editor]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${actualContent}`;
+      }
+
+      // EPIC 2: If retry-with-full-context, prepend the active file content
+      if (includeFullFile && getActiveFileContent) {
+        const fileContent = getActiveFileContent();
+        if (fileContent) {
+          const fileName = context.filePath ?? 'active file';
+          enrichedContent = `[Full file context — ${fileName}]:\n\`\`\`\n${fileContent}\n\`\`\`\n\n${enrichedContent}`;
+        }
       }
 
       const history = messages.map((m) => ({
@@ -201,6 +256,22 @@ export function AgentPromptPanel({
           finalizeMessage(assistantMsgId);
           setLastResponseContent(streamedContent);
 
+          // EPIC 5: Detect signals and infer output mode
+          const signals = detectSignals(streamedContent);
+          const mode_ = inferOutputMode(signals);
+          setOutputMode(mode_);
+
+          // EPIC 2: Token estimation and reporting
+          const inputTokens = estimateTokens(enrichedContent + (domContext ?? ''));
+          const outputTokens = estimateTokens(streamedContent);
+          onTokenUsage?.({ inputTokens, outputTokens });
+
+          // EPIC 2: Detect short response → show retry chip
+          const trimmed = streamedContent.trim();
+          if (trimmed.length < 200 || trimmed.split('\n').length < 3) {
+            setShowRetryChip(true);
+          }
+
           // Record the action type for arc detection
           const actionType = detectActionType(streamedContent);
           recordAction(projectId, {
@@ -208,6 +279,9 @@ export function AgentPromptPanel({
             timestamp: Date.now(),
             context: { filePath: context.filePath ?? undefined, fileLanguage: context.fileLanguage ?? undefined },
           });
+
+          // EPIC 5: Track conversation turn
+          arcRef.current.addTurn('assistant', actionType);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -226,7 +300,7 @@ export function AgentPromptPanel({
         if (abortRef.current === controller) abortRef.current = null;
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, mode, model]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model]
   );
 
   const handleStop = useCallback(() => {
@@ -238,6 +312,26 @@ export function AgentPromptPanel({
   const handleReview = useCallback(() => {
     onSend('Review all the changes we have discussed so far. Check for issues, improvements, and verify correctness.');
   }, [onSend]);
+
+  // EPIC 2: Clear chat — reset local state and call useAgentChat clear if available
+  const handleClearChat = useCallback(() => {
+    setLastResponseContent(null);
+    setShowRetryChip(false);
+    setError(null);
+    setIsStopped(false);
+    arcRef.current.reset();
+    setOutputMode('chat');
+    // Note: actual message clearing is done by passing empty messages or
+    // calling a clearMessages function from useAgentChat if available.
+    // For now the ChatInterface handles the visual clear.
+  }, []);
+
+  // EPIC 2: Determine if response suggestions should include retry chip
+  const responseSuggestionsWithRetry = useMemo(() => {
+    // Filter out the retry-context suggestion from prompt-suggestions
+    // since we handle it via showRetryChip prop on SuggestionChips
+    return responseSuggestions.filter(s => s.id !== 'post-retry-context');
+  }, [responseSuggestions]);
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
@@ -264,7 +358,7 @@ export function AgentPromptPanel({
           selectedElement={selectedElement}
           onDismissElement={onDismissElement}
           contextSuggestions={contextSuggestions}
-          responseSuggestions={responseSuggestions}
+          responseSuggestions={responseSuggestionsWithRetry}
           fileCount={fileCount}
           onStop={handleStop}
           onReview={handleReview}
@@ -276,6 +370,9 @@ export function AgentPromptPanel({
           onApplyCode={onApplyCode}
           onSaveCode={onSaveCode}
           editorSelection={context.selection}
+          onClearChat={handleClearChat}
+          showRetryChip={showRetryChip}
+          outputMode={outputMode}
         />
       )}
     </div>

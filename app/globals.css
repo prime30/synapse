@@ -5,6 +5,15 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ── Chromatic IDE Ambient Theming (EPIC 16) ─────────────────────── */
+  --ide-ambient-primary: oklch(0.5 0.1 264);
+  --ide-ambient-secondary: oklch(0.48 0.11 275);
+  --ide-ambient-accent: oklch(0.55 0.12 310);
+  --ide-ambient-primary-hsl: hsl(230, 65%, 55%);
+  --ide-ambient-secondary-hsl: hsl(245, 60%, 53%);
+  --ide-ambient-accent-hsl: hsl(280, 55%, 58%);
+  --ide-ambient-transition: 1.2s ease-in-out;
 }
 
 @theme inline {

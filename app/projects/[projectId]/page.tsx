@@ -393,7 +393,9 @@ export default function ProjectPage() {
 
   // EPIC 2: Provide active file content for [RETRY_WITH_FULL_CONTEXT]
   const activeFileContentRef = useRef('');
-  activeFileContentRef.current = activeFileContent;
+  useEffect(() => {
+    activeFileContentRef.current = activeFileContent;
+  }, [activeFileContent]);
   const getActiveFileContent = useCallback(() => {
     return activeFileContentRef.current || null;
   }, []);

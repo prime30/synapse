@@ -2,11 +2,18 @@
 
 import { useMemo } from 'react';
 
+export interface TokenUsageDisplay {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 interface StatusBarProps {
   fileName: string | null;
   content: string;
   language: 'liquid' | 'javascript' | 'css' | 'other';
   filePath?: string | null;
+  /** EPIC 2: Token usage from last AI response */
+  tokenUsage?: TokenUsageDisplay | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -38,7 +45,12 @@ function Divider() {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function StatusBar({ fileName, content, language, filePath }: StatusBarProps) {
+function formatTokenCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return `${n}`;
+}
+
+export function StatusBar({ fileName, content, language, filePath, tokenUsage }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -68,6 +80,16 @@ export function StatusBar({ fileName, content, language, filePath }: StatusBarPr
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* EPIC 2: Token count display */}
+      {tokenUsage && (
+        <>
+          <span className="whitespace-nowrap text-gray-600" title={`Input: ${tokenUsage.inputTokens} tokens, Output: ${tokenUsage.outputTokens} tokens`}>
+            ↑{formatTokenCount(tokenUsage.inputTokens)} ↓{formatTokenCount(tokenUsage.outputTokens)}
+          </span>
+          <Divider />
+        </>
+      )}
 
       {/* Cursor position placeholder */}
       <span className="whitespace-nowrap">Ln 1, Col 1</span>

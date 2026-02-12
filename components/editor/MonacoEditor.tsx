@@ -28,6 +28,10 @@ interface MonacoEditorProps {
   onSelectionChange?: (selectedText: string | null) => void;
   /** Called when user pastes an image – parent can handle "Add as asset" */
   onImagePaste?: (file: File) => void;
+  /** EPIC 5: Called when user triggers "Fix with AI" on a diagnostic */
+  onFixWithAI?: (message: string, line: number) => void;
+  /** EPIC 5: Called with selection position info for quick actions toolbar */
+  onSelectionPosition?: (position: { top: number; left: number; text: string } | null) => void;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -119,6 +123,8 @@ export function MonacoEditor({
   className,
   onSelectionChange,
   onImagePaste,
+  onFixWithAI,
+  onSelectionPosition,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -130,6 +136,12 @@ export function MonacoEditor({
 
   const onSelectionChangeRef = useRef(onSelectionChange);
   useEffect(() => { onSelectionChangeRef.current = onSelectionChange; }, [onSelectionChange]);
+
+  const onFixWithAIRef = useRef(onFixWithAI);
+  useEffect(() => { onFixWithAIRef.current = onFixWithAI; }, [onFixWithAI]);
+
+  const onSelectionPositionRef = useRef(onSelectionPosition);
+  useEffect(() => { onSelectionPositionRef.current = onSelectionPosition; }, [onSelectionPosition]);
 
   /* Feature 12 – paste-dialog state */
   const [pasteDialog, setPasteDialog] = useState<{
@@ -168,6 +180,26 @@ export function MonacoEditor({
         }
         const text = model.getValueInRange(selection);
         onSelectionChangeRef.current(text || null);
+
+        // EPIC 5: Report position for quick actions toolbar
+        if (onSelectionPositionRef.current) {
+          if (!selection || selection.isEmpty()) {
+            onSelectionPositionRef.current(null);
+          } else {
+            if (text && text.trim().length > 0) {
+              const coords = editorInstance.getScrolledVisiblePosition(selection.getStartPosition());
+              if (coords) {
+                onSelectionPositionRef.current({
+                  top: coords.top,
+                  left: coords.left,
+                  text,
+                });
+              }
+            } else {
+              onSelectionPositionRef.current(null);
+            }
+          }
+        }
       });
 
       /* Liquid code-action provider */
@@ -203,7 +235,41 @@ export function MonacoEditor({
                 };
               })
               .filter((x): x is NonNullable<typeof x> => x != null);
+
+            // EPIC 5: "Fix with AI" code action on Liquid diagnostics
+            const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+            const lineMarkers = markers.filter(m =>
+              _range.containsRange(new monaco.Range(m.startLineNumber, m.startColumn, m.endLineNumber, m.endColumn)) ||
+              (m.startLineNumber >= _range.startLineNumber && m.startLineNumber <= _range.endLineNumber)
+            );
+
+            for (const marker of lineMarkers) {
+              actions.push({
+                title: `Fix with AI: ${marker.message.slice(0, 60)}`,
+                kind: 'refactor.ai' as const,
+                diagnostics: [marker],
+                command: {
+                  id: 'synapse.fixWithAI',
+                  title: 'Fix with AI',
+                  arguments: [marker.message, marker.startLineNumber, model.uri.toString()],
+                },
+              });
+            }
+
             return { actions, dispose: () => {} };
+          },
+        });
+
+        // EPIC 5: Register "Fix with AI" command handler
+        editorInstance.addAction({
+          id: 'synapse.fixWithAI',
+          label: 'Fix with AI',
+          run: (_ed, ...args: unknown[]) => {
+            if (onFixWithAIRef.current && args.length >= 1) {
+              const message = args[0] as string;
+              const line = (args[1] as number) ?? 0;
+              onFixWithAIRef.current(message, line);
+            }
           },
         });
       }

@@ -58,7 +58,7 @@ todos:
     status: completed
   - id: epic-16
     content: "EPIC 16: Visual Experience -- Chromatic IDE (color pipeline, CSS injection, component theming, ambient gradient, transitions, settings) + Liquid Flow Visualizer (10 checkpoints: AST->dataflow->graph->canvas->static->particles->visuals->toggle->preview->perf)"
-    status: pending
+    status: completed
 isProject: false
 ---
 

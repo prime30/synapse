@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { CodeBlock } from './CodeBlock';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 import type { Suggestion } from '@/lib/ai/prompt-suggestions';
 import type { AgentMode } from '@/hooks/useAgentSettings';
-import { Square, Search, Paperclip, ChevronDown } from 'lucide-react';
+import type { OutputMode } from '@/lib/ai/signal-detector';
+import { PlanApprovalModal, parsePlanSteps, type PlanStep } from './PlanApprovalModal';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2 } from 'lucide-react';
 
 export interface ChatMessage {
   id: string;
@@ -52,6 +54,18 @@ interface ChatInterfaceProps {
   onSaveCode?: (code: string, fileName: string) => void;
   /** Current editor selection text (for selection injection context) */
   editorSelection?: string | null;
+  /** Current AI action for context-specific loading label */
+  currentAction?: string;
+  /** Number of files being reviewed (used when currentAction is 'review') */
+  reviewFileCount?: number;
+  /** Called when user clicks Clear chat — clears all messages */
+  onClearChat?: () => void;
+  /** Called with generated session summary text when chat is cleared */
+  onSessionSummary?: (summary: string) => void;
+  /** EPIC 2: When true, show "Retry with full context" chip in post-response suggestions */
+  showRetryChip?: boolean;
+  /** EPIC 5: Output rendering mode based on signal detection */
+  outputMode?: OutputMode;
 }
 
 // ── Content renderer with CodeBlock support ────────────────────────────────────
@@ -178,6 +192,58 @@ const MODEL_OPTIONS = [
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast, efficient' },
 ];
 
+// ── Action-specific loading labels ────────────────────────────────────────────
+
+const ACTION_LABELS: Record<string, string> = {
+  analyze: 'Analyzing your request...',
+  generate: 'Generating code...',
+  review: 'Reviewing files...',
+  fix: 'Fixing issues...',
+  explain: 'Explaining...',
+  refactor: 'Refactoring code...',
+  document: 'Generating documentation...',
+  plan: 'Generating plan...',
+  summary: 'Summarizing...',
+};
+
+function getThinkingLabel(action?: string, reviewFileCount?: number): string {
+  if (action === 'review' && reviewFileCount != null) {
+    return `Reviewing ${reviewFileCount} file${reviewFileCount !== 1 ? 's' : ''}...`;
+  }
+  if (action && action in ACTION_LABELS) return ACTION_LABELS[action];
+  return 'Thinking...';
+}
+
+// ── Session summary generator ─────────────────────────────────────────────────
+
+function generateSessionSummary(msgs: ChatMessage[]): string {
+  const decisions: string[] = [];
+  const codeChanges: string[] = [];
+  const openQuestions: string[] = [];
+
+  for (const m of msgs) {
+    if (m.role === 'assistant') {
+      const lower = m.content.toLowerCase();
+      if (lower.includes('decided') || lower.includes('chose') || lower.includes('approach')) {
+        decisions.push(m.content.slice(0, 120).replace(/\n/g, ' '));
+      }
+      if (m.content.includes('```')) {
+        codeChanges.push(`Code block at ${m.timestamp.toLocaleTimeString()}`);
+      }
+    }
+    if (m.content.trim().endsWith('?')) {
+      openQuestions.push(m.content.slice(0, 100).replace(/\n/g, ' '));
+    }
+  }
+
+  const parts: string[] = [];
+  if (decisions.length) parts.push(`Key decisions:\n${decisions.map(d => `  • ${d}`).join('\n')}`);
+  if (codeChanges.length) parts.push(`Code changes:\n${codeChanges.map(c => `  • ${c}`).join('\n')}`);
+  if (openQuestions.length) parts.push(`Open questions:\n${openQuestions.map(q => `  • ${q}`).join('\n')}`);
+
+  return parts.length > 0 ? parts.join('\n\n') : 'No key items found in this session.';
+}
+
 // ── ChatInterface component ───────────────────────────────────────────────────
 
 export function ChatInterface({
@@ -201,11 +267,22 @@ export function ChatInterface({
   onApplyCode,
   onSaveCode,
   editorSelection,
+  currentAction,
+  reviewFileCount,
+  onClearChat,
+  onSessionSummary,
+  showRetryChip = false,
+  outputMode,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputHasText, setInputHasText] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [sessionSummary, setSessionSummary] = useState<string | null>(null);
+  // EPIC 5: track the plan key the user has dismissed so modal won't re-show
+  const [planDismissedKey, setPlanDismissedKey] = useState('');
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -228,6 +305,80 @@ export function ChatInterface({
     };
   }, [showModelPicker]);
 
+  // Derived: last message in the conversation (used by multiple blocks below)
+  const lastMessage = messages[messages.length - 1];
+
+  // ── EPIC 5: Derive plan steps from output mode + last message (no effect) ──
+  const planSteps = useMemo((): PlanStep[] => {
+    if (outputMode === 'plan' && lastMessage?.role === 'assistant') {
+      const steps = parsePlanSteps(lastMessage.content);
+      return steps.length >= 2 ? steps : [];
+    }
+    return [];
+  }, [outputMode, lastMessage]);
+
+  const planKey = planSteps.length > 0
+    ? planSteps.map(s => s.description).join('|')
+    : '';
+  const planModalOpen = planSteps.length > 0 && planDismissedKey !== planKey;
+
+  // ── EPIC 5: Plan modal handlers ──────────────────────────────────────────
+  const handlePlanApprove = (steps: PlanStep[]) => {
+    setPlanDismissedKey(planKey);
+    onSend(`Approved plan. Execute these ${steps.length} steps.`);
+  };
+
+  const handlePlanModify = (feedback: string) => {
+    setPlanDismissedKey(planKey);
+    onSend(`Modify the plan: ${feedback}`);
+  };
+
+  // ── Pin toggle ──────────────────────────────────────────────────────────────
+
+  const togglePin = (id: string) => {
+    setPinnedMessageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // ── Copy as reusable prompt ─────────────────────────────────────────────────
+
+  const handleCopyPrompt = (assistantId: string, index: number) => {
+    const assistantMsg = messages[index];
+    if (!assistantMsg || assistantMsg.role !== 'assistant') return;
+
+    // Find the preceding user message
+    let userMsg: ChatMessage | undefined;
+    for (let i = index - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { userMsg = messages[i]; break; }
+    }
+
+    const text = userMsg
+      ? `Prompt: ${userMsg.content}\nResponse: ${assistantMsg.content}`
+      : `Response: ${assistantMsg.content}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedMessageId(assistantId);
+      setTimeout(() => setCopiedMessageId(null), 1500);
+    });
+  };
+
+  // ── Clear chat with session summary ─────────────────────────────────────────
+
+  const handleClearChat = () => {
+    if (!onClearChat) return;
+    const summary = generateSessionSummary(messages);
+    setSessionSummary(summary);
+    onSessionSummary?.(summary);
+    // Auto-dismiss summary after 5 seconds
+    setTimeout(() => setSessionSummary(null), 5000);
+    onClearChat();
+    setPinnedMessageIds(new Set());
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const raw = inputRef.current?.value?.trim();
@@ -247,7 +398,6 @@ export function ChatInterface({
   // Determine which suggestions to show
   const showPreSuggestions = !inputHasText && messages.length === 0 && !isLoading && contextSuggestions.length > 0;
   const showPostSuggestions = !isLoading && responseSuggestions.length > 0 && messages.length > 0;
-  const lastMessage = messages[messages.length - 1];
   const showPostAfterAssistant = showPostSuggestions && lastMessage?.role === 'assistant';
 
   return (
@@ -258,6 +408,53 @@ export function ChatInterface({
         role="log"
         aria-label="Conversation"
       >
+        {/* Session summary banner (shown briefly on clear) */}
+        {sessionSummary && (
+          <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3 text-xs text-gray-300 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-blue-400 uppercase tracking-wider font-medium">Session Summary</span>
+              <button
+                type="button"
+                onClick={() => setSessionSummary(null)}
+                className="text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <pre className="whitespace-pre-wrap font-sans leading-relaxed">{sessionSummary}</pre>
+          </div>
+        )}
+
+        {/* Pinned messages */}
+        {pinnedMessageIds.size > 0 && messages.some(m => pinnedMessageIds.has(m.id)) && (
+          <div className="sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50 rounded-lg p-2 space-y-1.5">
+            <p className="text-[10px] text-amber-400/80 uppercase tracking-wider px-1 font-medium flex items-center gap-1">
+              <Pin className="h-3 w-3" />
+              Pinned
+            </p>
+            {messages.filter(m => pinnedMessageIds.has(m.id)).map(m => (
+              <div
+                key={`pin-${m.id}`}
+                className={`rounded px-2.5 py-1.5 text-xs leading-relaxed flex items-start justify-between gap-1 ${
+                  m.role === 'user'
+                    ? 'bg-blue-600/10 text-gray-300'
+                    : 'bg-gray-800/40 text-gray-400'
+                }`}
+              >
+                <span className="line-clamp-2">{m.content.replace(/```[\s\S]*?```/g, '[code]')}</span>
+                <button
+                  type="button"
+                  onClick={() => togglePin(m.id)}
+                  className="flex-shrink-0 text-gray-600 hover:text-gray-400 transition-colors"
+                  title="Unpin"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Empty state with contextual suggestions */}
         {messages.length === 0 && !isLoading && (
           <div className="py-4 space-y-4">
@@ -275,44 +472,84 @@ export function ChatInterface({
         )}
 
         {/* Messages */}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
-              m.role === 'user'
-                ? 'bg-blue-600/20 text-gray-100 ml-4'
-                : 'bg-gray-800/60 text-gray-300 mr-4'
-            }`}
-          >
-            {m.role === 'assistant' ? (
-              <>
-                {parseContentSegments(m.content).map((seg, i) =>
-                  seg.type === 'code' ? (
-                    <CodeBlock
-                      key={`code-${i}`}
-                      code={seg.content}
-                      language={seg.language}
-                      fileName={seg.fileName}
-                      onApply={onApplyCode}
-                      onSave={onSaveCode}
-                    />
+        {messages.map((m, idx) => (
+          <div key={m.id} className="group/msg relative">
+            {/* Hover action buttons */}
+            <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10">
+              <button
+                type="button"
+                onClick={() => togglePin(m.id)}
+                className={`rounded p-1 transition-colors ${
+                  pinnedMessageIds.has(m.id)
+                    ? 'text-amber-400 bg-amber-500/10'
+                    : 'text-gray-600 hover:text-gray-300 hover:bg-gray-700/60'
+                }`}
+                title={pinnedMessageIds.has(m.id) ? 'Unpin message' : 'Pin message'}
+              >
+                <Pin className={`h-3 w-3 ${pinnedMessageIds.has(m.id) ? 'fill-current' : ''}`} />
+              </button>
+              {m.role === 'assistant' && (
+                <button
+                  type="button"
+                  onClick={() => handleCopyPrompt(m.id, idx)}
+                  className="rounded p-1 text-gray-600 hover:text-gray-300 hover:bg-gray-700/60 transition-colors"
+                  title="Copy as reusable prompt"
+                >
+                  {copiedMessageId === m.id ? (
+                    <span className="text-[10px] text-green-400 font-medium px-0.5">Copied!</span>
                   ) : (
-                    <React.Fragment key={`text-${i}`}>
-                      {renderTextContent(seg.content)}
-                    </React.Fragment>
-                  )
-                )}
-              </>
-            ) : (
-              m.content
-            )}
+                    <ClipboardCopy className="h-3 w-3" />
+                  )}
+                </button>
+              )}
+            </div>
+
+            <div
+              className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                m.role === 'user'
+                  ? 'bg-blue-600/20 text-gray-100 ml-4'
+                  : 'bg-gray-800/60 text-gray-300 mr-4'
+              } ${pinnedMessageIds.has(m.id) ? 'ring-1 ring-amber-500/30' : ''}`}
+            >
+              {m.role === 'assistant' ? (
+                <>
+                  {parseContentSegments(m.content).map((seg, i) =>
+                    seg.type === 'code' ? (
+                      <CodeBlock
+                        key={`code-${i}`}
+                        code={seg.content}
+                        language={seg.language}
+                        fileName={seg.fileName}
+                        onApply={onApplyCode}
+                        onSave={onSaveCode}
+                      />
+                    ) : (
+                      <React.Fragment key={`text-${i}`}>
+                        {renderTextContent(seg.content)}
+                      </React.Fragment>
+                    )
+                  )}
+                </>
+              ) : (
+                m.content
+              )}
+            </div>
           </div>
         ))}
+
+        {/* EPIC 5: Output mode badge */}
+        {isLoading && outputMode && outputMode !== 'chat' && (
+          <div className="px-3 py-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400">
+              {outputMode === 'plan' ? 'Plan mode' : outputMode === 'review' ? 'Review mode' : outputMode === 'fix' ? 'Fix mode' : outputMode}
+            </span>
+          </div>
+        )}
 
         {/* Loading state */}
         {isLoading && (
           <div className="rounded-lg px-3 py-2 text-sm bg-gray-800/60 text-gray-500 italic">
-            Analyzing your request...
+            {getThinkingLabel(currentAction, reviewFileCount)}
           </div>
         )}
 
@@ -324,6 +561,7 @@ export function ChatInterface({
               suggestions={responseSuggestions}
               onSelect={handleSuggestionSelect}
               variant="post"
+              showRetryChip={showRetryChip}
             />
           </div>
         )}
@@ -451,6 +689,18 @@ export function ChatInterface({
                 <span className="text-[11px] text-gray-500 italic">Stopped</span>
               )}
 
+              {/* Clear chat button */}
+              {onClearChat && !isLoading && messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearChat}
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-gray-500 hover:bg-gray-700/60 hover:text-gray-300 transition-colors"
+                  title="Clear chat"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+
               {/* Review button */}
               {onReview && !isLoading && messages.length > 0 && (
                 <button
@@ -475,6 +725,15 @@ export function ChatInterface({
           </div>
         </form>
       </div>
+
+      {/* EPIC 5: Plan approval modal */}
+      <PlanApprovalModal
+        steps={planSteps}
+        isOpen={planModalOpen}
+        onApprove={handlePlanApprove}
+        onModify={handlePlanModify}
+        onCancel={() => setPlanDismissedKey(planKey)}
+      />
     </div>
   );
 }

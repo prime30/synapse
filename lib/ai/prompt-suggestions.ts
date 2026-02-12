@@ -8,6 +8,8 @@
  * Uses weighted scoring with action history and frequency dampening.
  */
 
+import { getSuggestionStats, getDampeningFactor } from './action-history';
+
 export interface Suggestion {
   id: string;
   label: string;
@@ -37,7 +39,6 @@ export interface SuggestionContext {
 const W_FILE_TYPE = 1.0;
 const W_PATH_PATTERN = 0.9;
 const W_PROJECT_STATE = 0.7;
-const W_RECENCY = 0.8;
 const W_NOVELTY = 0.6;
 const FREQUENCY_PENALTY = 0.5;
 
@@ -111,9 +112,25 @@ interface ResponsePattern {
   detect: (response: string) => boolean;
   /** Priority order (lower = shown first) */
   priority: number;
+  /** Optional reason shown in tooltip (falls back to generic) */
+  reason?: string;
 }
 
 const RESPONSE_PATTERNS: ResponsePattern[] = [
+  // Short response — suggest retry with full context
+  {
+    id: 'post-retry-context',
+    label: 'Retry with full context',
+    prompt: '[RETRY_WITH_FULL_CONTEXT] Retry with full file context',
+    category: 'fix',
+    priority: 1,
+    detect: (r) => {
+      const trimmed = r.trim();
+      return trimmed.length < 200 || trimmed.split('\n').length < 3;
+    },
+    reason: 'The response was brief — retrying with the full file may give better results',
+  },
+
   // Code changes made
   { id: 'post-test', label: 'Test in preview', prompt: 'The changes look good. Let me check the preview to verify everything renders correctly.', category: 'test', priority: 1, detect: (r) => /\b(created|added|updated|modified|changed|wrote)\b/i.test(r) && /\b(file|section|template|snippet|css|javascript)\b/i.test(r) },
   { id: 'post-push', label: 'Push to Shopify', prompt: 'Push these changes to the Shopify dev theme so I can see them live.', category: 'deploy', priority: 2, detect: (r) => /\b(created|added|updated|changed)\b/i.test(r) },
@@ -213,13 +230,22 @@ function generateReason(entry: CatalogEntry, ctx: SuggestionContext): string {
 export function getContextualSuggestions(
   ctx: SuggestionContext,
   recentlyShownIds: Set<string> = new Set(),
+  projectId?: string,
 ): Suggestion[] {
+  // Load suggestion stats for frequency dampening
+  const stats = projectId ? getSuggestionStats(projectId) : {};
+
   const scored = CATALOG
     .map((entry) => ({
       entry,
       score: scoreEntry(entry, ctx, recentlyShownIds),
     }))
     .filter((s) => s.score > 0)
+    .map(({ entry, score }) => ({
+      entry,
+      // Apply dampening factor based on shown/used ratio
+      score: score * getDampeningFactor(stats[entry.id]),
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 4);
 
@@ -241,7 +267,10 @@ export function getResponseSuggestions(
   responseContent: string,
   ctx: SuggestionContext,
   recentlyShownIds: Set<string> = new Set(),
+  projectId?: string,
 ): Suggestion[] {
+  const stats = projectId ? getSuggestionStats(projectId) : {};
+
   const matched = RESPONSE_PATTERNS
     .filter((p) => p.detect(responseContent))
     .sort((a, b) => a.priority - b.priority)
@@ -253,8 +282,8 @@ export function getResponseSuggestions(
       label: p.label,
       prompt: p.prompt,
       category: p.category,
-      score: 10 - p.priority - (recentlyShownIds.has(p.id) ? FREQUENCY_PENALTY : 0),
-      reason: 'Based on the AI response',
+      score: (10 - p.priority - (recentlyShownIds.has(p.id) ? FREQUENCY_PENALTY : 0)) * getDampeningFactor(stats[p.id]),
+      reason: p.reason ?? 'Based on the AI response',
     }))
     .filter((s) => s.score > 0)
     .slice(0, 3);
