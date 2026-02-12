@@ -37,7 +37,7 @@ todos:
     status: completed
   - id: epic-9
     content: "EPIC 9: 1.0 Completeness -- asset browser, template composer + block reorderer, mock preview data, inline comments, deploy approval with AI pre-flight gate, metafield CRUD, performance scoring, image optimization + UI panel, a11y checker, locale preview"
-    status: pending
+    status: completed
   - id: epic-10
     content: "EPIC 10: Store Management -- OAuth Phase 1 scopes (themes, content, navigation, files, discounts, inventory, products), GraphQL client, orders, inventory, navigation, files, discounts, pages, storefront preview bridge"
     status: pending
@@ -46,10 +46,10 @@ todos:
     status: pending
   - id: epic-12
     content: "EPIC 12: Ambient Intelligence -- session intent graph, useAmbientIntelligence hook, AmbientBar, nudge feedback loop, one-click resolutions"
-    status: pending
+    status: completed
   - id: epic-13
     content: "EPIC 13: Intent Completion -- action stream, workflow patterns, intent matcher, IntentCompletionPanel, BatchDiffModal, auto-complete learning"
-    status: pending
+    status: completed
   - id: epic-14
     content: "EPIC 14: Developer Memory -- data model + migration, convention detector, decision extractor, preference learner, Layer 8 injection, memory panel UI"
     status: pending
