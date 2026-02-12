@@ -71,6 +71,7 @@ export function FeatureDeepDive() {
 
   return (
     <section
+      id="features"
       ref={ref}
       className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
     >
