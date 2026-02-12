@@ -1,0 +1,9 @@
+export { default as HeroSectionV2 } from './HeroSectionV2';
+export { default as ProblemSection } from './ProblemSection';
+export { ValuePropsV2 } from './ValuePropsV2';
+export { FeatureDeepDive } from './FeatureDeepDive';
+export { HowItWorksV2 } from './HowItWorksV2';
+export { default as MetricsStrip } from './MetricsStrip';
+export { default as FAQSection } from './FAQSection';
+export { default as FinalCTAV2 } from './FinalCTAV2';
+export { default as FooterV2 } from './FooterV2';
