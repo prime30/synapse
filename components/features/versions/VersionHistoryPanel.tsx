@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { FileVersion } from '@/lib/types/version';
 import { VersionListItem } from './VersionListItem';
 import { UndoRedoButtons } from './UndoRedoButtons';
+import { ConflictModal } from './ConflictModal';
 
 interface VersionHistoryPanelProps {
   versions: FileVersion[];
@@ -15,15 +16,21 @@ interface VersionHistoryPanelProps {
   isUndoing?: boolean;
   isRedoing?: boolean;
   isRestoring?: boolean;
+  /** Optional: when the restore API returns a conflict, set this to show the ConflictModal. */
+  conflict?: { serverVersion: number; clientVersion: number } | null;
+  /** Called when the user clicks "Force Overwrite" in the conflict modal. */
+  onForceOverwrite?: () => void;
+  /** Called when the user dismisses the conflict modal. */
+  onConflictDismiss?: () => void;
 }
 
 function SkeletonItem() {
   return (
     <div className="flex items-start gap-3 px-3 py-2 animate-pulse">
-      <div className="w-8 h-8 rounded-full bg-gray-700" />
+      <div className="w-8 h-8 rounded-full ide-surface-inset" />
       <div className="flex-1 space-y-2">
-        <div className="h-4 bg-gray-700 rounded w-24" />
-        <div className="h-3 bg-gray-700 rounded w-16" />
+        <div className="h-4 ide-surface-inset rounded w-24" />
+        <div className="h-3 ide-surface-inset rounded w-16" />
       </div>
     </div>
   );
@@ -39,6 +46,9 @@ export function VersionHistoryPanel({
   isUndoing = false,
   isRedoing = false,
   isRestoring = false,
+  conflict = null,
+  onForceOverwrite,
+  onConflictDismiss,
 }: VersionHistoryPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -50,18 +60,18 @@ export function VersionHistoryPanel({
   );
 
   return (
-    <div className="border border-gray-700 rounded-lg bg-gray-900/50">
+    <div className="border ide-border rounded-lg ide-surface-panel">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-t-lg transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium ide-text ide-hover rounded-t-lg transition-colors"
       >
         <span>Version History</span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
-          className={`w-4 h-4 text-gray-400 transition-transform ${
+          className={`w-4 h-4 ide-text-muted transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
         >
@@ -76,7 +86,7 @@ export function VersionHistoryPanel({
       {isOpen && (
         <div className="px-4 pb-4">
           {/* Undo / Redo controls */}
-          <div className="mb-3 pt-1 border-t border-gray-700">
+          <div className="mb-3 pt-1 border-t ide-border">
             <div className="pt-3">
               <UndoRedoButtons
                 currentVersion={currentVersion}
@@ -98,7 +108,7 @@ export function VersionHistoryPanel({
               <SkeletonItem />
             </div>
           ) : sortedVersions.length === 0 ? (
-            <div className="text-center py-6 text-sm text-gray-500">
+            <div className="text-center py-6 text-sm ide-text-muted">
               No version history yet
             </div>
           ) : (
@@ -116,6 +126,17 @@ export function VersionHistoryPanel({
           )}
         </div>
       )}
+
+      {/* TODO: Wire conflict detection into the restore API response.
+          The parent should set `conflict` prop when restore returns a 409/version-mismatch,
+          and handle `onForceOverwrite` to retry with force flag. */}
+      <ConflictModal
+        isOpen={conflict !== null}
+        serverVersion={conflict?.serverVersion ?? 0}
+        clientVersion={conflict?.clientVersion ?? currentVersion}
+        onForceOverwrite={() => onForceOverwrite?.()}
+        onCancel={() => onConflictDismiss?.()}
+      />
     </div>
   );
 }

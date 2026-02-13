@@ -75,7 +75,7 @@ export function ValuePropsV2() {
             return (
               <motion.div
                 key={card.title}
-                className="rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-8 flex flex-col"
+                className="rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 md:p-8 flex flex-col"
                 initial={{ opacity: 0, y: 24 }}
                 animate={
                   inView

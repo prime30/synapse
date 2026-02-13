@@ -47,6 +47,7 @@ function parseTemplateJson(raw: Record<string, unknown>): TemplateLayout {
     .filter((key) => key in sectionsMap)
     .map((key) => {
       const entry = sectionsMap[key];
+      if (!entry || typeof entry !== 'object') return null;
       const blocksMap = entry.blocks ?? {};
       const blockOrder = entry.block_order ?? Object.keys(blocksMap);
 
@@ -64,7 +65,8 @@ function parseTemplateJson(raw: Record<string, unknown>): TemplateLayout {
         settings: entry.settings ?? {},
         blocks,
       };
-    });
+    })
+    .filter((s): s is TemplateSection => s !== null);
 
   return { sections, rawJson: raw };
 }

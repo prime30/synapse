@@ -84,7 +84,7 @@ function ScoreGauge({ score }: { score: number }) {
           fill="none"
           stroke="currentColor"
           strokeWidth="8"
-          className="text-gray-800"
+          className="text-stone-200 dark:text-white/10"
         />
         <circle
           cx="64"
@@ -102,7 +102,7 @@ function ScoreGauge({ score }: { score: number }) {
         <span className={`text-3xl font-bold tabular-nums ${scoreColor(score)}`}>
           {score}
         </span>
-        <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+        <span className="text-[10px] ide-text-muted uppercase tracking-wider">
           {scoreLabel(score)}
         </span>
       </div>
@@ -123,25 +123,25 @@ function CategoryRow({
   const meta = CATEGORY_META[category];
 
   return (
-    <div className="border border-gray-800 rounded-lg overflow-hidden">
+    <div className="border ide-border rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800/50 transition-colors"
+        className="w-full flex items-center gap-3 px-3 py-2.5 ide-hover transition-colors"
       >
         {expanded ? (
-          <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+          <ChevronDown className="w-3.5 h-3.5 ide-text-muted flex-shrink-0" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 ide-text-muted flex-shrink-0" />
         )}
-        <span className="text-gray-400 flex-shrink-0">{meta.icon}</span>
-        <span className="text-xs font-medium text-gray-200 flex-1 text-left">
+        <span className="ide-text-muted flex-shrink-0">{meta.icon}</span>
+        <span className="text-xs font-medium ide-text flex-1 text-left">
           {meta.label}
         </span>
         <span className={`text-xs font-semibold tabular-nums ${scoreColor(score)}`}>
           {score}
         </span>
-        <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden flex-shrink-0">
+        <div className="w-20 h-1.5 ide-surface-inset rounded-full overflow-hidden flex-shrink-0">
           <div
             className={`h-full rounded-full ${scoreBg(score)} transition-all duration-500`}
             style={{ width: `${score}%` }}
@@ -150,7 +150,7 @@ function CategoryRow({
       </button>
 
       {expanded && findings.length > 0 && (
-        <div className="border-t border-gray-800 divide-y divide-gray-800/60">
+        <div className="border-t ide-border divide-y ide-border">
           {findings.map((f, i) => (
             <div key={`${f.rule}-${i}`} className="px-4 py-2 flex items-start gap-2">
               {f.score >= 70 ? (
@@ -159,12 +159,12 @@ function CategoryRow({
                 <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 mt-0.5 flex-shrink-0" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-300">{f.message}</p>
+                <p className="text-xs ide-text">{f.message}</p>
                 {f.recommendation && (
-                  <p className="text-[11px] text-gray-500 mt-0.5">{f.recommendation}</p>
+                  <p className="text-[11px] ide-text-muted mt-0.5">{f.recommendation}</p>
                 )}
                 {f.file && (
-                  <p className="text-[10px] text-gray-600 mt-0.5 font-mono truncate">
+                  <p className="text-[10px] ide-text-quiet mt-0.5 font-mono truncate">
                     {f.file}
                   </p>
                 )}
@@ -208,12 +208,12 @@ export function PerformanceDashboard({ files }: PerformanceDashboardProps) {
   ).filter((c) => c !== 'network-requests'); // hide placeholder category
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+    <div className="flex flex-col h-full ide-surface ide-text">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-700">
+      <div className="px-4 py-3 border-b ide-border">
         <div className="flex items-center gap-2">
-          <Gauge className="w-4 h-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-200">Performance</h2>
+          <Gauge className="w-4 h-4 ide-text-muted" />
+          <h2 className="text-sm font-semibold ide-text">Performance</h2>
         </div>
       </div>
 
@@ -222,7 +222,7 @@ export function PerformanceDashboard({ files }: PerformanceDashboardProps) {
         {/* Score gauge */}
         <div className="flex flex-col items-center gap-2">
           <ScoreGauge score={report.overallScore} />
-          <p className="text-[10px] text-gray-500">
+          <p className="text-[10px] ide-text-muted">
             Analyzed {files.length} files &middot;{' '}
             {new Date(report.analyzedAt).toLocaleTimeString()}
           </p>
@@ -230,7 +230,7 @@ export function PerformanceDashboard({ files }: PerformanceDashboardProps) {
 
         {/* Category breakdown */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider px-1">
+          <h3 className="text-xs font-medium ide-text-muted uppercase tracking-wider px-1">
             Category Breakdown
           </h3>
           {categories.map((cat) => (
@@ -249,7 +249,7 @@ export function PerformanceDashboard({ files }: PerformanceDashboardProps) {
             {
               label: 'Findings',
               value: report.findings.length,
-              color: 'text-gray-300',
+              color: 'ide-text',
             },
             {
               label: 'Issues',
@@ -264,12 +264,12 @@ export function PerformanceDashboard({ files }: PerformanceDashboardProps) {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="text-center px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-800"
+              className="text-center px-2 py-2 rounded-lg ide-surface-panel border ide-border"
             >
               <p className={`text-lg font-bold tabular-nums ${stat.color}`}>
                 {stat.value}
               </p>
-              <p className="text-[10px] text-gray-500">{stat.label}</p>
+              <p className="text-[10px] ide-text-muted">{stat.label}</p>
             </div>
           ))}
         </div>

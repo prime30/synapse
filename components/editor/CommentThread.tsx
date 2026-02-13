@@ -66,7 +66,7 @@ function Avatar({ author }: { author?: CodeComment['author'] }) {
   }
 
   return (
-    <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-[10px] font-medium text-gray-200">
+    <div className="w-7 h-7 rounded-full ide-surface-inset flex items-center justify-center text-[10px] font-medium ide-text-2">
       {author?.display_name ? getInitials(author.display_name) : <User className="w-3.5 h-3.5" />}
     </div>
   );
@@ -115,12 +115,12 @@ function CommentItem({
       <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="font-medium text-gray-200 truncate">
+          <span className="font-medium ide-text-2 truncate">
             {comment.author?.display_name ?? 'Unknown'}
           </span>
-          <span className="text-gray-500 shrink-0">{relativeTime(comment.created_at)}</span>
+          <span className="ide-text-muted shrink-0">{relativeTime(comment.created_at)}</span>
           {isTopLevel && comment.resolved && (
-            <span className="flex items-center gap-0.5 text-green-400 text-[10px]">
+            <span className="flex items-center gap-0.5 text-accent text-[10px]">
               <Check className="w-3 h-3" /> Resolved
             </span>
           )}
@@ -130,7 +130,7 @@ function CommentItem({
         {editing ? (
           <div className="mt-1">
             <textarea
-              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-100 resize-none focus:outline-none focus:border-blue-500"
+              className="w-full ide-surface-input border ide-border rounded px-2 py-1 text-sm ide-text resize-none focus:outline-none focus:border-sky-500 dark:focus:border-sky-400"
               rows={2}
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
@@ -140,21 +140,21 @@ function CommentItem({
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors"
+                className="px-2 py-0.5 bg-sky-500 hover:bg-sky-600 text-white text-xs rounded transition-colors"
               >
                 Save
               </button>
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-gray-200 text-xs rounded transition-colors"
+                className="px-2 py-0.5 ide-surface-input ide-text-2 hover:ide-text ide-hover text-xs rounded transition-colors"
               >
                 Cancel
               </button>
             </div>
           </div>
         ) : (
-          <p className="mt-0.5 text-sm text-gray-300 whitespace-pre-wrap break-words">
+          <p className="mt-0.5 text-sm ide-text-2 whitespace-pre-wrap break-words">
             {comment.content}
           </p>
         )}
@@ -165,7 +165,7 @@ function CommentItem({
             <button
               type="button"
               onClick={() => onReply(comment.parent_id ?? comment.id)}
-              className="flex items-center gap-0.5 text-gray-500 hover:text-gray-300 text-xs transition-colors"
+              className="flex items-center gap-0.5 ide-text-muted hover:ide-text-2 text-xs transition-colors"
             >
               <Reply className="w-3 h-3" /> Reply
             </button>
@@ -178,14 +178,14 @@ function CommentItem({
                     setEditContent(comment.content);
                     setEditing(true);
                   }}
-                  className="flex items-center gap-0.5 text-gray-500 hover:text-gray-300 text-xs transition-colors"
+                  className="flex items-center gap-0.5 ide-text-muted hover:ide-text-2 text-xs transition-colors"
                 >
                   <Pencil className="w-3 h-3" /> Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onDelete(comment.id)}
-                  className="flex items-center gap-0.5 text-gray-500 hover:text-red-400 text-xs transition-colors"
+                  className="flex items-center gap-0.5 ide-text-muted hover:text-red-500 dark:hover:text-red-400 text-xs transition-colors"
                 >
                   <Trash2 className="w-3 h-3" /> Delete
                 </button>
@@ -198,8 +198,8 @@ function CommentItem({
                 onClick={() => onResolve(comment.id)}
                 className={`flex items-center gap-0.5 text-xs transition-colors ${
                   comment.resolved
-                    ? 'text-green-400 hover:text-green-300'
-                    : 'text-gray-500 hover:text-green-400'
+                    ? 'text-accent hover:opacity-80'
+                    : 'ide-text-muted hover:text-accent'
                 }`}
               >
                 <Check className="w-3 h-3" />
@@ -234,7 +234,7 @@ function ReplyForm({
   return (
     <div className="mt-2 ml-9">
       <textarea
-        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100 resize-none focus:outline-none focus:border-blue-500 placeholder-gray-500"
+        className="w-full ide-surface-input border ide-border rounded px-2 py-1.5 text-sm ide-text resize-none focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 placeholder-ide-text-muted"
         rows={2}
         placeholder="Write a reply..."
         value={content}
@@ -252,14 +252,14 @@ function ReplyForm({
           type="button"
           onClick={handleSubmit}
           disabled={!content.trim()}
-          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded transition-colors"
+          className="px-2 py-0.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded transition-colors"
         >
           Submit
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-gray-200 text-xs rounded transition-colors"
+          className="px-2 py-0.5 ide-surface-input ide-text-2 hover:ide-text ide-hover text-xs rounded transition-colors"
         >
           Cancel
         </button>
@@ -291,7 +291,7 @@ export default function CommentThread({
 
   if (comments.length === 0) {
     return (
-      <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
+      <div className="flex items-center gap-2 p-4 text-sm ide-text-muted">
         <MessageSquare className="w-4 h-4" />
         No comments on this line
       </div>
@@ -299,7 +299,7 @@ export default function CommentThread({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg bg-gray-800 border border-gray-700 p-3">
+    <div className="flex flex-col gap-3 rounded-lg ide-surface-panel border ide-border p-3">
       {comments.map((topComment) => (
         <div key={topComment.id}>
           {/* Top-level comment */}
@@ -315,7 +315,7 @@ export default function CommentThread({
 
           {/* Threaded replies */}
           {topComment.replies && topComment.replies.length > 0 && (
-            <div className="ml-9 mt-2 flex flex-col gap-2 border-l border-gray-700 pl-3">
+            <div className="ml-9 mt-2 flex flex-col gap-2 border-l ide-border pl-3">
               {topComment.replies.map((reply) => (
                 <CommentItem
                   key={reply.id}

@@ -61,8 +61,8 @@ export default function InlineComments({ comments, onLineClick }: InlineComments
             transition-colors duration-150 cursor-pointer
             ${
               group.resolved
-                ? 'text-gray-500 hover:text-gray-300 bg-gray-900/50'
-                : 'text-blue-400 hover:text-blue-300 bg-gray-900/80'
+                ? 'ide-text-muted hover:ide-text-2 ide-surface-input'
+                : 'text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 ide-surface-panel'
             }
           `}
         >

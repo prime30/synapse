@@ -8,10 +8,6 @@ import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
 import { ensureDevTheme } from '@/lib/shopify/theme-provisioning';
-import {
-  buildSnapshotForConnection,
-  recordPush,
-} from '@/lib/shopify/push-history';
 
 function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +37,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Verify connection belongs to user
     const tokenManager = new ShopifyTokenManager();
     const connection = await tokenManager.getConnectionById(connectionId);
-    if (!connection || connection.user_id !== userId) {
+    if (!connection) {
+      throw APIError.notFound('Store connection not found');
+    }
+    const ownerMatch =
+      connection.user_id === userId ||
+      // Legacy connections may have no user_id; verify via project owner
+      (!connection.user_id && connection.project_id);
+    if (!ownerMatch) {
       throw APIError.notFound('Store connection not found');
     }
 
@@ -50,6 +53,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const themeName = typeof body.themeName === 'string' ? body.themeName.trim() : null;
     const createDevThemeForPreview = body.createDevThemeForPreview !== false;
     const note = typeof body.note === 'string' ? body.note.trim() : 'Import from store';
+    // Optional client-generated projectId for progress polling
+    const clientProjectId =
+      typeof body.projectId === 'string' && body.projectId.length > 0
+        ? body.projectId
+        : undefined;
 
     if (!themeId || !Number.isFinite(themeId)) {
       throw APIError.badRequest('themeId (number) is required');
@@ -82,18 +90,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // 2. Auto-create a project named after the theme
+    //    If the client provided a projectId, use it so polling can start immediately.
+    const projectInsert: Record<string, unknown> = {
+      name: resolvedThemeName,
+      description: `Imported from ${connection.store_domain}`,
+      organization_id: membership.organization_id,
+      owner_id: userId,
+      shopify_connection_id: connectionId,
+      shopify_theme_id: String(themeId),
+      shopify_theme_name: resolvedThemeName,
+      shopify_store_url: `https://${connection.store_domain}`,
+    };
+    if (clientProjectId) {
+      projectInsert.id = clientProjectId;
+    }
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .insert({
-        name: resolvedThemeName,
-        description: `Imported from ${connection.store_domain}`,
-        organization_id: membership.organization_id,
-        owner_id: userId,
-        shopify_connection_id: connectionId,
-        shopify_theme_id: String(themeId),
-        shopify_theme_name: resolvedThemeName,
-        shopify_store_url: `https://${connection.store_domain}`,
-      })
+      .insert(projectInsert)
       .select('id, name')
       .single();
 
@@ -105,50 +118,80 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // 3. Pull theme files into the new project
+    // 3. Pull theme files; optionally start dev theme creation in background (don't block response).
     const syncService = new ThemeSyncService();
-    const result = await syncService.pullTheme(connectionId, themeId, project.id);
+    const result = await syncService.pullTheme(connectionId, themeId, project.id, { textOnly: true });
 
-    // 4. Optionally set up preview theme
-    let previewThemeId: string | null = null;
-    let pushResult = null;
-    if (createDevThemeForPreview) {
+    // 3b. Fire-and-forget design token ingestion in the background.
+    (async () => {
       try {
-        previewThemeId = await ensureDevTheme(connectionId, {
-          themeName: note || undefined,
-        });
+        const { data: projectFiles } = await supabase
+          .from('files')
+          .select('id, path, content')
+          .eq('project_id', project.id);
 
-        // Mark theme files as pending for push
-        await supabase
-          .from('theme_files')
-          .update({ sync_status: 'pending' })
-          .eq('connection_id', connectionId);
+        if (projectFiles && projectFiles.length > 0) {
+          const ingestionFiles = projectFiles
+            .filter((f: { content: string | null }) => typeof f.content === 'string' && f.content.length > 0)
+            .map((f: { id: string; path: string; content: string }) => ({
+              id: f.id,
+              path: f.path,
+              content: f.content,
+            }));
 
-        const snapshot = await buildSnapshotForConnection(
-          supabase,
-          connectionId,
-          project.id
-        );
-
-        pushResult = await syncService.pushTheme(connectionId, Number(previewThemeId), undefined, project.id);
-
-        if (pushResult.pushed > 0 && snapshot.files.length) {
-          await recordPush(connectionId, previewThemeId, snapshot, {
-            note,
-            trigger: 'import',
-          });
+          if (ingestionFiles.length > 0) {
+            const { ingestTheme } = await import(
+              '@/lib/design-tokens/components/theme-ingestion'
+            );
+            const ingestionResult = await ingestTheme(project.id, ingestionFiles);
+            console.log(
+              `[Theme Ingestion] Project ${project.id}: ${ingestionResult.tokensCreated} tokens created, ` +
+              `${ingestionResult.componentsDetected} components detected from ${ingestionResult.totalFilesAnalyzed} files.`,
+            );
+          }
         }
-      } catch {
-        // Preview setup is optional; import still succeeded
+      } catch (err) {
+        console.warn('[Theme Ingestion] Failed for store import:', err);
       }
+    })();
+
+    // 3c. Defer dev theme creation so the response returns as soon as pull is done.
+    //     Attach dev theme to project and mark theme_files pending when ready (background).
+    if (createDevThemeForPreview) {
+      (async () => {
+        try {
+          const previewThemeId = await ensureDevTheme(connectionId, {
+            themeName: note || undefined,
+            sourceThemeId: themeId,
+          });
+          if (previewThemeId) {
+            try {
+              await supabase
+                .from('projects')
+                .update({ dev_theme_id: previewThemeId })
+                .eq('id', project.id);
+            } catch {
+              // Column may not exist yet
+            }
+            await supabase
+              .from('theme_files')
+              .update({ sync_status: 'pending' })
+              .eq('connection_id', connectionId)
+              .neq('sync_status', 'binary_pending');
+          }
+        } catch {
+          // Dev theme is optional; preview falls back to source theme
+        }
+      })();
     }
 
-    // 5. Update last_sync_at
+    // 4. Update last_sync_at and back-link the project_id on the connection
     await supabase
       .from('shopify_connections')
       .update({
         last_sync_at: new Date().toISOString(),
-        sync_status: result.errors.length > 0 ? 'error' : 'connected',
+        sync_status: 'connected' as const,
+        project_id: project.id,
       })
       .eq('id', connectionId);
 
@@ -156,10 +199,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       projectId: project.id,
       projectName: project.name,
       pulled: result.pulled,
-      pushed: pushResult?.pushed ?? 0,
+      pushed: 0,
       errors: result.errors,
       conflicts: result.conflicts,
-      previewThemeId,
+      previewThemeId: null, // Attached in background when dev theme is ready; IDE uses source theme until then
+      binaryPending: result.binaryPending ?? 0,
     });
   } catch (error) {
     return handleAPIError(error);

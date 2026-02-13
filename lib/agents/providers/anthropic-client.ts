@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use `lib/ai/providers/anthropic.ts` (AIProviderInterface) instead.
+ * This file is kept for backward compatibility but is no longer used by the Agent base class.
+ */
+
 export interface AIProviderClient {
   generateResponse(
     prompt: string,
@@ -7,11 +12,10 @@ export interface AIProviderClient {
 }
 
 /**
- * Anthropic Claude client for agent execution.
- * Uses Claude Opus 4.6 (claude-opus-4-20250514) for PM and specialist agents.
+ * @deprecated Use `createAnthropicProvider()` from `lib/ai/providers/anthropic.ts` instead.
  */
 export function createAnthropicClient(
-  model = 'claude-opus-4-20250514'
+  model = 'claude-sonnet-4-20250514'
 ): AIProviderClient {
   return {
     async generateResponse(

@@ -88,12 +88,6 @@ export function SocialProofStrip() {
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes stats-shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
     </section>
   );
 }

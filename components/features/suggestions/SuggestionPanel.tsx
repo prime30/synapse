@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { SuggestionCard } from './SuggestionCard';
+import { DiffPreview } from './DiffPreview';
+import { SuggestionHistory } from './SuggestionHistory';
 import type { SuggestionStatus } from '@/lib/types/suggestion';
 
 interface SuggestionPanelProps {
@@ -11,7 +13,7 @@ interface SuggestionPanelProps {
   onGenerate?: () => void;
 }
 
-type FilterStatus = 'all' | 'pending' | 'applied';
+type FilterStatus = 'all' | 'pending' | 'applied' | 'history';
 
 function SkeletonCard() {
   return (
@@ -39,6 +41,7 @@ export function SuggestionPanel({
 }: SuggestionPanelProps) {
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | undefined>(undefined);
+  const [viewingDiffId, setViewingDiffId] = useState<string | null>(null);
 
   const {
     suggestions,
@@ -46,14 +49,16 @@ export function SuggestionPanel({
     generate,
     apply,
     reject,
+    undo,
     refetch,
     isGenerating,
     isApplying,
     isRejecting,
+    isUndoing,
   } = useSuggestions({
     projectId,
     fileId,
-    status: statusFilter,
+    status: filter === 'history' ? undefined : statusFilter,
   });
 
   const handleGenerate = async () => {
@@ -85,9 +90,25 @@ export function SuggestionPanel({
     }
   };
 
+  const handleUndo = useCallback(
+    async (id: string) => {
+      try {
+        await undo(id);
+        await refetch();
+      } catch (error) {
+        console.error('Failed to undo suggestion:', error);
+      }
+    },
+    [undo, refetch]
+  );
+
   // When filter is 'all', statusFilter is undefined so API returns all suggestions
   // When filter is 'pending' or 'applied', statusFilter matches filter so API already filtered
   const filteredSuggestions = suggestions;
+
+  const viewingDiff = viewingDiffId
+    ? suggestions.find((s) => s.id === viewingDiffId)
+    : null;
 
   return (
     <div className="flex flex-col h-full border-l border-gray-700 bg-gray-900">
@@ -95,7 +116,7 @@ export function SuggestionPanel({
       <div className="px-4 py-3 border-b border-gray-700">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-200">Suggestions</h2>
-          {fileId && (
+          {fileId && filter !== 'history' && (
             <button
               type="button"
               onClick={handleGenerate}
@@ -109,13 +130,18 @@ export function SuggestionPanel({
 
         {/* Filter tabs */}
         <div className="flex items-center gap-1">
-          {(['all', 'pending', 'applied'] as FilterStatus[]).map((f) => (
+          {(['all', 'pending', 'applied', 'history'] as FilterStatus[]).map((f) => (
             <button
               key={f}
               type="button"
               onClick={() => {
                 setFilter(f);
-                setStatusFilter(f === 'all' ? undefined : (f as SuggestionStatus));
+                setViewingDiffId(null);
+                if (f === 'history') {
+                  setStatusFilter(undefined);
+                } else {
+                  setStatusFilter(f === 'all' ? undefined : (f as SuggestionStatus));
+                }
               }}
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 filter === f
@@ -129,9 +155,37 @@ export function SuggestionPanel({
         </div>
       </div>
 
+      {/* Diff preview drawer */}
+      {viewingDiff && (
+        <div className="border-b border-gray-700">
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/60">
+            <span className="text-xs font-medium text-gray-300">Diff Preview</span>
+            <button
+              type="button"
+              onClick={() => setViewingDiffId(null)}
+              className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+          <div className="max-h-64 overflow-auto">
+            <DiffPreview
+              originalCode={viewingDiff.original_code}
+              suggestedCode={viewingDiff.suggested_code}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading ? (
+        {filter === 'history' ? (
+          <SuggestionHistory
+            suggestions={suggestions}
+            onUndo={handleUndo}
+            isUndoing={isUndoing}
+          />
+        ) : isLoading ? (
           <>
             <SkeletonCard />
             <SkeletonCard />
@@ -152,14 +206,29 @@ export function SuggestionPanel({
           </div>
         ) : (
           filteredSuggestions.map((suggestion) => (
-            <SuggestionCard
-              key={suggestion.id}
-              suggestion={suggestion}
-              onAccept={handleAccept}
-              onReject={handleReject}
-              isApplying={isApplying}
-              isRejecting={isRejecting}
-            />
+            <div key={suggestion.id}>
+              <SuggestionCard
+                suggestion={suggestion}
+                onAccept={handleAccept}
+                onReject={handleReject}
+                isApplying={isApplying}
+                isRejecting={isRejecting}
+              />
+              {/* View diff link */}
+              {(suggestion.original_code || suggestion.suggested_code) && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setViewingDiffId(
+                      viewingDiffId === suggestion.id ? null : suggestion.id
+                    )
+                  }
+                  className="mt-1 px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {viewingDiffId === suggestion.id ? 'Hide diff' : 'View diff'}
+                </button>
+              )}
+            </div>
           ))
         )}
       </div>

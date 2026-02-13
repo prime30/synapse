@@ -38,7 +38,7 @@ export function CTASection() {
 
   const handleCtaAction = useCallback(() => {
     if (isAuthenticated) {
-      router.push('/projects');
+      router.push('/onboarding');
       return;
     }
     openAuthModal('signup');
@@ -91,7 +91,7 @@ export function CTASection() {
                   onClick={handleCtaAction}
                   className="h-12 px-8 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
                 >
-                  {isAuthenticated ? 'See Projects' : 'Sign up'}
+                  {isAuthenticated ? 'Open Editor' : 'Start Free'}
                 </button>
               </MagneticElement>
             </motion.div>

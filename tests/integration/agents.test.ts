@@ -93,42 +93,42 @@ describe('Agent Instances', () => {
   it('should create ProjectManagerAgent with correct config', () => {
     const pm = new ProjectManagerAgent();
     expect(pm.type).toBe('project_manager');
-    expect(pm.provider).toBe('anthropic');
+    expect(pm.defaultProvider).toBe('anthropic');
     expect(pm.getSystemPrompt()).toBe(PROJECT_MANAGER_PROMPT);
   });
 
   it('should create LiquidAgent with correct config', () => {
     const agent = new LiquidAgent();
     expect(agent.type).toBe('liquid');
-    expect(agent.provider).toBe('anthropic');
+    expect(agent.defaultProvider).toBe('anthropic');
     expect(agent.getSystemPrompt()).toBe(LIQUID_AGENT_PROMPT);
   });
 
   it('should create JavaScriptAgent with correct config', () => {
     const agent = new JavaScriptAgent();
     expect(agent.type).toBe('javascript');
-    expect(agent.provider).toBe('anthropic');
+    expect(agent.defaultProvider).toBe('anthropic');
     expect(agent.getSystemPrompt()).toBe(JAVASCRIPT_AGENT_PROMPT);
   });
 
   it('should create CSSAgent with correct config', () => {
     const agent = new CSSAgent();
     expect(agent.type).toBe('css');
-    expect(agent.provider).toBe('anthropic');
+    expect(agent.defaultProvider).toBe('anthropic');
     expect(agent.getSystemPrompt()).toBe(CSS_AGENT_PROMPT);
   });
 
   it('should create ReviewAgent with correct config', () => {
     const agent = new ReviewAgent();
     expect(agent.type).toBe('review');
-    expect(agent.provider).toBe('openai');
+    expect(agent.defaultProvider).toBe('openai');
     expect(agent.getSystemPrompt()).toBe(REVIEW_AGENT_PROMPT);
   });
 });
 
 describe('System Prompts', () => {
   it('should have version identifiers', () => {
-    expect(PROJECT_MANAGER_PROMPT).toContain('Version: 1.0.0');
+    expect(PROJECT_MANAGER_PROMPT).toContain('Version: 1.1.0');
     expect(LIQUID_AGENT_PROMPT).toContain('Version: 1.0.0');
     expect(JAVASCRIPT_AGENT_PROMPT).toContain('Version: 1.0.0');
     expect(CSS_AGENT_PROMPT).toContain('Version: 1.0.0');

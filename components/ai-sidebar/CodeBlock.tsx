@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import { useTheme } from '@/hooks/useTheme';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Copy,
@@ -28,6 +30,10 @@ interface CodeBlockProps {
   onApply?: (code: string, fileId: string, fileName: string) => void;
   /** Called when user clicks Save — saves code as new file */
   onSave?: (code: string, fileName: string) => void;
+  /** Previous content of the file (used for undo after apply) */
+  previousContent?: string;
+  /** Called to undo the apply (restore previous content) */
+  onUndoApply?: (fileId: string, previousContent: string) => void;
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
@@ -49,9 +55,13 @@ export function CodeBlock({
   fileId,
   onApply,
   onSave,
+  previousContent,
+  onUndoApply,
 }: CodeBlockProps) {
+  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [showDiffPreview, setShowDiffPreview] = useState(false);
+  const [showUndoToast, setShowUndoToast] = useState(false);
 
   const highlightLanguage = mapLanguage(language);
   const canApply = Boolean(fileId && fileName && onApply);
@@ -76,9 +86,14 @@ export function CodeBlock({
   const handleConfirmApply = useCallback(() => {
     if (onApply && fileId && fileName) {
       onApply(code, fileId, fileName);
+      // Show undo toast for 5 seconds
+      if (previousContent !== undefined && onUndoApply) {
+        setShowUndoToast(true);
+        setTimeout(() => setShowUndoToast(false), 5000);
+      }
     }
     setShowDiffPreview(false);
-  }, [onApply, code, fileId, fileName]);
+  }, [onApply, code, fileId, fileName, previousContent, onUndoApply]);
 
   const handleCancelApply = useCallback(() => {
     setShowDiffPreview(false);
@@ -97,12 +112,12 @@ export function CodeBlock({
   /* ── Render ────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="group/codeblock relative my-2 rounded-lg border border-gray-800 bg-gray-900 overflow-hidden">
+    <div className="group/codeblock relative my-2 rounded-lg border ide-border ide-surface-panel overflow-hidden">
       {/* ── Header / action bar ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/80 px-3 py-1.5">
+      <div className="flex items-center justify-between border-b ide-border ide-surface-panel px-3 py-1.5">
         {/* File name or language label */}
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <FileCode className="h-3.5 w-3.5 text-gray-500" />
+        <div className="flex items-center gap-1.5 text-xs ide-text-muted">
+          <FileCode className="h-3.5 w-3.5 ide-text-3" />
           <span className="font-mono truncate max-w-[200px]">
             {fileName || language || 'code'}
           </span>
@@ -114,7 +129,7 @@ export function CodeBlock({
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700/60 hover:text-gray-200 transition-colors"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs ide-text-muted ide-hover hover:ide-text transition-colors"
             aria-label={copied ? 'Copied' : 'Copy code'}
           >
             {copied ? (
@@ -136,7 +151,7 @@ export function CodeBlock({
               type="button"
               onClick={handleApplyClick}
               disabled={showDiffPreview}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs ide-text-muted hover:bg-sky-500/20 dark:hover:bg-sky-500/20 hover:text-sky-600 dark:hover:text-sky-300 transition-colors disabled:opacity-40 disabled:pointer-events-none"
               aria-label="Apply code changes"
             >
               <FileCode className="h-3.5 w-3.5" />
@@ -149,7 +164,7 @@ export function CodeBlock({
             <button
               type="button"
               onClick={handleSave}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-400 hover:bg-emerald-600/20 hover:text-emerald-300 transition-colors"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs ide-text-muted hover:bg-emerald-600/20 hover:text-emerald-300 transition-colors"
               aria-label="Save as new file"
             >
               <Save className="h-3.5 w-3.5" />
@@ -163,7 +178,7 @@ export function CodeBlock({
       <div className="relative overflow-auto max-h-[400px]">
         <SyntaxHighlighter
           language={highlightLanguage}
-          style={vscDarkPlus}
+          style={isDark ? vscDarkPlus : oneLight}
           showLineNumbers
           lineNumberStyle={{
             minWidth: '2.5em',
@@ -198,22 +213,22 @@ export function CodeBlock({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden border-t border-gray-800"
+            className="overflow-hidden border-t ide-border"
           >
-            <div className="bg-gray-950/80 p-3">
+            <div className="ide-surface p-3">
               {/* Diff header */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <ChevronDown className="h-3.5 w-3.5 text-blue-400" />
-                  <span className="text-xs font-medium text-gray-300">
+                  <ChevronDown className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+                  <span className="text-xs font-medium ide-text-2">
                     Preview changes to{' '}
-                    <span className="font-mono text-blue-400">{fileName}</span>
+                    <span className="font-mono text-sky-600 dark:text-sky-400">{fileName}</span>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleCancelApply}
-                  className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/40 transition-colors"
+                  className="p-0.5 rounded ide-text-3 hover:ide-text-2 ide-hover transition-colors"
                   aria-label="Close diff preview"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -221,14 +236,14 @@ export function CodeBlock({
               </div>
 
               {/* Unified diff view — all lines shown as additions */}
-              <div className="rounded border border-gray-800 bg-gray-900/60 overflow-auto max-h-[300px] font-mono text-xs leading-[1.6]">
+              <div className="rounded border ide-border-subtle ide-surface-panel overflow-auto max-h-[300px] font-mono text-xs leading-[1.6]">
                 {lines.map((line, i) => (
                   <div
                     key={i}
                     className="flex hover:bg-emerald-500/[0.08]"
                   >
                     {/* Line number */}
-                    <span className="select-none w-8 text-right pr-2 py-px text-emerald-700/80 flex-shrink-0 border-r border-gray-800">
+                    <span className="select-none w-8 text-right pr-2 py-px text-emerald-700/80 flex-shrink-0 border-r ide-border-subtle">
                       {i + 1}
                     </span>
                     {/* Diff gutter (+) */}
@@ -245,26 +260,49 @@ export function CodeBlock({
 
               {/* Confirm / Cancel */}
               <div className="flex items-center justify-end gap-2 mt-3">
-                <span className="text-[10px] text-gray-500 mr-auto">
-                  {lines.length} line{lines.length !== 1 ? 's' : ''} will be
-                  applied
+                <span className="text-[10px] ide-text-3 mr-auto">
+                  {lines.length} line{lines.length !== 1 ? 's' : ''} will replace the file content. You can undo from the editor.
                 </span>
                 <button
                   type="button"
                   onClick={handleCancelApply}
-                  className="rounded px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-700 hover:bg-gray-800 hover:text-gray-200 transition-colors"
+                  className="rounded px-3 py-1.5 text-xs font-medium ide-text-muted ide-hover hover:ide-text border ide-border transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmApply}
-                  className="rounded px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-colors"
+                  className="rounded px-3 py-1.5 text-xs font-medium text-white bg-emerald-500 hover:bg-emerald-600 transition-colors"
                 >
                   Confirm Apply
                 </button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Undo toast after applying */}
+      <AnimatePresence>
+        {showUndoToast && previousContent !== undefined && onUndoApply && fileId && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            className="mt-1 flex items-center justify-between gap-2 rounded-lg ide-surface-inset border ide-border px-3 py-1.5 text-xs"
+          >
+            <span className="ide-text-muted">Changes applied to {fileName}</span>
+            <button
+              type="button"
+              onClick={() => {
+                onUndoApply(fileId, previousContent);
+                setShowUndoToast(false);
+              }}
+              className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+            >
+              Undo
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

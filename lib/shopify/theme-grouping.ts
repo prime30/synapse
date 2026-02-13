@@ -131,39 +131,42 @@ export function generateFileGroups(files: FileInfo[]): FileGroup[] {
   const groups: FileGroup[] = [];
   const usedFileIds = new Set<string>();
 
-  // Focus on sections and templates as group roots
+  // Focus on Liquid files that may have matching CSS/JS assets as group roots
   const rootCandidates = files.filter(
     (f) =>
       f.path.startsWith('sections/') ||
+      f.path.startsWith('snippets/') ||
       f.path.startsWith('templates/') ||
       f.path.startsWith('layout/')
   );
 
   for (const root of rootCandidates) {
-    if (!root.content) continue;
-
-    const refs = extractLiquidReferences(root.content);
     const groupFileIds = new Set<string>([root.id]);
 
-    // Add rendered/included snippets
-    for (const snippetName of [...refs.renders, ...refs.includes]) {
-      const found = findFileByReference(snippetName, 'snippets', pathIndex);
-      if (found) groupFileIds.add(found.id);
+    // If content is available, extract Liquid references
+    if (root.content) {
+      const refs = extractLiquidReferences(root.content);
+
+      // Add rendered/included snippets
+      for (const snippetName of [...refs.renders, ...refs.includes]) {
+        const found = findFileByReference(snippetName, 'snippets', pathIndex);
+        if (found) groupFileIds.add(found.id);
+      }
+
+      // Add referenced sections
+      for (const sectionName of refs.sections) {
+        const found = findFileByReference(sectionName, 'sections', pathIndex);
+        if (found) groupFileIds.add(found.id);
+      }
+
+      // Add referenced assets (CSS/JS)
+      for (const assetName of refs.assetUrls) {
+        const found = findAssetFile(assetName, pathIndex);
+        if (found) groupFileIds.add(found.id);
+      }
     }
 
-    // Add referenced sections
-    for (const sectionName of refs.sections) {
-      const found = findFileByReference(sectionName, 'sections', pathIndex);
-      if (found) groupFileIds.add(found.id);
-    }
-
-    // Add referenced assets (CSS/JS)
-    for (const assetName of refs.assetUrls) {
-      const found = findAssetFile(assetName, pathIndex);
-      if (found) groupFileIds.add(found.id);
-    }
-
-    // Look for CSS/JS with same base name as the root
+    // Always look for CSS/JS with same base name as the root (doesn't need content)
     const rootBase = root.name.replace(/\.liquid$/, '');
     for (const ext of ['.css', '.scss', '.js', '.ts']) {
       const assetPath = `assets/${rootBase}${ext}`;
@@ -175,7 +178,7 @@ export function generateFileGroups(files: FileInfo[]): FileGroup[] {
     if (groupFileIds.size > 1) {
       const label = root.path
         .replace(/\.liquid$/, '')
-        .replace(/^(sections|templates|layout)\//, '');
+        .replace(/^(sections|snippets|templates|layout)\//, '');
 
       groups.push({
         id: `group-${root.id}`,

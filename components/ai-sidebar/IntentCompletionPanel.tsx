@@ -60,7 +60,7 @@ function StepItem({
           ${
             step.completed
               ? 'bg-green-500/20 border-green-500/40 text-green-400'
-              : 'border-gray-600 hover:border-gray-400 text-transparent'
+              : 'ide-border hover:border-stone-300 dark:hover:border-white/20 text-transparent'
           }
           flex items-center justify-center
         `}
@@ -76,7 +76,7 @@ function StepItem({
       {/* Label */}
       <span
         className={`flex-1 text-xs leading-relaxed ${
-          step.completed ? 'text-gray-500 line-through' : 'text-gray-300'
+          step.completed ? 'ide-text-3 line-through' : 'ide-text-2'
         }`}
       >
         {step.label}
@@ -90,7 +90,7 @@ function StepItem({
           className="
             flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity
             rounded px-1.5 py-0.5 text-[10px] font-medium
-            text-blue-400 hover:bg-blue-500/10 border border-blue-500/20
+            text-sky-500 dark:text-sky-400 hover:bg-sky-500/10 border border-sky-500/20
           "
           aria-label={`Apply: ${step.label}`}
         >
@@ -141,7 +141,7 @@ export function IntentCompletionPanel({
   return (
     <div
       className={`
-        flex flex-col border border-indigo-500/20 bg-indigo-500/5 rounded-lg
+        flex flex-col border border-sky-500/20 dark:border-sky-500/20 bg-sky-500/5 dark:bg-sky-500/5 rounded-lg
         mx-2 mb-2 overflow-hidden
         ${className}
       `}
@@ -149,20 +149,20 @@ export function IntentCompletionPanel({
       aria-label="Intent completion suggestions"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-indigo-500/10">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-sky-500/10 dark:border-sky-500/10">
         <span
-          className="flex-shrink-0 text-xs font-mono text-indigo-400 bg-indigo-500/10 rounded px-1.5 py-0.5"
+          className="flex-shrink-0 text-xs font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 dark:bg-sky-500/10 rounded px-1.5 py-0.5"
           aria-hidden="true"
         >
           {patternIcon}
         </span>
-        <span className="flex-1 text-xs font-medium text-gray-200 truncate min-w-0">
+        <span className="flex-1 text-xs font-medium ide-text truncate min-w-0">
           {match.title}
         </span>
         <button
           type="button"
           onClick={onDismiss}
-          className="flex-shrink-0 rounded p-0.5 text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors"
+          className="flex-shrink-0 rounded p-0.5 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
           aria-label="Dismiss intent completion"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,13 +174,13 @@ export function IntentCompletionPanel({
       {/* Progress bar */}
       {progress && (
         <div className="px-3 pt-2">
-          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+          <div className="flex items-center justify-between text-[10px] ide-text-3 mb-1">
             <span>{progress.completed}/{progress.total} steps</span>
             <span>{progress.percentage}%</span>
           </div>
-          <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-1 ide-surface-inset rounded-full overflow-hidden">
             <div
-              className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+              className="h-full bg-sky-500 dark:bg-sky-500 rounded-full transition-all duration-300"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
@@ -201,14 +201,14 @@ export function IntentCompletionPanel({
 
       {/* Action buttons */}
       {pendingCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-indigo-500/10">
+        <div className="flex items-center gap-2 px-3 py-2 border-t border-sky-500/10 dark:border-sky-500/10">
           <button
             type="button"
             onClick={onPreviewAll}
             className="
               flex-1 rounded px-3 py-1.5 text-xs font-medium
-              text-indigo-300 hover:bg-indigo-500/10
-              border border-indigo-500/20 transition-colors
+              text-sky-600 dark:text-sky-300 hover:bg-sky-500/10
+              border border-sky-500/20 transition-colors
             "
           >
             Preview All
@@ -218,7 +218,7 @@ export function IntentCompletionPanel({
             onClick={onApplyAll}
             className="
               flex-1 rounded px-3 py-1.5 text-xs font-medium
-              text-white bg-indigo-600 hover:bg-indigo-500
+              text-white bg-sky-500 dark:bg-sky-600 hover:bg-sky-600 dark:hover:bg-sky-500
               transition-colors
             "
           >

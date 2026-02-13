@@ -1,6 +1,7 @@
 import { Agent } from './base';
 import { PROJECT_MANAGER_PROMPT, SOLO_PM_PROMPT } from './prompts';
 import { getThemeContext, THEME_STRUCTURE_DOC } from '@/lib/shopify/theme-structure';
+import { detectWorkflow, getWorkflowDelegationHint } from './workflows/shopify-workflows';
 import type {
   AgentTask,
   AgentResult,
@@ -40,6 +41,10 @@ export class ProjectManagerAgent extends Agent {
       .map((f) => ({ path: f.path ?? f.fileName }));
     const themeContext = getThemeContext(themeFiles);
 
+    // Detect Shopify workflow pattern for optimized delegation
+    const workflow = detectWorkflow(task.instruction);
+    const workflowHint = workflow ? getWorkflowDelegationHint(workflow) : '';
+
     return [
       `User Request: ${task.instruction}`,
       '',
@@ -59,12 +64,17 @@ export class ProjectManagerAgent extends Agent {
       ...(task.context.domContext
         ? [task.context.domContext, '']
         : []),
+      // Developer memory (conventions, decisions, preferences)
+      ...(task.context.memoryContext
+        ? [task.context.memoryContext, '']
+        : []),
       '## Project Files:',
       fileList,
       '',
       '## User Preferences:',
       prefs || '(No preferences recorded yet)',
       '',
+      ...(workflowHint ? ['## Workflow Pattern Detected', workflowHint, ''] : []),
       '## Full File Contents:',
       ...task.context.files.map(
         (f) => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``
@@ -92,6 +102,10 @@ export class ProjectManagerAgent extends Agent {
       .map((f) => ({ path: f.path ?? f.fileName }));
     const themeContext = getThemeContext(themeFiles);
 
+    // Detect Shopify workflow pattern for optimized delegation
+    const workflow = detectWorkflow(task.instruction);
+    const workflowHint = workflow ? getWorkflowDelegationHint(workflow) : '';
+
     return [
       `User Request: ${task.instruction}`,
       '',
@@ -108,12 +122,17 @@ export class ProjectManagerAgent extends Agent {
       ...(task.context.domContext
         ? [task.context.domContext, '']
         : []),
+      // Developer memory (conventions, decisions, preferences)
+      ...(task.context.memoryContext
+        ? [task.context.memoryContext, '']
+        : []),
       '## Project Files:',
       fileList,
       '',
       '## User Preferences:',
       prefs || '(No preferences recorded yet)',
       '',
+      ...(workflowHint ? ['## Workflow Pattern Detected', workflowHint, ''] : []),
       '## Full File Contents:',
       ...task.context.files.map(
         (f) => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``

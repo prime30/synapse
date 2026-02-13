@@ -42,7 +42,7 @@ function Chevron() {
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-gray-600 shrink-0"
+      className="ide-text-3 shrink-0"
     >
       <polyline points="9 18 15 12 9 6" />
     </svg>
@@ -78,14 +78,14 @@ export function FileBreadcrumb({ filePath, content }: FileBreadcrumbProps) {
   if (segments.length === 0) return null;
 
   return (
-    <div className="h-6 flex items-center gap-1 px-3 bg-gray-900/50 border-b border-gray-800/50 overflow-x-auto select-none">
+    <div className="h-6 flex items-center gap-1 px-3 ide-surface-input border-b ide-border-subtle overflow-x-auto select-none">
       {segments.map((segment, idx) => (
         <span key={`${segment}-${idx}`} className="flex items-center gap-1 shrink-0">
           {idx > 0 && <Chevron />}
           <button
             type="button"
             onClick={() => console.log('Breadcrumb click:', segment)}
-            className="text-xs text-gray-400 hover:text-gray-200 transition-colors whitespace-nowrap"
+            className="text-xs ide-text-3 hover:ide-text-2 transition-colors whitespace-nowrap"
           >
             {segment}
           </button>

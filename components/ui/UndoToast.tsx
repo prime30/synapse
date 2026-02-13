@@ -75,12 +75,12 @@ export function UndoToast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-50 w-80 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+      className="fixed bottom-4 right-4 z-50 w-80 overflow-hidden rounded-lg border ide-border ide-surface-pop shadow-xl"
     >
       {/* Content area */}
       <div className="flex items-start gap-3 px-4 pt-3 pb-2">
         {/* Icon */}
-        <div className="mt-0.5 flex-shrink-0 text-blue-400">
+        <div className="mt-0.5 flex-shrink-0 text-sky-500 dark:text-sky-400">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="h-5 w-5"
@@ -97,8 +97,8 @@ export function UndoToast({
 
         {/* Message */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-100 truncate">{message}</p>
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="text-sm font-medium ide-text truncate">{message}</p>
+          <p className="mt-0.5 text-xs ide-text-muted">
             {fileCount && fileCount > 1
               ? `${fileCount} files · `
               : ''}
@@ -110,7 +110,7 @@ export function UndoToast({
         <button
           type="button"
           onClick={dismiss}
-          className="flex-shrink-0 rounded p-0.5 text-gray-500 hover:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-600"
+          className="flex-shrink-0 rounded p-0.5 ide-text-muted hover:ide-text-2 ide-hover focus:outline-none focus:ring-1 focus:ring-sky-500"
           aria-label="Dismiss"
         >
           <svg
@@ -133,16 +133,16 @@ export function UndoToast({
         <button
           type="button"
           onClick={handleUndo}
-          className="w-full rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          className="w-full rounded-md bg-sky-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a]"
         >
           Undo
         </button>
       </div>
 
       {/* Animated countdown progress bar */}
-      <div className="h-1 w-full bg-gray-800">
+      <div className="h-1 w-full ide-surface-input">
         <div
-          className="h-full bg-blue-500 transition-[width] duration-100 ease-linear"
+          className="h-full bg-sky-500 transition-[width] duration-100 ease-linear"
           style={{ width: `${progress}%` }}
         />
       </div>

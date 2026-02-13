@@ -27,9 +27,9 @@ interface ShopifyTheme {
 
 const ROLE_BADGE: Record<string, { label: string; cls: string }> = {
   main: { label: 'Live', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
-  development: { label: 'Dev', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+  development: { label: 'Dev', cls: 'ide-active text-sky-500 dark:text-sky-400 border-sky-500/40' },
   demo: { label: 'Demo', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
-  unpublished: { label: 'Unpublished', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/40' },
+  unpublished: { label: 'Unpublished', cls: 'bg-stone-500/20 ide-text-muted border-stone-500/40' },
 };
 
 function themeRelativeTime(iso: string): string {
@@ -268,15 +268,15 @@ export function ImportThemeModal({
   const isLoadingThemes = themesQuery.isLoading;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay">
+      <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-lg mx-4 border ide-border">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <h2 className="text-lg font-medium text-gray-200">Import Theme</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b ide-border">
+          <h2 className="text-lg font-medium ide-text">Import Theme</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="ide-text-muted hover:ide-text transition-colors"
             aria-label="Close"
           >
             x
@@ -284,15 +284,15 @@ export function ImportThemeModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b ide-border">
           {connection && (
             <button
               type="button"
               onClick={() => setActiveTab('store')}
               className={`px-4 py-2 text-sm ${
                 activeTab === 'store'
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'text-gray-400 hover:text-gray-300'
+                  ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400'
+                  : 'ide-text-muted hover:ide-text-2'
               }`}
             >
               From Store
@@ -303,8 +303,8 @@ export function ImportThemeModal({
             onClick={() => setActiveTab('zip')}
             className={`px-4 py-2 text-sm ${
               activeTab === 'zip'
-                ? 'border-b-2 border-blue-500 text-blue-400'
-                : 'text-gray-400 hover:text-gray-300'
+                ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400'
+                : 'ide-text-muted hover:ide-text-2'
             }`}
           >
             Upload ZIP
@@ -317,7 +317,7 @@ export function ImportThemeModal({
           {importSuccess && (
             <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-sm space-y-2">
               <p>{importSuccess}</p>
-              <p className="text-gray-400 dark:text-gray-400 text-xs">Design tokens are being extracted in the background.</p>
+              <p className="ide-text-muted text-xs">Design tokens are being extracted in the background.</p>
               {successProjectId && (
                 <button
                   onClick={() => {
@@ -342,22 +342,22 @@ export function ImportThemeModal({
                 onClick={() => fileInputRef.current?.click()}
                 className={`flex flex-col items-center justify-center gap-3 p-8 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
                   isDragging
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'
+                    ? 'border-sky-500 ide-active'
+                    : 'ide-border hover:border-stone-400 ide-surface-panel'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 ide-text-muted">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
                 {zipFile ? (
-                  <p className="text-sm text-gray-200">{zipFile.name}</p>
+                  <p className="text-sm ide-text">{zipFile.name}</p>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-400">Drag and drop your theme .zip file here</p>
+                    <p className="text-sm ide-text-muted">Drag and drop your theme .zip file here</p>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                      className="px-4 py-1.5 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+                      className="px-4 py-1.5 text-sm rounded ide-surface-panel ide-text ide-hover transition-colors"
                     >
                       Browse Files
                     </button>
@@ -383,7 +383,7 @@ export function ImportThemeModal({
                 <span>{connection.store_domain}</span>
               </div>
 
-              <label className="block text-xs font-medium text-gray-400">
+              <label className="block text-xs font-medium ide-text-muted">
                 Select theme to import
               </label>
               <div ref={themeDropdownRef} className="relative">
@@ -391,7 +391,7 @@ export function ImportThemeModal({
                   type="button"
                   onClick={() => !isLoadingThemes && setThemeDropdownOpen((o) => !o)}
                   disabled={isLoadingThemes}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm rounded ide-input disabled:opacity-50"
                 >
                   <span className="truncate">
                     {isLoadingThemes
@@ -400,13 +400,13 @@ export function ImportThemeModal({
                         ? themes.find((t) => t.id === selectedThemeId)?.name ?? 'Select a theme'
                         : 'Select a theme'}
                   </span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${themeDropdownOpen ? 'rotate-180' : ''}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 shrink-0 ide-text-muted transition-transform ${themeDropdownOpen ? 'rotate-180' : ''}`}>
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                   </svg>
                 </button>
 
                 {themeDropdownOpen && themes.length > 0 && (
-                  <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded bg-gray-800 border border-gray-600 shadow-lg">
+                  <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded ide-surface-panel border ide-border shadow-lg">
                     {themes.map((theme) => {
                       const badge = ROLE_BADGE[theme.role] ?? ROLE_BADGE.unpublished;
                       const isSelected = theme.id === selectedThemeId;
@@ -420,15 +420,15 @@ export function ImportThemeModal({
                             }}
                             className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm transition-colors ${
                               isSelected
-                                ? 'bg-blue-600/20 text-white'
-                                : 'text-gray-200 hover:bg-gray-700'
+                                ? 'ide-active ide-text'
+                                : 'ide-text ide-hover'
                             }`}
                           >
                             <span className="flex-1 min-w-0 truncate">{theme.name}</span>
                             <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded border ${badge.cls}`}>
                               {badge.label}
                             </span>
-                            <span className="shrink-0 text-[10px] text-gray-500 tabular-nums">
+                            <span className="shrink-0 text-[10px] ide-text-muted tabular-nums">
                               {themeRelativeTime(theme.updated_at)}
                             </span>
                           </button>
@@ -444,16 +444,16 @@ export function ImportThemeModal({
                   type="checkbox"
                   checked={createDevThemeForPreview}
                   onChange={(e) => setCreateDevThemeForPreview(e.target.checked)}
-                  className="mt-1 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                  className="mt-1 rounded ide-border ide-surface-input text-sky-500 focus:ring-sky-500"
                 />
-                <span className="text-sm text-gray-300">
+                <span className="text-sm ide-text-2">
                   Create a development theme for preview (recommended).
                 </span>
               </label>
 
               {createDevThemeForPreview && (
                 <div>
-                  <label htmlFor="preview-note" className="block text-xs font-medium text-gray-400 mb-1">
+                  <label htmlFor="preview-note" className="block text-xs font-medium ide-text-muted mb-1">
                     Preview note (optional)
                   </label>
                   <input
@@ -462,7 +462,7 @@ export function ImportThemeModal({
                     value={previewNote}
                     onChange={(e) => setPreviewNote(e.target.value)}
                     placeholder="e.g. Import from Live theme"
-                    className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2 text-sm rounded ide-input"
                   />
                 </div>
               )}
@@ -470,18 +470,18 @@ export function ImportThemeModal({
               {importProgress !== 'idle' && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-blue-400">
+                    <span className="text-sky-500 dark:text-sky-400">
                       Importing{totalAssets > 0 ? ` ${importedCount} of ${totalAssets} files` : '...'}
                     </span>
                     {totalAssets > 0 && (
-                      <span className="text-gray-500 text-xs tabular-nums">
+                      <span className="ide-text-muted text-xs tabular-nums">
                         {Math.round((importedCount / totalAssets) * 100)}%
                       </span>
                     )}
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-gray-700 overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full ide-surface-inset overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                      className="h-full rounded-full bg-sky-500 transition-all duration-700 ease-out"
                       style={{
                         width: totalAssets > 0
                           ? `${Math.min(100, (importedCount / totalAssets) * 100)}%`
@@ -489,7 +489,7 @@ export function ImportThemeModal({
                       }}
                     />
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs ide-text-muted">
                     {totalAssets > 0 && importedCount === 0
                       ? 'Downloading first files from Shopify…'
                       : 'Large themes can take a few minutes.'}
@@ -508,16 +508,16 @@ export function ImportThemeModal({
 
         {/* Footer */}
         <div className="px-4 pb-3">
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs ide-text-muted mb-3">
             Importing a theme creates a new project automatically.
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t ide-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
+            className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors"
           >
             Cancel
           </button>
@@ -527,7 +527,7 @@ export function ImportThemeModal({
               type="button"
               onClick={handleZipImport}
               disabled={!zipFile || isUploading || !projectId}
-              className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isUploading ? 'Importing...' : 'Import Theme'}
             </button>
@@ -538,7 +538,7 @@ export function ImportThemeModal({
               type="button"
               onClick={handleStoreImport}
               disabled={!selectedThemeId || isImporting || importProgress === 'importing'}
-              className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {importProgress === 'importing' || isImporting ? 'Importing...' : 'Import Theme'}
             </button>

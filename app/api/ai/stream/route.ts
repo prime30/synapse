@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const body = await validateBody(streamSchema)(request);
     const provider = getAIProvider(body.provider);
 
-    const stream = await provider.stream(body.messages, {
+    const { stream } = await provider.stream(body.messages, {
       model: body.model,
       maxTokens: body.maxTokens,
       temperature: body.temperature,

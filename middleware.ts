@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from sign-in page
   if (isAuthenticated && pathname === '/auth/signin') {
     const callbackUrl =
-      request.nextUrl.searchParams.get('callbackUrl') ?? '/projects';
+      request.nextUrl.searchParams.get('callbackUrl') ?? '/onboarding';
     return NextResponse.redirect(new URL(callbackUrl, request.url));
   }
 
@@ -77,8 +77,8 @@ export const config = {
      * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico, sitemap.xml, robots.txt (metadata files)
+     * - favicon.ico, sitemap.xml, robots.txt, ai.txt (metadata / crawler files)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt).*)',
   ],
 };

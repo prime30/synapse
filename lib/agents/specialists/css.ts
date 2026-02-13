@@ -30,6 +30,10 @@ export class CSSAgent extends Agent {
       ...(task.context.designContext
         ? [task.context.designContext, '']
         : []),
+      // Live DOM context from Shopify preview bridge
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
       '## CSS/SCSS Files (you may modify these):',
       ...cssFiles.map(
         (f) => `### ${f.fileName}\n\`\`\`css\n${f.content}\n\`\`\``

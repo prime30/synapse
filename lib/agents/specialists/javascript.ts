@@ -34,6 +34,10 @@ export class JavaScriptAgent extends Agent {
       ...(task.context.designContext
         ? [task.context.designContext, '']
         : []),
+      // Live DOM context from Shopify preview bridge
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
       '## JavaScript/TypeScript Files (you may modify these):',
       ...jsFiles.map(
         (f) => `### ${f.fileName}\n\`\`\`javascript\n${f.content}\n\`\`\``

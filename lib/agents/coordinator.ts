@@ -22,9 +22,12 @@ import { ProjectManagerAgent } from './project-manager';
 import { LiquidAgent } from './specialists/liquid';
 import { JavaScriptAgent } from './specialists/javascript';
 import { CSSAgent } from './specialists/css';
+import { JSONAgent } from './specialists/json';
 import { ReviewAgent } from './review';
-import type { AgentExecuteOptions } from './base';
+import type { AgentExecuteOptions, AgentUsage } from './base';
 import type { AIAction } from './model-router';
+import { getProviderForModel } from './model-router';
+import { AIProviderError } from '@/lib/ai/errors';
 import { DependencyDetector, ContextCache } from '@/lib/context';
 import type {
   FileContext as ContextFileContext,
@@ -34,6 +37,7 @@ import type {
 import { DesignSystemContextProvider } from '@/lib/design-tokens/agent-integration';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
 import { ContextEngine } from '@/lib/ai/context-engine';
+import { validateChangeSet } from './validation/change-set-validator';
 
 // ── Cross-file context helpers (REQ-5) ────────────────────────────────
 
@@ -41,7 +45,7 @@ import { ContextEngine } from '@/lib/ai/context-engine';
 const contextCache = new ContextCache();
 const dependencyDetector = new DependencyDetector();
 const designContextProvider = new DesignSystemContextProvider();
-const contextEngine = new ContextEngine(16_000);
+const contextEngine = new ContextEngine(60_000);
 
 /**
  * Detect cross-file dependencies and format a human-readable summary.
@@ -89,7 +93,10 @@ function buildDependencyContext(
   }
 }
 
-/** Format dependency list using file names (not IDs) for AI readability. */
+/**
+ * B3: Format dependencies as structured cross-file relationship maps.
+ * Groups by source file and categorises by dependency type for richer AI context.
+ */
 function formatDependencies(
   dependencies: FileDependency[],
   files: ContextFileContext[],
@@ -97,16 +104,75 @@ function formatDependencies(
   if (dependencies.length === 0) return '';
 
   const nameMap = new Map(files.map((f) => [f.fileId, f.fileName]));
-  const lines: string[] = ['## Cross-File Dependencies\n'];
+  const idByName = new Map(files.map((f) => [f.fileName, f.fileId]));
 
+  // Group deps by source file
+  const bySource = new Map<string, FileDependency[]>();
   for (const dep of dependencies) {
     const source = nameMap.get(dep.sourceFileId) ?? dep.sourceFileId;
-    const target = nameMap.get(dep.targetFileId) ?? dep.targetFileId;
-    const refs = dep.references.map((r) => r.symbol).join(', ');
-    lines.push(`- ${source} → ${target} (${dep.dependencyType}): ${refs}`);
+    const existing = bySource.get(source) ?? [];
+    existing.push(dep);
+    bySource.set(source, existing);
   }
 
-  return lines.join('\n');
+  // Build reverse lookup: which files reference a given target?
+  const usedByMap = new Map<string, Set<string>>();
+  for (const dep of dependencies) {
+    const target = nameMap.get(dep.targetFileId) ?? dep.targetFileId;
+    const source = nameMap.get(dep.sourceFileId) ?? dep.sourceFileId;
+    if (!usedByMap.has(target)) usedByMap.set(target, new Set());
+    usedByMap.get(target)!.add(source);
+  }
+
+  const sections: string[] = [];
+
+  for (const [sourceFile, deps] of bySource) {
+    const lines: string[] = [`## Cross-File Relationships for ${sourceFile}`];
+
+    // Categorise outgoing dependencies
+    const renders: string[] = [];
+    const styledBy: string[] = [];
+    const usedIn: string[] = [];
+    const other: string[] = [];
+
+    for (const dep of deps) {
+      const target = nameMap.get(dep.targetFileId) ?? dep.targetFileId;
+      const refs = dep.references.map((r) => r.symbol).join(', ');
+
+      if (dep.dependencyType === 'liquid_include' || dep.dependencyType === 'snippet_variable') {
+        renders.push(`${target} (passes: ${refs})`);
+      } else if (dep.dependencyType === 'css_class' || dep.dependencyType === 'css_import' || dep.dependencyType === 'css_section') {
+        styledBy.push(`${target} (classes: ${refs})`);
+      } else if (dep.dependencyType === 'template_section' || dep.dependencyType === 'schema_setting') {
+        usedIn.push(`${target} (${refs})`);
+      } else {
+        other.push(`${target} (${dep.dependencyType}): ${refs}`);
+      }
+    }
+
+    if (renders.length > 0) lines.push(`Renders: ${renders.join(', ')}`);
+    if (styledBy.length > 0) lines.push(`Styled by: ${styledBy.join(', ')}`);
+    if (usedIn.length > 0) lines.push(`Used in: ${usedIn.join(', ')}`);
+    if (other.length > 0) lines.push(`Related: ${other.join(', ')}`);
+
+    // Schema settings from file metadata
+    const sourceId = idByName.get(sourceFile);
+    if (sourceId) {
+      const sourceCtxFile = files.find((f) => f.fileId === sourceId);
+      const schemaSettings = sourceCtxFile?.dependencies?.exports ?? [];
+      if (schemaSettings.length > 0) {
+        lines.push(`Schema settings: ${schemaSettings.join(', ')}`);
+      }
+    }
+
+    // Reverse: who references this file?
+    const referencedBy = usedByMap.get(sourceFile);
+    lines.push(`Used by: ${referencedBy ? [...referencedBy].join(', ') : '(nothing references this file directly)'}`);
+
+    sections.push(lines.join('\n'));
+  }
+
+  return sections.join('\n\n');
 }
 
 // ── p0 Architectural Principles ──────────────────────────────────────────
@@ -155,6 +221,20 @@ function checkNeedsClarification(pmResult: AgentResult): boolean {
   return pmResult.analysis.toLowerCase().includes('needsclarification');
 }
 
+// ── Thinking Events (real-time progress) ────────────────────────────────
+
+export interface ThinkingEvent {
+  type: 'thinking';
+  phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'complete';
+  label: string;
+  detail?: string;
+  agent?: string;
+  analysis?: string;
+  summary?: string;
+}
+
+export type ProgressCallback = (event: ThinkingEvent) => void;
+
 // ── Coordinator Options ─────────────────────────────────────────────────
 
 export interface CoordinatorExecuteOptions {
@@ -166,6 +246,28 @@ export interface CoordinatorExecuteOptions {
   mode?: 'orchestrated' | 'solo';
   /** DOM context from preview bridge. */
   domContext?: string;
+  /** Developer memory context (formatted string). */
+  memoryContext?: string;
+  /** Real-time progress callback for thinking events. */
+  onProgress?: ProgressCallback;
+  /** If true, return after PM analysis without delegating to specialists. */
+  planOnly?: boolean;
+}
+
+// ── Usage tracking types ────────────────────────────────────────────────
+
+export interface AgentUsageEntry {
+  agentType: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface ExecutionUsage {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  perAgent: AgentUsageEntry[];
 }
 
 /**
@@ -182,7 +284,7 @@ export interface CoordinatorExecuteOptions {
  */
 export class AgentCoordinator {
   private pm: ProjectManagerAgent;
-  private specialists: Record<string, LiquidAgent | JavaScriptAgent | CSSAgent>;
+  private specialists: Record<string, LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent>;
   private reviewer: ReviewAgent;
 
   constructor() {
@@ -191,8 +293,43 @@ export class AgentCoordinator {
       liquid: new LiquidAgent(),
       javascript: new JavaScriptAgent(),
       css: new CSSAgent(),
+      json: new JSONAgent(),
     };
     this.reviewer = new ReviewAgent();
+  }
+
+  /**
+   * Collect token usage from every agent that participated in the last execution.
+   * Call this after execute() or executeSolo() completes.
+   * Returns accumulated totals + per-agent breakdown.
+   */
+  getAccumulatedUsage(): ExecutionUsage {
+    const entries: AgentUsageEntry[] = [];
+
+    const collect = (agentType: string, usage: AgentUsage | null) => {
+      if (!usage) return;
+      entries.push({
+        agentType,
+        provider: getProviderForModel(usage.model),
+        model: usage.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+      });
+    };
+
+    collect('project_manager', this.pm.getLastUsage());
+
+    for (const [name, agent] of Object.entries(this.specialists)) {
+      collect(name, agent.getLastUsage());
+    }
+
+    collect('review', this.reviewer.getLastUsage());
+
+    return {
+      totalInputTokens: entries.reduce((s, e) => s + e.inputTokens, 0),
+      totalOutputTokens: entries.reduce((s, e) => s + e.outputTokens, 0),
+      perAgent: entries,
+    };
   }
 
   /**
@@ -205,6 +342,48 @@ export class AgentCoordinator {
    * 6. Persist execution and return result
    */
   async execute(
+    executionId: string,
+    projectId: string,
+    userId: string,
+    userRequest: string,
+    files: FileContext[],
+    userPreferences: UserPreference[],
+    options?: CoordinatorExecuteOptions,
+  ): Promise<AgentResult> {
+    // Top-level coordinator timeout (180s) -- ensures we never hang
+    const COORDINATOR_TIMEOUT_MS = 180_000;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new AIProviderError(
+        'TIMEOUT',
+        `Coordinator execution timed out after ${COORDINATOR_TIMEOUT_MS / 1000}s`,
+        'coordinator'
+      )), COORDINATOR_TIMEOUT_MS)
+    );
+
+    try {
+      return await Promise.race([
+        this._executeInner(executionId, projectId, userId, userRequest, files, userPreferences, options),
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      updateExecutionStatus(executionId, 'failed');
+      await persistExecution(executionId);
+
+      const isProviderErr = error instanceof AIProviderError;
+      return {
+        agentType: 'project_manager',
+        success: false,
+        error: {
+          code: isProviderErr ? error.code : 'EXECUTION_FAILED',
+          message: isProviderErr ? error.userMessage : String(error),
+          agentType: 'project_manager',
+          recoverable: isProviderErr ? error.retryable : false,
+        },
+      };
+    }
+  }
+
+  private async _executeInner(
     executionId: string,
     projectId: string,
     userId: string,
@@ -242,10 +421,20 @@ export class AgentCoordinator {
       dependencyContext: (dependencyContext + fileGroupContext) || undefined,
       designContext: designContext || undefined,
       domContext: options?.domContext || undefined,
+      memoryContext: options?.memoryContext || undefined,
     };
+
+    const onProgress = options?.onProgress;
 
     try {
       // Step 1: Project Manager analyzes and delegates
+      onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        label: 'Reviewing your request',
+        detail: userRequest.slice(0, 120),
+      });
+
       setAgentActive(executionId, 'project_manager');
       const pmTask: AgentTask = {
         executionId,
@@ -267,6 +456,16 @@ export class AgentCoordinator {
         instruction: pmResult.analysis,
       });
 
+      onProgress?.({
+        type: 'thinking',
+        phase: 'planning',
+        label: 'Planning changes',
+        analysis: pmResult.analysis,
+        detail: pmResult.delegations?.length
+          ? `Delegating to ${pmResult.delegations.length} specialist(s)`
+          : 'Analyzing results',
+      });
+
       // ── p0: Scope Assessment Gate ──────────────────────────────────
       // If PM signals the request is too broad/ambiguous, return early
       // with needsClarification so the frontend can prompt the user.
@@ -278,6 +477,24 @@ export class AgentCoordinator {
           success: true,
           analysis: pmResult.analysis,
           needsClarification: true,
+        };
+      }
+
+      // ── Plan-only mode: return after PM analysis (no specialists) ────
+      if (options?.planOnly) {
+        onProgress?.({
+          type: 'thinking',
+          phase: 'complete',
+          label: 'Analysis complete',
+          summary: pmResult.analysis,
+        });
+        updateExecutionStatus(executionId, 'completed');
+        await persistExecution(executionId);
+        return {
+          agentType: 'project_manager',
+          success: true,
+          analysis: pmResult.analysis,
+          delegations: pmResult.delegations,
         };
       }
 
@@ -306,18 +523,35 @@ export class AgentCoordinator {
         const agent = this.specialists[delegation.agent];
         if (!agent) return null;
 
+        onProgress?.({
+          type: 'thinking',
+          phase: 'executing',
+          label: `${delegation.agent} agent`,
+          detail: delegation.task.slice(0, 120),
+          agent: delegation.agent,
+        });
+
         setAgentActive(executionId, delegation.agent);
 
         this.logMessage(executionId, 'coordinator', delegation.agent, 'task', {
           instruction: delegation.task,
         });
 
+        // A4: Build specialist-scoped context with 40k budget
+        const specialistContextEngine = new ContextEngine(40_000);
+        specialistContextEngine.indexFiles(enrichedFiles);
+        const specialistCtx = specialistContextEngine.selectRelevantFiles(
+          delegation.task,
+          [],
+          delegation.affectedFiles[0],
+        );
+
         const specialistTask: AgentTask = {
           executionId,
           instruction: delegation.task,
           context: {
             ...context,
-            files: enrichedFiles,
+            files: specialistCtx.files.length > 0 ? specialistCtx.files : enrichedFiles,
             userRequest: delegation.task,
           },
         };
@@ -342,6 +576,21 @@ export class AgentCoordinator {
       const specialistResults = (await Promise.all(specialistPromises)).filter(
         (r): r is AgentResult => r !== null
       );
+
+      // ── C1: Inter-Agent Proposal Sharing ──────────────────────────────
+      // Build a proposal summary so agents can see each other's changes
+      const proposalSummary = this.buildProposalSummary(specialistResults);
+      if (proposalSummary && specialistResults.length > 1) {
+        onProgress?.({
+          type: 'thinking',
+          phase: 'executing',
+          label: 'Coordinating changes',
+          detail: 'Cross-checking specialist proposals',
+        });
+        // Note: In a future iteration, re-invoke specialists with cross-context
+        // For now, log the proposal summary for the review agent to use
+        console.log('[AgentCoordinator] Proposal summary for review:', proposalSummary.slice(0, 200));
+      }
 
       // Collect all proposed changes
       let allChanges: CodeChange[] = specialistResults.flatMap(
@@ -372,8 +621,26 @@ export class AgentCoordinator {
         };
       }
 
+      // ── C4: Cross-File Validation Gate ──────────────────────────────
+      // Programmatic cross-file consistency check before review
+      const validationResult = validateChangeSet(allChanges, files);
+      let validationContext = '';
+      if (validationResult.issues.length > 0) {
+        const issueLines = validationResult.issues.map(
+          (i) => `- [${i.severity}] ${i.file}: ${i.description} (${i.category})`
+        );
+        validationContext = `\n\n## Pre-Review Validation Issues\n${issueLines.join('\n')}`;
+      }
+
       // ── p0: Verification First-Class ────────────────────────────────
       // Review agent is mandatory in orchestrated mode.
+      onProgress?.({
+        type: 'thinking',
+        phase: 'reviewing',
+        label: 'Reviewing changes',
+        detail: `Checking ${allChanges.length} proposed change(s)`,
+      });
+
       setAgentActive(executionId, 'review');
 
       this.logMessage(executionId, 'coordinator', 'review', 'task', {
@@ -381,11 +648,19 @@ export class AgentCoordinator {
         changes: allChanges,
       });
 
+      // A4: Build review-scoped context with 30k budget
+      const reviewContextEngine = new ContextEngine(30_000);
+      reviewContextEngine.indexFiles(files);
+      const reviewCtx = reviewContextEngine.buildContext(
+        files.filter(f => allChanges.some(c => c.fileName === f.fileName)).map(f => f.fileId),
+      );
+
       const reviewTask: AgentTask = {
         executionId,
-        instruction: `Review the following ${allChanges.length} proposed changes for: ${userRequest}`,
+        instruction: `Review the following ${allChanges.length} proposed changes for: ${userRequest}${validationContext}${proposalSummary ? `\n\n${proposalSummary}` : ''}`,
         context: {
           ...context,
+          files: reviewCtx.files.length > 0 ? reviewCtx.files : files,
           userRequest: JSON.stringify(allChanges),
         },
       };
@@ -404,7 +679,85 @@ export class AgentCoordinator {
         instruction: reviewResult.reviewResult?.summary,
       });
 
+      // ── C3: Review-Triggered Refinement ──────────────────────────────
+      // If review found critical errors, re-invoke responsible specialists (1 iteration max)
+      if (reviewResult.reviewResult && !reviewResult.reviewResult.approved) {
+        const criticalIssues = reviewResult.reviewResult.issues.filter(
+          (i) => i.severity === 'error'
+        );
+        if (criticalIssues.length > 0) {
+          onProgress?.({
+            type: 'thinking',
+            phase: 'executing',
+            label: 'Fixing critical issues',
+            detail: `${criticalIssues.length} critical issue(s) found`,
+          });
+
+          // Group issues by file to identify responsible specialists
+          const issuesByFile = new Map<string, typeof criticalIssues>();
+          for (const issue of criticalIssues) {
+            const existing = issuesByFile.get(issue.file) || [];
+            existing.push(issue);
+            issuesByFile.set(issue.file, existing);
+          }
+
+          // Re-invoke specialists for files with critical issues
+          const refinementPromises: Promise<AgentResult | null>[] = [];
+          for (const [fileName, issues] of issuesByFile) {
+            // Find which specialist originally changed this file
+            const originalChange = allChanges.find(c => c.fileName === fileName);
+            if (!originalChange) continue;
+            const agent = this.specialists[originalChange.agentType];
+            if (!agent) continue;
+
+            const issueDescriptions = issues.map(i =>
+              `- [${i.severity}] ${i.description}${i.suggestion ? ` (Suggestion: ${i.suggestion})` : ''}`
+            ).join('\n');
+
+            const refinementTask: AgentTask = {
+              executionId,
+              instruction: `Fix the following critical review issues in ${fileName}:\n${issueDescriptions}\n\nOriginal change reasoning: ${originalChange.reasoning}\n\nProvide the corrected version.`,
+              context: {
+                ...context,
+                files: files.filter(f =>
+                  f.fileName === fileName || enrichedFiles.some(ef => ef.fileId === f.fileId)
+                ),
+                userRequest: `Fix critical issues in ${fileName}`,
+              },
+            };
+
+            refinementPromises.push(
+              agent.execute(refinementTask, { ...agentOptions, action: 'fix' }).catch(() => null)
+            );
+          }
+
+          const refinementResults = (await Promise.all(refinementPromises)).filter(
+            (r): r is AgentResult => r !== null && r.success
+          );
+
+          // Merge refinement changes (replace original changes for the same files)
+          const refinedChanges = refinementResults.flatMap(r => r.changes ?? []);
+          if (refinedChanges.length > 0) {
+            for (const refined of refinedChanges) {
+              const idx = allChanges.findIndex(c => c.fileName === refined.fileName);
+              if (idx >= 0) {
+                allChanges[idx] = refined;
+              } else {
+                allChanges.push(refined);
+              }
+            }
+          }
+        }
+      }
+
       // Step 4: Persist and return
+      onProgress?.({
+        type: 'thinking',
+        phase: 'complete',
+        label: 'Ready',
+        summary: reviewResult.reviewResult?.summary ?? 'Changes complete',
+      });
+
       updateExecutionStatus(executionId, 'completed');
       await persistExecution(executionId);
 
@@ -427,14 +780,15 @@ export class AgentCoordinator {
 
       await persistExecution(executionId);
 
+      const isProviderErr = error instanceof AIProviderError;
       return {
         agentType: 'project_manager',
         success: false,
         error: {
-          code: 'EXECUTION_FAILED',
-          message: String(error),
+          code: isProviderErr ? error.code : 'EXECUTION_FAILED',
+          message: isProviderErr ? error.userMessage : String(error),
           agentType: 'project_manager',
-          recoverable: false,
+          recoverable: isProviderErr ? error.retryable : false,
         },
       };
     }
@@ -452,10 +806,12 @@ export class AgentCoordinator {
     userRequest: string,
     files: FileContext[],
     userPreferences: UserPreference[],
-    domContext?: string
+    options?: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
     createExecution(executionId, projectId, userId, userRequest);
     updateExecutionStatus(executionId, 'in_progress');
+
+    const onProgress = options?.onProgress;
 
     // Index files for context engine
     contextEngine.indexFiles(files);
@@ -480,10 +836,18 @@ export class AgentCoordinator {
       userPreferences,
       dependencyContext: dependencyContext || undefined,
       designContext: designContext || undefined,
-      domContext: domContext || undefined,
+      domContext: options?.domContext || undefined,
+      memoryContext: options?.memoryContext || undefined,
     };
 
     try {
+      onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        label: 'Solo mode — generating changes directly',
+        detail: userRequest.slice(0, 120),
+      });
+
       setAgentActive(executionId, 'project_manager');
 
       const pmTask: AgentTask = {
@@ -533,17 +897,35 @@ export class AgentCoordinator {
 
       await persistExecution(executionId);
 
+      const isProviderErr = error instanceof AIProviderError;
       return {
         agentType: 'project_manager',
         success: false,
         error: {
-          code: 'SOLO_EXECUTION_FAILED',
-          message: String(error),
+          code: isProviderErr ? error.code : 'SOLO_EXECUTION_FAILED',
+          message: isProviderErr ? error.userMessage : String(error),
           agentType: 'project_manager',
-          recoverable: false,
+          recoverable: isProviderErr ? error.retryable : false,
         },
       };
     }
+  }
+
+  /**
+   * C1: Build a summary of all specialist proposals for cross-agent coordination.
+   */
+  private buildProposalSummary(results: AgentResult[]): string {
+    const sections: string[] = [];
+    for (const result of results) {
+      if (!result.changes?.length) continue;
+      sections.push(`### ${result.agentType} agent proposals:`);
+      for (const change of result.changes) {
+        sections.push(`- ${change.fileName}: ${change.reasoning}`);
+      }
+    }
+    return sections.length > 0
+      ? `## Proposal Registry\n\n${sections.join('\n')}`
+      : '';
   }
 
   private logMessage(

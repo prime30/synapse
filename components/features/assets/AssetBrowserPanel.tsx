@@ -70,9 +70,9 @@ function AssetIcon({ assetKey }: { assetKey: string }) {
     return <Image className="h-5 w-5 text-purple-400" />;
   }
   if (isCode(assetKey)) {
-    return <FileCode className="h-5 w-5 text-blue-400" />;
+    return <FileCode className="h-5 w-5 text-sky-500 dark:text-sky-400" />;
   }
-  return <File className="h-5 w-5 text-gray-400" />;
+  return <File className="h-5 w-5 ide-text-muted" />;
 }
 
 /**
@@ -198,9 +198,9 @@ export default function AssetBrowserPanel({
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-900/50">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-400">Loading assets…</span>
+      <div className="flex h-full items-center justify-center ide-surface-panel">
+        <Loader2 className="h-6 w-6 animate-spin ide-text-muted" />
+        <span className="ml-2 text-sm ide-text-muted">Loading assets…</span>
       </div>
     );
   }
@@ -208,7 +208,7 @@ export default function AssetBrowserPanel({
   // ── Error state ────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-gray-900/50 p-4">
+      <div className="flex h-full flex-col items-center justify-center gap-2 ide-surface-panel p-4">
         <AlertCircle className="h-8 w-8 text-red-400" />
         <p className="text-sm text-red-300">
           {error instanceof Error ? error.message : 'Failed to load assets'}
@@ -219,18 +219,18 @@ export default function AssetBrowserPanel({
 
   // ── Main render ────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col bg-gray-900/50">
+    <div className="flex h-full flex-col ide-surface-panel">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-gray-800 px-3 py-2">
+      <div className="flex items-center gap-2 border-b ide-border px-3 py-2">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 ide-text-muted" />
           <input
             type="text"
             placeholder="Filter assets…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 py-1.5 pl-8 pr-3 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+            className="w-full rounded-md border ide-border ide-surface-input py-1.5 pl-8 pr-3 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
           />
         </div>
 
@@ -258,8 +258,8 @@ export default function AssetBrowserPanel({
       {/* ── Empty state ──────────────────────────────────────────────────── */}
       {filtered.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8">
-          <FolderOpen className="h-10 w-10 text-gray-600" />
-          <p className="text-sm text-gray-400">
+          <FolderOpen className="h-10 w-10 ide-text-quiet" />
+          <p className="text-sm ide-text-muted">
             {search.trim()
               ? 'No assets match your filter.'
               : 'No assets in this theme yet.'}
@@ -289,15 +289,15 @@ export default function AssetBrowserPanel({
                   key={asset.key}
                   draggable
                   onDragStart={(e) => handleDragStart(e, asset)}
-                  className="group relative flex flex-col overflow-hidden rounded-lg border border-gray-800 bg-gray-800/60 transition-colors hover:border-gray-700"
+                  className="group relative flex flex-col overflow-hidden rounded-lg border ide-border ide-surface-input transition-colors ide-hover"
                 >
                   {/* Drag handle */}
                   <div className="absolute left-1 top-1 cursor-grab opacity-0 transition-opacity group-hover:opacity-100">
-                    <GripVertical className="h-4 w-4 text-gray-500" />
+                    <GripVertical className="h-4 w-4 ide-text-muted" />
                   </div>
 
                   {/* Preview area */}
-                  <div className="flex h-24 items-center justify-center bg-gray-900/40 p-2">
+                  <div className="flex h-24 items-center justify-center ide-surface-inset p-2">
                     {thumb ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
@@ -321,12 +321,12 @@ export default function AssetBrowserPanel({
                   {/* Info */}
                   <div className="flex flex-1 flex-col gap-0.5 px-2 py-1.5">
                     <span
-                      className="truncate text-xs font-medium text-gray-100"
+                      className="truncate text-xs font-medium ide-text"
                       title={name}
                     >
                       {name}
                     </span>
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] ide-text-muted">
                       {formatSize(asset.size)} · {asset.content_type.split('/').pop()}
                     </span>
                   </div>
@@ -344,7 +344,7 @@ export default function AssetBrowserPanel({
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] font-medium text-gray-300 hover:bg-gray-600"
+                          className="rounded ide-surface-input px-1.5 py-0.5 text-[10px] font-medium ide-text-muted ide-hover"
                         >
                           No
                         </button>
@@ -352,7 +352,7 @@ export default function AssetBrowserPanel({
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(asset.key)}
-                        className="rounded p-0.5 text-gray-500 hover:bg-red-900/40 hover:text-red-400"
+                        className="rounded p-0.5 ide-text-muted hover:bg-red-900/40 hover:text-red-400"
                         title="Delete asset"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -367,7 +367,7 @@ export default function AssetBrowserPanel({
       )}
 
       {/* ── Footer status ────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-800 px-3 py-1.5 text-[11px] text-gray-500">
+      <div className="border-t ide-border px-3 py-1.5 text-[11px] ide-text-muted">
         {filtered.length} asset{filtered.length !== 1 ? 's' : ''}
         {search.trim() && assets.length !== filtered.length && (
           <span> (of {assets.length} total)</span>

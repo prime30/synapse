@@ -10,7 +10,7 @@ const STEPS = [
     number: 1,
     title: 'Create an account',
     description:
-      'Sign up at synapse.dev with your email or GitHub account. Choose the plan that fits your workflow — start with Free to explore, then upgrade to Pro when you\'re ready to connect a Shopify store.',
+      'Sign up at synapse.shop with your email or GitHub account. Choose the plan that fits your workflow — start with Free to explore, then upgrade to Pro when you\'re ready to connect a Shopify store.',
     content: {
       type: 'callout' as const,
       text: 'Tip: The Free plan gives you full access to the IDE and local development features. Pro unlocks unlimited AI agents, Shopify sync, and team collaboration.',

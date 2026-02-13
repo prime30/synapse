@@ -7,7 +7,7 @@ import type { AISidebarContextValue } from '@/hooks/useAISidebar';
 import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentSettings } from '@/hooks/useAgentSettings';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
-import { extractDecisionsFromChat } from '@/lib/ai/decision-extractor';
+import { extractDecisionsFromChat, type ChatMessage as DecisionChatMessage } from '@/lib/ai/decision-extractor';
 import {
   getContextualSuggestions,
   getResponseSuggestions,
@@ -25,6 +25,7 @@ import {
   recordSuggestionsShown,
 } from '@/lib/ai/action-history';
 import { detectSignals, inferOutputMode, type OutputMode } from '@/lib/ai/signal-detector';
+import { trimHistory } from '@/lib/ai/history-window';
 import { detectFilePaths } from '@/lib/ai/file-path-detector';
 import { ConversationArc } from '@/lib/ai/conversation-arc';
 import type { AIErrorCode } from '@/lib/ai/errors';
@@ -207,6 +208,8 @@ export function AgentPromptPanel({
   const [outputMode, setOutputMode] = useState<OutputMode>('chat');
   const arcRef = useRef(new ConversationArc());
   const [currentAction, setCurrentAction] = useState<string | undefined>();
+  const [lastTrimmedCount, setLastTrimmedCount] = useState(0);
+  const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
   const thinkingStepsRef = useRef<import('@/components/ai-sidebar/ThinkingBlock').ThinkingStep[]>([]);
@@ -318,10 +321,20 @@ export function AgentPromptPanel({
         }
       }
 
-      const history = messages.map((m) => ({
+      const rawHistory = messages.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
+      const { messages: trimmedHistory, summary: historySummary, trimmedCount } = trimHistory(rawHistory);
+      const history = trimmedHistory;
+
+      // Store trim info for ChatInterface UI (D2 summary block + D3 context meter)
+      setLastTrimmedCount(trimmedCount);
+      setLastHistorySummary(historySummary || undefined);
+
+      const requestWithContext = historySummary
+        ? `[Context from earlier conversation]:\n${historySummary}\n\n${enrichedContent}`
+        : enrichedContent;
 
       appendMessage('user', enrichedContent);
       setIsLoading(true);
@@ -345,7 +358,7 @@ export function AgentPromptPanel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             projectId,
-            request: enrichedContent,
+            request: requestWithContext,
             history,
             domContext: domContext || undefined,
             mode,          // EPIC 1c: agent mode (orchestrated/solo)
@@ -830,6 +843,10 @@ export function AgentPromptPanel({
           onOpenFile={onOpenFile}
           errorCode={errorCode}
           resolveFileId={resolveFileIdProp}
+          trimmedMessageCount={lastTrimmedCount}
+          historySummary={lastHistorySummary}
+          summarizedCount={lastTrimmedCount}
+          totalFiles={fileCount}
         />
       )}
     </div>

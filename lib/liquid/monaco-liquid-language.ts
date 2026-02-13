@@ -1,0 +1,372 @@
+import type * as monacoTypes from 'monaco-editor';
+
+/**
+ * Register Liquid language definition and tokenizer for Monaco Editor.
+ * EPIC 4: Provides syntax highlighting for Liquid templates.
+ */
+export function registerLiquidLanguage(monaco: typeof monacoTypes): void {
+  // Only register once
+  if (monaco.languages.getLanguages().some((l) => l.id === 'liquid')) return;
+
+  monaco.languages.register({
+    id: 'liquid',
+    extensions: ['.liquid'],
+    aliases: ['Liquid', 'liquid'],
+  });
+
+  monaco.languages.setLanguageConfiguration('liquid', {
+    comments: {
+      blockComment: ['{%- comment -%}', '{%- endcomment -%}'],
+    },
+    brackets: [
+      ['{%', '%}'],
+      ['{{', '}}'],
+      ['(', ')'],
+      ['[', ']'],
+    ],
+    autoClosingPairs: [
+      { open: '{{', close: '}}' },
+      { open: '{%', close: '%}' },
+      { open: '"', close: '"' },
+      { open: "'", close: "'" },
+      { open: '(', close: ')' },
+      { open: '[', close: ']' },
+      { open: '<', close: '>' },
+    ],
+    surroundingPairs: [
+      { open: '"', close: '"' },
+      { open: "'", close: "'" },
+      { open: '<', close: '>' },
+    ],
+  });
+
+  monaco.languages.setMonarchTokensProvider('liquid', {
+    defaultToken: '',
+    tokenPostfix: '.liquid',
+
+    // Liquid keywords
+    keywords: [
+      'if',
+      'elsif',
+      'else',
+      'endif',
+      'unless',
+      'endunless',
+      'for',
+      'endfor',
+      'break',
+      'continue',
+      'case',
+      'when',
+      'endcase',
+      'capture',
+      'endcapture',
+      'assign',
+      'increment',
+      'decrement',
+      'render',
+      'include',
+      'section',
+      'comment',
+      'endcomment',
+      'raw',
+      'endraw',
+      'schema',
+      'endschema',
+      'style',
+      'endstyle',
+      'javascript',
+      'endjavascript',
+      'form',
+      'endform',
+      'paginate',
+      'endpaginate',
+      'tablerow',
+      'endtablerow',
+      'layout',
+      'in',
+      'with',
+      'as',
+      'and',
+      'or',
+      'not',
+      'contains',
+      'limit',
+      'offset',
+      'reversed',
+      'cols',
+      'blank',
+      'empty',
+      'nil',
+      'null',
+      'true',
+      'false',
+    ],
+
+    // Liquid built-in filters
+    filters: [
+      'abs',
+      'append',
+      'at_least',
+      'at_most',
+      'capitalize',
+      'ceil',
+      'compact',
+      'concat',
+      'date',
+      'default',
+      'divided_by',
+      'downcase',
+      'escape',
+      'escape_once',
+      'first',
+      'floor',
+      'join',
+      'json',
+      'last',
+      'lstrip',
+      'map',
+      'minus',
+      'modulo',
+      'newline_to_br',
+      'plus',
+      'prepend',
+      'remove',
+      'remove_first',
+      'replace',
+      'replace_first',
+      'reverse',
+      'round',
+      'rstrip',
+      'size',
+      'slice',
+      'sort',
+      'sort_natural',
+      'split',
+      'strip',
+      'strip_html',
+      'strip_newlines',
+      'times',
+      'truncate',
+      'truncatewords',
+      'uniq',
+      'upcase',
+      'url_decode',
+      'url_encode',
+      'where',
+      'img_url',
+      'asset_url',
+      'asset_img_url',
+      'stylesheet_tag',
+      'script_tag',
+      'money',
+      'money_with_currency',
+      'money_without_currency',
+      'money_without_trailing_zeros',
+      'color_to_rgb',
+      'color_to_hsl',
+      'color_to_hex',
+      'color_modify',
+      'color_lighten',
+      'color_darken',
+      'color_saturate',
+      'color_desaturate',
+      'color_mix',
+      'color_contrast',
+      'color_brightness',
+      'color_difference',
+      'font_modify',
+      'font_face',
+      'font_url',
+      'weight_with_unit',
+      'placeholder_svg_tag',
+      't',
+      'link_to',
+      'within',
+      'image_tag',
+      'payment_type_img_url',
+      'shopify_asset_url',
+      'global_asset_url',
+      'file_url',
+      'file_img_url',
+      'customer_login_link',
+      'highlight',
+      'pluralize',
+      'time_tag',
+      'metafield_tag',
+      'metafield_text',
+    ],
+
+    // Shopify global objects
+    objects: [
+      'product',
+      'collection',
+      'collections',
+      'all_products',
+      'cart',
+      'checkout',
+      'customer',
+      'shop',
+      'settings',
+      'section',
+      'block',
+      'template',
+      'request',
+      'page',
+      'pages',
+      'article',
+      'blog',
+      'linklists',
+      'routes',
+      'theme',
+      'localization',
+      'search',
+      'recommendations',
+      'predictive_search',
+      'content_for_header',
+      'content_for_layout',
+      'canonical_url',
+      'current_page',
+      'current_tags',
+      'handle',
+      'page_title',
+      'page_description',
+      'form',
+      'paginate',
+      'forloop',
+      'tablerowloop',
+    ],
+
+    tokenizer: {
+      root: [
+        // Liquid comments
+        [/\{%-?\s*comment\s*-?%\}/, { token: 'comment.liquid', next: '@liquidComment' }],
+        // Raw blocks
+        [/\{%-?\s*raw\s*-?%\}/, { token: 'keyword.liquid', next: '@rawBlock' }],
+        // Schema blocks
+        [/\{%-?\s*schema\s*-?%\}/, { token: 'keyword.liquid', next: '@schemaBlock' }],
+        // Style blocks
+        [/\{%-?\s*style\s*-?%\}/, { token: 'keyword.liquid', next: '@styleBlock' }],
+        // JavaScript blocks
+        [/\{%-?\s*javascript\s*-?%\}/, { token: 'keyword.liquid', next: '@javascriptBlock' }],
+        // Liquid output tags {{ }}
+        [/\{\{-?/, { token: 'delimiter.liquid.output', next: '@liquidOutput' }],
+        // Liquid logic tags {% %}
+        [/\{%-?/, { token: 'delimiter.liquid.tag', next: '@liquidTag' }],
+        // HTML
+        [/<\/?[\w-]+/, { token: 'tag.html', next: '@htmlTag' }],
+        // HTML entities
+        [/&\w+;/, 'string.html'],
+        // HTML comments
+        [/<!--/, { token: 'comment.html', next: '@htmlComment' }],
+        // Text
+        [/[^<{&]+/, ''],
+      ],
+
+      liquidOutput: [
+        [/-?\}\}/, { token: 'delimiter.liquid.output', next: '@pop' }],
+        [/\|/, 'operator.liquid'],
+        [/[:]/, 'delimiter.liquid'],
+        [/'[^']*'/, 'string.liquid'],
+        [/"[^"]*"/, 'string.liquid'],
+        [/\d+(\.\d+)?/, 'number.liquid'],
+        [/(?:true|false|nil|null|blank|empty)\b/, 'keyword.liquid'],
+        [
+          /[a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*)*/,
+          {
+            cases: {
+              '@filters': 'support.function.liquid',
+              '@objects': 'variable.predefined.liquid',
+              '@default': 'variable.liquid',
+            },
+          },
+        ],
+        [/\s+/, ''],
+        [/./, 'operator.liquid'],
+      ],
+
+      liquidTag: [
+        [/-?%\}/, { token: 'delimiter.liquid.tag', next: '@pop' }],
+        [/'[^']*'/, 'string.liquid'],
+        [/"[^"]*"/, 'string.liquid'],
+        [/\d+(\.\d+)?/, 'number.liquid'],
+        [/(?:==|!=|>=|<=|<>|<|>)/, 'operator.liquid'],
+        [/=/, 'operator.liquid'],
+        [/\.\./, 'operator.liquid'],
+        [/\|/, 'operator.liquid'],
+        [/[,:]/, 'delimiter.liquid'],
+        [
+          /[a-zA-Z_][\w]*/,
+          {
+            cases: {
+              '@keywords': 'keyword.liquid',
+              '@filters': 'support.function.liquid',
+              '@objects': 'variable.predefined.liquid',
+              '@default': 'variable.liquid',
+            },
+          },
+        ],
+        [/\s+/, ''],
+        [/./, ''],
+      ],
+
+      liquidComment: [
+        [/\{%-?\s*endcomment\s*-?%\}/, { token: 'comment.liquid', next: '@pop' }],
+        [/./, 'comment.liquid'],
+      ],
+
+      rawBlock: [
+        [/\{%-?\s*endraw\s*-?%\}/, { token: 'keyword.liquid', next: '@pop' }],
+        [/./, 'string.liquid'],
+      ],
+
+      schemaBlock: [
+        [/\{%-?\s*endschema\s*-?%\}/, { token: 'keyword.liquid', next: '@pop' }],
+        // JSON inside schema
+        [/"([^"\\]|\\.)*"/, 'string.json'],
+        [/\d+(\.\d+)?/, 'number.json'],
+        [/(?:true|false|null)\b/, 'keyword.json'],
+        [/[{}[\],:]/, 'delimiter.json'],
+        [/\s+/, ''],
+        [/./, ''],
+      ],
+
+      styleBlock: [
+        [/\{%-?\s*endstyle\s*-?%\}/, { token: 'keyword.liquid', next: '@pop' }],
+        // Liquid inside style
+        [/\{\{-?/, { token: 'delimiter.liquid.output', next: '@liquidOutput.push' }],
+        [/\{%-?/, { token: 'delimiter.liquid.tag', next: '@liquidTag.push' }],
+        // CSS tokens
+        [/[a-zA-Z-]+(?=\s*:)/, 'attribute.name.css'],
+        [/:/, 'delimiter.css'],
+        [/#[0-9a-fA-F]{3,8}\b/, 'constant.color.css'],
+        [/\d+(\.\d+)?(px|em|rem|%|vh|vw|s|ms)?/, 'number.css'],
+        [/[{}();,]/, 'delimiter.css'],
+        [/./, ''],
+      ],
+
+      javascriptBlock: [
+        [/\{%-?\s*endjavascript\s*-?%\}/, { token: 'keyword.liquid', next: '@pop' }],
+        [/./, ''],
+      ],
+
+      htmlTag: [
+        [/>/, { token: 'tag.html', next: '@pop' }],
+        [/\/>/, { token: 'tag.html', next: '@pop' }],
+        [/\{\{-?/, { token: 'delimiter.liquid.output', next: '@liquidOutput.push' }],
+        [/\{%-?/, { token: 'delimiter.liquid.tag', next: '@liquidTag.push' }],
+        [/[a-zA-Z-]+(?==)/, 'attribute.name.html'],
+        [/=/, 'delimiter.html'],
+        [/"[^"]*"/, 'attribute.value.html'],
+        [/'[^']*'/, 'attribute.value.html'],
+        [/\s+/, ''],
+        [/./, ''],
+      ],
+
+      htmlComment: [
+        [/-->/, { token: 'comment.html', next: '@pop' }],
+        [/./, 'comment.html'],
+      ],
+    },
+  } as monacoTypes.languages.IMonarchLanguage);
+}

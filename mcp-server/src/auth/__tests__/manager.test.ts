@@ -53,7 +53,7 @@ import type { SynapseConfig } from '../../config.js';
 
 function createConfig(overrides: Partial<SynapseConfig> = {}): SynapseConfig {
   return {
-    apiUrl: 'https://api.synapse.dev',
+    apiUrl: 'https://api.synapse.shop',
     logLevel: 'info',
     fileWatcherEnabled: true,
     autoRefreshToken: true,
@@ -182,7 +182,7 @@ describe('AuthManager', () => {
       await manager.loadToken();
 
       expect(fetchSpy).toHaveBeenCalledWith(
-        'https://api.synapse.dev/api/auth/refresh',
+        'https://api.synapse.shop/api/auth/refresh',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -280,7 +280,7 @@ describe('AuthManager', () => {
       await manager.refreshToken();
 
       expect(fetchSpy).toHaveBeenCalledWith(
-        'https://api.synapse.dev/api/auth/refresh',
+        'https://api.synapse.shop/api/auth/refresh',
         {
           method: 'POST',
           headers: {

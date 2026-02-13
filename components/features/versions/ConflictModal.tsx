@@ -19,8 +19,8 @@ export function ConflictModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 border border-gray-700">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-700">
+      <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-md mx-4 border ide-border">
+        <div className="flex items-center gap-3 px-4 py-3 border-b ide-border">
           <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -35,41 +35,41 @@ export function ConflictModal({
               />
             </svg>
           </span>
-          <h2 className="text-lg font-medium text-gray-200">
+          <h2 className="text-lg font-medium ide-text">
             Version Conflict
           </h2>
         </div>
 
         <div className="px-4 py-4">
-          <p className="text-sm text-gray-300 mb-3">
+          <p className="text-sm ide-text mb-3">
             The file has been modified since your last action. Another change was
             saved while you were working.
           </p>
 
-          <div className="bg-gray-800 rounded p-3 space-y-1 text-sm">
+          <div className="ide-surface-input rounded p-3 space-y-1 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Your version:</span>
-              <span className="text-gray-200 font-mono">v{clientVersion}</span>
+              <span className="ide-text-muted">Your version:</span>
+              <span className="ide-text font-mono">v{clientVersion}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Server version:</span>
+              <span className="ide-text-muted">Server version:</span>
               <span className="text-amber-400 font-mono">
                 v{serverVersion}
               </span>
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-3">
+          <p className="text-xs ide-text-muted mt-3">
             Force overwrite will discard the server changes and apply your
             action. Cancel to review the latest version first.
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t ide-border">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
+            className="px-3 py-1.5 text-sm rounded ide-surface-inset ide-text ide-hover hover:ide-text transition-colors"
           >
             Cancel
           </button>

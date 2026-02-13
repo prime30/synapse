@@ -51,7 +51,7 @@ function FooterWatermark() {
       aria-hidden="true"
     >
       <span
-        className="font-pixel-circle text-[120px] sm:text-[180px] md:text-[240px] lg:text-[320px] tracking-[0.15em] uppercase text-stone-900 dark:text-white whitespace-nowrap"
+        className="font-pixel-circle text-[80px] sm:text-[120px] md:text-[240px] lg:text-[320px] tracking-[0.15em] uppercase text-stone-900 dark:text-white whitespace-nowrap"
         style={{
           opacity,
           transition: 'opacity 2.5s ease-in-out',

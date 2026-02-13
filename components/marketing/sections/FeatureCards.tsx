@@ -79,7 +79,7 @@ function CodeMockup({ inView }: { inView: boolean }) {
   }, [visibleLines]);
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[400px] flex flex-col">
+    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[280px] md:h-[400px] flex flex-col">
       <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5 shrink-0">
         <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
         <div className="w-2 h-2 rounded-full bg-[#febc2e]" />

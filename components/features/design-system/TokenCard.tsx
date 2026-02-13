@@ -24,7 +24,7 @@ export interface TokenCardProps {
 function ColorPreview({ value }: { value: string }) {
   return (
     <div
-      className="w-8 h-8 rounded border border-gray-700 flex-shrink-0"
+      className="w-8 h-8 rounded border ide-border flex-shrink-0"
       style={{ backgroundColor: value }}
       title={value}
     />
@@ -34,7 +34,7 @@ function ColorPreview({ value }: { value: string }) {
 function FontPreview({ value }: { value: string }) {
   return (
     <span
-      className="text-sm text-gray-200 truncate max-w-[140px]"
+      className="text-sm ide-text truncate max-w-[140px]"
       style={{ fontFamily: value }}
       title={value}
     >
@@ -46,7 +46,7 @@ function FontPreview({ value }: { value: string }) {
 function FontSizePreview({ value }: { value: string }) {
   return (
     <span
-      className="text-gray-200 leading-none truncate"
+      className="ide-text leading-none truncate"
       style={{ fontSize: value }}
       title={value}
     >
@@ -64,10 +64,10 @@ function SpacingPreview({ value }: { value: string }) {
   return (
     <div className="flex items-center gap-2">
       <div
-        className="h-3 rounded-sm bg-blue-500/60"
+        className="h-3 rounded-sm bg-sky-500/60"
         style={{ width: `${barWidth}px` }}
       />
-      <span className="text-[10px] text-gray-500">{value}</span>
+      <span className="text-[10px] ide-text-muted">{value}</span>
     </div>
   );
 }
@@ -75,7 +75,7 @@ function SpacingPreview({ value }: { value: string }) {
 function RadiusPreview({ value }: { value: string }) {
   return (
     <div
-      className="w-8 h-8 border-2 border-blue-400/60 bg-transparent"
+      className="w-8 h-8 border-2 border-sky-400/60 bg-transparent"
       style={{ borderRadius: value }}
       title={value}
     />
@@ -85,7 +85,7 @@ function RadiusPreview({ value }: { value: string }) {
 function ShadowPreview({ value }: { value: string }) {
   return (
     <div
-      className="w-8 h-8 rounded bg-gray-700"
+      className="w-8 h-8 rounded ide-surface-inset"
       style={{ boxShadow: value }}
       title={value}
     />
@@ -117,17 +117,17 @@ export function TokenCard({ value, type, usageFiles, usageCount }: TokenCardProp
       onClick={() => hasUsages && setExpanded((p) => !p)}
       className={[
         'w-full text-left px-2.5 py-2 rounded-md border transition-colors',
-        'bg-gray-800/50 border-gray-700/60 hover:border-gray-600',
+        'ide-surface-panel ide-border ide-hover',
         hasUsages ? 'cursor-pointer' : 'cursor-default',
       ].join(' ')}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <Preview value={value} />
-        <span className="text-xs text-gray-300 font-mono truncate flex-1 min-w-0">
+        <span className="text-xs ide-text font-mono truncate flex-1 min-w-0">
           {value}
         </span>
         {count > 0 && (
-          <span className="text-[10px] text-gray-500 flex-shrink-0">
+          <span className="text-[10px] ide-text-muted flex-shrink-0">
             {count} use{count !== 1 ? 's' : ''}
           </span>
         )}
@@ -138,7 +138,7 @@ export function TokenCard({ value, type, usageFiles, usageCount }: TokenCardProp
             viewBox="0 0 24 24"
             strokeWidth={2}
             stroke="currentColor"
-            className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 ide-text-muted flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
@@ -147,9 +147,9 @@ export function TokenCard({ value, type, usageFiles, usageCount }: TokenCardProp
 
       {/* Expanded: file usage list */}
       {expanded && usageFiles && usageFiles.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-700/40 space-y-0.5">
+        <div className="mt-2 pt-2 border-t ide-border space-y-0.5">
           {usageFiles.map((fp) => (
-            <p key={fp} className="text-[10px] text-gray-500 font-mono truncate">
+            <p key={fp} className="text-[10px] ide-text-muted font-mono truncate">
               {fp}
             </p>
           ))}

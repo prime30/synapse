@@ -3,9 +3,16 @@ import type {
   AIMessage,
   AICompletionOptions,
   AICompletionResult,
+  StreamResult,
 } from '../types';
+import {
+  AIProviderError,
+  classifyProviderError,
+  classifyNetworkError,
+  formatSSEError,
+} from '../errors';
 
-export function createAnthropicProvider(): AIProviderInterface {
+export function createAnthropicProvider(customApiKey?: string): AIProviderInterface {
   return {
     name: 'anthropic',
 
@@ -13,8 +20,8 @@ export function createAnthropicProvider(): AIProviderInterface {
       messages: AIMessage[],
       options?: Partial<AICompletionOptions>
     ): Promise<AICompletionResult> {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+      const apiKey = customApiKey ?? process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new AIProviderError('AUTH_ERROR', 'ANTHROPIC_API_KEY is not set', 'anthropic');
 
       const model = options?.model ?? 'claude-3-5-haiku-20241022';
       const systemMessage = messages.find((m) => m.role === 'system');
@@ -28,42 +35,51 @@ export function createAnthropicProvider(): AIProviderInterface {
       };
       if (systemMessage) body.system = systemMessage.content;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(body),
-      });
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(body),
+        });
 
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} ${err}`);
+        const bodyText = await response.text();
+        if (!response.ok) {
+          throw classifyProviderError(response.status, bodyText, 'anthropic');
+        }
+
+        const data = JSON.parse(bodyText || '{}') as {
+          content?: Array<{ type?: string; text?: string }>;
+          usage?: { input_tokens?: number; output_tokens?: number };
+        };
+
+        const textBlock = data.content?.find((c) => c.type === 'text');
+        if (!textBlock?.text) {
+          throw new AIProviderError('EMPTY_RESPONSE', 'Anthropic returned no content', 'anthropic');
+        }
+
+        return {
+          content: textBlock.text,
+          provider: 'anthropic',
+          model,
+          inputTokens: data.usage?.input_tokens,
+          outputTokens: data.usage?.output_tokens,
+        };
+      } catch (e) {
+        if (e instanceof AIProviderError) throw e;
+        throw classifyNetworkError(e, 'anthropic');
       }
-
-      const data = (await response.json()) as {
-        content?: Array<{ type?: string; text?: string }>;
-        usage?: { input_tokens?: number; output_tokens?: number };
-      };
-
-      const textBlock = data.content?.find((c) => c.type === 'text');
-      return {
-        content: textBlock?.text ?? '',
-        provider: 'anthropic',
-        model,
-        inputTokens: data.usage?.input_tokens,
-        outputTokens: data.usage?.output_tokens,
-      };
     },
 
     async stream(
       messages: AIMessage[],
       options?: Partial<AICompletionOptions>
-    ): Promise<ReadableStream<string>> {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+    ): Promise<StreamResult> {
+      const apiKey = customApiKey ?? process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new AIProviderError('AUTH_ERROR', 'ANTHROPIC_API_KEY is not set', 'anthropic');
 
       const model = options?.model ?? 'claude-3-5-haiku-20241022';
       const systemMessage = messages.find((m) => m.role === 'system');
@@ -88,36 +104,69 @@ export function createAnthropicProvider(): AIProviderInterface {
         body: JSON.stringify(body),
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         const err = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} ${err}`);
+        throw classifyProviderError(response.status, err, 'anthropic');
+      }
+      if (!response.body) {
+        throw new AIProviderError('UNKNOWN', 'Anthropic returned no stream body', 'anthropic');
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
-      return new ReadableStream<string>({
+      // Track token usage from SSE events
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let usageResolve: (value: { inputTokens: number; outputTokens: number }) => void;
+      const usagePromise = new Promise<{ inputTokens: number; outputTokens: number }>(
+        (resolve) => { usageResolve = resolve; }
+      );
+
+      const stream = new ReadableStream<string>({
         async pull(controller) {
-          const { done, value } = await reader.read();
-          if (done) {
-            controller.close();
-            return;
-          }
-          const text = decoder.decode(value);
-          const lines = text.split('\n').filter((l) => l.startsWith('data: '));
-          for (const line of lines) {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              if (parsed.type === 'content_block_delta') {
-                const content = parsed.delta?.text;
-                if (content) controller.enqueue(content);
-              }
-            } catch {
-              // skip malformed chunks
+          try {
+            const { done, value } = await reader.read();
+            if (done) {
+              controller.close();
+              usageResolve!({ inputTokens, outputTokens });
+              return;
             }
+            const text = decoder.decode(value);
+            const lines = text.split('\n').filter((l) => l.startsWith('data: '));
+            for (const line of lines) {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+
+                // Capture input tokens from message_start event
+                if (parsed.type === 'message_start') {
+                  inputTokens = parsed.message?.usage?.input_tokens ?? 0;
+                }
+
+                // Capture output tokens from message_delta event (end of stream)
+                if (parsed.type === 'message_delta') {
+                  outputTokens = parsed.usage?.output_tokens ?? 0;
+                }
+
+                // Enqueue content text as before
+                if (parsed.type === 'content_block_delta') {
+                  const content = parsed.delta?.text;
+                  if (content) controller.enqueue(content);
+                }
+              } catch {
+                // skip malformed chunks
+              }
+            }
+          } catch (e) {
+            const err = e instanceof AIProviderError ? e : classifyNetworkError(e, 'anthropic');
+            controller.enqueue(formatSSEError(err));
+            controller.close();
+            usageResolve!({ inputTokens, outputTokens });
           }
         },
       });
+
+      return { stream, getUsage: () => usagePromise };
     },
   };
 }

@@ -72,7 +72,7 @@ describe('config', () => {
       const config = loadConfig();
 
       expect(config).toEqual({
-        apiUrl: 'https://api.synapse.dev',
+        apiUrl: 'https://api.synapse.shop',
         logLevel: 'info',
         fileWatcherEnabled: true,
         autoRefreshToken: true,
@@ -145,7 +145,7 @@ describe('config', () => {
       const config = loadConfig();
 
       expect(config).toEqual({
-        apiUrl: 'https://api.synapse.dev',
+        apiUrl: 'https://api.synapse.shop',
         logLevel: 'info',
         fileWatcherEnabled: true,
         autoRefreshToken: true,

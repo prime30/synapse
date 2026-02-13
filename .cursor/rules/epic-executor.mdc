@@ -1,0 +1,115 @@
+---
+description: EPIC execution protocol - how to build an EPIC from the synapse execution plan. Activated when user says "build EPIC X" or "build next EPIC".
+alwaysApply: true
+---
+
+# EPIC Executor Protocol
+
+## Source of Truth
+
+The EPIC execution plan lives at: `.cursor/plans/synapse_epic_execution_0e0c3b0e.plan.md`
+The master spec lives at: `.cursor/plans/ai_chat_interactivity_blueprint_b967c85f.plan.md`
+
+## Execution Flow
+
+When the user says "build EPIC X" or "build next EPIC":
+
+### 1. Read the Plan
+
+Read `.cursor/plans/synapse_epic_execution_0e0c3b0e.plan.md` and find the target EPIC section. Extract:
+- Goal
+- Key files (new + modify)
+- Dependencies (verify they are completed -- check git log or file existence)
+- Acceptance criteria (these are your definition of done)
+
+### 2. Use the EPIC Plan Directly
+
+Use the EPIC plan's key files and acceptance criteria to drive execution. The plan at `.cursor/plans/synapse_epic_execution_0e0c3b0e.plan.md` is the single source of truth.
+
+### 3. Build Dependency Graph
+
+From the key files list:
+- **Tier 0**: New utility files, types, interfaces (no imports from other new files)
+- **Tier 1**: Core logic files that import Tier 0
+- **Tier 2**: API routes that import Tier 1
+- **Tier 3**: React hooks that call Tier 2
+- **Tier 4**: UI components that use Tier 3
+
+### 4. Execute in Tiers with Sub-Agents
+
+For each tier:
+- Spawn Implementer sub-agents for independent files (max 3 parallel)
+- Each sub-agent gets: the file path, what to build, relevant interfaces from earlier tiers, and the acceptance criteria it must satisfy
+- Wait for tier completion before starting next tier
+
+### 5. Verify After Each Tier
+
+After each tier that touches `lib/`, `app/api/`, or `package.json`:
+```
+npm run lint
+npm run test:run
+```
+Fix any regressions before proceeding.
+
+### 6. Final Verification
+
+After all tiers complete:
+- Run full lint + test suite
+- Check every acceptance criteria from the EPIC plan
+- If any criteria fails, create fix tasks and execute them
+- Commit with: `feat(epic-Xa): <short description> [EPIC-Xa]`
+
+### 7. Update Plan Status
+
+After successful commit, update the EPIC plan's todo status from `pending` to `completed`:
+- Edit `.cursor/plans/synapse_epic_execution_0e0c3b0e.plan.md`
+- Change the todo's `status: pending` to `status: completed`
+
+## Sub-Agent Prompt Template
+
+When spawning Implementer sub-agents, use this structure:
+
+```
+You are building [FILE_PATH] as part of EPIC [X].
+
+GOAL: [paste the EPIC's goal]
+
+THIS FILE'S PURPOSE: [what it does, from the key files list]
+
+INTERFACES IT MUST IMPLEMENT/USE:
+[paste relevant types from earlier tiers or existing codebase]
+
+ACCEPTANCE CRITERIA THIS FILE CONTRIBUTES TO:
+[list the specific criteria from the EPIC]
+
+EXISTING CODE TO REFERENCE:
+[list related existing files the agent should read first]
+
+CONSTRAINTS:
+- Follow existing code patterns in the codebase
+- Use existing imports (supabase client, API error handling, etc.)
+- Do NOT modify files outside your scope
+- Run lint check after writing
+```
+
+## Parallel Track Execution
+
+EPICs on independent tracks can be built simultaneously in separate conversations:
+- Track A (AI): E1a -> E1b -> E1c -> E5 -> E8 -> E12 -> E13
+- Track B (Editor): E1a -> E3 -> E7
+- Track C (Shopify): E8 -> E9 -> E10 -> E11 (E9 blocked on E8 deploy pre-flight)
+- Track D (Foundations): E1a -> E4 -> E16
+- Track E (Language): E1a -> E4 -> E6
+- Track F (Memory): E8 -> E14
+- Standalone: EPIC M (anytime after E1b commits to prompts.ts)
+
+After E1a completes, you can run Track B, C, D, and E in parallel (4 separate conversations).
+
+## Error Recovery
+
+If a sub-agent fails:
+1. Read the error output
+2. Check if it's a dependency issue (missing type, missing file)
+3. If dependency issue: the earlier tier was incomplete -- fix it first
+4. If implementation issue: retry with more context (read the existing file, read related files)
+5. Never skip a failing acceptance criterion -- fix it before moving on

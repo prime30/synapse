@@ -39,9 +39,9 @@ interface PreviewControlsProps {
 // Shared styles
 // ---------------------------------------------------------------------------
 
-const sectionLabelClass = 'text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5';
+const sectionLabelClass = 'text-xs font-semibold ide-text-2 mb-2 flex items-center gap-1.5';
 const selectClass =
-  'w-full rounded bg-gray-800 border border-gray-700 px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'w-full rounded ide-surface-input border ide-border px-2 py-1 text-xs ide-text focus:outline-none focus:ring-1 focus:ring-sky-500 dark:focus:ring-sky-400';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -59,12 +59,12 @@ export function PreviewControls({
   onMockConfigChange,
 }: PreviewControlsProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+    <div className="flex flex-col gap-3 rounded-lg border ide-border ide-surface-panel p-4">
       {/* ----------------------------------------------------------------- */}
       {/* Device size (existing) + quick-select viewport buttons            */}
       {/* ----------------------------------------------------------------- */}
       <div>
-        <p className="text-xs font-semibold text-gray-300 mb-2">Device size</p>
+        <p className="text-xs font-semibold ide-text-2 mb-2">Device size</p>
         <DeviceSizeSelector value={deviceWidth} onChange={onDeviceWidthChange} />
         <div className="flex items-center gap-1.5 mt-2">
           {VIEWPORT_PRESETS.map((vp) => (
@@ -74,8 +74,8 @@ export function PreviewControls({
               onClick={() => onDeviceWidthChange(vp.width)}
               className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
                 deviceWidth === vp.width
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                  ? 'bg-sky-500 dark:bg-sky-600 text-white'
+                  : 'ide-surface-input ide-text-3 hover:ide-text-2 ide-hover'
               }`}
             >
               {vp.label === 'Full' ? 'Full' : `${vp.label}px`}
@@ -88,7 +88,7 @@ export function PreviewControls({
       {/* Page type (existing)                                              */}
       {/* ----------------------------------------------------------------- */}
       <div>
-        <p className="text-xs font-semibold text-gray-300 mb-2">Page type</p>
+        <p className="text-xs font-semibold ide-text-2 mb-2">Page type</p>
         <PageTypeSelector value={pageType} onChange={onPageTypeChange} />
       </div>
 
@@ -120,7 +120,7 @@ export function PreviewControls({
       {/* ----------------------------------------------------------------- */}
       {mockConfig && onMockConfigChange && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold text-gray-300">Mock data</p>
+          <p className="text-xs font-semibold ide-text-2">Mock data</p>
 
           {/* Customer preset */}
           <div>

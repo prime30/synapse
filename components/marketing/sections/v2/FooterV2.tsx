@@ -47,7 +47,7 @@ export default function FooterV2() {
       aria-label="Site footer"
     >
       <motion.div
-        className="max-w-6xl mx-auto px-8 md:px-10 pt-16 pb-10"
+        className="max-w-6xl mx-auto px-8 md:px-10 pt-12 pb-8 md:pt-16 md:pb-10"
         initial={{ opacity: 0, y: 20 }}
         animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -62,7 +62,7 @@ export default function FooterV2() {
             >
               SYNAPSE
             </Link>
-            <p className="text-stone-500 dark:text-white/50 text-sm leading-relaxed max-w-xs">
+            <p className="text-stone-500 dark:text-white/50 text-sm leading-relaxed max-w-full sm:max-w-xs">
               The Shopify theme IDE that thinks alongside you.
             </p>
           </div>

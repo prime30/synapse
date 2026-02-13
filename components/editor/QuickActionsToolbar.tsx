@@ -121,7 +121,7 @@ export function QuickActionsToolbar({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 4 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className="absolute z-50 flex items-center rounded-md border border-gray-600 bg-gray-800/80 shadow-lg backdrop-blur-md"
+          className="absolute z-50 flex items-center rounded-md border ide-border ide-surface-pop shadow-lg backdrop-blur-md"
           style={{
             top: position.top - TOOLBAR_OFFSET_Y,
             left: position.left,
@@ -130,19 +130,19 @@ export function QuickActionsToolbar({
           {actions.map((action, idx) => (
             <React.Fragment key={action.id}>
               {idx > 0 && (
-                <div className="h-5 w-px shrink-0 bg-gray-600/60" />
+                <div className="h-5 w-px shrink-0 ide-border-subtle bg-stone-200 dark:bg-white/10" />
               )}
               <button
                 type="button"
                 onClick={() => onAction(action.action)}
-                className="flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs text-gray-300 transition-colors first:rounded-l-md last:rounded-r-md hover:bg-gray-700/70 hover:text-white"
+                className="flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs ide-text-2 transition-colors first:rounded-l-md last:rounded-r-md ide-hover hover:ide-text"
               >
-                <span className="flex shrink-0 items-center text-gray-400 group-hover:text-white">
+                <span className="flex shrink-0 items-center ide-text-3 group-hover:ide-text">
                   {action.icon}
                 </span>
                 <span>{action.label}</span>
                 {action.shortcut && (
-                  <kbd className="ml-1 rounded border border-gray-600 bg-gray-700/60 px-1 py-0.5 font-mono text-[10px] leading-none text-gray-500">
+                  <kbd className="ml-1 rounded border ide-border ide-surface-inset px-1 py-0.5 font-mono text-[10px] leading-none ide-text-muted">
                     {action.shortcut}
                   </kbd>
                 )}

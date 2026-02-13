@@ -38,7 +38,7 @@ export function FileList({
 
   if (!projectId) {
     return (
-      <div className="p-4 text-gray-500 text-sm">Select a project</div>
+      <div className="p-4 ide-text-muted text-sm">Select a project</div>
     );
   }
 
@@ -49,7 +49,7 @@ export function FileList({
         <button
           type="button"
           onClick={() => refetch()}
-          className="text-blue-400 text-sm hover:underline"
+          className="text-sky-500 dark:text-sky-400 text-sm hover:underline"
         >
           Retry
         </button>
@@ -59,15 +59,15 @@ export function FileList({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-2 py-1 border-b border-gray-700">
-        <span className="text-sm font-medium text-gray-300">
+      <div className="flex items-center justify-between px-2 py-1 border-b ide-border">
+        <span className="text-sm font-medium ide-text-2">
           Files ({files.length})
         </span>
         {onAddFile && (
           <button
             type="button"
             onClick={onAddFile}
-            className="text-xs text-blue-400 hover:underline"
+            className="text-xs text-sky-500 dark:text-sky-400 hover:underline"
           >
             + Add
           </button>
@@ -87,12 +87,12 @@ export function FileList({
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-12 bg-gray-700/30 rounded animate-pulse"
+                className="h-12 ide-surface-inset rounded animate-pulse"
               />
             ))}
           </div>
         ) : files.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
+          <div className="p-4 text-center ide-text-muted text-sm">
             {search ? (
               <>No files match &apos;{search}&apos;</>
             ) : (
@@ -105,7 +105,7 @@ export function FileList({
                   <button
                     type="button"
                     onClick={onAddFile}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500"
+                    className="px-3 py-1.5 bg-sky-500 text-white text-sm rounded hover:bg-sky-600"
                   >
                     Upload Your First File
                   </button>

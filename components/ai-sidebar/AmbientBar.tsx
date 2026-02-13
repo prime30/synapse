@@ -57,17 +57,17 @@ const SIGNAL_CONFIG: Record<
   },
   'accessibility-gap': {
     icon: '♿',
-    bgClass: 'bg-blue-500/10',
-    textClass: 'text-blue-400',
-    borderClass: 'border-blue-500/20',
+    bgClass: 'bg-sky-500/10 dark:bg-sky-500/10',
+    textClass: 'text-sky-600 dark:text-sky-400',
+    borderClass: 'border-sky-500/20 dark:border-sky-500/20',
   },
 };
 
 const DEFAULT_CONFIG = {
   icon: '💡',
-  bgClass: 'bg-gray-500/10',
-  textClass: 'text-gray-400',
-  borderClass: 'border-gray-500/20',
+  bgClass: 'ide-surface-inset',
+  textClass: 'ide-text-muted',
+  borderClass: 'ide-border-subtle border',
 };
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ export function AmbientBar({ nudge, onAccept, onDismiss, className = '' }: Ambie
           </span>
 
           {/* Message */}
-          <span className="flex-1 text-xs text-gray-300 truncate min-w-0">
+          <span className="flex-1 text-xs ide-text-2 truncate min-w-0">
             {nudge.message}
           </span>
 
@@ -147,7 +147,7 @@ export function AmbientBar({ nudge, onAccept, onDismiss, className = '' }: Ambie
           <button
             type="button"
             onClick={handleDismiss}
-            className="flex-shrink-0 rounded p-0.5 text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors duration-150"
+            className="flex-shrink-0 rounded p-0.5 ide-text-muted hover:ide-text-2 ide-hover transition-colors duration-150"
             aria-label="Dismiss suggestion"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

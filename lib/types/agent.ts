@@ -1,5 +1,5 @@
 /** Agent type identifiers for the multi-agent orchestration system */
-export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'review';
+export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'json' | 'review';
 
 /** Message types exchanged between agents via the coordinator */
 export type MessageType = 'task' | 'result' | 'error' | 'question';
@@ -68,6 +68,10 @@ export interface AgentContext {
   dependencyContext?: string;
   /** Design system token context for design-aware code generation (REQ-52) */
   designContext?: string;
+  /** Live DOM context from the Shopify preview bridge (app elements, selectors, styles) */
+  domContext?: string;
+  /** Developer memory context (conventions, decisions, preferences) from EPIC 14 */
+  memoryContext?: string;
 }
 
 /** A task delegated from the PM to a specialist */
@@ -95,6 +99,10 @@ export interface AgentResult {
   reviewResult?: ReviewResult;
   analysis?: string;
   error?: AgentError;
+  /** p0: Scope Assessment Gate — PM signals the request needs clarification */
+  needsClarification?: boolean;
+  /** p0: Testing Always First — signal to inject "Verify this works" chip */
+  suggestVerification?: boolean;
 }
 
 /** In-memory state for an active execution */

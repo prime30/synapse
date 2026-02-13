@@ -9,6 +9,7 @@ import { registerFileTools } from './tools/files.js';
 import { registerAgentTools } from './tools/agents.js';
 import { registerApplyTools } from './tools/apply-changes.js';
 import { registerPreferencesTools } from './tools/preferences.js';
+import { registerInspectPreviewTools } from './tools/inspect-preview.js';
 import { AuthManager } from './auth/manager.js';
 import { APIClient } from './api/client.js';
 
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
   registerAgentTools(registry, apiClient, authManager);
   registerApplyTools(registry, apiClient, authManager);
   registerPreferencesTools(registry, apiClient, authManager);
+  registerInspectPreviewTools(registry, apiClient, authManager);
 
   // Register all tools with the MCP server (single tools/list + tools/call handler)
   registerAllTools(server, registry);

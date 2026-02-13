@@ -23,11 +23,11 @@ export function GoogleSignInButton({
       href={oauthUrl}
       className={`
         flex w-full items-center justify-center gap-3
-        rounded-lg border border-gray-700 bg-gray-800
-        px-6 py-3 text-sm font-medium text-gray-200
+        rounded-lg border ide-border ide-surface-panel
+        px-6 py-3 text-sm font-medium ide-text
         transition-all duration-150
-        hover:border-gray-600 hover:bg-gray-750
-        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950
+        ide-hover
+        focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-950 dark:focus:ring-offset-[#0a0a0a]
         ${className}
       `}
       aria-label="Sign in with Google"

@@ -46,7 +46,7 @@ const SECURITY_CARDS = [
     icon: '\u{1F6A8}',
     title: 'Incident Response',
     description:
-      '24-hour response SLA. Security issues: security@synapse.dev',
+      '24-hour response SLA. Security issues: security@synapse.shop',
   },
 ];
 
@@ -105,10 +105,10 @@ export default function SecurityPage() {
               vulnerabilities directly to our security team — we respond within 24 hours.
             </p>
             <a
-              href="mailto:security@synapse.dev"
+              href="mailto:security@synapse.shop"
               className="inline-block rounded-full border border-stone-200 dark:border-white/10 bg-stone-100 dark:bg-white/5 px-6 py-3 text-sm font-medium text-stone-900 dark:text-white hover:bg-stone-200 dark:hover:bg-white/10 transition-colors"
             >
-              security@synapse.dev
+              security@synapse.shop
             </a>
           </div>
         </motion.div>

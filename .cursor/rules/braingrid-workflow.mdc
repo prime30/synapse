@@ -1,13 +1,15 @@
 ---
-description: BrainGrid workflow rules - always pull tasks from BrainGrid before building
-alwaysApply: true
+description: BrainGrid workflow rules - pull tasks from BrainGrid when working on BrainGrid requirements. Disabled for EPIC plan execution.
+alwaysApply: false
 ---
 
 # BrainGrid Workflow Rules
 
-## Task Breakdown Rule (HARD RULE)
+> **NOTE**: This rule is OFF by default. It only applies when the user explicitly references a BrainGrid requirement (e.g. "build REQ-X"). For EPIC plan execution, use the epic-executor protocol in `.cursor/rules/epic-executor.mdc` instead.
 
-NEVER create your own task breakdown for a requirement. Always check BrainGrid first:
+## Task Breakdown Rule (when using BrainGrid)
+
+When working on a BrainGrid requirement, always check BrainGrid first:
 
 ```bash
 braingrid task list -r REQ-X -p PROJ-1 --limit 20

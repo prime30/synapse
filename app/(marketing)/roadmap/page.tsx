@@ -202,10 +202,10 @@ export default function RoadmapPage() {
             <p className="text-stone-500 dark:text-white/50 text-base">
               Have a feature request? Let us know at{' '}
               <a
-                href="mailto:hello@synapse.dev"
+                href="mailto:hello@synapse.shop"
                 className="text-accent underline underline-offset-4 hover:text-accent/80 transition-colors"
               >
-                hello@synapse.dev
+                hello@synapse.shop
               </a>
             </p>
           </div>

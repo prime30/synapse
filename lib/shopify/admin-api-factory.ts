@@ -2,6 +2,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { APIError } from '@/lib/errors/handler';
 import { decryptToken } from './token-manager';
 import { ShopifyAdminAPI } from './admin-api';
+import { ShopifyTokenManager } from './token-manager';
 import type { ShopifyConnection } from '@/lib/types/shopify';
 
 function getAdminClient() {
@@ -16,6 +17,24 @@ function getAdminClient() {
 }
 
 export class ShopifyAdminAPIFactory {
+  /**
+   * Create a ShopifyAdminAPI instance from a project ID.
+   * Resolves the active connection for the user and project, then creates the API.
+   */
+  static async fromProjectId(
+    projectId: string,
+    userId: string
+  ): Promise<ShopifyAdminAPI> {
+    const tokenManager = new ShopifyTokenManager();
+    const connection = await tokenManager.getActiveConnection(userId, {
+      projectId,
+    });
+    if (!connection) {
+      throw APIError.notFound('No active Shopify store connection for this project');
+    }
+    return this.create(connection.id);
+  }
+
   /**
    * Create a ShopifyAdminAPI instance from a connection ID.
    * Gets connection from DB, decrypts token, and creates API instance.

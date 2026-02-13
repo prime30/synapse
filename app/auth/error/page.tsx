@@ -74,7 +74,7 @@ function ErrorContent() {
   const { title, description } = getErrorInfo(errorCode);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+    <div className="flex min-h-screen items-center justify-center ide-surface px-4">
       <div className="w-full max-w-sm text-center">
         {/* Error icon */}
         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-950 ring-1 ring-red-800">
@@ -95,11 +95,11 @@ function ErrorContent() {
         </div>
 
         {/* Error details */}
-        <h1 className="text-xl font-bold text-white">{title}</h1>
-        <p className="mt-2 text-sm text-gray-400">{description}</p>
+        <h1 className="text-xl font-bold ide-text">{title}</h1>
+        <p className="mt-2 text-sm ide-text-muted">{description}</p>
 
         {errorCode && (
-          <p className="mt-3 text-xs text-gray-600">
+          <p className="mt-3 text-xs ide-text-quiet">
             Error code: {errorCode}
           </p>
         )}
@@ -108,13 +108,13 @@ function ErrorContent() {
         <div className="mt-8 flex flex-col gap-3">
           <Link
             href="/auth/signin"
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+            className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] dark:focus:ring-offset-[#0a0a0a]"
           >
             Try Again
           </Link>
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-gray-600 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+            className="inline-flex items-center justify-center rounded-lg border ide-border ide-surface-panel px-4 py-2.5 text-sm font-medium ide-text transition-colors ide-hover focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] dark:focus:ring-offset-[#0a0a0a]"
           >
             Go Home
           </Link>
@@ -133,8 +133,8 @@ export default function AuthErrorPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-950">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+        <div className="flex min-h-screen items-center justify-center ide-surface">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 ide-border border-t-sky-500" />
         </div>
       }
     >

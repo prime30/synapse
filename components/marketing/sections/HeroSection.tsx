@@ -367,7 +367,7 @@ export default function HeroSection() {
               <button
                 type="button"
                 onClick={() => openAuthModal('signup')}
-                className="h-12 px-10 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
+                className="h-12 px-6 sm:px-10 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors w-full sm:w-auto"
               >
                 Start Free
               </button>

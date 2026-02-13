@@ -68,7 +68,7 @@ export function UserAvatar({
 
   return (
     <span
-      className={`rounded-full flex items-center justify-center font-medium text-gray-200 flex-shrink-0 ${sizeClass} ${className}`}
+      className={`rounded-full flex items-center justify-center font-medium ide-text flex-shrink-0 ${sizeClass} ${className}`}
       style={{ backgroundColor: fallbackColor }}
       aria-hidden
     >

@@ -74,7 +74,7 @@ export function CopyPasteUpload({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-1">
+        <label className="block text-sm font-medium ide-text-2 mb-1">
           File Name
         </label>
         <input
@@ -84,7 +84,7 @@ export function CopyPasteUpload({
             validate: (v) =>
               v.includes('.') || 'File name must include extension',
           })}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full px-3 py-2 ide-input"
           placeholder="product.liquid"
         />
         {errors.name && (
@@ -93,7 +93,7 @@ export function CopyPasteUpload({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-1">
+        <label className="block text-sm font-medium ide-text-2 mb-1">
           Content
         </label>
         <textarea
@@ -107,7 +107,7 @@ export function CopyPasteUpload({
             },
           })}
           rows={12}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-gray-200 font-mono text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full px-3 py-2 ide-input font-mono text-sm"
           placeholder="Paste your file content here..."
         />
         {errors.content && (
@@ -121,7 +121,7 @@ export function CopyPasteUpload({
         </p>
       )}
       {content && (
-        <p className={`text-sm ${sizeOk ? 'text-gray-400' : 'text-red-400'}`}>
+        <p className={`text-sm ${sizeOk ? 'ide-text-muted' : 'text-red-400'}`}>
           Size: {(sizeBytes / 1024).toFixed(1)} KB
           {!sizeOk && ' (exceeds 10MB)'}
         </p>

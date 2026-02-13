@@ -2,6 +2,7 @@ import { STANDARD_TAGS } from "./standard-tags";
 import { STANDARD_FILTERS } from "./standard-filters";
 import { TypeChecker } from "./type-checker";
 import { ScopeTracker } from "./scope-tracker";
+import { parseLiquidAST } from "./liquid-ast";
 import shopifySchema from "./shopify-schema.json";
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -246,7 +247,6 @@ export class LiquidValidator {
     customFilters: string[] = [],
   ): ValidationError[] {
     const errors: ValidationError[] = [];
-    const scopeTracker = new ScopeTracker();
 
     // Build the set of all known filter names
     const allFilterNames = new Set<string>([
@@ -449,6 +449,43 @@ export class LiquidValidator {
           severity: "warning",
         });
       }
+    }
+
+    // AST-based type checking (enhanced validation layer)
+    try {
+      const parseResult = parseLiquidAST(template);
+
+      if (parseResult.ast.length > 0) {
+        // Build scope from AST
+        const astScope = new ScopeTracker();
+        astScope.buildFromAST(parseResult.ast);
+
+        // Run type checker with scope context
+        const typeIssues = this.typeChecker.walkAndCheck(
+          parseResult.ast,
+          undefined,
+          astScope,
+        );
+
+        // Merge AST-based issues into errors (avoid duplicates)
+        const existingMessages = new Set(
+          errors.map((e) => `${e.line}:${e.message}`),
+        );
+        for (const issue of typeIssues) {
+          const key = `${issue.line}:${issue.message}`;
+          if (!existingMessages.has(key)) {
+            errors.push({
+              type: "semantic",
+              line: issue.line,
+              column: issue.column,
+              message: issue.message,
+              severity: issue.severity,
+            });
+          }
+        }
+      }
+    } catch {
+      // AST parsing may fail on malformed templates; regex checks above still apply
     }
 
     return errors;

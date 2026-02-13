@@ -49,17 +49,48 @@ function isNoRowsError(error: unknown): boolean {
   return err?.code === 'PGRST116';
 }
 
-function isStoreFirstColumnMissingError(error: unknown): boolean {
+/**
+ * Extract a human-readable message from any thrown value.
+ * Handles: Error instances, Supabase/PostgREST error objects, strings, etc.
+ */
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const obj = error as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.details === 'string') return obj.details;
+    if (typeof obj.hint === 'string') return obj.hint;
+    try { return JSON.stringify(error); } catch { /* ignore */ }
+  }
+  return 'Unknown error';
+}
+
+/**
+ * Detect schema-mismatch errors that should trigger the legacy fallback path.
+ * Catches: missing columns (user_id, is_active), schema cache stale, and
+ * missing unique constraint on (user_id, store_domain).
+ */
+function isSchemaFallbackError(error: unknown): boolean {
   const err = error as { code?: string; message?: string };
   const message = (err?.message ?? '').toLowerCase();
+  const code = err?.code ?? '';
   return (
-    err?.code === 'PGRST204' ||
-    err?.code === '42703' ||
+    // PostgREST: schema cache mismatch
+    code === 'PGRST204' ||
+    // PostgreSQL: column does not exist
+    code === '42703' ||
+    // PostgreSQL: no unique or exclusion constraint matching ON CONFLICT
+    code === '42P10' ||
     (message.includes('column') &&
       message.includes('shopify_connections') &&
       (message.includes('is_active') || message.includes('user_id'))) ||
     (message.includes('schema cache') &&
-      (message.includes('is_active') || message.includes('user_id')))
+      (message.includes('is_active') || message.includes('user_id'))) ||
+    // Constraint-related errors for the upsert
+    message.includes('on conflict') ||
+    message.includes('unique constraint') ||
+    message.includes('exclusion constraint')
   );
 }
 
@@ -134,6 +165,72 @@ export class ShopifyTokenManager {
     return (projects ?? []).map((p) => p.id);
   }
 
+  /**
+   * Auto-create a bare project so the legacy schema can store a connection.
+   * Called during onboarding when no projects exist yet.
+   */
+  private async ensurePlaceholderProject(
+    userId: string,
+    storeDomain: string
+  ): Promise<string> {
+    const supabase = adminSupabase();
+
+    // Find the user's organization (or create one)
+    const { data: memberships } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .limit(1);
+
+    let orgId = memberships?.[0]?.organization_id;
+
+    if (!orgId) {
+      // Create a personal organization for the user
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .insert({ name: 'Personal', owner_id: userId })
+        .select('id')
+        .single();
+
+      if (orgError || !org) {
+        throw new APIError(
+          `Failed to create organization: ${orgError?.message ?? 'unknown'}`,
+          'ORG_CREATE_FAILED',
+          500
+        );
+      }
+
+      orgId = org.id;
+
+      // Add user as member
+      await supabase
+        .from('organization_members')
+        .insert({ organization_id: orgId, user_id: userId, role: 'owner' });
+    }
+
+    // Create placeholder project
+    const storeName = storeDomain.replace(/\.myshopify\.com$/, '');
+    const { data: project, error: projError } = await supabase
+      .from('projects')
+      .insert({
+        name: storeName,
+        organization_id: orgId,
+        owner_id: userId,
+      })
+      .select('id')
+      .single();
+
+    if (projError || !project) {
+      throw new APIError(
+        `Failed to create placeholder project: ${projError?.message ?? 'unknown'}`,
+        'PROJECT_CREATE_FAILED',
+        500
+      );
+    }
+
+    return project.id;
+  }
+
   private asLegacyCompatibleConnection(
     row: Omit<ShopifyConnection, 'user_id' | 'is_active'> & {
       user_id?: string;
@@ -167,6 +264,40 @@ export class ShopifyTokenManager {
       );
     }
     return (data ?? null) as ShopifyConnection | null;
+  }
+
+  /**
+   * Reverse lookup: resolve a connection via `projects.shopify_connection_id`.
+   * The import flow sets this FK on the project but doesn't always update
+   * `shopify_connections.project_id`, so a direct lookup can miss it.
+   */
+  private async getConnectionViaProject(
+    supabase: ReturnType<typeof adminSupabase>,
+    projectId: string,
+    userId: string
+  ): Promise<ShopifyConnection | null> {
+    try {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('shopify_connection_id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (!project?.shopify_connection_id) return null;
+
+      const { data: conn } = await supabase
+        .from('shopify_connections')
+        .select('*')
+        .eq('id', project.shopify_connection_id)
+        .maybeSingle();
+
+      if (!conn) return null;
+
+      return this.asLegacyCompatibleConnection(conn as ShopifyConnection, userId);
+    } catch {
+      // Column may not exist (pre-migration-025) — safe to ignore
+      return null;
+    }
   }
 
   /**
@@ -214,8 +345,8 @@ export class ShopifyTokenManager {
 
       return data as ShopifyConnection;
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      if (!isSchemaFallbackError(error)) {
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to store connection: ${message}`,
           'CONNECTION_STORE_FAILED',
@@ -224,14 +355,14 @@ export class ShopifyTokenManager {
       }
 
       // Legacy fallback: project-scoped schema
-      const projectId =
+      let projectId =
         options?.projectId ??
         (await this.getProjectIdsForUser(userId)).at(0);
 
+      // During onboarding, no project exists yet — auto-create a placeholder
+      // so the connection can be stored. The import step will create the real project.
       if (!projectId) {
-        throw APIError.badRequest(
-          'A project is required to connect a store before database migrations are applied.'
-        );
+        projectId = await this.ensurePlaceholderProject(userId, storeDomain);
       }
 
       const { data: legacyData, error: legacyError } = await supabase
@@ -286,10 +417,32 @@ export class ShopifyTokenManager {
         throw error;
       }
 
-      return data as ShopifyConnection | null;
+      // Primary query found a result — return it
+      if (data) {
+        return data as ShopifyConnection;
+      }
+
+      // Primary query succeeded but returned no rows (no is_active connection).
+      // Check reverse lookup via projects.shopify_connection_id before legacy path.
+      if (options?.projectId) {
+        const reverseConnection = await this.getConnectionViaProject(supabase, options.projectId, userId);
+        if (reverseConnection) {
+          return reverseConnection;
+        }
+      }
+
+      // Fall through to legacy lookup — the connection may have been
+      // stored via the project-scoped fallback (no user_id/is_active).
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      // If the table doesn't exist or has a schema issue, return null gracefully
+      const err = error as { code?: string; message?: string };
+      const isTableMissing =
+        err?.code === '42P01' ||
+        (err?.message ?? '').toLowerCase().includes('relation') ||
+        (err?.message ?? '').toLowerCase().includes('does not exist');
+
+      if (!isSchemaFallbackError(error) && !isTableMissing) {
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to get active connection: ${message}`,
           'CONNECTION_FETCH_FAILED',
@@ -297,37 +450,57 @@ export class ShopifyTokenManager {
         );
       }
 
-      // Legacy fallback: resolve by project if provided, otherwise most recently updated
-      if (options?.projectId) {
-        const connection = await this.getLegacyConnectionByProjectId(options.projectId);
-        return connection
-          ? this.asLegacyCompatibleConnection(connection, userId)
-          : null;
+      if (isTableMissing) {
+        return null;
       }
 
-      const projectIds = await this.getProjectIdsForUser(userId);
-      if (projectIds.length === 0) return null;
-
-      const { data: rows, error: legacyError } = await supabase
-        .from('shopify_connections')
-        .select('*')
-        .in('project_id', projectIds)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      if (legacyError) {
-        throw new APIError(
-          `Failed to get active connection: ${legacyError.message}`,
-          'CONNECTION_FETCH_FAILED',
-          500
-        );
-      }
-
-      const row = rows?.[0];
-      return row
-        ? this.asLegacyCompatibleConnection(row as ShopifyConnection, userId)
-        : null;
+      // Schema fallback — continue to legacy lookup below
     }
+
+    // Legacy fallback: resolve by project if provided, otherwise most recently updated
+    if (options?.projectId) {
+      const connection = await this.getLegacyConnectionByProjectId(options.projectId);
+      if (connection) {
+        return this.asLegacyCompatibleConnection(connection, userId);
+      }
+
+      // Reverse lookup: the import flow sets projects.shopify_connection_id
+      // but may not update shopify_connections.project_id back to this project.
+      const reverseConnection = await this.getConnectionViaProject(supabase, options.projectId, userId);
+      if (reverseConnection) {
+        return reverseConnection;
+      }
+    }
+
+    const projectIds = await this.getProjectIdsForUser(userId);
+    if (projectIds.length === 0) return null;
+
+    // Limit IDs to avoid exceeding HTTP URL length limits in the PostgREST
+    // .in() filter (577 UUIDs ≈ 21KB, well past the ~8KB URL limit).
+    // Projects are sorted by updated_at DESC, so the most recent are first —
+    // the legacy storeConnection path always picks the most recent project.
+    const MAX_IN_IDS = 50;
+    const limitedProjectIds = projectIds.slice(0, MAX_IN_IDS);
+
+    const { data: rows, error: legacyError } = await supabase
+      .from('shopify_connections')
+      .select('*')
+      .in('project_id', limitedProjectIds)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (legacyError) {
+      throw new APIError(
+        `Failed to get active connection: ${legacyError.message}`,
+        'CONNECTION_FETCH_FAILED',
+        500
+      );
+    }
+
+    const row = rows?.[0];
+    return row
+      ? this.asLegacyCompatibleConnection(row as ShopifyConnection, userId)
+      : null;
   }
 
   /**
@@ -360,8 +533,8 @@ export class ShopifyTokenManager {
       }
       return;
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      if (!isSchemaFallbackError(error)) {
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to activate store: ${message}`,
           'ACTIVATE_STORE_FAILED',
@@ -383,10 +556,11 @@ export class ShopifyTokenManager {
         throw APIError.notFound('Store connection not found');
       }
 
+      const limitedIds = projectIds.slice(0, 50);
       const { data: rows, error: legacyError } = await supabase
         .from('shopify_connections')
         .select('id')
-        .in('project_id', projectIds)
+        .in('project_id', limitedIds)
         .eq('id', connectionId)
         .limit(1);
 
@@ -425,8 +599,18 @@ export class ShopifyTokenManager {
 
       return (data ?? []) as ShopifyConnection[];
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      const err = error as { code?: string; message?: string };
+      const isTableMissing =
+        err?.code === '42P01' ||
+        (err?.message ?? '').toLowerCase().includes('relation') ||
+        (err?.message ?? '').toLowerCase().includes('does not exist');
+
+      if (isTableMissing) {
+        return [];
+      }
+
+      if (!isSchemaFallbackError(error)) {
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to list connections: ${message}`,
           'CONNECTION_LIST_FAILED',
@@ -444,10 +628,11 @@ export class ShopifyTokenManager {
       const projectIds = await this.getProjectIdsForUser(userId);
       if (projectIds.length === 0) return [];
 
+      const limitedIds = projectIds.slice(0, 50);
       const { data: rows, error: legacyError } = await supabase
         .from('shopify_connections')
         .select('*')
-        .in('project_id', projectIds)
+        .in('project_id', limitedIds)
         .order('updated_at', { ascending: false });
 
       if (legacyError) {
@@ -488,8 +673,8 @@ export class ShopifyTokenManager {
 
       return data as ShopifyConnection | null;
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      if (!isSchemaFallbackError(error)) {
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to get connection: ${message}`,
           'CONNECTION_FETCH_FAILED',
@@ -520,10 +705,11 @@ export class ShopifyTokenManager {
       const projectIds = await this.getProjectIdsForUser(userId);
       if (projectIds.length === 0) return null;
 
+      const limitedIds = projectIds.slice(0, 50);
       const { data: rows, error: legacyError } = await supabase
         .from('shopify_connections')
         .select('*')
-        .in('project_id', projectIds)
+        .in('project_id', limitedIds)
         .eq('store_domain', storeDomain)
         .order('updated_at', { ascending: false })
         .limit(1);
@@ -564,10 +750,11 @@ export class ShopifyTokenManager {
 
   /**
    * Update the theme_id for a connection (e.g. after provisioning a dev theme).
+   * Pass null to clear the theme_id.
    */
   async updateThemeId(
     connectionId: string,
-    themeId: string
+    themeId: string | null
   ): Promise<void> {
     const supabase = adminSupabase();
 
@@ -615,11 +802,11 @@ export class ShopifyTokenManager {
         'id' | 'user_id' | 'project_id' | 'store_domain' | 'theme_id' | 'is_active' | 'sync_status' | 'scopes' | 'last_sync_at' | 'created_at' | 'updated_at'
       >;
     } catch (error) {
-      if (!isStoreFirstColumnMissingError(error)) {
+      if (!isSchemaFallbackError(error)) {
         if (isNoRowsError(error)) {
           return null;
         }
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message = extractErrorMessage(error);
         throw new APIError(
           `Failed to get connection: ${message}`,
           'CONNECTION_FETCH_FAILED',

@@ -37,7 +37,7 @@ describe('ShopifyOAuthService', () => {
       expect(parsed.pathname).toBe('/admin/oauth/authorize');
       expect(parsed.searchParams.get('client_id')).toBe('test-api-key');
       expect(parsed.searchParams.get('scope')).toBe(
-        'read_themes,write_themes'
+        'read_themes,write_themes,read_content,write_content,read_online_store_navigation,write_online_store_navigation,read_discounts,write_discounts,read_files,write_files,read_products,read_inventory'
       );
       expect(parsed.searchParams.get('redirect_uri')).toBe(
         'https://app.example.com/api/shopify/callback'

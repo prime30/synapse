@@ -48,17 +48,17 @@ export function ResourcePicker({
 
   return (
     <div className="space-y-2">
-      <label className="text-xs text-gray-400">{label}</label>
+      <label className="text-xs ide-text-muted">{label}</label>
       <input
         type="text"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={`Search ${label.toLowerCase()}...`}
-        className="w-full rounded bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500"
+        className="w-full rounded ide-surface-input border ide-border px-3 py-2 text-sm ide-text placeholder-ide-text-muted"
       />
 
-      {loading && <p className="text-xs text-gray-400">Loading...</p>}
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {loading && <p className="text-xs ide-text-muted">Loading...</p>}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       <ul className="max-h-64 overflow-y-auto space-y-2">
         {resources.map((resource) => (
@@ -66,7 +66,7 @@ export function ResourcePicker({
             <button
               type="button"
               onClick={() => onSelect(resource)}
-              className="flex w-full items-center gap-3 rounded border border-gray-800 bg-gray-900/50 px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800"
+              className="flex w-full items-center gap-3 rounded border ide-border ide-surface-panel px-3 py-2 text-left text-sm ide-text-2 hover:ide-text ide-hover"
             >
               {resource.image ? (
                 <img
@@ -75,17 +75,17 @@ export function ResourcePicker({
                   className="h-8 w-8 rounded object-cover"
                 />
               ) : (
-                <div className="h-8 w-8 rounded bg-gray-700" />
+                <div className="h-8 w-8 rounded ide-surface-inset" />
               )}
               <div className="flex flex-col">
                 <span className="font-medium">{resource.title}</span>
-                <span className="text-xs text-gray-400">{resource.handle}</span>
+                <span className="text-xs ide-text-muted">{resource.handle}</span>
               </div>
             </button>
           </li>
         ))}
         {!loading && resources.length === 0 && (
-          <li className="text-xs text-gray-500">No results</li>
+          <li className="text-xs ide-text-muted">No results</li>
         )}
       </ul>
     </div>

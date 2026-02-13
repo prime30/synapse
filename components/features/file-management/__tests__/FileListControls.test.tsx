@@ -80,7 +80,7 @@ describe('FileListControls', () => {
     render(<FileListControls {...defaultProps} filter="liquid" />);
 
     const liquidButton = screen.getByRole('button', { name: /^liquid$/i });
-    expect(liquidButton.className).toContain('bg-blue-600');
+    expect(liquidButton.className).toContain('bg-sky-500');
     expect(liquidButton.className).toContain('text-white');
   });
 
@@ -88,8 +88,8 @@ describe('FileListControls', () => {
     render(<FileListControls {...defaultProps} filter="liquid" />);
 
     const allButton = screen.getByRole('button', { name: /^all$/i });
-    expect(allButton.className).toContain('bg-gray-700');
-    expect(allButton.className).not.toContain('bg-blue-600');
+    expect(allButton.className).toContain('ide-surface-panel');
+    expect(allButton.className).not.toContain('bg-sky-500');
   });
 
   it('renders sort dropdown with options', () => {

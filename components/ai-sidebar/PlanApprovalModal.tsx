@@ -109,7 +109,7 @@ interface StepRowProps {
 function StepRow({ step, checked, onToggle }: StepRowProps) {
   return (
     <label
-      className="flex items-start gap-2.5 rounded-lg border border-gray-700/60 bg-gray-800/60 px-3 py-2.5 cursor-pointer hover:bg-gray-800 transition-colors"
+      className="flex items-start gap-2.5 rounded-lg border ide-border-subtle ide-surface-inset px-3 py-2.5 cursor-pointer ide-hover transition-colors"
     >
       {/* Checkbox */}
       <span className="mt-0.5 flex-shrink-0">
@@ -122,8 +122,8 @@ function StepRow({ step, checked, onToggle }: StepRowProps) {
         <span
           className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
             checked
-              ? 'border-blue-500 bg-blue-600 text-white'
-              : 'border-gray-600 bg-gray-900 text-transparent'
+              ? 'border-sky-500 bg-sky-500 dark:bg-sky-600 text-white'
+              : 'ide-border ide-surface text-transparent'
           }`}
         >
           <Check size={10} strokeWidth={3} />
@@ -131,12 +131,12 @@ function StepRow({ step, checked, onToggle }: StepRowProps) {
       </span>
 
       {/* Step number */}
-      <span className="flex-shrink-0 text-xs font-mono text-gray-500 mt-0.5 w-5 text-right">
+      <span className="flex-shrink-0 text-xs font-mono ide-text-muted mt-0.5 w-5 text-right">
         {step.number}.
       </span>
 
       {/* Description + complexity */}
-      <span className="flex-1 text-xs text-gray-300 leading-relaxed">
+      <span className="flex-1 text-xs ide-text-2 leading-relaxed">
         {step.description}
         {step.complexity && <ComplexityBadge complexity={step.complexity} />}
       </span>
@@ -197,7 +197,7 @@ export function PlanApprovalModal({
         <>
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 z-40 bg-black/40"
+            className="absolute inset-0 z-40 ide-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -207,7 +207,7 @@ export function PlanApprovalModal({
 
           {/* Panel */}
           <motion.div
-            className="absolute inset-x-0 bottom-0 z-50 flex flex-col rounded-t-xl border-t border-gray-700 bg-gray-900 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 z-50 flex flex-col rounded-t-xl border-t ide-border ide-surface shadow-2xl"
             style={{ maxHeight: '80%' }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
@@ -215,17 +215,17 @@ export function PlanApprovalModal({
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2.5 flex-shrink-0">
+            <div className="flex items-center justify-between border-b ide-border-subtle px-4 py-2.5 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <ChevronRight size={14} className="text-blue-400" />
-                <span className="text-xs font-semibold text-gray-200">
+                <ChevronRight size={14} className="text-sky-500 dark:text-sky-400" />
+                <span className="text-xs font-semibold ide-text-2">
                   AI Plan &mdash; {steps.length} step{steps.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={onCancel}
-                className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+                className="rounded p-1 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
                 aria-label="Close plan"
               >
                 <X size={14} />
@@ -248,7 +248,7 @@ export function PlanApprovalModal({
             <AnimatePresence>
               {showModifyInput && (
                 <motion.div
-                  className="border-t border-gray-800 px-4 py-3"
+                  className="border-t ide-border-subtle px-4 py-3"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
@@ -258,7 +258,7 @@ export function PlanApprovalModal({
                     value={modifyFeedback}
                     onChange={(e) => setModifyFeedback(e.target.value)}
                     placeholder="Describe how to modify the plan..."
-                    className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                    className="w-full resize-none rounded-lg border ide-border ide-surface-input px-3 py-2 text-xs ide-text placeholder-ide-text-muted focus:border-sky-500 dark:focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500/30"
                     rows={3}
                     autoFocus
                     onKeyDown={(e) => {
@@ -272,7 +272,7 @@ export function PlanApprovalModal({
                     <button
                       type="button"
                       onClick={() => setShowModifyInput(false)}
-                      className="rounded px-2.5 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+                      className="rounded px-2.5 py-1 text-xs ide-text-muted ide-hover hover:ide-text-2 transition-colors"
                     >
                       Cancel
                     </button>
@@ -280,7 +280,7 @@ export function PlanApprovalModal({
                       type="button"
                       onClick={handleModifySubmit}
                       disabled={!modifyFeedback.trim()}
-                      className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="rounded bg-sky-500 px-3 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       Send Feedback
                     </button>
@@ -290,18 +290,18 @@ export function PlanApprovalModal({
             </AnimatePresence>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-800 px-4 py-2.5 flex-shrink-0">
+            <div className="flex items-center justify-end gap-2 border-t ide-border-subtle px-4 py-2.5 flex-shrink-0">
               <button
                 type="button"
                 onClick={onCancel}
-                className="rounded px-3 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+                className="rounded px-3 py-1.5 text-xs font-medium ide-text-muted ide-hover hover:ide-text-2 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => setShowModifyInput((v) => !v)}
-                className="flex items-center gap-1.5 rounded bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/30 transition-colors"
+                className="flex items-center gap-1.5 rounded bg-sky-500/20 dark:bg-sky-500/20 px-3 py-1.5 text-xs font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-500/30 transition-colors"
               >
                 <Edit3 size={12} />
                 Modify
@@ -310,7 +310,7 @@ export function PlanApprovalModal({
                 type="button"
                 onClick={handleApprove}
                 disabled={checkedSteps.size === 0}
-                className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Check size={12} />
                 Approve Plan

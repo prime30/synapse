@@ -59,10 +59,46 @@
   --foreground: #ededed;
 }
 
+/* ── IDE Surface Tokens ──────────────────────────────────────────
+   Aligned to the marketing design system's light/dark patterns.
+   Use these classes in IDE components for consistent theming.
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .ide-surface       { @apply bg-[#fafaf9] dark:bg-[#0a0a0a]; }
+  .ide-surface-panel { @apply bg-white dark:bg-white/5; }
+  .ide-surface-input { @apply bg-stone-50 dark:bg-white/[0.03]; }
+  .ide-surface-inset { @apply bg-stone-100 dark:bg-white/5; }
+  .ide-surface-pop   { @apply bg-white dark:bg-[#0a0a0a]; }
+
+  .ide-border        { @apply border-stone-200 dark:border-white/10; }
+  .ide-border-subtle { @apply border-stone-200 dark:border-white/5; }
+
+  .ide-text          { @apply text-stone-900 dark:text-white; }
+  .ide-text-2        { @apply text-stone-700 dark:text-white/70; }
+  .ide-text-3        { @apply text-stone-500 dark:text-white/50; }
+  .ide-text-muted    { @apply text-stone-400 dark:text-white/40; }
+  .ide-text-quiet    { @apply text-stone-300 dark:text-white/30; }
+
+  .ide-hover         { @apply hover:bg-stone-100 dark:hover:bg-white/5; }
+  .ide-active        { @apply bg-sky-50 dark:bg-sky-500/10; }
+
+  .ide-input {
+    @apply bg-stone-50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/10 rounded-md text-stone-900 dark:text-white
+      placeholder-stone-400 dark:placeholder-white/40
+      focus:outline-none focus:border-sky-500 dark:focus:border-sky-400
+      focus:ring-1 focus:ring-sky-500/20 dark:focus:ring-sky-400/20
+      transition-colors;
+  }
+
+  .ide-overlay {
+    @apply fixed inset-0 bg-black/40 dark:bg-black/60;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ───────────────────────────────────────────────
@@ -305,6 +341,11 @@ body {
   to { transform: translateX(-50%); }
 }
 
+@keyframes stats-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 @keyframes task-shimmer {
   0%, 100% { opacity: 0.7; }
   50% { opacity: 1; }
@@ -318,6 +359,32 @@ body {
 @keyframes flow-dot {
   0% { top: -6px; }
   100% { top: calc(100% + 2px); }
+}
+
+/* AI chat — blinking caret at end of streaming text */
+@keyframes ai-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* AI chat — shimmer sweep across the thinking label */
+@keyframes ai-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* AI chat — gentle pulse on the thinking container border */
+@keyframes ai-thinking-pulse {
+  0%, 100% { border-color: rgba(99, 102, 241, 0.1); }
+  50% { border-color: rgba(99, 102, 241, 0.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-streaming-caret,
+  .ai-thinking-shimmer,
+  .ai-thinking-pulse-border {
+    animation: none !important;
+  }
 }
 
 .logo-marquee-track {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const CODE = `{% schema %}
   { "name": "Hero Banner",
@@ -66,10 +66,22 @@ const COLUMNS = 3;
 
 export function CursorRevealCode() {
   const ref = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Only render the code text client-side so it's never in the SSR HTML
+  // (prevents crawlers from indexing decorative Liquid code as page content)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // Skip mousemove tracking on touch devices — the reveal effect is mouse-only
+    const isTouch =
+      'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isTouch) return;
 
     const onMove = (e: MouseEvent) => {
       el.style.setProperty('--rx', `${e.clientX}px`);
@@ -80,9 +92,12 @@ export function CursorRevealCode() {
     return () => window.removeEventListener('mousemove', onMove);
   }, []);
 
+  if (!mounted) return null;
+
   return (
     <div
       ref={ref}
+      data-nosnippet=""
       className="absolute inset-0 w-full h-full pointer-events-none select-none z-0 overflow-hidden"
       aria-hidden="true"
       style={{

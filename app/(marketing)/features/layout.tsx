@@ -20,14 +20,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://synapse.dev/features',
+    url: 'https://synapse.shop/features',
     siteName: 'Synapse',
     title: 'Features — AI-Powered Shopify Theme IDE | Synapse',
     description:
       'AI code generation, Liquid intelligence, performance scoring, and one-click deploy for Shopify theme developers.',
     images: [
       {
-        url: 'https://synapse.dev/og-image.png',
+        url: 'https://synapse.shop/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Synapse IDE Features — AI-powered Shopify theme development',
@@ -39,10 +39,10 @@ export const metadata: Metadata = {
     title: 'Features — Synapse Shopify Theme IDE',
     description:
       'AI code generation, Liquid intelligence, performance scoring, and one-click deploy.',
-    images: ['https://synapse.dev/og-image.png'],
+    images: ['https://synapse.shop/og-image.png'],
   },
   robots: { index: true, follow: true },
-  alternates: { canonical: 'https://synapse.dev/features' },
+  alternates: { canonical: 'https://synapse.shop/features' },
 };
 
 const jsonLd = {
@@ -55,7 +55,7 @@ const jsonLd = {
         'AI-powered Shopify theme IDE with Liquid intelligence, multi-agent code generation, performance scoring, and one-click deploy.',
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'Web',
-      url: 'https://synapse.dev',
+      url: 'https://synapse.shop',
       featureList: [
         'AI code generation with 5 specialist agents',
         'Object-aware Liquid completions for 40+ Shopify objects',
@@ -82,8 +82,8 @@ const jsonLd = {
     {
       '@type': 'Organization',
       name: 'Synapse',
-      url: 'https://synapse.dev',
-      logo: 'https://synapse.dev/logo.svg',
+      url: 'https://synapse.shop',
+      logo: 'https://synapse.shop/logo.svg',
     },
   ],
 };

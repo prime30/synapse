@@ -19,12 +19,12 @@ export function DeviceSizeSelector({ value, onChange }: DeviceSizeSelectorProps)
           key={size.label}
           type="button"
           onClick={() => onChange(size.width)}
-          className={`rounded px-3 py-1 text-xs ${value === size.width ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200 hover:bg-gray-700'}`}
+          className={`rounded px-3 py-1 text-xs ${value === size.width ? 'bg-sky-500 dark:bg-sky-600 text-white' : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'}`}
         >
           {size.label}
         </button>
       ))}
-      <label className="flex items-center gap-2 text-xs text-gray-300">
+      <label className="flex items-center gap-2 text-xs ide-text-2">
         Custom
         <input
           type="number"
@@ -32,7 +32,7 @@ export function DeviceSizeSelector({ value, onChange }: DeviceSizeSelectorProps)
           max={2560}
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="w-24 rounded bg-gray-800 border border-gray-700 px-2 py-1 text-gray-200"
+          className="w-24 rounded ide-surface-input border ide-border px-2 py-1 ide-text"
         />
         px
       </label>

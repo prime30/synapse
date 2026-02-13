@@ -10,10 +10,11 @@ import { SynapseLogo } from './SynapseLogo';
 import { usePageReady } from '@/components/marketing/PreloaderContext';
 import { useAuthModal } from '@/components/marketing/AuthModalContext';
 import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
+import { useTheme } from '@/hooks/useTheme';
 import { createClient } from '@/lib/supabase/client';
 
 const NAV_LINKS = [
-  { label: 'Features', href: '#features' },
+  { label: 'Features', href: '/features' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Docs', href: '/docs' },
   { label: 'Blog', href: '/blog' },
@@ -22,15 +23,7 @@ const NAV_LINKS = [
 export function Navbar() {
   const ready = usePageReady();
   const router = useRouter();
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem('synapse-theme');
-    if (stored === 'dark') {
-      document.documentElement.classList.add('dark');
-      return true;
-    }
-    return false;
-  });
+  const { isDark, toggle: handleToggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { authModal, openAuthModal, closeAuthModal } = useAuthModal();
@@ -58,20 +51,6 @@ export function Navbar() {
     };
   }, []);
 
-  const handleToggle = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
-      if (next) {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('synapse-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('synapse-theme', 'light');
-      }
-      return next;
-    });
-  }, []);
-
   const hamburgerBar = 'w-5 h-[1.5px] bg-stone-900 dark:bg-white block';
 
   const handlePrimaryAuthAction = useCallback(async () => {
@@ -88,7 +67,7 @@ export function Navbar() {
 
   const handleCtaAction = useCallback(() => {
     if (isAuthenticated) {
-      router.push('/projects');
+      router.push('/onboarding');
       return;
     }
 
@@ -112,7 +91,7 @@ export function Navbar() {
             </div>
           </div>
           {/* Content container — centered max-w-6xl */}
-          <div className="relative max-w-6xl mx-auto px-6 w-full flex items-center justify-between">
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 w-full flex items-center justify-between">
             {/* Logo — left */}
             <Link href="/" className="text-stone-900 dark:text-white shrink-0">
               <SynapseLogo />
@@ -150,7 +129,7 @@ export function Navbar() {
                   onClick={handleCtaAction}
                   className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
                 >
-                  {isAuthenticated ? 'See Projects' : 'Start Free'}
+                  {isAuthenticated ? 'Open Editor' : 'Start Free'}
                 </button>
               </MagneticElement>
 
@@ -163,7 +142,7 @@ export function Navbar() {
               {/* Hamburger (mobile) */}
               <button
                 type="button"
-                className="md:hidden flex flex-col gap-1.5 p-2"
+                className="md:hidden flex flex-col items-center justify-center gap-1.5 p-2.5 min-w-[44px] min-h-[44px]"
                 onClick={() => setMobileOpen((prev) => !prev)}
                 aria-label="Toggle menu"
               >
@@ -189,7 +168,7 @@ export function Navbar() {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            className="fixed inset-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-2xl flex flex-col items-center justify-center gap-8"
+            className="fixed inset-0 z-[60] bg-[#0a0a0a]/95 backdrop-blur-2xl flex flex-col items-center justify-center gap-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -237,13 +216,13 @@ export function Navbar() {
             >
               <button
                 type="button"
-                className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-accent text-white font-semibold text-lg hover:bg-accent-hover transition-colors"
+                className="inline-flex items-center justify-center px-6 py-2.5 sm:px-8 sm:py-3 rounded-full bg-accent text-white font-semibold text-base sm:text-lg hover:bg-accent-hover transition-colors"
                 onClick={() => {
                   setMobileOpen(false);
                   handleCtaAction();
                 }}
               >
-                {isAuthenticated ? 'See Projects' : 'Start Free'}
+                {isAuthenticated ? 'Open Editor' : 'Start Free'}
               </button>
             </motion.div>
           </motion.div>

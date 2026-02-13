@@ -9,6 +9,8 @@
 
 import type { FileContext } from '@/lib/types/agent';
 import { estimateTokens } from './token-counter';
+import type { MemoryEntry } from './developer-memory';
+import { filterActiveMemories, formatMemoryForPrompt } from './developer-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -35,6 +37,8 @@ export interface ContextResult {
   budget: ContextBudget;
   /** Files that were requested but excluded due to budget */
   excluded: string[];
+  /** Layer 8: Developer memory prompt to prepend to agent system prompts */
+  memoryPrompt?: string;
 }
 
 // ── Reference extraction helpers ──────────────────────────────────────
@@ -177,8 +181,52 @@ export class ContextEngine {
   private fileContents = new Map<string, string>();
   private maxTokens: number;
 
+  /**
+   * Layer 8: Developer memory entries loaded for the current project.
+   * Injected into agent system prompts via `getMemoryPrompt()`.
+   */
+  private memories: MemoryEntry[] = [];
+  private memoryMinConfidence = 0.6;
+
   constructor(maxTokens = 16_000) {
     this.maxTokens = maxTokens;
+  }
+
+  // ── Layer 8: Developer Memory ───────────────────────────────────────
+
+  /**
+   * Load developer memory entries for context injection.
+   * Call this on session start or when memories change.
+   */
+  loadMemories(entries: MemoryEntry[], minConfidence = 0.6): void {
+    this.memories = entries;
+    this.memoryMinConfidence = minConfidence;
+  }
+
+  /**
+   * Get the formatted memory block for injection into agent system prompts.
+   * Returns an empty string if no active memories exist.
+   */
+  getMemoryPrompt(): string {
+    const active = filterActiveMemories(this.memories, this.memoryMinConfidence);
+    return formatMemoryForPrompt(active);
+  }
+
+  /**
+   * Get the count of active (non-rejected, high-confidence) memories.
+   * Used by the StatusBar memory indicator.
+   */
+  getActiveMemoryCount(): number {
+    return filterActiveMemories(this.memories, this.memoryMinConfidence).length;
+  }
+
+  /**
+   * Get active memories by type.
+   */
+  getActiveMemoriesByType(type: MemoryEntry['type']): MemoryEntry[] {
+    return filterActiveMemories(this.memories, this.memoryMinConfidence).filter(
+      (m) => m.type === type
+    );
   }
 
   // ── Indexing ──────────────────────────────────────────────────────
@@ -331,6 +379,7 @@ export class ContextEngine {
    * Build a context window that fits within the token budget.
    *
    * Inclusion order:
+   *  0. Developer memory (Layer 8) — reserved from budget first
    *  1. Priority files (always included first)
    *  2. Requested files
    *  3. Auto-resolved dependencies of (1) and (2)
@@ -339,12 +388,18 @@ export class ContextEngine {
    */
   buildContext(
     requestedFileIds: string[],
-    priorityFileIds?: string[]
+    priorityFileIds?: string[],
+    tokenBudget?: number
   ): ContextResult {
+    // Reserve tokens for Layer 8 developer memory prompt
+    const memoryPrompt = this.getMemoryPrompt();
+    const memoryTokens = memoryPrompt ? estimateTokens(memoryPrompt) : 0;
+    const maxTokens = tokenBudget ?? this.maxTokens;
+
     const budget: ContextBudget = {
-      maxTokens: this.maxTokens,
-      usedTokens: 0,
-      remainingTokens: this.maxTokens,
+      maxTokens,
+      usedTokens: memoryTokens,
+      remainingTokens: maxTokens - memoryTokens,
     };
 
     const included = new Map<string, FileContext>();
@@ -406,7 +461,91 @@ export class ContextEngine {
       files: [...included.values()],
       budget,
       excluded,
+      memoryPrompt: memoryPrompt || undefined,
     };
+  }
+
+  /**
+   * Select files relevant to the user's current message.
+   * Extracts explicit file references, fuzzy-matches natural language,
+   * and always includes the active file with its dependencies.
+   * Reserves budget for dependency files before allocating to others.
+   */
+  selectRelevantFiles(
+    userMessage: string,
+    recentMessages?: string[],
+    activeFilePath?: string,
+    budget?: number
+  ): ContextResult {
+    const tokenBudget = budget ?? this.maxTokens;
+
+    // 1. Extract explicit file references from userMessage
+    const explicitPaths = this.extractFileReferences(userMessage);
+
+    // 2. If activeFilePath is provided, find its ID and always include it
+    let activeFileId: string | undefined;
+    if (activeFilePath) {
+      const activeMeta = this.findByPath(activeFilePath);
+      activeFileId = activeMeta?.fileId;
+    }
+
+    // 3. Resolve dependencies for all explicit references + active file
+    const explicitIds = explicitPaths
+      .map((p) => this.findByPath(p)?.fileId)
+      .filter((id): id is string => id != null);
+    const coreIds = [...new Set([...(activeFileId ? [activeFileId] : []), ...explicitIds])];
+    const coreWithDeps = this.resolveWithDependencies(coreIds);
+    const depIds = coreWithDeps.filter((id) => !coreIds.includes(id));
+
+    // Reserve 40% of budget for dependency files (deps get priority over fuzzy matches)
+    const priorityFileIds: string[] = [
+      ...(activeFileId ? [activeFileId] : []),
+      ...explicitIds.filter((id) => id !== activeFileId),
+      ...depIds,
+    ];
+
+    // 4. Use fuzzyMatch on userMessage to find additional relevant files
+    const fuzzyFromCurrent = this.fuzzyMatch(userMessage, 10).map((m) => m.fileId);
+
+    // 5. If recentMessages provided, also fuzzyMatch on recent messages (lower priority)
+    const fuzzyFromRecent = recentMessages
+      ? recentMessages.flatMap((msg) => this.fuzzyMatch(msg, 5).map((m) => m.fileId))
+      : [];
+    const fuzzyIds = [...new Set([...fuzzyFromCurrent, ...fuzzyFromRecent])].filter(
+      (id) => !priorityFileIds.includes(id)
+    );
+
+    // 6. Build context with priority ordering: active -> explicit -> deps -> fuzzy
+    return this.buildContext(fuzzyIds, priorityFileIds, tokenBudget);
+  }
+
+  /**
+   * Extract file references from a message (paths, render/include names, asset names).
+   */
+  private extractFileReferences(text: string): string[] {
+    const refs: string[] = [];
+
+    // Direct path mentions (sections/foo.liquid, snippets/bar.liquid, etc.)
+    const pathRe =
+      /(?:sections|snippets|assets|templates|layout|config|blocks|locales)\/[\w.-]+(?:\.liquid|\.css|\.js|\.json)?/g;
+    let m: RegExpExecArray | null;
+    while ((m = pathRe.exec(text)) !== null) {
+      refs.push(m[0]);
+    }
+
+    // {% render 'name' %} or {% include 'name' %}
+    const renderRe = /\{%[-\s]*(?:render|include)\s+['"]([^'"]+)['"]/g;
+    while ((m = renderRe.exec(text)) !== null) {
+      refs.push(`snippets/${m[1]}.liquid`);
+    }
+
+    // {{ 'name' | asset_url }}
+    const assetRe = /\{\{\s*['"]([^'"]+)['"]\s*\|\s*asset_url/g;
+    while ((m = assetRe.exec(text)) !== null) {
+      refs.push(`assets/${m[1]}`);
+    }
+
+    return [...new Set(refs)];
   }
 
   // ── Internal helpers ──────────────────────────────────────────────

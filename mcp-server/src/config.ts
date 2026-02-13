@@ -11,7 +11,7 @@ export interface SynapseConfig {
 }
 
 const DEFAULT_CONFIG: SynapseConfig = {
-  apiUrl: 'https://api.synapse.dev',
+  apiUrl: 'https://api.synapse.shop',
   logLevel: 'info',
   fileWatcherEnabled: true,
   autoRefreshToken: true,

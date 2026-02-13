@@ -1,8 +1,12 @@
+/**
+ * @deprecated Use `lib/ai/providers/openai.ts` (AIProviderInterface) instead.
+ * This file is kept for backward compatibility but is no longer used by the Agent base class.
+ */
+
 import type { AIProviderClient } from './anthropic-client';
 
 /**
- * OpenAI GPT client for agent execution.
- * Uses GPT-4 for the Review Agent (code review + security).
+ * @deprecated Use `createOpenAIProvider()` from `lib/ai/providers/openai.ts` instead.
  */
 export function createOpenAIClient(
   model = 'gpt-4o'

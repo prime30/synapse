@@ -34,7 +34,7 @@ interface ValueInputProps {
 
 function ValueInput({ type, value, onChange }: ValueInputProps) {
   const baseClasses =
-    'w-full rounded-md border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+    'w-full rounded-md px-3 py-2 text-sm ide-input';
 
   switch (type) {
     case 'single_line_text_field':
@@ -91,8 +91,8 @@ function ValueInput({ type, value, onChange }: ValueInputProps) {
             role="switch"
             aria-checked={value === 'true'}
             onClick={() => onChange(value === 'true' ? 'false' : 'true')}
-            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 ${
-              value === 'true' ? 'bg-blue-600' : 'bg-gray-600'
+            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-200 dark:focus:ring-offset-[#0a0a0a] ${
+              value === 'true' ? 'bg-sky-500' : 'bg-stone-400 dark:bg-stone-600'
             }`}
           >
             <span
@@ -101,7 +101,7 @@ function ValueInput({ type, value, onChange }: ValueInputProps) {
               }`}
             />
           </button>
-          <span className="text-sm text-gray-300">
+          <span className="text-sm ide-text-2">
             {value === 'true' ? 'True' : 'False'}
           </span>
         </label>
@@ -136,7 +136,7 @@ function ValueInput({ type, value, onChange }: ValueInputProps) {
             type="color"
             value={hexValue}
             onChange={(e) => onChange(e.target.value)}
-            className="h-10 w-10 cursor-pointer rounded border border-gray-700 bg-transparent p-0.5"
+            className="h-10 w-10 cursor-pointer rounded border ide-border bg-transparent p-0.5"
           />
           <input
             type="text"
@@ -162,7 +162,7 @@ function ValueInput({ type, value, onChange }: ValueInputProps) {
             className={baseClasses + ' resize-y font-mono text-xs'}
           />
           {type === 'json' && (
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs ide-text-muted">
               Must be valid JSON
             </p>
           )}
@@ -358,21 +358,21 @@ export function MetafieldForm({
   );
 
   const inputClasses =
-    'w-full rounded-md border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+    'w-full rounded-md px-3 py-2 text-sm ide-input';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-100">
+      <h3 className="text-lg font-semibold ide-text">
         {isEditing ? 'Edit Metafield' : 'Create Metafield'}
       </h3>
 
       {/* Namespace */}
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-300">
+        <label className="mb-1 block text-sm font-medium ide-text-2">
           Namespace
         </label>
         {isEditing ? (
-          <p className="rounded-md border border-gray-700/50 bg-gray-800/50 px-3 py-2 text-sm text-gray-400">
+          <p className="rounded-md border ide-border ide-surface-panel px-3 py-2 text-sm ide-text-muted">
             {namespace}
           </p>
         ) : (
@@ -389,11 +389,11 @@ export function MetafieldForm({
 
       {/* Key */}
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-300">
+        <label className="mb-1 block text-sm font-medium ide-text-2">
           Key
         </label>
         {isEditing ? (
-          <p className="rounded-md border border-gray-700/50 bg-gray-800/50 px-3 py-2 text-sm text-gray-400">
+          <p className="rounded-md border ide-border ide-surface-panel px-3 py-2 text-sm ide-text-muted">
             {key}
           </p>
         ) : (
@@ -410,11 +410,11 @@ export function MetafieldForm({
 
       {/* Type */}
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-300">
+        <label className="mb-1 block text-sm font-medium ide-text-2">
           Type
         </label>
         {isEditing ? (
-          <p className="rounded-md border border-gray-700/50 bg-gray-800/50 px-3 py-2 text-sm text-gray-400">
+          <p className="rounded-md border ide-border ide-surface-panel px-3 py-2 text-sm ide-text-muted">
             {METAFIELD_TYPE_LABELS[type as MetafieldType] ?? type}
           </p>
         ) : (
@@ -438,19 +438,19 @@ export function MetafieldForm({
 
       {/* Value (type-aware) */}
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-300">
+        <label className="mb-1 block text-sm font-medium ide-text-2">
           Value
         </label>
         <ValueInput type={type} value={value} onChange={setValue} />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-2 border-t border-gray-700 pt-4">
+      <div className="flex items-center justify-end gap-2 border-t ide-border pt-4">
         <button
           type="button"
           onClick={onCancel}
           disabled={isSaving}
-          className="inline-flex items-center gap-1.5 rounded-md border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md border ide-border px-3 py-1.5 text-sm ide-text-2 ide-hover disabled:opacity-50 transition-colors"
         >
           <X className="h-4 w-4" />
           Cancel
@@ -458,7 +458,7 @@ export function MetafieldForm({
         <button
           type="submit"
           disabled={isSaving || !namespace.trim() || !key.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 transition-colors"
         >
           <Save className="h-4 w-4" />
           {isSaving ? 'Saving…' : isEditing ? 'Update' : 'Create'}

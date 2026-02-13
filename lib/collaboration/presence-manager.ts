@@ -1,5 +1,20 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { assignUserColor } from './user-colors';
+
+/**
+ * Admin Supabase client that bypasses RLS.
+ *
+ * The presence endpoints already authenticate & authorize via
+ * `requireProjectAccess` in the route handler, so using the service-role
+ * client here is safe and avoids the RLS infinite-recursion bug on
+ * `organization_members` (Postgres error 42P17).
+ */
+function adminSupabase() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export interface PresenceUpdateInput {
   project_id: string;
@@ -10,7 +25,7 @@ export interface PresenceUpdateInput {
 }
 
 export async function upsertPresence(input: PresenceUpdateInput) {
-  const supabase = await createClient();
+  const supabase = adminSupabase();
   const color = assignUserColor(input.user_id);
 
   const { data, error } = await supabase
@@ -35,7 +50,7 @@ export async function upsertPresence(input: PresenceUpdateInput) {
 }
 
 export async function listPresence(projectId: string) {
-  const supabase = await createClient();
+  const supabase = adminSupabase();
   const { data, error } = await supabase
     .from('user_presence')
     .select('*')

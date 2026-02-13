@@ -74,7 +74,9 @@ function formatBytes(bytes: number): string {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-function FileNodeInner({ data, selected }: NodeProps<CanvasFileData>) {
+function FileNodeInner(props: NodeProps) {
+  const { data: rawData, selected } = props;
+  const data = rawData as unknown as CanvasFileData;
   const Icon = FILE_ICONS[data.fileType] ?? OtherIcon;
   const hasDiagnostics = data.diagnosticsCount > 0;
 
@@ -82,16 +84,16 @@ function FileNodeInner({ data, selected }: NodeProps<CanvasFileData>) {
     <div
       className={`
         relative flex items-center gap-2.5 px-3 py-2.5
-        bg-gray-900/95 border rounded-lg shadow-lg
+        ide-surface-pop border rounded-lg shadow-lg
         transition-all duration-150
         min-w-[180px] max-w-[240px]
-        ${selected ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-gray-700/80'}
-        hover:border-gray-600
+        ${selected ? 'border-sky-500 ring-1 ring-sky-500/30' : 'ide-border'}
+        hover:ide-border
       `}
     >
       {/* React Flow handles */}
-      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-gray-600 !border-gray-500" />
-      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-gray-600 !border-gray-500" />
+      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-stone-400 dark:!bg-white/40 !border-stone-300 dark:!border-white/20" />
+      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-stone-400 dark:!bg-white/40 !border-stone-300 dark:!border-white/20" />
 
       {/* File type icon */}
       <Icon />
@@ -99,7 +101,7 @@ function FileNodeInner({ data, selected }: NodeProps<CanvasFileData>) {
       {/* File info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-gray-200 truncate">
+          <span className="text-xs font-medium ide-text truncate">
             {data.fileName}
           </span>
 
@@ -113,9 +115,9 @@ function FileNodeInner({ data, selected }: NodeProps<CanvasFileData>) {
         </div>
 
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[10px] text-gray-500">{data.directory}</span>
-          <span className="text-[10px] text-gray-600">·</span>
-          <span className="text-[10px] text-gray-500">{formatBytes(data.sizeBytes)}</span>
+          <span className="text-[10px] ide-text-muted">{data.directory}</span>
+          <span className="text-[10px] ide-text-quiet">·</span>
+          <span className="text-[10px] ide-text-muted">{formatBytes(data.sizeBytes)}</span>
         </div>
       </div>
 

@@ -99,7 +99,7 @@ export function FeatureDeepDive() {
             return (
               <motion.div
                 key={pillar.title}
-                className={`rounded-xl border border-stone-200 dark:border-white/10 p-8 ${pillar.tint}`}
+                className={`rounded-xl border border-stone-200 dark:border-white/10 p-5 md:p-8 ${pillar.tint}`}
                 initial={{ opacity: 0, y: 24 }}
                 animate={
                   inView

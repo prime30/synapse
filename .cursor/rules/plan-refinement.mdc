@@ -1,0 +1,62 @@
+﻿---
+description: "HARD RULE: Three-pass refinement protocol. MUST be followed before ANY plan is presented to the user."
+alwaysApply: true
+---
+
+# Plan Refinement Protocol (HARD RULE)
+
+## When This Applies
+
+This applies EVERY TIME you are about to call CreatePlan or present a plan to the user -- whether in Plan mode, Agent mode, or any other context. There are NO exceptions.
+
+## Procedure (MUST follow in order)
+
+You MUST complete ALL THREE passes before calling CreatePlan. Do NOT call CreatePlan after only a first draft. If you catch yourself about to present a plan without having run the three passes, STOP and run them.
+
+### Step 1: Draft the plan internally (do NOT present it yet)
+
+Write the plan in your thinking/reasoning. This is the raw first draft.
+
+### Step 2: Run Pass 1 -- Gap Analysis
+
+Launch an explore subagent to audit the draft for:
+- Missing steps, unhandled edge cases, implicit assumptions
+- Tasks that lack clear inputs, outputs, or acceptance criteria
+- Functionalities that would strengthen the solution
+- Items to flag for future phases (scalability, extensibility, tech debt)
+
+Fold all findings into the draft before proceeding.
+
+### Step 3: Run Pass 2 -- Refinement and Enhancement
+
+Launch an explore subagent (can run in parallel with Pass 3) to:
+- Re-evaluate after Pass 1 corrections for remaining gaps
+- Confirm every task is fully defined to accomplish the goal
+- Propose additional improvements that elevate the solution
+- Answer: What functionalities and improvements would make this even better?
+
+Fold all findings into the draft before proceeding.
+
+### Step 4: Run Pass 3 -- UI Surface and Design System Compliance
+
+Launch an explore subagent to:
+- Verify every new/changed feature is surfaced in the UI where applicable
+- Confirm all UI follows the design system (app/globals.css):
+  - Light/dark mode: dark: variant pairs -- never hardcoded
+  - Colors: stone neutrals, sky interactive, accent green #28CD56 for CTAs
+  - Backgrounds: bg-[#fafaf9] dark:bg-[#0a0a0a]
+  - Borders: border-stone-200 dark:border-white/5 or dark:border-white/10
+  - Glass cards: GlassCard with theme=light
+  - Typography: text-stone-900 dark:text-white headings, text-stone-600 dark:text-gray-400 body
+  - Inputs: bg-white dark:bg-white/5, border-stone-300 dark:border-white/10
+- Flag and fix any non-compliant components
+
+Fold all findings into the draft.
+
+### Step 5: Present the final plan
+
+NOW call CreatePlan with the fully refined plan. The plan you present must be the output of all three passes, not the first draft.
+
+## Enforcement
+
+If the user points out that a plan was not refined, acknowledge the failure, run the passes immediately, and present the corrected plan. Do not make excuses.

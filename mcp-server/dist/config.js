@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 const DEFAULT_CONFIG = {
-    apiUrl: 'https://api.synapse.dev',
+    apiUrl: 'https://api.synapse.shop',
     logLevel: 'info',
     fileWatcherEnabled: true,
     autoRefreshToken: true,

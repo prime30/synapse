@@ -20,6 +20,8 @@ interface FileEditorProps {
   onSelectionChange?: (selectedText: string | null) => void;
   /** Called when file content changes (for breadcrumb, status bar) */
   onContentChange?: (content: string) => void;
+  /** EPIC 5: Called when user triggers "Fix with AI" on a diagnostic */
+  onFixWithAI?: (message: string, line: number) => void;
 }
 
 export function FileEditor({
@@ -32,6 +34,7 @@ export function FileEditor({
   onToggleLock,
   onSelectionChange,
   onContentChange,
+  onFixWithAI,
 }: FileEditorProps) {
   const {
     content,
@@ -75,7 +78,7 @@ export function FileEditor({
 
   if (!fileId) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 ide-text-muted">
         Select a file
       </div>
     );
@@ -84,7 +87,7 @@ export function FileEditor({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+        <div className="animate-pulse ide-text-muted">Loading...</div>
       </div>
     );
   }
@@ -92,12 +95,12 @@ export function FileEditor({
   return (
     <div className="flex flex-col h-full relative">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 p-2 border-b border-gray-700 bg-gray-900/50">
+      <div className="flex items-center gap-2 p-2 border-b ide-border ide-surface-panel">
         <button
           type="button"
           onClick={() => save().then(onSave).catch(() => {})}
           disabled={!isDirty || locked}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Save
         </button>
@@ -105,7 +108,7 @@ export function FileEditor({
           type="button"
           onClick={cancel}
           disabled={!isDirty || locked}
-          className="px-3 py-1 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 text-sm ide-text-muted ide-hover hover:ide-text disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
@@ -123,7 +126,7 @@ export function FileEditor({
           className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${
             locked
               ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
-              : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700/50'
+              : 'ide-text-muted hover:ide-text-2 ide-hover'
           }`}
           title={locked ? 'File is locked — click to unlock' : 'Lock file to prevent edits'}
         >
@@ -146,23 +149,23 @@ export function FileEditor({
 
       {/* Unlock confirmation dialog */}
       {showUnlockConfirm && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-gray-800 border border-gray-600 rounded-lg p-5 max-w-sm mx-4 shadow-xl">
+        <div className="absolute inset-0 z-50 flex items-center justify-center ide-overlay backdrop-blur-sm">
+          <div className="ide-surface-pop border ide-border rounded-lg p-5 max-w-sm mx-4 shadow-xl">
             <div className="flex items-center gap-2 mb-3">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <h3 className="text-sm font-semibold text-white">Unlock this file?</h3>
+              <h3 className="text-sm font-semibold ide-text">Unlock this file?</h3>
             </div>
-            <p className="text-xs text-gray-400 leading-relaxed mb-4">
+            <p className="text-xs ide-text-muted leading-relaxed mb-4">
               Unlocking allows edits from you and AI agents. You can lock it again anytime.
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowUnlockConfirm(false)}
-                className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                className="px-3 py-1.5 text-xs rounded ide-surface-panel ide-text-2 ide-hover transition-colors"
               >
                 Keep locked
               </button>
@@ -190,6 +193,7 @@ export function FileEditor({
           height="100%"
           className="flex-1 w-full min-h-[200px]"
           onSelectionChange={onSelectionChange}
+          onFixWithAI={onFixWithAI}
         />
       </div>
     </div>

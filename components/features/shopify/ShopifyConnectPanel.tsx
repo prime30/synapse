@@ -57,9 +57,9 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const ROLE_BADGE: Record<string, { label: string; cls: string }> = {
   main: { label: 'Live', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
-  development: { label: 'Dev', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+  development: { label: 'Dev', cls: 'ide-active text-sky-500 dark:text-sky-400 border-sky-500/40' },
   demo: { label: 'Demo', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
-  unpublished: { label: 'Unpublished', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/40' },
+  unpublished: { label: 'Unpublished', cls: 'bg-stone-500/20 ide-text-muted border-stone-500/40' },
 };
 
 function themeRelativeTime(iso: string): string {
@@ -322,10 +322,10 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
   // Loading skeleton
   if (storeLoading) {
     return (
-      <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4 animate-pulse">
-        <div className="h-5 bg-gray-700 rounded w-40" />
-        <div className="h-4 bg-gray-700 rounded w-60" />
-        <div className="h-9 bg-gray-700 rounded w-full" />
+      <div className="border ide-border rounded-lg ide-surface-panel p-5 space-y-4 animate-pulse">
+        <div className="h-5 ide-surface-inset rounded w-40" />
+        <div className="h-4 ide-surface-inset rounded w-60" />
+        <div className="h-9 ide-surface-inset rounded w-full" />
       </div>
     );
   }
@@ -333,13 +333,13 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
   // Disconnected state
   if (!connected || !connection) {
     return (
-      <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4">
+      <div className="border ide-border rounded-lg ide-surface-panel p-5 space-y-4">
         <div className="flex items-center gap-2">
           <StatusDot status="disconnected" />
-          <h3 className="text-sm font-semibold text-gray-200">Shopify Store</h3>
+          <h3 className="text-sm font-semibold ide-text-2">Shopify Store</h3>
         </div>
 
-        <p className="text-xs text-gray-400">
+        <p className="text-xs ide-text-muted">
           Connect a Shopify store to sync theme files.
         </p>
 
@@ -351,9 +351,9 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
               onChange={(e) => setShopDomain(e.target.value.replace(/\.myshopify\.com$/i, ''))}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               placeholder="your-store-name"
-              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-l bg-gray-800 border border-r-0 border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-l ide-surface-input border border-r-0 ide-border ide-text placeholder-ide-text-muted focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors"
             />
-            <span className="inline-flex items-center px-3 py-2 text-sm text-gray-500 bg-gray-800/60 border border-l-0 border-gray-600 rounded-r select-none whitespace-nowrap">
+            <span className="inline-flex items-center px-3 py-2 text-sm ide-text-muted ide-surface-inset border border-l-0 ide-border rounded-r select-none whitespace-nowrap">
               .myshopify.com
             </span>
           </div>
@@ -364,14 +364,14 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             onChange={(e) => setAdminToken(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
             placeholder="Admin API token (shpat_...)"
-            className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full px-3 py-2 text-sm rounded ide-surface-input border ide-border ide-text placeholder-ide-text-muted focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors"
           />
 
           <button
             type="button"
             onClick={handleConnect}
             disabled={!shopDomain.trim() || !adminToken.trim() || isConnecting}
-            className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isConnecting ? 'Connecting...' : 'Connect'}
           </button>
@@ -386,24 +386,24 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
   // Connected state
   return (
-    <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-5 space-y-4">
+    <div className="border ide-border rounded-lg ide-surface-panel p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <StatusDot status={connection.sync_status} />
-          <h3 className="text-sm font-semibold text-gray-200">Shopify Store</h3>
+          <h3 className="text-sm font-semibold ide-text-2">Shopify Store</h3>
         </div>
-        <span className="text-xs text-gray-400 font-mono">{connection.store_domain}</span>
+        <span className="text-xs ide-text-muted font-mono">{connection.store_domain}</span>
       </div>
 
       {/* Last sync */}
-      <div className="text-xs text-gray-500">
+      <div className="text-xs ide-text-muted">
         Last synced: {formatTimestamp(connection.last_sync_at)}
       </div>
 
       {/* Theme selector */}
       <div className="space-y-2">
-        <label className="block text-xs font-medium text-gray-400">
+        <label className="block text-xs font-medium ide-text-muted">
           Theme
         </label>
         <div ref={themeDropdownRef} className="relative">
@@ -411,7 +411,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             type="button"
             onClick={() => !isLoadingThemes && setThemeDropdownOpen((o) => !o)}
             disabled={isLoadingThemes}
-            className="w-full flex items-center justify-between px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-between px-3 py-2 text-sm rounded ide-surface-input border ide-border ide-text focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors disabled:opacity-50"
           >
             <span className="truncate">
               {isLoadingThemes
@@ -424,13 +424,13 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                       ? 'No themes found'
                       : 'Select a theme'}
             </span>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${themeDropdownOpen ? 'rotate-180' : ''}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 shrink-0 ide-text-3 transition-transform ${themeDropdownOpen ? 'rotate-180' : ''}`}>
               <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
             </svg>
           </button>
 
           {themeDropdownOpen && themes.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded bg-gray-800 border border-gray-600 shadow-lg">
+            <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded ide-surface-pop border ide-border shadow-lg">
               {themes.map((theme) => {
                 const badge = ROLE_BADGE[theme.role] ?? ROLE_BADGE.unpublished;
                 const isSelected = theme.id === effectiveThemeId;
@@ -444,8 +444,8 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                       }}
                       className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm transition-colors ${
                         isSelected
-                          ? 'bg-blue-600/20 text-white'
-                          : 'text-gray-200 hover:bg-gray-700'
+                          ? 'ide-active ide-text'
+                          : 'ide-text-2 ide-hover'
                       }`}
                     >
                       <span className="flex-1 min-w-0 truncate">{theme.name}</span>
@@ -453,7 +453,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                         {badge.label}
                       </span>
                       {theme.updated_at && (
-                        <span className="shrink-0 text-[10px] text-gray-500 tabular-nums">
+                        <span className="shrink-0 text-[10px] ide-text-muted tabular-nums">
                           {themeRelativeTime(theme.updated_at)}
                         </span>
                       )}
@@ -471,27 +471,27 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Action menu */}
           <div ref={actionMenuRef} className="relative">
-            <button type="button" onClick={() => setActionMenuOpen((o) => !o)} className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
-              Actions ▾
+<button type="button" onClick={() => setActionMenuOpen((o) => !o)} className="px-2 py-1.5 text-xs rounded ide-surface-input ide-text-2 hover:ide-text ide-hover transition-colors">
+            Actions ▾
             </button>
             {actionMenuOpen && (
-              <ul className="absolute z-20 mt-1 w-48 rounded bg-gray-800 border border-gray-600 shadow-lg text-xs">
-                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setRenameInput(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setActionMenuOpen(false); }}>Rename</button></li>
-                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setCloneNameInput(`Copy of ${themes.find((t) => t.id === effectiveThemeId)?.name ?? 'theme'}`); setCloneModal('shopify'); setActionMenuOpen(false); }}>Clone on Shopify</button></li>
-                <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setCloneNameInput(`Copy of project`); setCloneModal('project'); setActionMenuOpen(false); }}>Clone as new project</button></li>
+              <ul className="absolute z-20 mt-1 w-48 rounded ide-surface-pop border ide-border shadow-lg text-xs">
+                <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover" onClick={() => { setRenameInput(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setActionMenuOpen(false); }}>Rename</button></li>
+                <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover" onClick={() => { setCloneNameInput(`Copy of ${themes.find((t) => t.id === effectiveThemeId)?.name ?? 'theme'}`); setCloneModal('shopify'); setActionMenuOpen(false); }}>Clone on Shopify</button></li>
+                <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover" onClick={() => { setCloneNameInput(`Copy of project`); setCloneModal('project'); setActionMenuOpen(false); }}>Clone as new project</button></li>
                 {themes.find((t) => t.id === effectiveThemeId)?.role !== 'main' && (
-                  <li><button type="button" className="w-full text-left px-3 py-2 text-gray-200 hover:bg-gray-700" onClick={() => { setPublishConfirmStep(1); setActionMenuOpen(false); }}>Publish to live</button></li>
+                  <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover" onClick={() => { setPublishConfirmStep(1); setActionMenuOpen(false); }}>Publish to live</button></li>
                 )}
-                <li><a href={`/api/projects/${projectId}/export`} download className="block px-3 py-2 text-gray-200 hover:bg-gray-700">Export JSON</a></li>
+                <li><a href={`/api/projects/${projectId}/export`} download className="block px-3 py-2 ide-text-2 ide-hover">Export JSON</a></li>
                 {themes.find((t) => t.id === effectiveThemeId)?.role !== 'main' && (
-                  <li><button type="button" className="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-700" onClick={() => { setDeleteConfirmName(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setDeleteInputValue(''); setActionMenuOpen(false); }}>Delete theme</button></li>
+                  <li><button type="button" className="w-full text-left px-3 py-2 text-red-500 dark:text-red-400 ide-hover" onClick={() => { setDeleteConfirmName(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setDeleteInputValue(''); setActionMenuOpen(false); }}>Delete theme</button></li>
                 )}
               </ul>
             )}
           </div>
 
           {/* Review changes button */}
-          <button type="button" onClick={() => effectiveThemeId && diffTheme(effectiveThemeId)} disabled={isDiffingTheme || !effectiveThemeId} className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-50 transition-colors">
+          <button type="button" onClick={() => effectiveThemeId && diffTheme(effectiveThemeId)} disabled={isDiffingTheme || !effectiveThemeId} className="px-2 py-1.5 text-xs rounded ide-surface-input ide-text-2 hover:ide-text ide-hover disabled:opacity-50 transition-colors">
             {isDiffingTheme ? 'Loading...' : 'Review changes'}
           </button>
 
@@ -506,8 +506,8 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           </button>
 
           {/* Auto-sync toggle */}
-          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
-            <input type="checkbox" checked={autoSyncOn} onChange={(e) => { setAutoSyncOn(e.target.checked); setAutoSyncEnabled(projectId, e.target.checked); }} className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 w-3.5 h-3.5" />
+          <label className="flex items-center gap-1.5 text-xs ide-text-muted cursor-pointer select-none">
+            <input type="checkbox" checked={autoSyncOn} onChange={(e) => { setAutoSyncOn(e.target.checked); setAutoSyncEnabled(projectId, e.target.checked); }} className="rounded ide-border ide-surface-input text-sky-500 focus:ring-sky-500 focus:ring-offset-0 w-3.5 h-3.5" />
             Auto-push on save
           </label>
         </div>
@@ -516,26 +516,26 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
       {/* Inline rename */}
       {renameInput !== null && effectiveThemeId && (
         <div className="flex gap-2">
-          <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="flex-1 px-3 py-1.5 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500" autoFocus />
-          <button type="button" disabled={!renameInput.trim() || isRenamingTheme} onClick={async () => { await renameTheme({ themeId: effectiveThemeId, name: renameInput.trim() }); setRenameInput(null); }} className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">{isRenamingTheme ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={() => setRenameInput(null)} className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+          <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="flex-1 px-3 py-1.5 text-sm rounded ide-input" autoFocus />
+          <button type="button" disabled={!renameInput.trim() || isRenamingTheme} onClick={async () => { await renameTheme({ themeId: effectiveThemeId, name: renameInput.trim() }); setRenameInput(null); }} className="px-3 py-1.5 text-xs rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 transition-colors">{isRenamingTheme ? 'Saving...' : 'Save'}</button>
+          <button type="button" onClick={() => setRenameInput(null)} className="px-3 py-1.5 text-xs rounded ide-surface-panel ide-text-2 ide-hover transition-colors">Cancel</button>
         </div>
       )}
 
       {/* Diff results */}
       {diffResult && diffResult.files.length > 0 && (
-        <div className="text-xs p-3 rounded bg-gray-800 border border-gray-700 space-y-1 max-h-48 overflow-y-auto">
-          <p className="text-gray-300 font-medium mb-2">{diffResult.files.length} pending changes</p>
+        <div className="text-xs p-3 rounded ide-surface-panel border ide-border space-y-1 max-h-48 overflow-y-auto">
+          <p className="ide-text-2 font-medium mb-2">{diffResult.files.length} pending changes</p>
           {diffResult.files.map((f) => (
             <div key={f.path} className="flex items-center gap-2 py-0.5">
               <span className={`shrink-0 px-1 py-0.5 rounded text-[10px] ${f.status === 'added' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{f.status}</span>
-              <span className="text-gray-400 truncate">{f.path}</span>
+              <span className="ide-text-muted truncate">{f.path}</span>
             </div>
           ))}
         </div>
       )}
       {diffResult && diffResult.files.length === 0 && (
-        <p className="text-xs text-gray-500">No pending changes to push.</p>
+        <p className="text-xs ide-text-muted">No pending changes to push.</p>
       )}
 
       {/* Pre-flight scan results */}
@@ -549,7 +549,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             <span className={`font-medium ${scanResult.passed ? 'text-green-400' : 'text-red-400'}`}>
               {scanResult.passed ? 'Pre-flight passed' : 'Pre-flight failed'}
             </span>
-            <span className="text-gray-500">
+            <span className="ide-text-muted">
               {scanResult.scannedFiles} files in {scanResult.scanTimeMs}ms
             </span>
           </div>
@@ -565,9 +565,9 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                   }`}>
                     {issue.severity}
                   </span>
-                  <span className="text-gray-400">
-                    <span className="text-gray-500">{issue.file}</span>
-                    {issue.line && <span className="text-gray-600">:{issue.line}</span>}
+                  <span className="ide-text-muted">
+                    <span className="ide-text-muted">{issue.file}</span>
+                    {issue.line && <span className="ide-text-quiet">:{issue.line}</span>}
                     {' — '}{issue.message}
                   </span>
                 </li>
@@ -578,7 +578,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           <button
             type="button"
             onClick={() => setScanResult(null)}
-            className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+            className="text-[10px] ide-text-muted hover:ide-text-2 transition-colors"
           >
             Dismiss
           </button>
@@ -589,7 +589,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Push note */}
       <div>
-        <label htmlFor="push-note" className="block text-xs font-medium text-gray-400 mb-1">
+        <label htmlFor="push-note" className="block text-xs font-medium ide-text-muted mb-1">
           Note (optional, for manual push)
         </label>
         <input
@@ -598,7 +598,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           value={pushNote}
           onChange={(e) => setPushNote(e.target.value)}
           placeholder="e.g. Homepage update"
-          className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+          className="w-full px-3 py-2 text-sm rounded ide-input"
         />
       </div>
 
@@ -608,7 +608,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           type="button"
           onClick={() => handleSync('pull')}
           disabled={!effectiveThemeId || isSyncing}
-          className="flex-1 px-3 py-2 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex-1 px-3 py-2 text-sm rounded ide-surface-panel ide-text ide-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSyncing ? 'Syncing...' : 'Pull from Shopify'}
         </button>
@@ -616,7 +616,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           type="button"
           onClick={handlePushWithPreflight}
           disabled={!effectiveThemeId || isSyncing}
-          className="flex-1 px-3 py-2 text-sm rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex-1 px-3 py-2 text-sm rounded ide-surface-panel ide-text ide-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSyncing ? 'Syncing...' : 'Push to Shopify'}
         </button>
@@ -624,14 +624,14 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Sync result feedback */}
       {syncResult && (
-        <div className="text-xs p-3 rounded bg-gray-800 border border-gray-700 space-y-1">
-          <p className="text-gray-300">
+        <div className="text-xs p-3 rounded ide-surface-panel border ide-border space-y-1">
+          <p className="ide-text-2">
             Pulled: {syncResult.pulled} &middot; Pushed: {syncResult.pushed}
           </p>
-          {syncResult.conflicts.length > 0 && (
+          {syncResult.conflicts?.length > 0 && (
             <p className="text-yellow-400">Conflicts: {syncResult.conflicts.join(', ')}</p>
           )}
-          {syncResult.errors.length > 0 && (
+          {syncResult.errors?.length > 0 && (
             <p className="text-red-400">Errors: {syncResult.errors.join(', ')}</p>
           )}
         </div>
@@ -642,36 +642,36 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Push history */}
       <div className="space-y-2">
-        <h4 className="text-xs font-medium text-gray-400">Push history</h4>
+        <h4 className="text-xs font-medium ide-text-muted">Push history</h4>
         {pushHistory.length === 0 ? (
-          <p className="text-xs text-gray-500">No pushes yet.</p>
+          <p className="text-xs ide-text-muted">No pushes yet.</p>
         ) : (
           <ul className="space-y-1.5 max-h-48 overflow-y-auto">
             {pushHistory.map((row, index) => (
               <li
                 key={row.id}
-                className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-gray-800/60 border border-gray-700 text-xs"
+                className="flex items-center justify-between gap-2 py-1.5 px-2 rounded ide-surface-panel border ide-border text-xs"
               >
                 <div className="min-w-0 flex-1">
-                  <span className="text-gray-400">{relativeTime(row.pushed_at)}</span>
+                  <span className="ide-text-muted">{relativeTime(row.pushed_at)}</span>
                   {row.note && (
-                    <span className="ml-2 text-gray-500 truncate block" title={row.note}>
+                    <span className="ml-2 ide-text-muted truncate block" title={row.note}>
                       {row.note.length > 24 ? `${row.note.slice(0, 24)}...` : row.note}
                     </span>
                   )}
-                  <span className="text-gray-500">
+                  <span className="ide-text-muted">
                     {TRIGGER_LABELS[row.trigger] ?? row.trigger} &middot; {row.file_count} files
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {index === 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-gray-600 text-gray-300 text-[10px]">Current</span>
+                    <span className="px-1.5 py-0.5 rounded bg-stone-500/20 ide-text-muted border-stone-500/40 text-[10px]">Current</span>
                   )}
                   <button
                     type="button"
                     onClick={() => handleRollback(row.id)}
                     disabled={index === 0 || isRollingBack}
-                    className="px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed text-[11px] transition-colors"
+                    className="px-2 py-1 rounded ide-surface-panel ide-text-2 ide-hover disabled:opacity-50 disabled:cursor-not-allowed text-[11px] transition-colors"
                   >
                     Rollback to this
                   </button>
@@ -684,18 +684,18 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Rollback confirmation dialog */}
       {rollbackPushId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Confirm rollback"
+        <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay" role="dialog" aria-modal="true" aria-label="Confirm rollback"
           onKeyDown={(e) => { if (e.key === 'Escape') setRollbackPushId(null); }}
         >
-          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
-            <p className="text-sm text-gray-200">
+          <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-sm mx-4 border ide-border p-4 space-y-3">
+            <p className="text-sm ide-text">
               Restore preview theme to this push? Current preview state will be overwritten.
             </p>
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setRollbackPushId(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
+              <button type="button" onClick={() => setRollbackPushId(null)} className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors">
                 Cancel
               </button>
-              <button type="button" onClick={confirmRollback} disabled={isRollingBack} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              <button type="button" onClick={confirmRollback} disabled={isRollingBack} className="px-3 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {isRollingBack ? 'Rolling back...' : 'Restore'}
               </button>
             </div>
@@ -705,13 +705,13 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Delete theme confirmation dialog */}
       {deleteConfirmName !== null && effectiveThemeId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
-          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
-            <p className="text-sm text-gray-200">Delete theme <strong>&ldquo;{deleteConfirmName}&rdquo;</strong>? This will remove it from Shopify permanently.</p>
-            <p className="text-xs text-gray-400">Type the theme name to confirm:</p>
-            <input type="text" value={deleteInputValue} onChange={(e) => setDeleteInputValue(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-red-500" placeholder={deleteConfirmName} autoFocus />
+        <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay" role="dialog" aria-modal="true">
+          <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-sm mx-4 border ide-border p-4 space-y-3">
+            <p className="text-sm ide-text">Delete theme <strong>&ldquo;{deleteConfirmName}&rdquo;</strong>? This will remove it from Shopify permanently.</p>
+            <p className="text-xs ide-text-muted">Type the theme name to confirm:</p>
+            <input type="text" value={deleteInputValue} onChange={(e) => setDeleteInputValue(e.target.value)} className="w-full px-3 py-2 text-sm rounded ide-input focus:border-red-500 focus:ring-red-500/20" placeholder={deleteConfirmName} autoFocus />
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setDeleteConfirmName(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+              <button type="button" onClick={() => setDeleteConfirmName(null)} className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors">Cancel</button>
               <button type="button" disabled={deleteInputValue !== deleteConfirmName || isDeletingTheme} onClick={async () => { await deleteTheme(effectiveThemeId); setDeleteConfirmName(null); }} className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{isDeletingTheme ? 'Deleting...' : 'Delete'}</button>
             </div>
           </div>
@@ -720,12 +720,12 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Clone modal */}
       {cloneModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
-          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
-            <p className="text-sm text-gray-200">{cloneModal === 'shopify' ? 'Clone theme on Shopify' : 'Clone as new project'}</p>
-            <input type="text" value={cloneNameInput} onChange={(e) => setCloneNameInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500" placeholder="Name" autoFocus />
+        <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay" role="dialog" aria-modal="true">
+          <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-sm mx-4 border ide-border p-4 space-y-3">
+            <p className="text-sm ide-text">{cloneModal === 'shopify' ? 'Clone theme on Shopify' : 'Clone as new project'}</p>
+            <input type="text" value={cloneNameInput} onChange={(e) => setCloneNameInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded ide-input" placeholder="Name" autoFocus />
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setCloneModal(null)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+              <button type="button" onClick={() => setCloneModal(null)} className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors">Cancel</button>
               <button type="button" disabled={!cloneNameInput.trim() || isCloningTheme || isCloningProject} onClick={async () => {
                 if (cloneModal === 'shopify' && effectiveThemeId) {
                   await cloneTheme({ themeId: effectiveThemeId, name: cloneNameInput.trim() });
@@ -734,7 +734,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                   router.push(`/projects/${result.projectId}`);
                 }
                 setCloneModal(null);
-              }} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              }} className="px-3 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {isCloningTheme || isCloningProject ? 'Cloning...' : 'Clone'}
               </button>
             </div>
@@ -744,23 +744,23 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
 
       {/* Publish confirmation (two-step) */}
       {publishConfirmStep > 0 && effectiveThemeId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
-          <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-sm mx-4 border border-gray-700 p-4 space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay" role="dialog" aria-modal="true">
+          <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-sm mx-4 border ide-border p-4 space-y-3">
             {publishConfirmStep === 1 && (
               <>
-                <p className="text-sm text-gray-200">This will make this theme <strong>live</strong> on your store. The current live theme will be replaced.</p>
+                <p className="text-sm ide-text">This will make this theme <strong>live</strong> on your store. The current live theme will be replaced.</p>
                 <div className="flex gap-2 justify-end">
-                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors">Cancel</button>
                   <button type="button" onClick={() => { setPublishConfirmStep(2); setPublishInput(''); }} className="px-3 py-1.5 text-sm rounded bg-yellow-600 text-white hover:bg-yellow-500 transition-colors">Continue</button>
                 </div>
               </>
             )}
             {publishConfirmStep === 2 && (
               <>
-                <p className="text-sm text-gray-200">Type <strong>PUBLISH</strong> to confirm:</p>
-                <input type="text" value={publishInput} onChange={(e) => setPublishInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded bg-gray-800 border border-gray-600 text-gray-200 focus:outline-none focus:border-yellow-500" placeholder="PUBLISH" autoFocus />
+                <p className="text-sm ide-text">Type <strong>PUBLISH</strong> to confirm:</p>
+                <input type="text" value={publishInput} onChange={(e) => setPublishInput(e.target.value)} className="w-full px-3 py-2 text-sm rounded ide-input focus:border-yellow-500 focus:ring-yellow-500/20" placeholder="PUBLISH" autoFocus />
                 <div className="flex gap-2 justify-end">
-                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">Cancel</button>
+                  <button type="button" onClick={() => setPublishConfirmStep(0)} className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors">Cancel</button>
                   <button type="button" disabled={publishInput !== 'PUBLISH' || isPublishingTheme} onClick={async () => { await publishTheme(effectiveThemeId); setPublishConfirmStep(0); }} className="px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{isPublishingTheme ? 'Publishing...' : 'Publish to live'}</button>
                 </div>
               </>

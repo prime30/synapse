@@ -35,7 +35,10 @@ export interface FileDependency {
     | 'data_attribute'
     | 'asset_reference'
     | 'js_import'
-    | 'css_import';
+    | 'css_import'
+    | 'schema_setting'
+    | 'css_section'
+    | 'snippet_variable';
   references: DependencyReference[];
 }
 

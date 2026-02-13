@@ -35,12 +35,19 @@ interface LetterState {
  * Once dismissed, it removes the query param from the URL so refreshing
  * won't replay the animation.
  */
+const LOGIN_ANIM_KEY = 'synapse-login-animated';
+
 export function LoginTransition() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const shouldShow = searchParams.get('signed_in') === '1';
+  const hasFlag = searchParams.get('signed_in') === '1';
+  // Prevent double-play: if the animation already ran this session (e.g. the
+  // smart gate redirected from /onboarding to /projects/[id] and both pages
+  // render LoginTransition), skip the second trigger.
+  const alreadyPlayed = typeof window !== 'undefined' && sessionStorage.getItem(LOGIN_ANIM_KEY) === '1';
+  const shouldShow = hasFlag && !alreadyPlayed;
 
   const [visible, setVisible] = useState(shouldShow);
   const [phase, setPhase] = useState<'scramble' | 'reveal' | 'toast' | 'wipe'>(
@@ -56,11 +63,15 @@ export function LoginTransition() {
   const [revealProgress, setRevealProgress] = useState(0);
   const rafRef = useRef(0);
 
-  // Clean up query param once we've captured shouldShow
+  // Clean up query param once we've captured shouldShow, and mark that
+  // the animation has been played this session so redirects don't re-trigger it.
   const cleanedRef = useRef(false);
   useEffect(() => {
     if (!shouldShow || cleanedRef.current) return;
     cleanedRef.current = true;
+    // Mark played BEFORE the animation finishes so any mid-animation redirect
+    // (e.g. onboarding gate → IDE) won't replay it.
+    try { sessionStorage.setItem(LOGIN_ANIM_KEY, '1'); } catch { /* SSR / private browsing */ }
     // Remove signed_in param without triggering a full navigation
     const params = new URLSearchParams(searchParams.toString());
     params.delete('signed_in');
@@ -195,6 +206,9 @@ function LoginTransitionInner({
       {visible && (
         <motion.div
           className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#0a0a0a]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Signing in"
           initial={false}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -202,6 +216,7 @@ function LoginTransitionInner({
           {/* Subtle green glow */}
           <div
             className="absolute w-[50vmax] h-[50vmax] rounded-full pointer-events-none"
+            aria-hidden="true"
             style={{
               background:
                 'radial-gradient(circle, rgba(40,205,86,0.06) 0%, transparent 60%)',
@@ -209,7 +224,7 @@ function LoginTransitionInner({
           />
 
           {/* Logo scramble → reveal */}
-          <span className="relative inline-flex items-center text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-white z-10">
+          <span className="relative inline-flex items-center text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-white z-10" aria-label="Synapse">
             {/* Invisible sizer: stable box across phases */}
             <span className="inline-flex invisible pointer-events-none" aria-hidden="true">
               {DISPLAY_CHARS.map((ch, i) => (
@@ -265,7 +280,9 @@ function LoginTransitionInner({
           <AnimatePresence>
             {showToast && (
               <motion.p
-                className="mt-8 text-sm text-gray-400 z-10"
+                className="mt-8 text-sm ide-text-muted z-10"
+                role="status"
+                aria-live="polite"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}

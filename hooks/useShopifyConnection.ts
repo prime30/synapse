@@ -153,6 +153,87 @@ export function useShopifyConnection(projectId: string) {
     enabled: statusQuery.data?.connected === true,
   });
 
+  // ── Delete theme ─────────────────────────────────────────────────────────
+  const deleteThemeMutation = useMutation({
+    mutationFn: async (themeId: number) => {
+      const res = await fetch(`/api/projects/${projectId}/shopify/themes/${themeId}`, { method: 'DELETE' });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to delete theme'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shopify-themes', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-connection', projectId] });
+    },
+  });
+
+  // ── Rename theme ────────────────────────────────────────────────────────
+  const renameThemeMutation = useMutation({
+    mutationFn: async ({ themeId, name }: { themeId: number; name: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/shopify/themes/${themeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to rename theme'); }
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shopify-themes', projectId] }); },
+  });
+
+  // ── Clone theme on Shopify ──────────────────────────────────────────────
+  const cloneThemeMutation = useMutation({
+    mutationFn: async ({ themeId, name }: { themeId: number; name: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/shopify/themes/${themeId}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to clone theme'); }
+      const json = await res.json();
+      return json.data as { theme: ShopifyTheme; copied: number; errors: string[] };
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shopify-themes', projectId] }); },
+  });
+
+  // ── Publish theme to live ───────────────────────────────────────────────
+  const publishThemeMutation = useMutation({
+    mutationFn: async (themeId: number) => {
+      const res = await fetch(`/api/projects/${projectId}/shopify/themes/${themeId}/publish`, { method: 'POST' });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to publish theme'); }
+      const json = await res.json();
+      return json.data as { published: boolean; previousLiveThemeId: number | null };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shopify-themes', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-connection', projectId] });
+    },
+  });
+
+  // ── Theme diff (pending files vs Shopify) ───────────────────────────────
+  const diffThemeMutation = useMutation({
+    mutationFn: async (themeId: number) => {
+      const res = await fetch(`/api/projects/${projectId}/shopify/themes/${themeId}/diff`);
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to fetch diff'); }
+      const json = await res.json();
+      return json.data as { files: { path: string; local: string; remote: string | null; status: 'added' | 'modified' }[] };
+    },
+  });
+
+  // ── Clone project (local files → new project) ──────────────────────────
+  const cloneProjectMutation = useMutation({
+    mutationFn: async ({ name }: { name: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? 'Failed to clone project'); }
+      const json = await res.json();
+      return json.data as { projectId: string; projectName: string; filesCopied: number };
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); },
+  });
+
   return {
     // Connection status
     connection: statusQuery.data?.connection ?? null,
@@ -178,5 +259,20 @@ export function useShopifyConnection(projectId: string) {
     isLoadingThemes: themesQuery.isLoading,
     themesError: themesQuery.error,
     refetchThemes: themesQuery.refetch,
+
+    // Theme management
+    deleteTheme: deleteThemeMutation.mutateAsync,
+    isDeletingTheme: deleteThemeMutation.isPending,
+    renameTheme: renameThemeMutation.mutateAsync,
+    isRenamingTheme: renameThemeMutation.isPending,
+    cloneTheme: cloneThemeMutation.mutateAsync,
+    isCloningTheme: cloneThemeMutation.isPending,
+    publishTheme: publishThemeMutation.mutateAsync,
+    isPublishingTheme: publishThemeMutation.isPending,
+    diffTheme: diffThemeMutation.mutateAsync,
+    isDiffingTheme: diffThemeMutation.isPending,
+    diffResult: diffThemeMutation.data ?? null,
+    cloneProject: cloneProjectMutation.mutateAsync,
+    isCloningProject: cloneProjectMutation.isPending,
   };
 }

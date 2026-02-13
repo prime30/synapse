@@ -65,8 +65,8 @@ export function FileListControls({
             onClick={() => onFilterChange(opt.value)}
             className={`px-2 py-1 text-xs rounded transition-colors ${
               filter === opt.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                ? 'bg-sky-500 text-white'
+                : 'ide-surface-panel ide-text-muted ide-hover'
             }`}
           >
             {opt.label}
@@ -76,7 +76,7 @@ export function FileListControls({
       <select
         value={sort}
         onChange={(e) => onSortChange(e.target.value as SortOption)}
-        className="w-full px-2 py-1 text-sm bg-gray-800 border border-gray-600 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-full px-2 py-1 text-sm ide-input"
       >
         {SORT_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>

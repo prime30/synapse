@@ -163,19 +163,23 @@ export function TestimonialCarousel() {
             </div>
           </div>
 
-          {/* Dot indicators */}
-          <div className="flex items-center justify-center gap-2 mt-8">
+          {/* Dot indicators — visual dots inside 44px touch targets */}
+          <div className="flex items-center justify-center gap-0 mt-8">
             {CARDS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setActiveIndex(i)}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  activeIndex === i
-                    ? 'bg-stone-800 dark:bg-white w-5'
-                    : 'bg-stone-300 dark:bg-white/20 hover:bg-stone-400 dark:hover:bg-white/30'
-                }`}
+                className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label={`Go to card ${i + 1}`}
-              />
+              >
+                <span
+                  className={`block h-2 rounded-full transition-all duration-300 ${
+                    activeIndex === i
+                      ? 'bg-stone-800 dark:bg-white w-5'
+                      : 'bg-stone-300 dark:bg-white/20 hover:bg-stone-400 dark:hover:bg-white/30 w-2'
+                  }`}
+                />
+              </button>
             ))}
           </div>
         </motion.div>

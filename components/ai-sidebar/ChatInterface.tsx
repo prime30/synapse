@@ -7,16 +7,37 @@ import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 import type { Suggestion } from '@/lib/ai/prompt-suggestions';
-import type { AgentMode } from '@/hooks/useAgentSettings';
+import type { AgentMode, IntentMode } from '@/hooks/useAgentSettings';
 import type { OutputMode } from '@/lib/ai/signal-detector';
+import { ThinkingBlock, type ThinkingStep } from './ThinkingBlock';
 import { PlanApprovalModal, parsePlanSteps, type PlanStep } from './PlanApprovalModal';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Plus, Pencil, RotateCcw } from 'lucide-react';
+import { usePromptProgress } from '@/hooks/usePromptProgress';
+import { useContextMeter } from '@/hooks/useContextMeter';
+import { ContextMeter } from './ContextMeter';
+import { SessionHistory, type ChatSession } from './SessionHistory';
+import { detectFilePaths } from '@/lib/ai/file-path-detector';
+import { FileText } from 'lucide-react';
+
+/** Try to extract a file name/path from the first line of a code block (e.g. "// sections/header.liquid"). */
+function detectFileNameFromCode(code: string): string | undefined {
+  const firstLine = code.split('\n')[0]?.trim();
+  if (!firstLine) return undefined;
+  // Match comment patterns: // path, /* path */, # path, {%- comment -%} path, <!-- path -->
+  const commentRe = /^(?:\/\/|\/\*|#|{%-?\s*comment\s*-?%}|<!--)\s*((?:sections|templates|snippets|assets|config|layout|locales|blocks)\/[\w./-]+)/;
+  const m = firstLine.match(commentRe);
+  return m?.[1] ?? undefined;
+}
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  /** Thinking steps emitted during this assistant message (streamed via SSE). */
+  thinkingSteps?: ThinkingStep[];
+  /** Whether the thinking phase for this message is complete. */
+  thinkingComplete?: boolean;
 }
 
 interface ChatInterfaceProps {
@@ -71,6 +92,75 @@ interface ChatInterfaceProps {
   onImageUpload?: (file: File) => Promise<string>;
   /** EPIC 8: Project ID for image upload context */
   projectId?: string;
+  /** Multi-session: all chat sessions for this project */
+  sessions?: ChatSession[];
+  /** Multi-session: currently active session ID */
+  activeSessionId?: string | null;
+  /** Multi-session: create a new chat session */
+  onNewChat?: () => void;
+  /** Multi-session: switch to a different session */
+  onSwitchSession?: (sessionId: string) => void;
+  /** Multi-session: delete a session */
+  onDeleteSession?: (sessionId: string) => void;
+  /** Multi-session: rename a session */
+  onRenameSession?: (sessionId: string, title: string) => void;
+  /** Current intent mode (Ask / Plan / Code / Debug) */
+  intentMode?: IntentMode;
+  /** Called when the user switches intent mode */
+  onIntentModeChange?: (mode: IntentMode) => void;
+  /** Called when user edits a message — resends from that point (index, new content) */
+  onEditMessage?: (index: number, content: string) => void;
+  /** Called when user wants to regenerate the last assistant response */
+  onRegenerateMessage?: () => void;
+  /** Called when user clicks a file path in an AI response to open it */
+  onOpenFile?: (filePath: string) => void;
+  /** Current error code from agent (for in-thread display) */
+  errorCode?: string | null;
+  /** Resolve a file path to a fileId for code block Apply. Returns null if not found. */
+  resolveFileId?: (path: string) => string | null;
+  /** Number of older messages that were summarized/trimmed */
+  trimmedMessageCount?: number;
+  /** Summary text of trimmed messages */
+  historySummary?: string;
+  /** Number of messages that were summarized (for context meter) */
+  summarizedCount?: number;
+  /** Total files in the project (for context meter "N of M" display) */
+  totalFiles?: number;
+  /** Whether budget enforcement truncated content (for context meter warning) */
+  budgetTruncated?: boolean;
+}
+
+function HistorySummaryBlock({ count, summary }: { count: number; summary?: string }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <div className="mx-3 mb-3">
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="flex w-full items-center gap-2 rounded-lg ide-surface-inset border ide-border-subtle px-3 py-2 text-left transition-colors ide-hover"
+      >
+        <svg className="h-3.5 w-3.5 ide-text-muted shrink-0" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+        </svg>
+        <span className="text-xs ide-text-muted font-medium flex-1">
+          {count} older message{count !== 1 ? 's' : ''} summarized
+        </span>
+        <svg
+          className={`h-3 w-3 ide-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {expanded && summary && (
+        <div className="mt-1 rounded-lg ide-surface-inset border ide-border-subtle px-3 py-2">
+          <p className="text-xs ide-text-muted whitespace-pre-wrap">{summary}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Content renderer with CodeBlock support ────────────────────────────────────
@@ -127,7 +217,8 @@ function parseDiffContent(code: string): { original: string; suggested: string }
 
 function parseContentSegments(text: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
-  const codeBlockRe = /```(\w*)\n([\s\S]*?)```/g;
+  // Support ```lang or ```lang:filepath (e.g. ```liquid:sections/header.liquid)
+  const codeBlockRe = /```(\w*(?::[^\n]*)?)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -136,8 +227,19 @@ function parseContentSegments(text: string): ContentSegment[] {
     if (match.index > lastIndex) {
       segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
     }
-    // Code block
-    const language = match[1] || undefined;
+    // Parse language and optional file name from the fence info string
+    const infoString = match[1] || '';
+    let language: string | undefined;
+    let fileName: string | undefined;
+
+    if (infoString.includes(':')) {
+      const [langPart, ...rest] = infoString.split(':');
+      language = langPart || undefined;
+      fileName = rest.join(':').trim() || undefined;
+    } else {
+      language = infoString || undefined;
+    }
+
     const code = match[2].replace(/\n$/, ''); // trim trailing newline
 
     // EPIC 8: Detect diff-formatted code blocks and render as split-diff
@@ -147,11 +249,12 @@ function parseContentSegments(text: string): ContentSegment[] {
         type: 'diff',
         content: code,
         language,
+        fileName,
         originalCode: original,
         suggestedCode: suggested,
       });
     } else {
-      segments.push({ type: 'code', content: code, language });
+      segments.push({ type: 'code', content: code, language, fileName });
     }
 
     lastIndex = match.index + match[0].length;
@@ -186,13 +289,13 @@ function renderInline(text: string): React.ReactNode {
       if (boldIdx > 0) parts.push(remaining.slice(0, boldIdx));
       const closeIdx = remaining.indexOf('**', boldIdx + 2);
       if (closeIdx === -1) { parts.push(remaining.slice(boldIdx)); break; }
-      parts.push(<strong key={`b-${key++}`} className="font-semibold text-gray-100">{remaining.slice(boldIdx + 2, closeIdx)}</strong>);
+      parts.push(<strong key={`b-${key++}`} className="font-semibold ide-text">{remaining.slice(boldIdx + 2, closeIdx)}</strong>);
       remaining = remaining.slice(closeIdx + 2);
     } else {
       if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
       const closeIdx = remaining.indexOf('`', codeIdx + 1);
       if (closeIdx === -1) { parts.push(remaining.slice(codeIdx)); break; }
-      parts.push(<code key={`c-${key++}`} className="rounded bg-gray-700/60 px-1 py-0.5 text-[0.8em] font-mono text-blue-300">{remaining.slice(codeIdx + 1, closeIdx)}</code>);
+      parts.push(<code key={`c-${key++}`} className="rounded bg-stone-100 dark:bg-white/10 px-1 py-0.5 text-[0.8em] font-mono text-sky-600 dark:text-sky-300">{remaining.slice(codeIdx + 1, closeIdx)}</code>);
       remaining = remaining.slice(closeIdx + 1);
     }
   }
@@ -200,7 +303,58 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : <>{parts}</>;
 }
 
-function renderTextContent(text: string): React.ReactNode {
+/**
+ * Render a line of text, replacing detected file paths with clickable chips.
+ * Falls back to plain renderInline when onOpenFile is not provided.
+ */
+function renderInlineWithFiles(
+  text: string,
+  onOpenFile?: (path: string) => void,
+): React.ReactNode {
+  if (!onOpenFile) return renderInline(text);
+
+  const filePaths = detectFilePaths(text);
+  if (filePaths.length === 0) return renderInline(text);
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+
+  for (const fp of filePaths) {
+    // Text before this file path
+    if (fp.start > cursor) {
+      parts.push(renderInline(text.slice(cursor, fp.start)));
+    }
+
+    // File chip
+    const fileName = fp.path.split('/').pop() ?? fp.path;
+    parts.push(
+      <button
+        key={`fp-${fp.start}`}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenFile(fp.path);
+        }}
+        className="inline-flex items-center gap-1 rounded-md bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/20 px-1.5 py-0.5 text-[11px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors cursor-pointer mx-0.5 align-middle"
+        title={`Open ${fp.path}`}
+      >
+        <FileText className="h-3 w-3" />
+        {fileName}
+      </button>,
+    );
+
+    cursor = fp.end;
+  }
+
+  // Remaining text after last file path
+  if (cursor < text.length) {
+    parts.push(renderInline(text.slice(cursor)));
+  }
+
+  return <>{parts}</>;
+}
+
+function renderTextContent(text: string, onOpenFile?: (path: string) => void): React.ReactNode {
   if (!text.trim()) return null;
 
   const lines = text.split('\n');
@@ -223,7 +377,7 @@ function renderTextContent(text: string): React.ReactNode {
     const listMatch = line.match(/^[\s]*[-*]\s+(.+)$/);
     if (listMatch) {
       listItems.push(
-        <li key={`li-${key++}`}>{renderInline(listMatch[1])}</li>
+        <li key={`li-${key++}`}>{renderInlineWithFiles(listMatch[1], onOpenFile)}</li>
       );
       continue;
     }
@@ -235,7 +389,7 @@ function renderTextContent(text: string): React.ReactNode {
     } else {
       elements.push(
         <p key={`p-${key++}`} className="my-0.5">
-          {renderInline(line)}
+          {renderInlineWithFiles(line, onOpenFile)}
         </p>
       );
     }
@@ -257,23 +411,41 @@ const MODEL_OPTIONS = [
 // ── Action-specific loading labels ────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
-  analyze: 'Analyzing your request...',
-  generate: 'Generating code...',
-  review: 'Reviewing files...',
-  fix: 'Fixing issues...',
-  explain: 'Explaining...',
-  refactor: 'Refactoring code...',
-  document: 'Generating documentation...',
-  plan: 'Generating plan...',
-  summary: 'Summarizing...',
+  analyze: 'Analyzing your request',
+  generate: 'Generating code',
+  review: 'Reviewing files',
+  fix: 'Fixing issues',
+  explain: 'Explaining',
+  refactor: 'Refactoring code',
+  document: 'Generating documentation',
+  plan: 'Generating plan',
+  summary: 'Summarizing',
 };
 
 function getThinkingLabel(action?: string, reviewFileCount?: number): string {
   if (action === 'review' && reviewFileCount != null) {
-    return `Reviewing ${reviewFileCount} file${reviewFileCount !== 1 ? 's' : ''}...`;
+    return `Reviewing ${reviewFileCount} file${reviewFileCount !== 1 ? 's' : ''}`;
   }
   if (action && action in ACTION_LABELS) return ACTION_LABELS[action];
-  return 'Thinking...';
+  return 'Thinking';
+}
+
+/** Three dots that pulse sequentially — appended after the thinking label. */
+function ThinkingDots() {
+  return (
+    <span className="inline-flex items-center ml-0.5 gap-[2px]" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block w-[3px] h-[3px] rounded-full bg-current ai-thinking-shimmer"
+          style={{
+            animation: 'thinking-dot 1.4s ease-in-out infinite',
+            animationDelay: `${i * 0.2}s`,
+          }}
+        />
+      ))}
+    </span>
+  );
 }
 
 // ── Session summary generator ─────────────────────────────────────────────────
@@ -341,9 +513,29 @@ export function ChatInterface({
   showRetryChip = false,
   outputMode,
   onImageUpload,
+  sessions = [],
+  activeSessionId,
+  onNewChat,
+  onSwitchSession,
+  onDeleteSession,
+  onRenameSession,
+  intentMode = 'code',
+  onIntentModeChange,
+  onEditMessage,
+  onRegenerateMessage,
+  onOpenFile,
+  // errorCode — available via prop for future in-thread use
+  resolveFileId: resolveFileIdProp,
+  trimmedMessageCount = 0,
+  historySummary,
+  summarizedCount,
+  totalFiles,
+  budgetTruncated,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** When set, the next submit should edit-and-resend at this message index instead of appending. */
+  const editPendingRef = useRef<number | null>(null);
   const [inputHasText, setInputHasText] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
@@ -357,6 +549,13 @@ export function ChatInterface({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Prompt progress / countdown
+  const promptProgress = usePromptProgress(!!isLoading, currentAction, intentMode);
+
+  // Context window meter
+  const contextMeter = useContextMeter(messages, currentModel, fileCount, editorSelection, summarizedCount, totalFiles, budgetTruncated);
+  const currentModelOption = MODEL_OPTIONS.find((o) => o.value === currentModel);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -394,7 +593,11 @@ export function ChatInterface({
   const planKey = planSteps.length > 0
     ? planSteps.map(s => s.description).join('|')
     : '';
-  const planModalOpen = planSteps.length > 0 && planDismissedKey !== planKey;
+  // Only auto-open the plan modal when the user explicitly chose Plan intent mode.
+  // Otherwise, show an inline "Review Plan" button so it's not intrusive.
+  const planModalOpen = planSteps.length > 0 && planDismissedKey !== planKey && intentMode === 'plan';
+  const showInlinePlanButton = planSteps.length > 0 && planDismissedKey !== planKey && intentMode !== 'plan';
+  const [manualPlanOpen, setManualPlanOpen] = useState(false);
 
   // ── EPIC 5: Plan modal handlers ──────────────────────────────────────────
   const handlePlanApprove = (steps: PlanStep[]) => {
@@ -437,6 +640,15 @@ export function ChatInterface({
     navigator.clipboard.writeText(text).then(() => {
       setCopiedMessageId(assistantId);
       setTimeout(() => setCopiedMessageId(null), 1500);
+    });
+  };
+
+  // ── Copy full response content ────────────────────────────────────────────
+  const [copiedResponseId, setCopiedResponseId] = useState<string | null>(null);
+  const handleCopyResponse = (msg: ChatMessage) => {
+    navigator.clipboard.writeText(msg.content).then(() => {
+      setCopiedResponseId(msg.id);
+      setTimeout(() => setCopiedResponseId(null), 1500);
     });
   };
 
@@ -536,7 +748,14 @@ export function ChatInterface({
       messageText = prefix + messageText;
     }
 
-    if (messageText) onSend(messageText);
+    // If we're editing a previous message, use edit-and-resend instead of appending
+    if (editPendingRef.current !== null && onEditMessage) {
+      const editIdx = editPendingRef.current;
+      editPendingRef.current = null;
+      onEditMessage(editIdx, messageText);
+    } else if (messageText) {
+      onSend(messageText);
+    }
     if (inputRef.current) inputRef.current.value = '';
     setInputHasText(false);
     onDismissElement?.();
@@ -561,13 +780,13 @@ export function ChatInterface({
       >
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
-          <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3 text-xs text-gray-300 space-y-1.5">
+          <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/30 rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-blue-400 uppercase tracking-wider font-medium">Session Summary</span>
+              <span className="text-[10px] text-sky-500 dark:text-sky-400 uppercase tracking-wider font-medium">Session Summary</span>
               <button
                 type="button"
                 onClick={() => setSessionSummary(null)}
-                className="text-gray-500 hover:text-gray-300 transition-colors"
+                className="ide-text-muted hover:ide-text-2 transition-colors"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -578,7 +797,7 @@ export function ChatInterface({
 
         {/* Pinned messages */}
         {pinnedMessageIds.size > 0 && messages.some(m => pinnedMessageIds.has(m.id)) && (
-          <div className="sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50 rounded-lg p-2 space-y-1.5">
+          <div className="sticky top-0 z-20 ide-surface-pop backdrop-blur-sm border-b ide-border-subtle rounded-lg p-2 space-y-1.5">
             <p className="text-[10px] text-amber-400/80 uppercase tracking-wider px-1 font-medium flex items-center gap-1">
               <Pin className="h-3 w-3" />
               Pinned
@@ -588,15 +807,15 @@ export function ChatInterface({
                 key={`pin-${m.id}`}
                 className={`rounded px-2.5 py-1.5 text-xs leading-relaxed flex items-start justify-between gap-1 ${
                   m.role === 'user'
-                    ? 'bg-blue-600/10 text-gray-300'
-                    : 'bg-gray-800/40 text-gray-400'
+                    ? 'bg-sky-50 dark:bg-sky-500/10 ide-text-2'
+                    : 'ide-surface-inset ide-text-3'
                 }`}
               >
                 <span className="line-clamp-2">{m.content.replace(/```[\s\S]*?```/g, '[code]')}</span>
                 <button
                   type="button"
                   onClick={() => togglePin(m.id)}
-                  className="flex-shrink-0 text-gray-600 hover:text-gray-400 transition-colors"
+                  className="flex-shrink-0 ide-text-quiet hover:ide-text-3 transition-colors"
                   title="Unpin"
                 >
                   <X className="h-3 w-3" />
@@ -606,12 +825,35 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Empty state with contextual suggestions */}
+        {/* Empty state with mode explanations + suggestions */}
         {messages.length === 0 && !isLoading && (
           <div className="py-4 space-y-4">
-            <p className="text-sm text-gray-500 text-center">
+            <p className="text-sm ide-text-3 text-center">
               What would you like to build?
             </p>
+            <div className="grid grid-cols-2 gap-1.5 px-2">
+              {[
+                { key: 'code', icon: '⌨', label: 'Code', desc: 'Change theme files' },
+                { key: 'ask', icon: '?', label: 'Ask', desc: 'Questions about your project' },
+                { key: 'plan', icon: '📋', label: 'Plan', desc: 'Step-by-step plans' },
+                { key: 'debug', icon: '🔍', label: 'Debug', desc: 'Find and fix issues' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onIntentModeChange?.(item.key as IntentMode)}
+                  className={`rounded-md px-2 py-1.5 text-left text-[11px] transition-colors border ${
+                    intentMode === item.key
+                      ? 'border-sky-400/40 bg-sky-500/10 ide-text'
+                      : 'ide-border-subtle ide-surface hover:ide-hover ide-text-muted'
+                  }`}
+                  aria-label={`Switch to ${item.label} mode: ${item.desc}`}
+                >
+                  <span className="font-medium">{item.icon} {item.label}</span>
+                  <span className="block ide-text-muted text-[10px]">{item.desc}</span>
+                </button>
+              ))}
+            </div>
             {showPreSuggestions && (
               <SuggestionChips
                 suggestions={contextSuggestions}
@@ -622,18 +864,75 @@ export function ChatInterface({
           </div>
         )}
 
+        {/* History summary block (D2) */}
+        {trimmedMessageCount > 0 && (
+          <HistorySummaryBlock
+            count={trimmedMessageCount}
+            summary={historySummary}
+          />
+        )}
+
         {/* Messages */}
         {messages.map((m, idx) => (
           <div key={m.id} className="group/msg relative">
             {/* Hover action buttons */}
-            <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10">
+            <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10 ide-surface-pop rounded-md px-0.5 py-0.5 border ide-border-subtle">
+              {/* Edit & resend (user messages only) */}
+              {m.role === 'user' && onEditMessage && !isLoading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = inputRef.current;
+                    if (el) {
+                      el.value = m.content;
+                      setInputHasText(true);
+                      el.focus();
+                      // Store the index so submit triggers edit-and-resend
+                      editPendingRef.current = idx;
+                    }
+                  }}
+                  className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+                  title="Edit and resend"
+                  aria-label="Edit and resend this message"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
+              {/* Regenerate (last assistant message only) */}
+              {m.role === 'assistant' && idx === messages.length - 1 && onRegenerateMessage && !isLoading && (
+                <button
+                  type="button"
+                  onClick={onRegenerateMessage}
+                  className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+                  title="Regenerate response"
+                  aria-label="Regenerate this response"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              )}
+              {/* Copy full response (assistant messages) */}
+              {m.role === 'assistant' && (
+                <button
+                  type="button"
+                  onClick={() => handleCopyResponse(m)}
+                  className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+                  title="Copy full response"
+                  aria-label="Copy full response"
+                >
+                  {copiedResponseId === m.id ? (
+                    <span className="text-[10px] text-green-400 font-medium px-0.5">Copied!</span>
+                  ) : (
+                    <ClipboardCopy className="h-3 w-3" />
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => togglePin(m.id)}
                 className={`rounded p-1 transition-colors ${
                   pinnedMessageIds.has(m.id)
                     ? 'text-amber-400 bg-amber-500/10'
-                    : 'text-gray-600 hover:text-gray-300 hover:bg-gray-700/60'
+                    : 'ide-text-muted hover:ide-text-2 ide-hover'
                 }`}
                 title={pinnedMessageIds.has(m.id) ? 'Unpin message' : 'Pin message'}
               >
@@ -643,7 +942,7 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={() => handleCopyPrompt(m.id, idx)}
-                  className="rounded p-1 text-gray-600 hover:text-gray-300 hover:bg-gray-700/60 transition-colors"
+                  className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
                   title="Copy as reusable prompt"
                 >
                   {copiedMessageId === m.id ? (
@@ -658,12 +957,20 @@ export function ChatInterface({
             <div
               className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
                 m.role === 'user'
-                  ? 'bg-blue-600/20 text-gray-100 ml-4'
-                  : 'bg-gray-800/60 text-gray-300 mr-4'
+                  ? 'bg-sky-50 dark:bg-sky-500/10 ide-text ml-4'
+                  : 'ide-surface-input ide-text-2 mr-4'
               } ${pinnedMessageIds.has(m.id) ? 'ring-1 ring-amber-500/30' : ''}`}
             >
               {m.role === 'assistant' ? (
                 <>
+                  {/* Thinking block (inline, above response content) */}
+                  {m.thinkingSteps && m.thinkingSteps.length > 0 && (
+                    <ThinkingBlock
+                      steps={m.thinkingSteps}
+                      isComplete={m.thinkingComplete ?? false}
+                      defaultExpanded={!m.thinkingComplete}
+                    />
+                  )}
                   {parseContentSegments(m.content).map((seg, i) =>
                     seg.type === 'diff' && seg.originalCode !== undefined && seg.suggestedCode !== undefined ? (
                       <div key={`diff-${i}`} className="my-2">
@@ -672,49 +979,119 @@ export function ChatInterface({
                           suggestedCode={seg.suggestedCode}
                         />
                       </div>
-                    ) : seg.type === 'code' ? (
-                      <CodeBlock
-                        key={`code-${i}`}
-                        code={seg.content}
-                        language={seg.language}
-                        fileName={seg.fileName}
-                        onApply={onApplyCode}
-                        onSave={onSaveCode}
-                      />
-                    ) : (
+                    ) : seg.type === 'code' ? (() => {
+                      const fn = seg.fileName || detectFileNameFromCode(seg.content);
+                      const fId = fn && resolveFileIdProp ? resolveFileIdProp(fn) : undefined;
+                      return (
+                        <CodeBlock
+                          key={`code-${i}`}
+                          code={seg.content}
+                          language={seg.language}
+                          fileName={fn}
+                          fileId={fId ?? undefined}
+                          onApply={onApplyCode}
+                          onSave={onSaveCode}
+                        />
+                      );
+                    })() : (
                       <React.Fragment key={`text-${i}`}>
-                        {renderTextContent(seg.content)}
+                        {renderTextContent(seg.content, onOpenFile)}
                       </React.Fragment>
                     )
+                  )}
+                  {/* Blinking caret while streaming */}
+                  {isLoading && idx === messages.length - 1 && (
+                    <span
+                      className="inline-block w-[2px] h-[1.1em] bg-indigo-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
+                      style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}
+                      aria-hidden="true"
+                    />
                   )}
                 </>
               ) : (
                 m.content
               )}
             </div>
+
+            {/* Clarification hint — shows when assistant is asking for more info */}
+            {m.role === 'assistant' && !isLoading && idx === messages.length - 1 &&
+              /\?\s*$/.test(m.content.trim()) &&
+              /(?:could you|can you|please|more detail|clarif|which|what exactly|specify)/i.test(m.content) && (
+              <div className="mt-1.5 flex items-center gap-1.5 px-1">
+                <span className="text-[10px] ide-text-muted italic">The agent needs more detail.</span>
+              </div>
+            )}
           </div>
         ))}
 
         {/* EPIC 5: Output mode badge */}
         {isLoading && outputMode && outputMode !== 'chat' && (
           <div className="px-3 py-1">
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 dark:bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-400">
               {outputMode === 'plan' ? 'Plan mode' : outputMode === 'review' ? 'Review mode' : outputMode === 'fix' ? 'Fix mode' : outputMode}
             </span>
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading state with shimmer label and progress bar */}
         {isLoading && (
-          <div className="rounded-lg px-3 py-2 text-sm bg-gray-800/60 text-gray-500 italic">
-            {getThinkingLabel(currentAction, reviewFileCount)}
+          <div
+            className="rounded-lg px-3 py-2 ide-surface-input space-y-1.5 border ai-thinking-pulse-border"
+            style={{ animation: 'ai-thinking-pulse 3s ease-in-out infinite' }}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="text-sm font-medium italic ai-thinking-shimmer"
+                style={{
+                  background: 'linear-gradient(90deg, rgba(148,163,184,0.6) 0%, rgba(199,210,254,0.9) 50%, rgba(148,163,184,0.6) 100%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'ai-shimmer 2s ease-in-out infinite',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                {getThinkingLabel(currentAction, reviewFileCount)}
+                <ThinkingDots />
+              </span>
+              {promptProgress.secondsRemaining != null && (
+                <span className="text-[10px] tabular-nums ide-text-quiet font-mono">
+                  ~{promptProgress.secondsRemaining}s
+                </span>
+              )}
+            </div>
+            {/* Progress track */}
+            <div className="h-1 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-accent/70 transition-all duration-150 ease-out"
+                style={{ width: `${promptProgress.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Inline "Review Plan" button (when plan detected but not in Plan intent mode) */}
+        {showInlinePlanButton && (
+          <div className="pt-1 px-1">
+            <button
+              type="button"
+              onClick={() => setManualPlanOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-emerald-400 text-xs font-medium hover:bg-emerald-500/10 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="M9 14l2 2 4-4" />
+              </svg>
+              Review Plan ({planSteps.length} steps)
+            </button>
           </div>
         )}
 
         {/* Post-response suggestions (after last assistant message) */}
         {showPostAfterAssistant && (
           <div className="pt-1">
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5 px-1">Next steps</p>
+            <p className="text-[10px] ide-text-quiet uppercase tracking-wider mb-1.5 px-1">Next steps</p>
             <SuggestionChips
               suggestions={responseSuggestions}
               onSelect={handleSuggestionSelect}
@@ -725,65 +1102,43 @@ export function ChatInterface({
         )}
       </div>
 
-      {/* Input area — Cursor-style */}
-      <div className="flex-shrink-0 border-t border-gray-800">
-        {/* Context badges */}
-        {(fileCount > 0 || editorSelection) && (
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-800/50">
+      {/* Input area */}
+      <div className="flex-shrink-0 border-t ide-border-subtle">
+        {/* Consolidated context row: badges + element chip + image + inline suggestions */}
+        {(fileCount > 0 || editorSelection || selectedElement || attachedImage || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
+          <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap border-b ide-border-subtle">
             {fileCount > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[10px] text-gray-400">
-                <Paperclip className="h-3 w-3" />
-                {fileCount} file{fileCount !== 1 ? 's' : ''}
+              <span className="inline-flex items-center gap-1 rounded-full ide-surface-inset px-2 py-0.5 text-[10px] ide-text-3">
+                <Paperclip className="h-2.5 w-2.5" />
+                {fileCount}
               </span>
             )}
             {editorSelection && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400 truncate max-w-[200px]">
-                Selection: {editorSelection.slice(0, 40)}{editorSelection.length > 40 ? '…' : ''}
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400 truncate max-w-[160px]">
+                {editorSelection.slice(0, 30)}{editorSelection.length > 30 ? '...' : ''}
               </span>
             )}
-          </div>
-        )}
-
-        {selectedElement && (
-          <div className="px-3 py-1.5">
-            <ElementRefChip element={selectedElement} onDismiss={onDismissElement} />
-          </div>
-        )}
-
-        {/* Inline pre-prompt chips when there ARE messages but input is empty */}
-        {!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0 && (
-          <div className="px-3 py-1.5">
-            <SuggestionChips
-              suggestions={contextSuggestions.slice(0, 2)}
-              onSelect={handleSuggestionSelect}
-              variant="pre"
-            />
-          </div>
-        )}
-
-        {/* EPIC 8: Image attachment preview */}
-        {attachedImage && (
-          <div className="px-3 py-1.5 border-b border-gray-800/50">
-            <div className="inline-flex items-center gap-2 rounded-lg bg-gray-800/60 border border-gray-700 px-2 py-1.5">
-              {/* eslint-disable-next-line @next/next/no-img-element -- blob URL, not optimizable */}
-              <img
-                src={attachedImage.preview}
-                alt="Attached"
-                className="h-10 w-10 rounded object-cover"
+            {selectedElement && (
+              <ElementRefChip element={selectedElement} onDismiss={onDismissElement} />
+            )}
+            {attachedImage && (
+              <span className="inline-flex items-center gap-1.5 rounded-full ide-surface-inset px-2 py-0.5 text-[10px] ide-text-3">
+                {/* eslint-disable-next-line @next/next/no-img-element -- blob URL */}
+                <img src={attachedImage.preview} alt="" className="h-4 w-4 rounded object-cover" />
+                <span className="truncate max-w-[80px]">{attachedImage.file.name}</span>
+                <button type="button" onClick={handleRemoveImage} className="ide-text-muted hover:ide-text-2">
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            )}
+            {/* Inline suggestion chips (compact, max 2) */}
+            {!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0 && (
+              <SuggestionChips
+                suggestions={contextSuggestions.slice(0, 2)}
+                onSelect={handleSuggestionSelect}
+                variant="pre"
               />
-              <div className="text-xs">
-                <p className="text-gray-300 truncate max-w-[140px]">{attachedImage.file.name}</p>
-                <p className="text-gray-500">{(attachedImage.file.size / 1024).toFixed(0)} KB</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/60 transition-colors"
-                title="Remove image"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            )}
           </div>
         )}
 
@@ -803,19 +1158,34 @@ export function ChatInterface({
             onChange={handleFileSelect}
           />
 
-          <div className={`relative ${isDraggingOver ? 'ring-2 ring-blue-500/50 rounded-lg' : ''}`}>
+          <div className={`relative ${isDraggingOver ? 'ring-2 ring-sky-500/50 dark:ring-sky-400/50 rounded-lg' : ''}`}>
             <textarea
               ref={inputRef}
               name="message"
               rows={2}
               placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
               disabled={isLoading || isUploadingImage}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 resize-none"
+              className="w-full rounded-lg border ide-border ide-surface-input px-3 py-2 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 disabled:opacity-50 resize-none"
               onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSubmit(e);
+                }
+                // Escape: stop streaming
+                if (e.key === 'Escape' && isLoading && onStop) {
+                  e.preventDefault();
+                  onStop();
+                }
+                // Up arrow on empty input: recall last user message
+                const target = e.target as HTMLTextAreaElement;
+                if (e.key === 'ArrowUp' && !target.value?.trim()) {
+                  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+                  if (lastUserMsg) {
+                    e.preventDefault();
+                    target.value = lastUserMsg.content;
+                    setInputHasText(true);
+                  }
                 }
               }}
               onPaste={handlePaste}
@@ -823,8 +1193,8 @@ export function ChatInterface({
 
             {/* Drag-drop overlay */}
             {isDraggingOver && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-blue-600/10 border-2 border-dashed border-blue-500/40 pointer-events-none">
-                <div className="flex items-center gap-2 text-sm text-blue-400">
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-sky-500/10 dark:bg-sky-500/10 border-2 border-dashed border-sky-500/40 pointer-events-none">
+                <div className="flex items-center gap-2 text-sm text-sky-600 dark:text-sky-400">
                   <Upload className="h-4 w-4" />
                   Drop image here
                 </div>
@@ -832,8 +1202,15 @@ export function ChatInterface({
             )}
           </div>
 
+          {/* Keyboard hint */}
+          <div className="flex items-center justify-end px-1 mt-0.5">
+            <span className="text-[10px] ide-text-muted select-none">
+              Enter to send · Shift+Enter for new line
+            </span>
+          </div>
+
           {/* Action bar */}
-          <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center justify-between mt-1">
             <div className="flex items-center gap-1.5">
               {/* Model picker */}
               {onModelChange && (
@@ -841,24 +1218,24 @@ export function ChatInterface({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowModelPicker(p => !p); }}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-gray-400 bg-gray-800 border border-gray-700 hover:border-gray-600 hover:text-gray-300 transition-colors"
+                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ide-text-3 ide-surface-inset border ide-border hover:border-stone-300 dark:hover:border-white/20 hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                   >
                     <span className="truncate max-w-[100px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
                     <ChevronDown className="h-3 w-3" />
                   </button>
                   {showModelPicker && (
-                    <div className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border border-gray-700 bg-gray-900 shadow-xl z-50 py-1">
+                    <div className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border ide-border ide-surface-pop shadow-xl z-50 py-1">
                       {MODEL_OPTIONS.map(opt => (
                         <button
                           key={opt.value}
                           type="button"
                           onClick={() => { onModelChange(opt.value); setShowModelPicker(false); }}
-                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors ${
-                            currentModel === opt.value ? 'text-blue-400' : 'text-gray-300'
+                          className={`w-full text-left px-3 py-1.5 text-xs ide-hover transition-colors ${
+                            currentModel === opt.value ? 'text-emerald-400' : 'ide-text-2'
                           }`}
                         >
                           <div className="font-medium">{opt.label}</div>
-                          <div className="text-[10px] text-gray-500">{opt.description}</div>
+                          <div className="text-[10px] ide-text-muted">{opt.description}</div>
                         </button>
                       ))}
                     </div>
@@ -871,15 +1248,48 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={() => onModeChange(agentMode === 'orchestrated' ? 'solo' : 'orchestrated')}
-                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors ${
+                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
                     agentMode === 'solo'
                       ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                      : 'text-gray-400 bg-gray-800 border-gray-700 hover:border-gray-600'
+                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
                   }`}
                   title={agentMode === 'orchestrated' ? 'Multi-agent mode: PM delegates to specialists' : 'Solo mode: single-pass generation'}
+                  aria-label={agentMode === 'orchestrated' ? 'Switch to solo mode' : 'Switch to team mode'}
                 >
                   {agentMode === 'solo' ? 'Solo' : 'Team'}
                 </button>
+              )}
+
+              {/* Intent mode pills — unified emerald accent */}
+              {onIntentModeChange && (
+                <div className="flex items-center gap-0.5 rounded ide-surface-input border ide-border-subtle p-0.5" role="tablist" aria-label="Agent intent mode">
+                  {([
+                    { mode: 'ask' as IntentMode, label: 'Ask', tip: 'Ask questions about your code' },
+                    { mode: 'plan' as IntentMode, label: 'Plan', tip: 'Get a plan before making changes' },
+                    { mode: 'code' as IntentMode, label: 'Code', tip: 'Generate code changes — full agent pipeline' },
+                    { mode: 'debug' as IntentMode, label: 'Debug', tip: 'Diagnose and fix issues' },
+                  ] as const).map(({ mode, label, tip }) => {
+                    const isActive = intentMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-label={tip}
+                        onClick={() => onIntentModeChange(mode)}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium border transition-all focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                          isActive
+                            ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40'
+                            : 'ide-text-3 border-transparent hover:ide-text-2 ide-hover'
+                        }`}
+                        title={tip}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
 
               {/* EPIC 8: Image attachment button */}
@@ -890,14 +1300,29 @@ export function ChatInterface({
                   disabled={isUploadingImage}
                   className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors ${
                     attachedImage
-                      ? 'text-blue-400 bg-blue-500/10 border-blue-500/30'
-                      : 'text-gray-400 bg-gray-800 border-gray-700 hover:border-gray-600'
+                      ? 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30'
+                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
                   }`}
                   title="Attach image for AI analysis"
                 >
                   <ImageIcon className="h-3 w-3" />
                   {isUploadingImage ? 'Uploading...' : attachedImage ? '1 image' : ''}
                 </button>
+              )}
+
+              {/* Context window meter */}
+              <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
+
+              {/* Session history */}
+              {onSwitchSession && (
+                <SessionHistory
+                  sessions={sessions}
+                  activeSessionId={activeSessionId ?? null}
+                  onSwitch={onSwitchSession}
+                  onNew={onNewChat ?? (() => {})}
+                  onDelete={onDeleteSession}
+                  onRename={onRenameSession}
+                />
               )}
             </div>
 
@@ -907,16 +1332,42 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={onStop}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors"
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                  aria-label="Stop generation"
                 >
                   <Square className="h-3 w-3 fill-current" />
                   Stop
                 </button>
               )}
 
-              {/* Stopped state label */}
+              {/* Stopped state with Resend/Edit actions */}
               {!isLoading && isStopped && (
-                <span className="text-[11px] text-gray-500 italic">Stopped</span>
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="rounded bg-stone-200 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium ide-text-muted">Stopped</span>
+                  {onRegenerateMessage && (
+                    <button
+                      type="button"
+                      onClick={onRegenerateMessage}
+                      className="rounded px-1.5 py-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors"
+                      aria-label="Resend last message"
+                    >
+                      Resend
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* New chat button */}
+              {onNewChat && !isLoading && (
+                <button
+                  type="button"
+                  onClick={onNewChat}
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-muted ide-hover hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                  title="New chat"
+                  aria-label="New chat"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
               )}
 
               {/* Clear chat button */}
@@ -924,8 +1375,9 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={handleClearChat}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-gray-500 hover:bg-gray-700/60 hover:text-gray-300 transition-colors"
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-muted ide-hover hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                   title="Clear chat"
+                  aria-label="Clear chat"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -936,7 +1388,8 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={onReview}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-gray-400 hover:bg-gray-700/60 hover:text-gray-200 transition-colors"
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-3 ide-hover hover:ide-text transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                  aria-label="Review changes"
                 >
                   <Search className="h-3 w-3" />
                   Review
@@ -947,7 +1400,7 @@ export function ChatInterface({
               <button
                 type="submit"
                 disabled={isLoading || isUploadingImage}
-                className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
               >
                 {isUploadingImage ? 'Uploading…' : isLoading ? 'Running…' : 'Send'}
               </button>
@@ -959,10 +1412,10 @@ export function ChatInterface({
       {/* EPIC 5: Plan approval modal */}
       <PlanApprovalModal
         steps={planSteps}
-        isOpen={planModalOpen}
-        onApprove={handlePlanApprove}
-        onModify={handlePlanModify}
-        onCancel={() => setPlanDismissedKey(planKey)}
+        isOpen={planModalOpen || manualPlanOpen}
+        onApprove={(steps) => { setManualPlanOpen(false); handlePlanApprove(steps); }}
+        onModify={(fb) => { setManualPlanOpen(false); handlePlanModify(fb); }}
+        onCancel={() => { setManualPlanOpen(false); setPlanDismissedKey(planKey); }}
       />
     </div>
   );

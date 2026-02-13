@@ -27,7 +27,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Verify the connection belongs to this user
     const tokenManager = new ShopifyTokenManager();
     const connection = await tokenManager.getConnectionById(connectionId);
-    if (!connection || connection.user_id !== userId) {
+    if (!connection) {
+      throw APIError.notFound('Store connection not found');
+    }
+    const ownerMatch =
+      connection.user_id === userId ||
+      (!connection.user_id && connection.project_id);
+    if (!ownerMatch) {
       throw APIError.notFound('Store connection not found');
     }
 
@@ -63,7 +69,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Verify the connection belongs to this user
     const tokenManager = new ShopifyTokenManager();
     const connection = await tokenManager.getConnectionById(connectionId);
-    if (!connection || connection.user_id !== userId) {
+    if (!connection) {
+      throw APIError.notFound('Store connection not found');
+    }
+    const ownerMatch =
+      connection.user_id === userId ||
+      (!connection.user_id && connection.project_id);
+    if (!ownerMatch) {
       throw APIError.notFound('Store connection not found');
     }
 
@@ -106,7 +118,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Verify the connection belongs to this user
     const tokenManager = new ShopifyTokenManager();
     const connection = await tokenManager.getConnectionById(connectionId);
-    if (!connection || connection.user_id !== userId) {
+    if (!connection) {
+      throw APIError.notFound('Store connection not found');
+    }
+    const ownerMatch =
+      connection.user_id === userId ||
+      (!connection.user_id && connection.project_id);
+    if (!ownerMatch) {
       throw APIError.notFound('Store connection not found');
     }
 

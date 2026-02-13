@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 export interface TokenUsageDisplay {
   inputTokens: number;
@@ -18,6 +18,10 @@ interface StatusBarProps {
   isOnline?: boolean;
   /** EPIC 7: Whether there are queued offline changes */
   hasOfflineChanges?: boolean;
+  /** EPIC 14: Count of active developer memory conventions */
+  activeMemoryCount?: number;
+  /** Optional slot for extra indicators (e.g. binary sync progress) */
+  children?: ReactNode;
 }
 
 /* ------------------------------------------------------------------ */
@@ -42,7 +46,7 @@ function formatSize(bytes: number): string {
 /* ------------------------------------------------------------------ */
 
 function Divider() {
-  return <span className="w-px h-3 bg-gray-700 shrink-0" />;
+  return <span className="w-px h-3 bg-stone-200 dark:bg-white/10 shrink-0" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -54,13 +58,13 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, children }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
 
   return (
-    <div className="h-[22px] flex items-center gap-2 px-3 bg-gray-900/80 border-t border-gray-800 text-[11px] text-gray-500 select-none shrink-0">
+    <div className="h-[22px] flex items-center gap-2 px-3 bg-[#fafaf9] dark:bg-[#0a0a0a]/80 border-t ide-border-subtle text-[11px] ide-text-muted select-none shrink-0">
       {/* File name */}
       {fileName && (
         <>
@@ -85,6 +89,9 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Extra indicators slot (e.g. binary sync progress) */}
+      {children}
+
       {/* EPIC 7: Offline indicator */}
       {!isOnline && (
         <>
@@ -104,10 +111,27 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
         </>
       )}
 
+      {/* EPIC 14: Memory indicator */}
+      {activeMemoryCount > 0 && (
+        <>
+          <span
+            className="inline-flex items-center gap-1 whitespace-nowrap text-purple-400"
+            title={`${activeMemoryCount} convention${activeMemoryCount === 1 ? '' : 's'} learned from this project`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
+              <circle cx="12" cy="11" r="3" />
+            </svg>
+            {activeMemoryCount} {activeMemoryCount === 1 ? 'convention' : 'conventions'}
+          </span>
+          <Divider />
+        </>
+      )}
+
       {/* EPIC 2: Token count display */}
       {tokenUsage && (
         <>
-          <span className="whitespace-nowrap text-gray-600" title={`Input: ${tokenUsage.inputTokens} tokens, Output: ${tokenUsage.outputTokens} tokens`}>
+          <span className="whitespace-nowrap ide-text-quiet" title={`Input: ${tokenUsage.inputTokens} tokens, Output: ${tokenUsage.outputTokens} tokens`}>
             ↑{formatTokenCount(tokenUsage.inputTokens)} ↓{formatTokenCount(tokenUsage.outputTokens)}
           </span>
           <Divider />

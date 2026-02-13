@@ -2,47 +2,41 @@ import { describe, it, expect } from 'vitest';
 import { buildPreviewUrl } from '../url-generator';
 
 describe('buildPreviewUrl', () => {
-  it('builds URL with store domain and theme ID', () => {
+  it('builds proxy URL with project ID', () => {
     const url = buildPreviewUrl({
-      storeDomain: 'mystore.myshopify.com',
-      themeId: 12345,
+      projectId: 'abc-123',
     });
-    expect(url).toContain('https://mystore.myshopify.com');
-    expect(url).toContain('preview_theme_id=12345');
-    expect(url).toMatch(/\?preview_theme_id=12345$/);
-  });
-
-  it('accepts themeId as string', () => {
-    const url = buildPreviewUrl({
-      storeDomain: 'mystore.myshopify.com',
-      themeId: '999',
-    });
-    expect(url).toContain('preview_theme_id=999');
+    expect(url).toBe('/api/projects/abc-123/preview?path=%2F');
   });
 
   it('defaults path to /', () => {
     const url = buildPreviewUrl({
-      storeDomain: 'mystore.myshopify.com',
-      themeId: 1,
+      projectId: 'abc-123',
     });
-    expect(url).toBe('https://mystore.myshopify.com/?preview_theme_id=1');
+    expect(url).toContain('path=%2F');
   });
 
   it('uses custom path when provided', () => {
     const url = buildPreviewUrl({
-      storeDomain: 'mystore.myshopify.com',
-      themeId: 1,
+      projectId: 'abc-123',
       path: '/products/foo',
     });
-    expect(url).toContain('/products/foo');
-    expect(url).toContain('preview_theme_id=1');
+    expect(url).toContain('path=%2Fproducts%2Ffoo');
   });
 
-  it('strips protocol from store domain', () => {
+  it('encodes projectId', () => {
     const url = buildPreviewUrl({
-      storeDomain: 'https://mystore.myshopify.com',
-      themeId: 1,
+      projectId: 'has spaces',
+      path: '/',
     });
-    expect(url).toMatch(/^https:\/\/mystore\.myshopify\.com\//);
+    expect(url).toContain('has%20spaces');
+  });
+
+  it('handles path without leading slash', () => {
+    const url = buildPreviewUrl({
+      projectId: 'abc-123',
+      path: 'collections/all',
+    });
+    expect(url).toContain('path=%2Fcollections%2Fall');
   });
 });

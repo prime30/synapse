@@ -201,3 +201,70 @@ export async function listProjectFiles(
   if (error) throw error;
   return data;
 }
+
+/**
+ * List project files WITH content. Used for bulk sync-to-disk.
+ * - Inline content for files < 100KB (stored in `content` column)
+ * - Parallel-fetch from Supabase Storage for files >= 100KB
+ * - Skips binary file types (image, font, binary)
+ */
+export async function listProjectFilesWithContent(
+  projectId: string,
+  filter?: FileFilter,
+): Promise<Array<{ id: string; path: string; file_type: string; content: string }>> {
+  const supabase = await getClient();
+
+  let query = supabase
+    .from('files')
+    .select('id, name, path, file_type, content, storage_path, size_bytes')
+    .eq('project_id', projectId)
+    .order('path', { ascending: true });
+
+  if (filter?.file_type) {
+    query = query.eq('file_type', filter.file_type);
+  }
+  if (filter?.search) {
+    query = query.ilike('name', `%${filter.search}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!data) return [];
+
+  // Filter out binary files
+  const BINARY_TYPES = ['image', 'font', 'binary'];
+  const textFiles = data.filter((f) => !BINARY_TYPES.includes(f.file_type));
+
+  // Separate files needing storage download
+  const inlineFiles = textFiles.filter((f) => f.content != null);
+  const storageFiles = textFiles.filter((f) => f.content == null && f.storage_path);
+
+  // Parallel-fetch from storage with concurrency limit
+  const CONCURRENCY = 10;
+  const storageResults: Array<{ id: string; path: string; file_type: string; content: string }> = [];
+
+  for (let i = 0; i < storageFiles.length; i += CONCURRENCY) {
+    const batch = storageFiles.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(async (f) => {
+        const content = await downloadFromStorage(f.storage_path!);
+        return { id: f.id, path: f.path, file_type: f.file_type, content };
+      }),
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        storageResults.push(r.value);
+      }
+    }
+  }
+
+  return [
+    ...inlineFiles.map((f) => ({
+      id: f.id,
+      path: f.path,
+      file_type: f.file_type,
+      content: f.content as string,
+    })),
+    ...storageResults,
+  ];
+}

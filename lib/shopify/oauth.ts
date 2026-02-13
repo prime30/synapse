@@ -17,9 +17,23 @@ export class ShopifyOAuthService {
     this.config = {
       apiKey: process.env.SHOPIFY_API_KEY ?? '',
       apiSecret: process.env.SHOPIFY_API_SECRET ?? '',
-      scopes: ['read_themes', 'write_themes'],
+      scopes: [
+        // Phase 1 scopes (no Shopify app review needed)
+        'read_themes', 'write_themes',
+        'read_content', 'write_content',
+        'read_online_store_navigation', 'write_online_store_navigation',
+        'read_discounts', 'write_discounts',
+        'read_files', 'write_files',
+        'read_products',
+        'read_inventory',
+      ],
       redirectUri: `${process.env.NEXT_PUBLIC_APP_URL}/api/shopify/callback`,
     };
+  }
+
+  /** The canonical list of OAuth scopes requested during install. */
+  get scopes(): string[] {
+    return this.config.scopes;
   }
 
   /**

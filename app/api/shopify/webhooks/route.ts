@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import { successResponse, errorResponse } from '@/lib/api/response';
+import { emitPreviewEvent } from '@/lib/preview/preview-events';
 
 /**
  * Verify the Shopify webhook HMAC-SHA256 signature.
@@ -65,10 +66,14 @@ export async function POST(request: NextRequest) {
 
     switch (topic) {
       case 'themes/update': {
+        const webhookData = JSON.parse(rawBody) as {
+          id?: number;
+          updated_at?: string;
+        };
         // Mark all synced theme files as pending for affected connections
         const { data: connections } = await supabase
           .from('shopify_connections')
-          .select('id')
+          .select('id, project_id')
           .eq('store_domain', shopDomain);
 
         if (connections) {
@@ -82,6 +87,20 @@ export async function POST(request: NextRequest) {
               .eq('connection_id', conn.id)
               .eq('sync_status', 'synced');
           }
+          // Notify connected IDE clients via SSE
+          for (const conn of connections) {
+            const projectId = conn.project_id ?? '';
+            emitPreviewEvent({
+              type: 'external-change',
+              projectId,
+              data: {
+                themeId: webhookData.id,
+                updatedAt: webhookData.updated_at,
+                source: 'shopify-webhook',
+                timestamp: Date.now(),
+              },
+            });
+          }
         }
         break;
       }
@@ -90,10 +109,19 @@ export async function POST(request: NextRequest) {
         // Remove all connections for the uninstalled store
         const { data: connections } = await supabase
           .from('shopify_connections')
-          .select('id')
+          .select('id, project_id')
           .eq('store_domain', shopDomain);
 
         if (connections) {
+          // Notify connected IDE clients before removing connections
+          for (const conn of connections) {
+            const projectId = conn.project_id ?? '';
+            emitPreviewEvent({
+              type: 'sync-status',
+              projectId,
+              data: { status: 'disconnected', timestamp: Date.now() },
+            });
+          }
           const tokenManager = new ShopifyTokenManager();
           for (const conn of connections) {
             await tokenManager.deleteConnection(conn.id);

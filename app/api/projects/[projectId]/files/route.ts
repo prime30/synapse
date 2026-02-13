@@ -2,13 +2,14 @@ import { NextRequest } from 'next/server';
 import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
-import { listProjectFiles, createFile } from '@/lib/services/files';
+import { listProjectFiles, listProjectFilesWithContent, createFile } from '@/lib/services/files';
 import {
   detectFileTypeFromName,
   type FileType,
   type CreateFileRequest,
 } from '@/lib/types/files';
 import { APIError } from '@/lib/errors/handler';
+import { resolveProjectSlug, writeFileToDisk, isLocalSyncEnabled } from '@/lib/sync/disk-sync';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -60,12 +61,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const searchParams = request.nextUrl.searchParams;
     const fileType = searchParams.get('file_type') as FileType | null;
     const search = searchParams.get('search');
+    const includeContent = searchParams.get('include_content') === 'true';
 
-    const files = await listProjectFiles(projectId, {
+    const filter = {
       file_type: fileType ?? undefined,
       search: search ?? undefined,
-    });
+    };
 
+    if (includeContent) {
+      const files = await listProjectFilesWithContent(projectId, filter);
+      return successResponse(files);
+    }
+
+    const files = await listProjectFiles(projectId, filter);
     return successResponse(files);
   } catch (error) {
     return handleAPIError(error);
@@ -88,6 +96,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       content,
       created_by: userId,
     });
+
+    // Fire-and-forget: sync new file to disk
+    if (isLocalSyncEnabled()) {
+      resolveProjectSlug(projectId).then((slug) =>
+        writeFileToDisk(slug, name, content),
+      ).catch(() => {});
+    }
 
     return successResponse(file, 201);
   } catch (error) {

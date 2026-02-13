@@ -100,19 +100,6 @@ export function ProjectTabs({
 
   return (
     <div className="flex items-center min-w-0 flex-1">
-      {/* Store domain breadcrumb */}
-      {connection && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 shrink-0 border-r border-gray-700/50">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
-          <span className="text-[11px] text-gray-500 font-mono truncate max-w-[120px]">
-            {connection.store_domain.replace('.myshopify.com', '')}
-          </span>
-          <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-gray-600">
-            <path d="M1 1l4 4-4 4" />
-          </svg>
-        </div>
-      )}
-
       <div
         ref={scrollRef}
         className="flex items-center gap-0 overflow-x-auto scrollbar-none min-w-0"
@@ -127,10 +114,10 @@ export function ProjectTabs({
               onClick={() => {
                 if (!isActive) onSwitchProject(tab.id);
               }}
-              className={`group flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border-r border-gray-700/50 whitespace-nowrap shrink-0 transition-colors ${
+              className={`group flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border-r ide-border whitespace-nowrap shrink-0 transition-colors ${
                 isActive
-                  ? 'bg-gray-800/60 text-gray-200 border-b-2 border-b-blue-500'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                  ? 'ide-surface-panel ide-text border-b-2 border-b-sky-500 dark:border-b-sky-400'
+                  : 'ide-text-muted ide-hover hover:ide-text'
               }`}
             >
               <span className="truncate max-w-[140px]">{tab.name}</span>
@@ -142,7 +129,7 @@ export function ProjectTabs({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleClose(tab.id, e as unknown as React.MouseEvent);
                   }}
-                  className={`w-4 h-4 flex items-center justify-center rounded-sm hover:bg-gray-600/50 transition-colors ${
+                  className={`w-4 h-4 flex items-center justify-center rounded-sm ide-hover transition-colors ${
                     isActive ? 'opacity-70' : 'opacity-0 group-hover:opacity-70'
                   }`}
                   aria-label={`Close ${tab.name}`}
@@ -161,7 +148,7 @@ export function ProjectTabs({
       <button
         type="button"
         onClick={onCreateProject}
-        className="flex items-center justify-center w-7 h-7 shrink-0 ml-0.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 rounded transition-colors"
+        className="flex items-center justify-center w-7 h-7 shrink-0 ml-0.5 ide-text-muted ide-hover hover:ide-text rounded transition-colors"
         aria-label="Import theme"
         title="Import theme"
       >

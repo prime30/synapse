@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import React, { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
@@ -13,22 +14,21 @@ import { ImportThemeModal } from '@/components/features/file-management/ImportTh
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import type { PreviewPanelHandle } from '@/components/preview/PreviewPanel';
 import { ActiveUsersPanel } from '@/components/collaboration/ActiveUsersPanel';
-import { ProjectTabs } from '@/components/features/projects/ProjectTabs';
-import { DesignTokenBrowser } from '@/components/features/design-system/DesignTokenBrowser';
+// DesignTokenBrowser moved to dedicated Design System page; panel now shows summary + link
 import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
 import { VersionHistoryPanel } from '@/components/features/versions/VersionHistoryPanel';
 import { DiagnosticsPanel } from '@/components/diagnostics/DiagnosticsPanel';
 import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
-import { UserMenu } from '@/components/features/auth/UserMenu';
 import { useFileTabs } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useVersionHistory } from '@/hooks/useVersionHistory';
 import { useWorkspaceDiagnostics } from '@/hooks/useWorkspaceDiagnostics';
 import { useProjectFiles } from '@/hooks/useProjectFiles';
-import { useProjects } from '@/hooks/useProjects';
+import { useProjects, type ReconcileResult } from '@/hooks/useProjects';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
+import { useActiveStore } from '@/hooks/useActiveStore';
 import { useWorkspacePresence } from '@/hooks/useWorkspacePresence';
 import { useRemoteCursors } from '@/hooks/useRemoteCursors';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
@@ -36,18 +36,87 @@ import { RelatedFilesPrompt, type RelatedFileInfo } from '@/components/features/
 import { getLinkedFileIds, linkMultiple, isDismissed, dismissGroup } from '@/lib/file-linking';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { ActivityBar } from '@/components/editor/ActivityBar';
+import { TopBar } from '@/components/editor/TopBar';
+import { SectionNav } from '@/components/ui/SectionNav';
 import { SettingsModal } from '@/components/editor/SettingsModal';
 import { FileBreadcrumb } from '@/components/editor/FileBreadcrumb';
 import { StatusBar } from '@/components/editor/StatusBar';
+import { BinarySyncIndicator } from '@/components/features/sync/BinarySyncIndicator';
+import { LocalSyncIndicator } from '@/components/features/sync/LocalSyncIndicator';
+import { UndoToast } from '@/components/ui/UndoToast';
 import { CommandPalette } from '@/components/editor/CommandPalette';
+import type { PaletteCommand } from '@/components/editor/CommandPalette';
+import { ThemeConsole } from '@/components/editor/ThemeConsole';
+import type { ThemeConsoleTab, ThemeConsoleEntry } from '@/components/editor/ThemeConsole';
+import { QuickActionsToolbar } from '@/components/editor/QuickActionsToolbar';
+import { AmbientBar } from '@/components/ai-sidebar/AmbientBar';
+import { IntentCompletionPanel } from '@/components/ai-sidebar/IntentCompletionPanel';
+import type { AmbientNudge } from '@/hooks/useAmbientIntelligence';
+import type { WorkflowMatch } from '@/lib/ai/workflow-patterns';
 import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
+import { ChromaticSettingsProvider } from '@/hooks/useChromaticSettings';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 import type { TokenUsage } from '@/components/features/agents/AgentPromptPanel';
+import type { ThemeReviewReport as ThemeReviewReportData } from '@/lib/ai/theme-reviewer';
 import { useCanvasData } from '@/hooks/useCanvasData';
+import { useAuth } from '@/components/features/auth/AuthProvider';
+import { usePassiveContext } from '@/hooks/usePassiveContext';
+import { useDesignTokens } from '@/hooks/useDesignTokens';
+import { useMemory } from '@/hooks/useMemory';
+import { resolveFileId } from '@/lib/ai/file-path-detector';
+import { detectConventions, type ThemeFile } from '@/lib/ai/convention-detector';
 
 // EPIC 15: Lazy-load canvas (zero bundle cost for non-canvas users)
 const CanvasView = React.lazy(() =>
   import('@/components/canvas/CanvasView').then((mod) => ({ default: mod.CanvasView }))
+);
+
+// Dynamic imports for heavy panels (loaded only when their tab is active)
+const AssetBrowserPanel = dynamic(
+  () => import('@/components/features/assets/AssetBrowserPanel'),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const TemplateComposer = dynamic(
+  () => import('@/components/features/templates/TemplateComposer').then(m => ({ default: m.TemplateComposer })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const MetafieldExplorer = dynamic(
+  () => import('@/components/features/content/MetafieldExplorer').then(m => ({ default: m.MetafieldExplorer })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const PublishRequestPanel = dynamic(
+  () => import('@/components/features/shopify/PublishRequestPanel').then(m => ({ default: m.PublishRequestPanel })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const PerformanceDashboard = dynamic(
+  () => import('@/components/features/quality/PerformanceDashboard').then(m => ({ default: m.PerformanceDashboard })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const A11yPanel = dynamic(
+  () => import('@/components/features/quality/A11yPanel').then(m => ({ default: m.A11yPanel })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+const ImageOptPanel = dynamic(
+  () => import('@/components/features/quality/ImageOptPanel').then(m => ({ default: m.ImageOptPanel })),
+  { ssr: false, loading: () => <div className="p-4 ide-text-3 text-sm">Loading…</div> }
+);
+
+// A7: Dynamic imports for agent workflow modals (heavy, rarely shown)
+const PlanApprovalModal = dynamic(
+  () => import('@/components/ai-sidebar/PlanApprovalModal').then(m => ({ default: m.PlanApprovalModal })),
+  { ssr: false }
+);
+const BatchDiffModal = dynamic(
+  () => import('@/components/ai-sidebar/BatchDiffModal').then(m => ({ default: m.BatchDiffModal })),
+  { ssr: false }
+);
+const ThemeReviewReportPanel = dynamic(
+  () => import('@/components/ai-sidebar/ThemeReviewReport').then(m => ({ default: m.ThemeReviewReport })),
+  { ssr: false }
+);
+const MemoryPanel = dynamic(
+  () => import('@/components/features/memory/MemoryPanel').then(m => ({ default: m.MemoryPanel })),
+  { ssr: false }
 );
 
 type ViewMode = 'editor' | 'canvas';
@@ -79,15 +148,152 @@ export default function ProjectPage() {
   // EPIC 15: View mode toggle (Editor / Canvas)
   const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
+  // Right-panel vertical split: preview height as percentage (persisted)
+  const [previewPct, setPreviewPct] = useState(() => {
+    if (typeof window === 'undefined') return 50;
+    try {
+      const saved = localStorage.getItem('synapse-preview-pct');
+      if (saved) { const n = Number(saved); if (n >= 20 && n <= 80) return n; }
+    } catch { /* ignore */ }
+    return 50;
+  });
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const previewPctRef = useRef(previewPct);
+  previewPctRef.current = previewPct;
+  const vDragging = useRef(false);
+  /** Snapshot at drag start so we use delta from start instead of current rect (avoids jump/jitter). */
+  const vDragStart = useRef<{ startY: number; startPct: number; startHeight: number } | null>(null);
+  const vDragMoveCount = useRef(0);
+  const vPendingClientY = useRef<number | null>(null);
+  const vRafScheduled = useRef(false);
+  const vRafId = useRef<number | null>(null);
+
+  // Persist preview split ratio
+  useEffect(() => {
+    try { localStorage.setItem('synapse-preview-pct', String(previewPct)); } catch { /* ignore */ }
+  }, [previewPct]);
+
+  // Vertical drag handlers for the preview/chat split (delta-based + rAF throttle to avoid jitter)
+  useEffect(() => {
+    const applyPending = () => {
+      vRafScheduled.current = false;
+      vRafId.current = null;
+      if (!vDragging.current || !vDragStart.current) return;
+      const clientY = vPendingClientY.current;
+      if (clientY === null) return;
+      const { startY, startPct, startHeight } = vDragStart.current;
+      const deltaY = clientY - startY;
+      const deltaPct = startHeight > 0 ? (deltaY / startHeight) * 100 : 0;
+      const pct = startPct + deltaPct;
+      const clamped = Math.min(80, Math.max(20, pct));
+      vDragMoveCount.current += 1;
+      setPreviewPct(clamped);
+    };
+
+    const handleMove = (e: MouseEvent | PointerEvent) => {
+      if (!vDragging.current || !vDragStart.current) return;
+      vPendingClientY.current = e.clientY;
+      if (!vRafScheduled.current) {
+        vRafScheduled.current = true;
+        vRafId.current = requestAnimationFrame(applyPending);
+      }
+    };
+
+    const handleUp = (e?: MouseEvent | PointerEvent) => {
+      if (e && 'pointerId' in e && e.target instanceof HTMLElement) {
+        try { e.target.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      }
+      if (vRafId.current !== null) {
+        cancelAnimationFrame(vRafId.current);
+        vRafId.current = null;
+      }
+      vRafScheduled.current = false;
+      vPendingClientY.current = null;
+      if (vDragging.current) {
+        vDragging.current = false;
+        vDragStart.current = null;
+        vDragMoveCount.current = 0;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp as (e: PointerEvent) => void);
+    window.addEventListener('pointercancel', handleUp as () => void);
+    return () => {
+      if (vRafId.current !== null) cancelAnimationFrame(vRafId.current);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp as (e: PointerEvent) => void);
+      window.removeEventListener('pointercancel', handleUp as () => void);
+    };
+  }, []);
+
+  // A5: ThemeConsole state
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleTab, setConsoleTab] = useState<ThemeConsoleTab>('diagnostics');
+  const [consoleEntries, setConsoleEntries] = useState<ThemeConsoleEntry[]>([]);
+
+  // A7: Agent workflow modal state
+  const [planApproval, setPlanApproval] = useState<{ steps: Array<{ number: number; description: string; complexity?: 'simple' | 'moderate' | 'complex' }> } | null>(null);
+  const [batchDiff, setBatchDiff] = useState<{ title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }> } | null>(null);
+  const [themeReview, setThemeReview] = useState<ThemeReviewReportData | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+
+  // A5: QuickActionsToolbar state
+  const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const [quickActionsPosition, setQuickActionsPosition] = useState({ top: 0, left: 0 });
+  const [quickActionsText, setQuickActionsText] = useState('');
+
+  // EPIC 5: Ref to send messages to agent chat (QuickActions, Fix with AI)
+  const sendMessageRef = useRef<((content: string) => void) | null>(null);
+
+  // EPIC 14: Convention detection runs once per session when files + memory are ready
+  const conventionDetectedRef = useRef(false);
+
+  // A5: AmbientBar state
+  const [ambientNudge, setAmbientNudge] = useState<AmbientNudge | null>(null);
+
+  // A5: IntentCompletionPanel state
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowMatch | null>(null);
+
+  // Panel sub-nav states (SectionNav active items)
+  const [filesNav, setFilesNav] = useState('files');
+  const [storeNav, setStoreNav] = useState('sync');
+  const [qualityNav, setQualityNav] = useState('issues');
+  const [historyNav, setHistoryNav] = useState('versions');
+
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
   const {
     projects,
+    activeProjects,
     isLoading: isLoadingProjects,
     setLastProjectId,
     createProject,
+    reconcile,
+    restoreProject,
+    isRestoring,
   } = useProjects();
-  const { connected, connection } = useShopifyConnection(projectId);
+  // useActiveStore is the primary source of truth for connection status (user-scoped).
+  // useShopifyConnection provides sync/theme operations (project-scoped).
+  const activeStore = useActiveStore(projectId);
+  const shopify = useShopifyConnection(projectId);
+  const { data: tokenData } = useDesignTokens(projectId);
+  const connected = !!activeStore.connection || shopify.connected;
+  const connection = activeStore.connection
+    ? {
+        id: activeStore.connection.id,
+        store_domain: activeStore.connection.store_domain,
+        theme_id: activeStore.connection.theme_id,
+        is_active: activeStore.connection.is_active,
+        sync_status: activeStore.connection.sync_status,
+        scopes: activeStore.connection.scopes,
+        last_sync_at: activeStore.connection.last_sync_at,
+        created_at: activeStore.connection.created_at,
+        updated_at: activeStore.connection.updated_at,
+      }
+    : shopify.connection;
+  const shopifyThemes = shopify.themes;
 
   const activeFile = useMemo(
     () => rawFiles.find((f) => f.id === tabs.activeFileId),
@@ -118,6 +324,72 @@ export default function ProjectPage() {
 
   // EPIC 15: Canvas dependency data (lazy-fetched only when canvas is active)
   const canvasData = useCanvasData(viewMode === 'canvas' ? projectId : null);
+
+  // Passive IDE context reporter — always enabled for logged-in users
+  const { user: authUser } = useAuth();
+  const passiveContextEnabled = !!authUser;
+  const activeSubNav = activeActivity === 'files' ? filesNav
+    : activeActivity === 'store' ? storeNav
+    : activeActivity === 'quality' ? qualityNav
+    : activeActivity === 'history' ? historyNav
+    : null;
+  const passiveContext = usePassiveContext({
+    enabled: passiveContextEnabled,
+    activePanel: activeActivity,
+    subNav: activeSubNav,
+    viewMode,
+    filePath: activeFile?.path ?? null,
+    fileLanguage: activeFile?.file_type ?? null,
+    selection: sidebar.context.selection ?? null,
+  });
+
+  // EPIC 14: Developer Memory
+  const memory = useMemory(projectId);
+
+  // EPIC 14: Convention detection — run once per session when files + memory are ready
+  useEffect(() => {
+    if (
+      conventionDetectedRef.current ||
+      rawFiles.length === 0 ||
+      memory.isLoading
+    ) {
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/files?include_content=true`
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        const filesWithContent = (json.data ?? []) as Array<{
+          path: string;
+          content?: string | null;
+          file_type?: string;
+        }>;
+        const themeFiles: ThemeFile[] = filesWithContent.map((f) => ({
+          path: f.path,
+          content: f.content ?? '',
+          fileType: (f.file_type ?? 'other') as ThemeFile['fileType'],
+        }));
+        const conventions = detectConventions(themeFiles);
+        for (const dc of conventions) {
+          if (dc.convention.confidence >= 0.6) {
+            await memory.create(
+              'convention',
+              dc.convention,
+              dc.convention.confidence
+            );
+          }
+        }
+        conventionDetectedRef.current = true;
+      } catch {
+        // Non-critical: avoid crashing on convention detection errors
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conventionDetectedRef guards re-runs; memory.create is stable
+  }, [projectId, rawFiles.length, memory.isLoading, memory.create]);
+
   useEffect(() => {
     sidebar.updateContext({
       filePath: activeFile?.path ?? null,
@@ -126,9 +398,7 @@ export default function ProjectPage() {
   }, [activeFile?.path, activeFile?.file_type, sidebar.updateContext]);
 
   // EPIC 1c: Selection injection — track editor selection for AI context
-  const handleEditorSelectionChange = useCallback((selectedText: string | null) => {
-    sidebar.updateContext({ selection: selectedText });
-  }, [sidebar]);
+  // (Also triggers QuickActionsToolbar — see handleEditorSelectionChange below)
 
   const recoveryAttemptedRef = useRef(false);
 
@@ -239,10 +509,128 @@ export default function ProjectPage() {
     [allCursors, activeFilePath]
   );
 
-  const showPreview = connected && connection && !!connection.theme_id;
-  const previewThemeId = connection?.theme_id ?? null;
+  // Preview theme resolution (instant preview optimization):
+  // 1. If dev_theme_id exists AND sync is complete → use dev theme (edits are live)
+  // 2. Otherwise, use the source theme (shopify_theme_id) for instant preview
+  // 3. Fall back to connection.theme_id for backward compat
+  const currentProject = projects.find((p) => p.id === projectId);
+  const devThemeReady =
+    currentProject?.dev_theme_id && connection?.sync_status === 'connected';
+  const previewThemeId = devThemeReady
+    ? currentProject.dev_theme_id
+    : currentProject?.shopify_theme_id ??
+      currentProject?.dev_theme_id ??
+      connection?.theme_id ??
+      null;
+  const showPreview = connected && connection && !!previewThemeId;
+  const isPreviewUsingSourceTheme =
+    !!previewThemeId &&
+    !devThemeReady &&
+    previewThemeId === (currentProject?.shopify_theme_id ?? null);
 
   const hasFiles = rawFiles.length > 0;
+
+  // ── Auto-reconcile on mount (once per browser session) ────────────────────
+  const reconcileTriggeredRef = useRef(false);
+  const [undoToast, setUndoToast] = useState<{
+    message: string;
+    archivedIds: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!connected || isLoadingProjects || reconcileTriggeredRef.current) return;
+    // Once per session guard
+    if (typeof window !== 'undefined' && sessionStorage.getItem('synapse-reconciled')) {
+      reconcileTriggeredRef.current = true;
+      return;
+    }
+
+    reconcileTriggeredRef.current = true;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('synapse-reconciled', '1');
+    }
+
+    reconcile()
+      .then((result: ReconcileResult) => {
+        if (result.archived > 0) {
+          const names =
+            result.archivedProjectNames.length > 0
+              ? result.archivedProjectNames.join(', ')
+              : `${result.archived} theme(s)`;
+          setUndoToast({
+            message: `${names} archived — dev themes removed from Shopify`,
+            archivedIds: result.archivedProjectIds,
+          });
+
+          // If current project was just archived, redirect to first active
+          if (result.archivedProjectIds.includes(projectId)) {
+            const remaining = activeProjects.filter(
+              (p) => !result.archivedProjectIds.includes(p.id)
+            );
+            if (remaining.length > 0) {
+              router.replace(`/projects/${remaining[0].id}`);
+            } else {
+              router.replace('/projects');
+            }
+          }
+        }
+
+        if (result.restored > 0) {
+          setToast(`${result.restored} theme(s) restored`);
+          setTimeout(() => setToast(null), 4000);
+        }
+      })
+      .catch(() => {
+        // Reconcile failure is non-critical
+      });
+  }, [connected, isLoadingProjects, reconcile, projectId, activeProjects, router]);
+
+  // Handle undo of archive (set projects back to active)
+  const handleUndoArchive = useCallback(async () => {
+    if (!undoToast) return;
+    // Undo: restore each archived project, then trigger background file push
+    for (const id of undoToast.archivedIds) {
+      try {
+        await restoreProject(id);
+        // Trigger background dev theme push (fire-and-forget)
+        fetch(`/api/projects/${id}/sync-dev-theme`, { method: 'POST' }).catch(() => {});
+      } catch {
+        // Continue with remaining
+      }
+    }
+    setUndoToast(null);
+  }, [undoToast, restoreProject]);
+
+  // Is the current project archived?
+  const isProjectArchived = currentProject?.status === 'archived';
+
+  // Handle "Sync Now" for archived banner
+  const [bannerRestoring, setBannerRestoring] = useState(false);
+  const handleBannerRestore = useCallback(async () => {
+    setBannerRestoring(true);
+    try {
+      await restoreProject(projectId);
+      // Trigger background dev theme push (same deferred pattern as import)
+      fetch(`/api/projects/${projectId}/sync-dev-theme`, { method: 'POST' }).catch(() => {});
+      setToast('Theme restored — syncing files to Shopify…');
+      setTimeout(() => setToast(null), 5000);
+    } catch (err) {
+      console.error('Restore failed', err);
+      setToast('Restore failed — Shopify may have reached the theme limit');
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setBannerRestoring(false);
+    }
+  }, [projectId, restoreProject]);
+
+  // Handle "Switch Project" from archived banner
+  const handleSwitchToActive = useCallback(() => {
+    if (activeProjects.length > 0) {
+      router.push(`/projects/${activeProjects[0].id}`);
+    } else {
+      router.push('/projects');
+    }
+  }, [activeProjects, router]);
 
   // ── Presence heartbeat ────────────────────────────────────────────────────
   useEffect(() => {
@@ -343,9 +731,10 @@ export default function ProjectPage() {
   };
 
   // ── Project switching ─────────────────────────────────────────────────────
-  const handleSwitchProject = (newProjectId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSwitchProject = useCallback((newProjectId: string) => {
     router.push(`/projects/${newProjectId}`);
-  };
+  }, [router]);
 
   const handleCreateProject = useCallback(async () => {
     try {
@@ -400,9 +789,82 @@ export default function ProjectPage() {
     return activeFileContentRef.current || null;
   }, []);
 
+  // Open file by path (from AI response file chips)
+  const handleOpenFile = useCallback((filePath: string) => {
+    const fileId = resolveFileId(filePath, rawFiles);
+    if (fileId) {
+      tabs.openTab(fileId);
+    }
+  }, [rawFiles, tabs]);
+
+  // Resolve file path to fileId (for code block Apply)
+  const handleResolveFileId = useCallback((filePath: string) => {
+    return resolveFileId(filePath, rawFiles);
+  }, [rawFiles]);
+
   // EPIC 2: Token usage handler
   const handleTokenUsage = useCallback((usage: TokenUsage) => {
     setTokenUsage(usage);
+  }, []);
+
+  // A5: Console clear handler
+  const handleConsoleClear = useCallback(() => {
+    setConsoleEntries([]);
+  }, []);
+
+  // A5: QuickActions — update selection info from editor selection changes
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const handleEditorSelectionForToolbar = useCallback((selectedText: string | null) => {
+    // Forward to AI sidebar context as before
+    sidebar.updateContext({ selection: selectedText });
+    // Show/hide quick actions toolbar
+    if (selectedText && selectedText.length > 2) {
+      setQuickActionsText(selectedText);
+      setQuickActionsVisible(true);
+      // Position relative to editor container; use a fixed fallback position
+      // since we don't have direct Monaco cursor coords piped here yet
+      setQuickActionsPosition({ top: 80, left: 60 });
+    } else {
+      setQuickActionsVisible(false);
+    }
+  }, [sidebar]);
+
+  // EPIC 1c + A5: Combined selection handler
+  const handleEditorSelectionChange = useCallback((selectedText: string | null) => {
+    handleEditorSelectionForToolbar(selectedText);
+  }, [handleEditorSelectionForToolbar]);
+
+  // A5: QuickActions — send prompt to agent chat
+  const handleQuickAction = useCallback((prompt: string) => {
+    setQuickActionsVisible(false);
+    sendMessageRef.current?.(prompt);
+    agentChatRef.current?.querySelector('textarea')?.focus();
+  }, []);
+
+  // EPIC 5: Fix with AI — send diagnostic to agent chat
+  const handleFixWithAI = useCallback((diagnostic: string, line: number) => {
+    sidebar.updateContext({ selection: diagnostic });
+    const prompt = `Fix this Liquid diagnostic on line ${line}: ${diagnostic}`;
+    sendMessageRef.current?.(prompt);
+    agentChatRef.current?.querySelector('textarea')?.focus();
+  }, [sidebar]);
+
+  // A5: AmbientBar handlers
+  const handleAmbientAccept = useCallback((_nudgeId: string) => {
+    // Future: trigger resolution action
+    setAmbientNudge(null);
+  }, []);
+  const handleAmbientDismiss = useCallback((_nudgeId: string) => {
+    setAmbientNudge(null);
+  }, []);
+
+  // A5: IntentCompletionPanel handlers (no-op stubs; workflow engine not yet connected)
+  const handleWorkflowToggleStep = useCallback((_stepId: string) => {}, []);
+  const handleWorkflowApplyStep = useCallback((_stepId: string) => {}, []);
+  const handleWorkflowApplyAll = useCallback(() => {}, []);
+  const handleWorkflowPreviewAll = useCallback(() => {}, []);
+  const handleWorkflowDismiss = useCallback(() => {
+    setActiveWorkflow(null);
   }, []);
 
   // ── EPIC 3: Snippet usage counting (path-based via theme grouping) ──────
@@ -425,6 +887,34 @@ export default function ProjectPage() {
     return counts;
   }, [rawFiles, relatedFilesMap]);
 
+  // ── A6: Command palette commands ──────────────────────────────────────────
+  const paletteCommands: PaletteCommand[] = useMemo(() => [
+    // Commands
+    { id: 'theme-review', category: 'command', label: 'Run Theme Review', action: () => {} },
+    { id: 'toggle-console', category: 'command', label: 'Toggle Console', action: () => setConsoleOpen(prev => !prev) },
+    { id: 'push-shopify', category: 'command', label: 'Push to Shopify', action: () => {} },
+    { id: 'pull-shopify', category: 'command', label: 'Pull from Shopify', action: () => {} },
+    { id: 'export-theme', category: 'command', label: 'Export Theme ZIP', action: () => {} },
+    { id: 'memory', category: 'command', label: 'Open Memory Panel', action: () => setMemoryOpen(true) },
+
+    // Navigation
+    { id: 'nav-files', category: 'navigation', label: 'Go to Files', action: () => { setActiveActivity('files'); setFilesNav('files'); } },
+    { id: 'nav-assets', category: 'navigation', label: 'Go to Assets', action: () => { setActiveActivity('files'); setFilesNav('assets'); } },
+    { id: 'nav-templates', category: 'navigation', label: 'Go to Templates', action: () => { setActiveActivity('files'); setFilesNav('templates'); } },
+    { id: 'nav-store-sync', category: 'navigation', label: 'Go to Store > Sync', action: () => { setActiveActivity('store'); setStoreNav('sync'); } },
+    { id: 'nav-store-content', category: 'navigation', label: 'Go to Store > Content', action: () => { setActiveActivity('store'); setStoreNav('content'); } },
+    { id: 'nav-store-publish', category: 'navigation', label: 'Go to Store > Publish', action: () => { setActiveActivity('store'); setStoreNav('publish'); } },
+    { id: 'nav-design', category: 'navigation', label: 'Go to Design Tokens', action: () => { setActiveActivity('design'); } },
+    { id: 'nav-quality-issues', category: 'navigation', label: 'Go to Quality > Issues', action: () => { setActiveActivity('quality'); setQualityNav('issues'); } },
+    { id: 'nav-quality-a11y', category: 'navigation', label: 'Go to Accessibility', action: () => { setActiveActivity('quality'); setQualityNav('a11y'); } },
+
+    // Account
+    { id: 'account-overview', category: 'account', label: 'Open Account Overview', action: () => window.open('/account', '_blank') },
+    { id: 'account-usage', category: 'account', label: 'Open Usage', action: () => window.open('/account/usage', '_blank') },
+    { id: 'account-billing', category: 'account', label: 'Open Billing', action: () => window.open('/account/billing', '_blank') },
+    { id: 'account-settings', category: 'account', label: 'Open Settings', action: () => window.open('/account/settings', '_blank') },
+  ], []);
+
   // ── EPIC 3: File list for command palette ─────────────────────────────────
   const commandPaletteFiles = useMemo(
     () => rawFiles.map((f) => ({ id: f.id, name: f.name, path: f.path })),
@@ -441,8 +931,9 @@ export default function ProjectPage() {
   };
 
   return (
+    <ChromaticSettingsProvider>
     <EditorSettingsProvider>
-    <div className="flex h-screen flex-col bg-gray-950 text-gray-200">
+    <div className="flex h-screen flex-col ide-surface ide-text">
       {/* Login transition overlay (activates when ?signed_in=1 is present) */}
       <Suspense fallback={null}>
         <LoginTransition />
@@ -450,49 +941,77 @@ export default function ProjectPage() {
 
       {/* ── Connection status banner (authenticated IDE) ─────────────────── */}
       {!connected && (
-        <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-slate-800/40 border-b border-slate-700/60 text-slate-300 text-xs">
+        <div className="flex items-center justify-center gap-2 px-4 py-1.5 ide-surface-panel border-b ide-border ide-text-2 text-xs">
           <span className="font-medium">No store connected</span>
-          <span className="text-slate-500">&mdash;</span>
+          <span className="ide-text-3">&mdash;</span>
           <span>Import a theme or connect Shopify to enable live preview sync.</span>
           <button
             type="button"
             onClick={handleOpenImport}
-            className="ml-2 underline hover:text-slate-100 transition-colors"
+            className="ml-2 underline ide-text-2 hover:ide-text transition-colors"
           >
             Import or connect
           </button>
         </div>
       )}
 
-      {/* ── Header (project tabs + status) ────────────────────────────────── */}
-      <header className="flex items-center border-b border-gray-800 bg-gray-900/80">
-        {/* Project tabs */}
-        <ProjectTabs
-          currentProjectId={projectId}
-          onSwitchProject={handleSwitchProject}
-          onCreateProject={handleCreateProject}
-        />
-
-        {/* Right: save / status / user menu */}
-        <div className="flex items-center gap-3 px-3 shrink-0">
-          {toast && (
-            <span className="text-sm text-green-400 animate-pulse">
-              {toast}
-            </span>
-          )}
-          <span className="text-xs text-gray-500">
-            {connected ? (
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
-                {connection?.store_domain}
-              </span>
-            ) : (
-              'Up to date'
-            )}
+      {/* ── Archived project banner ─────────────────────────────────────────── */}
+      {isProjectArchived && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/40 text-amber-800 dark:text-amber-200 text-xs">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          <span className="flex-1">
+            This theme&apos;s dev copy was removed from Shopify.{' '}
+            <span className="text-amber-700/80 dark:text-amber-300/70">Your files are safe.</span>
           </span>
-          <UserMenu />
+          <button
+            type="button"
+            onClick={handleBannerRestore}
+            disabled={bannerRestoring || isRestoring}
+            className="px-3 py-1 text-xs font-medium bg-sky-600 hover:bg-sky-500 text-white rounded transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {bannerRestoring ? (
+              <>
+                <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                </svg>
+                Syncing…
+              </>
+            ) : (
+              'Sync Now'
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleSwitchToActive}
+            className="px-3 py-1 text-xs ide-text-2 hover:ide-text ide-hover rounded transition-colors"
+          >
+            Switch Project
+          </button>
         </div>
-      </header>
+      )}
+
+      {/* ── Top Bar (push/pull, view toggle, command palette, user menu) ── */}
+      <TopBar
+        onPush={() => {/* wired to Shopify sync later */}}
+        onPull={() => {/* wired to Shopify sync later */}}
+        syncStatus={connected ? (connection?.sync_status === 'syncing' ? 'syncing' : connection?.sync_status === 'error' ? 'error' : 'idle') : 'idle'}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        onCommandPalette={() => setCommandPaletteOpen((prev) => !prev)}
+        storeDomain={connection?.store_domain ?? null}
+        connected={connected}
+      />
+
+      {/* Toast notification overlay */}
+      {toast && (
+        <div className="absolute top-14 right-4 z-50">
+          <span className="text-sm text-accent animate-pulse ide-surface-pop px-3 py-1.5 rounded-md border ide-border">
+            {toast}
+          </span>
+        </div>
+      )}
 
       {/* ── Main 4-column layout ──────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
@@ -501,143 +1020,243 @@ export default function ProjectPage() {
           activePanel={activeActivity}
           onPanelChange={setActiveActivity}
           onSettingsClick={() => setSettingsOpen(true)}
+          projectName={currentProject?.name}
+          storeConnected={connected}
         />
 
         {/* ── Col 2: Left Panel (dynamic by activeActivity) ──────────────── */}
         {activeActivity !== null && (
           <aside
-            className="relative border-r border-gray-800 flex-shrink-0 flex flex-col min-h-0"
+            className="relative border-r ide-border-subtle flex-shrink-0 flex flex-col min-h-0 ide-surface"
             style={{ width: leftResize.width }}
           >
-            {/* Panel header */}
-            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-800 shrink-0">
-              <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide select-none">
-                {activeActivity === 'files' && 'Explorer'}
-                {activeActivity === 'suggestions' && 'Suggestions'}
-                {activeActivity === 'versions' && 'Version History'}
-                {activeActivity === 'shopify' && 'Shopify'}
-                {activeActivity === 'design' && 'Design Tokens'}
-                {activeActivity === 'diagnostics' && 'Diagnostics'}
-              </span>
-              {activeActivity === 'files' && (
-                <div className="flex items-center gap-1 ml-auto">
-                  <button
-                    type="button"
-                    onClick={handleOpenImport}
-                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    Import
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAddFile}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M5 1v8M1 5h8" />
-                    </svg>
-                    Add
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Panel content */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* ── Files panel ─────────────────────────────────────────── */}
               {activeActivity === 'files' && (
                 <>
-                  <ActiveUsersPanel presence={presence} />
-                  {hasFiles ? (
-                    <FileList
-                      projectId={projectId}
-                      onFileClick={handleFileClick}
-                      onAddFile={handleAddFile}
-                      presence={presence}
-                      snippetUsageCounts={snippetUsageCounts}
-                    />
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
-                      <div className="w-12 h-12 mb-3 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="w-6 h-6 text-gray-500"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
+                  <SectionNav
+                    title="Files"
+                    sections={[{ header: 'Theme', items: [
+                      { id: 'files', label: 'Files' },
+                      { id: 'assets', label: 'Assets' },
+                      { id: 'templates', label: 'Templates' },
+                    ]}]}
+                    activeItem={filesNav}
+                    onItemClick={setFilesNav}
+                    headerActions={
+                      filesNav === 'files' ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={handleOpenImport}
+                            className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium ide-text-muted hover:ide-text ide-hover rounded transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                            Import
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddFile}
+                            className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium ide-text-muted hover:ide-text ide-hover rounded transition-colors"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M5 1v8M1 5h8" />
+                            </svg>
+                            Add
+                          </button>
+                        </div>
+                      ) : undefined
+                    }
+                  />
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                    {filesNav === 'files' && (
+                      <>
+                        <ActiveUsersPanel presence={presence} />
+                        {hasFiles ? (
+                          <FileList
+                            projectId={projectId}
+                            onFileClick={handleFileClick}
+                            onAddFile={handleAddFile}
+                            presence={presence}
+                            snippetUsageCounts={snippetUsageCounts}
                           />
-                        </svg>
-                      </div>
-                      <p className="text-sm text-gray-400 font-medium">No theme loaded</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Import a theme to get started
-                      </p>
-                    </div>
-                  )}
+                        ) : (
+                          <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
+                            <div className="w-12 h-12 mb-3 rounded-lg ide-surface-input border ide-border-subtle flex items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 ide-text-3">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                              </svg>
+                            </div>
+                            <p className="text-sm ide-text-muted font-medium">No theme loaded</p>
+                            <p className="text-xs ide-text-3 mt-1">Import a theme to get started</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {filesNav === 'assets' && (
+                      connected && connection?.id && connection?.theme_id ? (
+                        <AssetBrowserPanel connectionId={connection.id} themeId={Number(connection.theme_id)} storeDomain={connection.store_domain} />
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center p-4 text-sm ide-text-3">Connect a Shopify store to browse assets.</div>
+                      )
+                    )}
+                    {filesNav === 'templates' && (
+                      <TemplateComposer projectId={projectId} />
+                    )}
+                  </div>
                 </>
               )}
-              {activeActivity === 'suggestions' && (
-                <div className="flex-1 overflow-auto p-2">
-                  <SuggestionPanel projectId={projectId} fileId={tabs.activeFileId ?? undefined} />
-                </div>
-              )}
-              {activeActivity === 'versions' && (
-                <div className="flex-1 overflow-auto p-2">
-                  <VersionHistoryPanel
-                    versions={versionHistory.versions}
-                    currentVersion={
-                      versionHistory.versions.length > 0
-                        ? Math.max(
-                            ...versionHistory.versions.map((v) => v.version_number)
-                          )
-                        : 0
-                    }
-                    isLoading={versionHistory.isLoading}
-                    onUndo={(n) =>
-                      versionHistory.undo({ current_version_number: n })
-                    }
-                    onRedo={(n) =>
-                      versionHistory.redo({ current_version_number: n })
-                    }
-                    onRestore={(versionId) =>
-                      versionHistory.restore({
-                        version_id: versionId,
-                        current_version_number:
-                          versionHistory.versions.length > 0
-                            ? Math.max(
-                                ...versionHistory.versions.map(
-                                  (v) => v.version_number
-                                )
-                              )
-                            : 0,
-                      })
-                    }
-                    isUndoing={versionHistory.isUndoing}
-                    isRedoing={versionHistory.isRedoing}
-                    isRestoring={versionHistory.isRestoring}
+
+              {/* ── Store panel ─────────────────────────────────────────── */}
+              {activeActivity === 'store' && (
+                <>
+                  <SectionNav
+                    title="Store"
+                    sections={[{ header: 'Connection', items: [
+                      { id: 'sync', label: 'Sync' },
+                      { id: 'content', label: 'Content' },
+                      { id: 'publish', label: 'Publish' },
+                    ]}]}
+                    activeItem={storeNav}
+                    onItemClick={setStoreNav}
                   />
-                </div>
+                  <div className="flex-1 flex flex-col min-h-0 overflow-auto">
+                    {storeNav === 'sync' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <ShopifyConnectPanel projectId={projectId} />
+                      </div>
+                    )}
+                    {storeNav === 'content' && (
+                      connected && connection?.id ? (
+                        <MetafieldExplorer connectionId={connection.id} />
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center p-4 text-sm ide-text-3">Connect a Shopify store to manage metafields.</div>
+                      )
+                    )}
+                    {storeNav === 'publish' && (
+                      connected && connection?.id ? (
+                        <PublishRequestPanel projectId={projectId} currentUserId={authUser?.id ?? ''} userRole="owner" themes={(shopifyThemes ?? []).map(t => ({ id: t.id, name: t.name, role: t.role }))} />
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center p-4 text-sm ide-text-3">Connect a Shopify store to manage publish requests.</div>
+                      )
+                    )}
+                  </div>
+                </>
               )}
-              {activeActivity === 'shopify' && (
-                <div className="flex-1 overflow-auto p-2">
-                  <ShopifyConnectPanel projectId={projectId} />
-                </div>
-              )}
+
+              {/* ── Design panel (summary + link to Design System page) ── */}
               {activeActivity === 'design' && (
-                <DesignTokenBrowser projectId={projectId} />
+                <>
+                  <div className="flex items-center px-4 py-2.5 border-b ide-border-subtle shrink-0">
+                    <span className="text-[13px] font-semibold ide-text">Design System</span>
+                  </div>
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm ide-text-2">
+                        {tokenData ? `${tokenData.tokenCount} tokens found` : 'No tokens yet'}
+                      </p>
+                      <p className="text-xs ide-text-muted">
+                        Explore tokens, components, and cleanup suggestions
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/projects/${projectId}/design-system`)}
+                      className="px-4 py-2 text-sm font-medium bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors"
+                    >
+                      Open Design System
+                    </button>
+                  </div>
+                </>
               )}
-              {activeActivity === 'diagnostics' && (
-                <div className="flex-1 overflow-auto p-2">
-                  <DiagnosticsPanel files={diagnostics.files} />
-                </div>
+
+              {/* ── Quality panel ───────────────────────────────────────── */}
+              {activeActivity === 'quality' && (
+                <>
+                  <SectionNav
+                    title="Quality"
+                    sections={[{ header: 'Analysis', items: [
+                      { id: 'issues', label: 'Issues' },
+                      { id: 'performance', label: 'Performance' },
+                      { id: 'a11y', label: 'Accessibility' },
+                      { id: 'images', label: 'Images' },
+                    ]}]}
+                    activeItem={qualityNav}
+                    onItemClick={setQualityNav}
+                  />
+                  <div className="flex-1 flex flex-col min-h-0 overflow-auto">
+                    {qualityNav === 'issues' && (
+                      <div className="flex-1 overflow-auto p-2 space-y-3">
+                        <SuggestionPanel projectId={projectId} fileId={tabs.activeFileId ?? undefined} />
+                        <DiagnosticsPanel files={diagnostics.files} />
+                      </div>
+                    )}
+                    {qualityNav === 'performance' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <PerformanceDashboard files={[]} />
+                      </div>
+                    )}
+                    {qualityNav === 'a11y' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <A11yPanel html="" />
+                      </div>
+                    )}
+                    {qualityNav === 'images' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <ImageOptPanel files={[]} />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* ── History panel ───────────────────────────────────────── */}
+              {activeActivity === 'history' && (
+                <>
+                  <SectionNav
+                    title="History"
+                    sections={[{ header: 'Timeline', items: [
+                      { id: 'versions', label: 'Versions' },
+                      { id: 'push-log', label: 'Push Log' },
+                    ]}]}
+                    activeItem={historyNav}
+                    onItemClick={setHistoryNav}
+                  />
+                  <div className="flex-1 flex flex-col min-h-0 overflow-auto">
+                    {historyNav === 'versions' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <VersionHistoryPanel
+                          versions={versionHistory.versions}
+                          currentVersion={
+                            versionHistory.versions.length > 0
+                              ? Math.max(...versionHistory.versions.map((v) => v.version_number))
+                              : 0
+                          }
+                          isLoading={versionHistory.isLoading}
+                          onUndo={(n) => versionHistory.undo({ current_version_number: n })}
+                          onRedo={(n) => versionHistory.redo({ current_version_number: n })}
+                          onRestore={(versionId) =>
+                            versionHistory.restore({
+                              version_id: versionId,
+                              current_version_number:
+                                versionHistory.versions.length > 0
+                                  ? Math.max(...versionHistory.versions.map((v) => v.version_number))
+                                  : 0,
+                            })
+                          }
+                          isUndoing={versionHistory.isUndoing}
+                          isRedoing={versionHistory.isRedoing}
+                          isRestoring={versionHistory.isRestoring}
+                        />
+                      </div>
+                    )}
+                    {historyNav === 'push-log' && (
+                      <div className="p-4 ide-text-3 text-sm">Push log coming soon</div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
@@ -645,6 +1264,7 @@ export default function ProjectPage() {
               side="right"
               minWidth={leftResize.minWidth}
               maxWidth={leftResize.maxWidth}
+              currentWidth={leftResize.width}
               onResize={leftResize.setWidth}
               onDoubleClick={leftResize.resetWidth}
             />
@@ -653,9 +1273,18 @@ export default function ProjectPage() {
 
         {/* ── Col 3: Center — File tabs + Editor / Canvas ────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col">
-          {/* EPIC 15: View mode toggle + file tabs */}
-          <div className="flex items-center border-b border-gray-800 bg-gray-900/40">
-            {viewMode === 'editor' && (
+          {/* A5: AmbientBar — proactive nudge above file tabs */}
+          {viewMode === 'editor' && (
+            <AmbientBar
+              nudge={ambientNudge}
+              onAccept={handleAmbientAccept}
+              onDismiss={handleAmbientDismiss}
+            />
+          )}
+
+          {/* File tabs (editor view only) */}
+          {viewMode === 'editor' && (
+            <div className="flex items-center border-b ide-border-subtle ide-surface-panel">
               <div className="flex-1 min-w-0">
                 <FileTabs
                   openTabs={tabs.openTabs}
@@ -675,54 +1304,8 @@ export default function ProjectPage() {
                   onReorderTabs={tabs.reorderTabs}
                 />
               </div>
-            )}
-            {viewMode === 'canvas' && (
-              <div className="flex-1 min-w-0" />
-            )}
-
-            {/* Editor / Canvas toggle */}
-            <div className="flex items-center gap-0.5 px-2 py-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewMode('editor')}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                  viewMode === 'editor'
-                    ? 'bg-gray-700/80 text-gray-200'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
-                }`}
-                title="Editor view"
-              >
-                <span className="flex items-center gap-1.5">
-                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="16 18 22 12 16 6" />
-                    <polyline points="8 6 2 12 8 18" />
-                  </svg>
-                  Editor
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('canvas')}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                  viewMode === 'canvas'
-                    ? 'bg-gray-700/80 text-gray-200'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
-                }`}
-                title="Canvas view — dependency graph"
-              >
-                <span className="flex items-center gap-1.5">
-                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="6" cy="6" r="3" />
-                    <circle cx="18" cy="18" r="3" />
-                    <circle cx="18" cy="6" r="3" />
-                    <line x1="8.5" y1="7.5" x2="15.5" y2="16.5" />
-                    <line x1="15" y1="6" x2="9" y2="6" />
-                  </svg>
-                  Canvas
-                </span>
-              </button>
             </div>
-          </div>
+          )}
 
           {/* ── Editor view ────────────────────────────────────────────── */}
           {viewMode === 'editor' && (
@@ -764,39 +1347,76 @@ export default function ProjectPage() {
                     content={activeFileContent}
                   />
 
-                  <FileEditor
-                    fileId={tabs.activeFileId}
-                    fileType={
-                      rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
-                      'liquid'
-                    }
-                    onMarkDirty={handleMarkDirty}
-                    cursors={cursorsForActiveFile}
-                    locked={tabs.isLocked(tabs.activeFileId)}
-                    onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
-                    onSelectionChange={handleEditorSelectionChange}
-                    onContentChange={handleContentChange}
+                  {/* Editor area with relative positioning for QuickActionsToolbar overlay */}
+                  <div ref={editorContainerRef} className="relative flex-1 min-h-0 flex flex-col">
+                    <FileEditor
+                      fileId={tabs.activeFileId}
+                      fileType={
+                        rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
+                        'liquid'
+                      }
+                      onMarkDirty={handleMarkDirty}
+                      cursors={cursorsForActiveFile}
+                      locked={tabs.isLocked(tabs.activeFileId)}
+                      onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
+                      onSelectionChange={handleEditorSelectionChange}
+                      onContentChange={handleContentChange}
+                      onFixWithAI={handleFixWithAI}
+                    />
+
+                    {/* A5: QuickActionsToolbar — floating toolbar on text selection */}
+                    <QuickActionsToolbar
+                      isVisible={quickActionsVisible}
+                      position={quickActionsPosition}
+                      selectedText={quickActionsText}
+                      onAction={handleQuickAction}
+                      onDismiss={() => setQuickActionsVisible(false)}
+                    />
+                  </div>
+
+                  {/* A5: ThemeConsole — collapsible bottom panel below editor */}
+                  <ThemeConsole
+                    isOpen={consoleOpen}
+                    onToggle={() => setConsoleOpen((o) => !o)}
+                    activeTab={consoleTab}
+                    onTabChange={setConsoleTab}
+                    entries={consoleEntries}
+                    counts={{
+                      diagnostics: consoleEntries.filter((e) => consoleTab === 'diagnostics' || true).length,
+                      'push-log': 0,
+                      'theme-check': 0,
+                    }}
+                    onClear={handleConsoleClear}
                   />
 
-              {/* EPIC 3: Status bar */}
-              <StatusBar
-                fileName={activeFile?.name ?? null}
-                content={activeFileContent}
-                language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
-                filePath={activeFile?.path ?? null}
-                tokenUsage={tokenUsage}
-              />
+                  {/* EPIC 3: Status bar */}
+                  <StatusBar
+                    fileName={activeFile?.name ?? null}
+                    content={activeFileContent}
+                    language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
+                    filePath={activeFile?.path ?? null}
+                    tokenUsage={tokenUsage}
+                    activeMemoryCount={memory.activeConventionCount}
+                  >
+                    <LocalSyncIndicator projectId={projectId} />
+                    <BinarySyncIndicator projectId={projectId} />
+                  </StatusBar>
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                  <h2 className="text-lg font-medium text-gray-400 mb-1">
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-6 relative">
+                  <h2 className="text-lg font-medium ide-text-2 mb-1">
                     No file selected
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm ide-text-3">
                     {hasFiles
                       ? 'Select a file from the explorer to start editing'
                       : 'Import a theme or upload files to begin'}
                   </p>
+                  {/* Sync indicators when no file is open */}
+                  <div className="absolute bottom-3 right-3 flex items-center gap-3">
+                    <LocalSyncIndicator projectId={projectId} />
+                    <BinarySyncIndicator projectId={projectId} />
+                  </div>
                 </div>
               )}
             </>
@@ -806,10 +1426,10 @@ export default function ProjectPage() {
           {viewMode === 'canvas' && (
             <Suspense
               fallback={
-                <div className="flex-1 flex items-center justify-center bg-gray-950">
+                <div className="flex-1 flex items-center justify-center ide-surface">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs text-gray-500">Loading canvas…</span>
+                    <div className="w-8 h-8 border-2 border-sky-500 dark:border-sky-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs ide-text-3">Loading canvas…</span>
                   </div>
                 </div>
               }
@@ -834,19 +1454,21 @@ export default function ProjectPage() {
 
         {/* ── Col 4: Right — Preview (top) + Agent Chat (bottom) ─────────── */}
         <aside
-          className="relative border-l border-gray-800 flex-shrink-0 flex flex-col min-h-0"
+          ref={rightPanelRef}
+          className="relative border-l ide-border-subtle flex-shrink-0 flex flex-col min-h-0 ide-surface"
           style={{ width: rightResize.width }}
         >
           <ResizeHandle
             side="left"
             minWidth={rightResize.minWidth}
             maxWidth={rightResize.maxWidth}
+            currentWidth={rightResize.width}
             onResize={rightResize.setWidth}
             onDoubleClick={rightResize.resetWidth}
           />
 
-          {/* Top half: Preview */}
-          <div className="flex-1 flex flex-col min-h-0 border-b border-gray-800">
+          {/* Top: Preview (resizable via previewPct) */}
+          <div className="flex flex-col min-h-0 border-b ide-border-subtle" style={{ height: `${previewPct}%` }}>
             {showPreview && previewThemeId ? (
               <div className="flex-1 overflow-auto p-3">
                 <PreviewPanel
@@ -856,6 +1478,7 @@ export default function ProjectPage() {
                   projectId={projectId}
                   path={previewPathFromFile(activeFilePath)}
                   syncStatus={connection!.sync_status}
+                  isSourceThemePreview={isPreviewUsingSourceTheme}
                   onElementSelected={(el) => {
                     setSelectedElement(el);
                     agentChatRef.current?.querySelector('textarea')?.focus();
@@ -864,12 +1487,12 @@ export default function ProjectPage() {
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                <div className="w-14 h-14 mb-3 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
-                  <svg className="w-7 h-7 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-14 h-14 mb-3 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
+                  <svg className="w-7 h-7 ide-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
                   </svg>
                 </div>
-                <p className="text-sm text-gray-400 font-medium">
+                <p className="text-sm ide-text-muted font-medium">
                   {connected && !previewThemeId
                     ? 'Setting up preview theme…'
                     : 'Import a theme or connect Shopify to see preview'}
@@ -878,8 +1501,79 @@ export default function ProjectPage() {
             )}
           </div>
 
-          {/* Bottom half: Agent Chat */}
+          {/* ── Vertical resize handle between preview and chat ──────── */}
+          <button
+            type="button"
+            className="relative h-[5px] shrink-0 cursor-row-resize bg-transparent hover:bg-accent/30 dark:hover:bg-accent/40 active:bg-accent/50 transition-colors duration-75 focus:outline-none"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+              (e.target as HTMLElement).setPointerCapture(e.pointerId);
+              const latestPct = previewPctRef.current;
+              if (rightPanelRef.current) {
+                const rect = rightPanelRef.current.getBoundingClientRect();
+                vDragStart.current = {
+                  startY: e.clientY,
+                  startPct: latestPct,
+                  startHeight: rect.height,
+                };
+              }
+              vDragging.current = true;
+              vDragMoveCount.current = 0;
+              document.body.style.cursor = 'row-resize';
+              document.body.style.userSelect = 'none';
+            }}
+            onDoubleClick={() => setPreviewPct(50)}
+            aria-label="Resize preview and chat"
+          />
+
+          {/* A5: IntentCompletionPanel — workflow step tracker (when a workflow is active) */}
+          {activeWorkflow && (
+            <IntentCompletionPanel
+              match={activeWorkflow}
+              progress={
+                activeWorkflow
+                  ? {
+                      total: activeWorkflow.steps.length,
+                      completed: activeWorkflow.steps.filter((s) => s.completed).length,
+                      pending: activeWorkflow.steps.filter((s) => !s.completed).length,
+                      percentage: activeWorkflow.steps.length > 0
+                        ? Math.round(
+                            (activeWorkflow.steps.filter((s) => s.completed).length /
+                              activeWorkflow.steps.length) *
+                              100
+                          )
+                        : 0,
+                    }
+                  : null
+              }
+              onToggleStep={handleWorkflowToggleStep}
+              onApplyStep={handleWorkflowApplyStep}
+              onApplyAll={handleWorkflowApplyAll}
+              onPreviewAll={handleWorkflowPreviewAll}
+              onDismiss={handleWorkflowDismiss}
+            />
+          )}
+
+          {/* Bottom: Agent Chat (fills remaining space) */}
           <div ref={agentChatRef} className="flex-1 flex flex-col min-h-0 p-2">
+            {/* A7: Agent chat header with Memory button */}
+            <div className="flex items-center justify-end mb-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMemoryOpen(true)}
+                className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium ide-text-3 hover:text-purple-400 ide-hover rounded transition-colors"
+                title="Open Developer Memory"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
+                  <path d="M12 2a7 7 0 0 0-4.9 2" />
+                  <path d="M12 2a7 7 0 0 1 4.9 2" />
+                  <circle cx="12" cy="11" r="3" />
+                </svg>
+                Memory
+              </button>
+            </div>
             <AgentPromptPanel
               projectId={projectId}
               context={sidebar.context}
@@ -890,6 +1584,10 @@ export default function ProjectPage() {
               getPreviewSnapshot={getPreviewSnapshot}
               getActiveFileContent={getActiveFileContent}
               onTokenUsage={handleTokenUsage}
+              getPassiveContext={passiveContext.getContextString}
+              onOpenFile={handleOpenFile}
+              resolveFileId={handleResolveFileId}
+              sendMessageRef={sendMessageRef}
             />
           </div>
         </aside>
@@ -915,7 +1613,7 @@ export default function ProjectPage() {
         onClose={() => setSettingsOpen(false)}
       />
 
-      {/* EPIC 3: Command palette (Ctrl+P) */}
+      {/* EPIC 3 + A6: Command palette (Ctrl+P) — file search + command mode */}
       <CommandPalette
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
@@ -925,8 +1623,78 @@ export default function ProjectPage() {
           tabs.openTab(fileId);
           setCommandPaletteOpen(false);
         }}
+        commands={paletteCommands}
       />
+
+      {/* A7: Agent workflow modals */}
+      {planApproval && (
+        <PlanApprovalModal
+          steps={planApproval.steps}
+          isOpen={true}
+          onApprove={() => setPlanApproval(null)}
+          onModify={() => setPlanApproval(null)}
+          onCancel={() => setPlanApproval(null)}
+        />
+      )}
+
+      {batchDiff && (
+        <BatchDiffModal
+          isOpen={true}
+          title={batchDiff.title}
+          entries={batchDiff.entries}
+          onApplyAll={() => setBatchDiff(null)}
+          onClose={() => setBatchDiff(null)}
+        />
+      )}
+
+      {themeReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 dark:bg-black/50 backdrop-blur-sm" onClick={() => setThemeReview(null)}>
+          <div className="relative w-full max-w-2xl max-h-[80vh] rounded-xl border ide-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <ThemeReviewReportPanel
+              report={themeReview}
+              onClose={() => setThemeReview(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Auto-reconcile UndoToast */}
+      {undoToast && (
+        <UndoToast
+          message={undoToast.message}
+          duration={10000}
+          onUndo={handleUndoArchive}
+          onDismiss={() => setUndoToast(null)}
+        />
+      )}
+
+      {memoryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 dark:bg-black/50 backdrop-blur-sm" onClick={() => setMemoryOpen(false)}>
+          <div className="relative w-full max-w-xl max-h-[80vh] rounded-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <MemoryPanel
+              memories={memory.memories}
+              isLoading={memory.isLoading}
+              onFeedback={memory.setFeedback}
+              onForget={memory.forget}
+              onEdit={memory.edit}
+              activeConventionCount={memory.activeConventionCount}
+            />
+            <button
+              type="button"
+              onClick={() => setMemoryOpen(false)}
+              className="absolute top-2 right-2 z-10 rounded p-1 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
+              aria-label="Close memory panel"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
     </EditorSettingsProvider>
+    </ChromaticSettingsProvider>
   );
 }

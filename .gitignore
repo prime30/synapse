@@ -43,3 +43,6 @@ next-env.d.ts
 
 # dev-only tools (not shipped)
 components/marketing/dev/
+
+# Local theme file sync (dev-only mirror of Supabase files)
+.synapse-themes/

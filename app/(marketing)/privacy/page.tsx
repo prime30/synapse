@@ -78,7 +78,7 @@ const SECTIONS = [
   {
     title: '9. Contact',
     paragraphs: [
-      'If you have any questions about this Privacy Policy or our data practices, please contact us at privacy@synapse.dev.',
+      'If you have any questions about this Privacy Policy or our data practices, please contact us at privacy@synapse.shop.',
     ],
   },
 ];

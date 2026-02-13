@@ -10,7 +10,7 @@ export function CollaborativeCursors({ cursors }: CollaborativeCursorsProps) {
   if (cursors.length === 0) return null;
 
   return (
-    <div className="absolute top-2 right-2 rounded bg-gray-900/80 px-2 py-1 text-xs text-gray-200">
+    <div className="absolute top-2 right-2 rounded ide-surface-pop border ide-border px-2 py-1 text-xs ide-text-2">
       Active cursors: {cursors.length}
     </div>
   );

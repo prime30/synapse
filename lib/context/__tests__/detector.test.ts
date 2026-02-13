@@ -59,8 +59,11 @@ describe('DependencyDetector', () => {
       ];
 
       const deps = detector.detectDependencies(files);
-      expect(deps.length).toBe(1);
-      expect(deps[0].dependencyType).toBe('css_class');
+      expect(deps.length).toBeGreaterThanOrEqual(1);
+      const cssClassDep = deps.find((d) => d.dependencyType === 'css_class');
+      expect(cssClassDep).toBeDefined();
+      expect(cssClassDep!.sourceFileId).toBe('liquid-1');
+      expect(cssClassDep!.targetFileId).toBe('css-1');
     });
   });
 
@@ -547,6 +550,85 @@ describe('DependencyDetector', () => {
       expect(deps.length).toBe(2);
       expect(deps[0].targetFileId).toBe('css-2');
       expect(deps[1].targetFileId).toBe('css-3');
+    });
+  });
+
+  describe('schema setting dependencies', () => {
+    it('should detect section.settings.X usage and schema settings', () => {
+      const sectionFile = createMockFile({
+        fileId: 'section-1',
+        fileName: 'sections/hero.liquid',
+        fileType: 'liquid',
+        content: `
+          <h1>{{ section.settings.title }}</h1>
+          {% schema %}
+          { "settings": [{ "id": "title", "type": "text" }] }
+          {% endschema %}
+        `,
+      });
+
+      const deps = detector.detectLiquidDependencies(sectionFile, [
+        sectionFile,
+      ]);
+
+      const schemaDeps = deps.filter((d) => d.dependencyType === 'schema_setting');
+      expect(schemaDeps.length).toBeGreaterThanOrEqual(1);
+      expect(schemaDeps[0].references.some((r) => r.symbol === 'title')).toBe(
+        true
+      );
+    });
+  });
+
+  describe('snippet variable contracts', () => {
+    it('should detect render with variables', () => {
+      const liquidFile = createMockFile({
+        fileId: 'liquid-1',
+        fileName: 'sections/product-grid.liquid',
+        fileType: 'liquid',
+        content: "{% render 'card', product: item, show_price: true %}",
+      });
+
+      const cardFile = createMockFile({
+        fileId: 'liquid-2',
+        fileName: 'snippets/card.liquid',
+        fileType: 'liquid',
+        content: '<div>{{ product.title }}</div>',
+      });
+
+      const deps = detector.detectLiquidDependencies(liquidFile, [
+        liquidFile,
+        cardFile,
+      ]);
+
+      const snippetVarDeps = deps.filter(
+        (d) => d.dependencyType === 'snippet_variable'
+      );
+      expect(snippetVarDeps.length).toBe(1);
+      expect(snippetVarDeps[0].references[0].symbol).toContain('product');
+      expect(snippetVarDeps[0].references[0].symbol).toContain('show_price');
+    });
+  });
+
+  describe('buildReverseIndex', () => {
+    it('should return Map of target file ID to source file IDs', () => {
+      const sectionFile = createMockFile({
+        fileId: 'section-1',
+        fileName: 'sections/main.liquid',
+        fileType: 'liquid',
+        content: "{% render 'card' %}",
+      });
+
+      const cardFile = createMockFile({
+        fileId: 'snippet-1',
+        fileName: 'snippets/card.liquid',
+        fileType: 'liquid',
+        content: '<div>Card</div>',
+      });
+
+      const index = detector.buildReverseIndex([sectionFile, cardFile]);
+
+      expect(index.get('snippet-1')).toContain('section-1');
+      expect(index.get('snippet-1')!.length).toBe(1);
     });
   });
 

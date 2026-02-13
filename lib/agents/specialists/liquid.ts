@@ -1,5 +1,6 @@
 import { Agent } from '../base';
 import { LIQUID_AGENT_PROMPT } from '../prompts';
+import { parseLiquidAST } from '@/lib/liquid/liquid-ast';
 import type { AgentTask, AgentResult, CodeChange } from '@/lib/types/agent';
 
 /**
@@ -23,6 +24,59 @@ export class LiquidAgent extends Agent {
       (f) => f.fileType !== 'liquid'
     );
 
+    // Generate AST summaries for each Liquid file
+    const astSummaries = liquidFiles
+      .map((f) => {
+        try {
+          const result = parseLiquidAST(f.content);
+          if (result.errors.length > 0 || result.ast.length === 0) return null;
+
+          // Summarize the AST structure
+          const nodeTypes: Record<string, number> = {};
+          const variables: string[] = [];
+          const sections: string[] = [];
+
+          for (const node of result.ast) {
+            const type = node.type;
+            nodeTypes[type] = (nodeTypes[type] || 0) + 1;
+
+            if (type === 'Assign') {
+              variables.push((node as { name: string }).name);
+            }
+            if (type === 'Schema') {
+              try {
+                const schemaNode = node as { jsonContent: string; parsedJSON: unknown };
+                const parsed =
+                  schemaNode.parsedJSON ??
+                  (schemaNode.jsonContent
+                    ? JSON.parse(schemaNode.jsonContent.trim())
+                    : null);
+                if (parsed && typeof parsed === 'object' && 'name' in parsed && parsed.name) {
+                  sections.push(String(parsed.name));
+                }
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+
+          const parts: string[] = [
+            `Structure: ${Object.entries(nodeTypes)
+              .map(([t, c]) => `${c} ${t}`)
+              .join(', ')}`,
+          ];
+          if (variables.length > 0)
+            parts.push(`Variables: ${variables.join(', ')}`);
+          if (sections.length > 0)
+            parts.push(`Schema name: ${sections.join(', ')}`);
+
+          return `${f.fileName}: ${parts.join(' | ')}`;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
     return [
       `Task: ${task.instruction}`,
       '',
@@ -33,6 +87,13 @@ export class LiquidAgent extends Agent {
       // Design system token context from REQ-52
       ...(task.context.designContext
         ? [task.context.designContext, '']
+        : []),
+      // Live DOM context from Shopify preview bridge
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
+      ...(astSummaries.length > 0
+        ? ['## Template Structure (AST analysis):', ...astSummaries, '']
         : []),
       '## Liquid Files (you may modify these):',
       ...liquidFiles.map(

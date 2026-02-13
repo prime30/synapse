@@ -21,13 +21,13 @@ interface FileListItemProps {
 function getFileTypeColor(type: FileType): string {
   switch (type) {
     case 'liquid':
-      return 'text-blue-400';
+      return 'text-sky-500 dark:text-sky-400';
     case 'javascript':
       return 'text-amber-400';
     case 'css':
       return 'text-purple-400';
     default:
-      return 'text-gray-400';
+      return 'ide-text-muted';
   }
 }
 
@@ -78,21 +78,21 @@ export function FileListItem({
         type="button"
         onClick={onClick}
         onContextMenu={handleContextMenu}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-700/50 rounded transition-colors group"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left ide-hover rounded transition-colors group"
       >
         <span className={`flex-shrink-0 ${getFileTypeColor(file.file_type)}`}>
           📄
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm text-gray-200 flex items-center">
+          <div className="truncate text-sm ide-text flex items-center">
             {displayName}
             {snippetUsageCount != null && snippetUsageCount > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/15 text-blue-400 rounded-full leading-none">
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-medium ide-active text-sky-500 dark:text-sky-400 rounded-full leading-none">
                 x{snippetUsageCount}
               </span>
             )}
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs ide-text-muted">
             {formatFileSize(file.size_bytes)} • {formatRelativeTime(file.updated_at)}
           </div>
         </div>

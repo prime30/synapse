@@ -1,5 +1,6 @@
 import type { AIMessage } from '@/lib/ai/types';
 import type { AgentResult, CodeChange, ReviewResult, AgentError } from '@/lib/types/agent';
+import { trimHistory } from '@/lib/ai/history-window';
 
 /** Conversation turn from the frontend (user or assistant). */
 export interface HistoryMessage {
@@ -76,8 +77,11 @@ export function buildSummaryMessages(
     { role: 'system', content: systemPrompt },
   ];
 
-  // Add conversation history as prior turns
-  for (const msg of history) {
+  // Trim history to prevent context overflow
+  const { messages: trimmedHistory, summary: historySummary } = trimHistory(history);
+
+  // Add trimmed conversation history as prior turns
+  for (const msg of trimmedHistory) {
     messages.push({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: msg.content,
@@ -86,10 +90,13 @@ export function buildSummaryMessages(
 
   // Build the current turn: user request + structured result context
   const contextBlock = formatResultContext(result);
+  const contextPrefix = historySummary
+    ? `[Context from earlier conversation]:\n${historySummary}\n\n`
+    : '';
 
   messages.push({
     role: 'user',
-    content: [
+    content: contextPrefix + [
       `The user asked: "${userRequest}"`,
       '',
       '--- Agent Execution Result ---',
@@ -110,13 +117,21 @@ function formatResultContext(result: AgentResult): string {
   // Success / failure status
   sections.push(`Success: ${result.success}`);
 
+  // Clarification needed
+  if ((result as unknown as Record<string, unknown>).needsClarification) {
+    sections.push('Needs clarification: true');
+    if (result.analysis) {
+      sections.push(`Clarification question: ${result.analysis}`);
+    }
+  }
+
   // Error (if failed)
   if (!result.success && result.error) {
     sections.push(formatError(result.error));
   }
 
-  // PM analysis
-  if (result.analysis) {
+  // PM analysis (skip if already used for clarification)
+  if (result.analysis && !(result as unknown as Record<string, unknown>).needsClarification) {
     sections.push(`Analysis: ${result.analysis}`);
   }
 

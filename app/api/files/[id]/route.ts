@@ -3,6 +3,13 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { getFile, updateFile, deleteFile } from '@/lib/services/files';
+import {
+  resolveProjectSlug,
+  writeFileToDisk,
+  deleteFileFromDisk,
+  renameFileOnDisk,
+  isLocalSyncEnabled,
+} from '@/lib/sync/disk-sync';
 import type { UpdateFileRequest } from '@/lib/types/files';
 import { APIError } from '@/lib/errors/handler';
 import { createClient } from '@/lib/supabase/server';
@@ -72,6 +79,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Fire-and-forget: sync to local disk
+    if (isLocalSyncEnabled() && projectId && file.path && body.content != null) {
+      const path = file.path;
+      const content = body.content;
+      resolveProjectSlug(projectId).then((slug) => {
+        if (slug) writeFileToDisk(slug, path, content);
+      }).catch(() => {});
+    }
+
     return successResponse({
       ...file,
       ...(shopifyPushQueued && {
@@ -92,7 +108,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!body.name) {
       throw APIError.badRequest('PATCH requires name for rename');
     }
+
+    // Capture old path for disk rename
+    let oldPath: string | null = null;
+    if (isLocalSyncEnabled()) {
+      try {
+        const existing = await getFile(id);
+        oldPath = existing?.path ?? null;
+      } catch { /* non-critical */ }
+    }
+
     const file = await updateFile(id, { name: body.name, path: body.name });
+
+    // Fire-and-forget: rename on disk
+    if (isLocalSyncEnabled() && file.project_id && oldPath && file.path) {
+      resolveProjectSlug(file.project_id as string).then((slug) =>
+        renameFileOnDisk(slug, oldPath!, file.path, file.content ?? ''),
+      ).catch(() => {});
+    }
+
     return successResponse(file);
   } catch (error) {
     return handleAPIError(error);
@@ -103,7 +137,24 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     await requireAuth(request);
     const { id } = await params;
+
+    // Capture file info before deletion for disk sync
+    let fileInfo: { project_id?: string; path?: string } | null = null;
+    if (isLocalSyncEnabled()) {
+      try {
+        fileInfo = await getFile(id);
+      } catch { /* non-critical */ }
+    }
+
     await deleteFile(id);
+
+    // Fire-and-forget: delete from disk
+    if (fileInfo?.project_id && fileInfo?.path) {
+      resolveProjectSlug(fileInfo.project_id).then((slug) =>
+        deleteFileFromDisk(slug, fileInfo!.path!),
+      ).catch(() => {});
+    }
+
     return successResponse({ message: 'File deleted' });
   } catch (error) {
     return handleAPIError(error);

@@ -11,6 +11,9 @@ export interface ShopifyTheme {
 export interface ShopifyAsset {
   key: string; // e.g. "templates/product.liquid"
   value?: string; // file content (text files)
+  attachment?: string; // base64-encoded binary content (returned by getAsset for images/fonts)
+  public_url?: string; // CDN URL (returned by listAssets for assets/ dir files)
+  checksum?: string; // MD5 hash
   content_type: string;
   size: number;
   created_at: string;
@@ -33,10 +36,125 @@ interface ShopifyAssetResponse {
   asset: ShopifyAsset;
 }
 
+// ── GraphQL response types ────────────────────────────────────────────
+
+export interface GraphQLResponse<T> {
+  data: T;
+  errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }> }>;
+  extensions?: { cost: { requestedQueryCost: number; actualQueryCost: number; throttleStatus: { maximumAvailable: number; currentlyAvailable: number; restoreRate: number } } };
+}
+
+// ── Navigation types ──────────────────────────────────────────────────
+
+export interface ShopifyMenu {
+  id: string;
+  title: string;
+  handle: string;
+  items: ShopifyMenuItem[];
+}
+
+export interface ShopifyMenuItem {
+  id: string;
+  title: string;
+  url: string;
+  type: string;
+  resource_id?: number | null;
+  items?: ShopifyMenuItem[];
+}
+
+// ── Page types ────────────────────────────────────────────────────────
+
+export interface ShopifyPage {
+  id: number;
+  title: string;
+  handle: string;
+  body_html: string;
+  author: string;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  template_suffix: string | null;
+}
+
+// ── Discount types ────────────────────────────────────────────────────
+
+export interface ShopifyPriceRule {
+  id: number;
+  title: string;
+  value_type: 'fixed_amount' | 'percentage';
+  value: string;
+  target_type: 'line_item' | 'shipping_line';
+  target_selection: 'all' | 'entitled';
+  allocation_method: 'across' | 'each';
+  starts_at: string;
+  ends_at: string | null;
+  usage_limit: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopifyDiscountCode {
+  id: number;
+  price_rule_id: number;
+  code: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Inventory types ───────────────────────────────────────────────────
+
+export interface ShopifyProduct {
+  id: number;
+  title: string;
+  handle: string;
+  variants: ShopifyVariant[];
+  images: Array<{ id: number; src: string; alt: string | null }>;
+  status: 'active' | 'draft' | 'archived';
+}
+
+export interface ShopifyVariant {
+  id: number;
+  title: string;
+  sku: string;
+  price: string;
+  inventory_item_id: number;
+  inventory_quantity: number;
+}
+
+export interface ShopifyLocation {
+  id: number;
+  name: string;
+  active: boolean;
+  address1: string | null;
+  city: string | null;
+  country: string | null;
+}
+
+export interface ShopifyInventoryLevel {
+  inventory_item_id: number;
+  location_id: number;
+  available: number | null;
+  updated_at: string;
+}
+
+// ── File (CDN) types ──────────────────────────────────────────────────
+
+export interface ShopifyFile {
+  id: string;
+  alt: string | null;
+  createdAt: string;
+  fileStatus: 'READY' | 'PROCESSING' | 'FAILED' | 'UPLOADED';
+  preview?: { image?: { url: string } };
+  url?: string;
+  filename?: string;
+  mimeType?: string;
+}
+
 export class ShopifyAdminAPI {
   private storeDomain: string;
   private accessToken: string;
-  private readonly apiVersion = '2024-01';
+  private readonly apiVersion = '2025-10';
 
   constructor(storeDomain: string, accessToken: string) {
     this.storeDomain = storeDomain;
@@ -190,19 +308,26 @@ export class ShopifyAdminAPI {
   }
 
   /**
-   * Create a theme from a public ZIP URL.
+   * Create a theme, optionally from a public ZIP URL.
    * POST /admin/api/2024-01/themes.json
-   * Requires theme src (public URL to theme zip). New theme is unpublished by default.
+   * When `src` is provided, the theme is seeded from that ZIP.
+   * When `src` is omitted, an empty theme is created (useful for import
+   * workflows where files are pushed immediately after creation).
+   * New theme is unpublished by default.
    */
   async createTheme(
     name: string,
-    src: string,
+    src?: string,
     role: 'unpublished' | 'development' = 'unpublished'
   ): Promise<ShopifyTheme> {
+    const themePayload: Record<string, unknown> = { name, role };
+    if (src) {
+      themePayload.src = src;
+    }
     const response = await this.request<ShopifyThemeResponse>(
       'POST',
       'themes',
-      { theme: { name, src, role } }
+      { theme: themePayload }
     );
     return response.theme;
   }
@@ -235,22 +360,24 @@ export class ShopifyAdminAPI {
   /**
    * Create or update an asset.
    * PUT /admin/api/2024-01/themes/{themeId}/assets.json
-   * Body: { asset: { key, value } }
+   * Body: { asset: { key, value } } for text or { asset: { key, attachment } } for binary (base64)
    */
   async putAsset(
     themeId: number,
     key: string,
-    value: string
+    value?: string,
+    attachment?: string
   ): Promise<ShopifyAsset> {
+    const assetBody: Record<string, string> = { key };
+    if (attachment) {
+      assetBody.attachment = attachment;
+    } else if (value) {
+      assetBody.value = value;
+    }
     const response = await this.request<ShopifyAssetResponse>(
       'PUT',
       `themes/${themeId}/assets`,
-      {
-        asset: {
-          key,
-          value,
-        },
-      }
+      { asset: assetBody }
     );
     return response.asset;
   }
@@ -265,5 +392,387 @@ export class ShopifyAdminAPI {
       'DELETE',
       `themes/${themeId}/assets?asset[key]=${encodedKey}`
     );
+  }
+
+  /**
+   * Update a theme (rename, change role, etc.).
+   * PUT /admin/api/2024-01/themes/{themeId}.json
+   */
+  async updateTheme(
+    themeId: number,
+    fields: { name?: string; role?: string }
+  ): Promise<ShopifyTheme> {
+    const response = await this.request<ShopifyThemeResponse>(
+      'PUT',
+      `themes/${themeId}`,
+      { theme: fields }
+    );
+    return response.theme;
+  }
+
+  /**
+   * Delete a theme.
+   * DELETE /admin/api/2024-01/themes/{themeId}.json
+   * Cannot delete the live (main) theme.
+   */
+  async deleteTheme(themeId: number): Promise<void> {
+    await this.request<void>('DELETE', `themes/${themeId}`);
+  }
+
+  // ── GraphQL API ─────────────────────────────────────────────────────
+
+  /**
+   * Execute a GraphQL query against the Shopify Admin API.
+   * POST /admin/api/2024-01/graphql.json
+   */
+  async graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    const cleanDomain = this.storeDomain.replace(/^https?:\/\//, '');
+    const url = `https://${cleanDomain}/admin/api/${this.apiVersion}/graphql.json`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': this.accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new APIError(
+        `GraphQL error: ${response.status} ${text.slice(0, 200)}`,
+        'GRAPHQL_ERROR',
+        response.status
+      );
+    }
+
+    const result = (await response.json()) as GraphQLResponse<T>;
+
+    if (result.errors?.length) {
+      throw new APIError(
+        `GraphQL errors: ${result.errors.map((e) => e.message).join('; ')}`,
+        'GRAPHQL_QUERY_ERROR',
+        400
+      );
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Duplicate an existing theme via GraphQL.
+   * Returns the new theme with all files copied server-side by Shopify.
+   * Available in API version 2025-10+.
+   */
+  async duplicateTheme(themeId: number, name: string): Promise<ShopifyTheme> {
+    const gid = `gid://shopify/OnlineStoreTheme/${themeId}`;
+    const data = await this.graphql<{
+      themeDuplicate: {
+        newTheme: { id: string; name: string; role: string; createdAt: string; updatedAt: string } | null;
+        userErrors: Array<{ field: string[]; message: string }>;
+      };
+    }>(
+      `mutation themeDuplicate($id: ID!, $name: String!) {
+        themeDuplicate(id: $id, name: $name) {
+          newTheme { id name role createdAt updatedAt }
+          userErrors { field message }
+        }
+      }`,
+      { id: gid, name }
+    );
+
+    const { newTheme, userErrors } = data.themeDuplicate;
+    if (userErrors.length > 0) {
+      throw new APIError(
+        `Theme duplicate failed: ${userErrors.map((e) => e.message).join('; ')}`,
+        'THEME_DUPLICATE_FAILED',
+        400
+      );
+    }
+    if (!newTheme) {
+      throw new APIError('Theme duplicate returned no theme', 'THEME_DUPLICATE_FAILED', 500);
+    }
+
+    // Convert GraphQL GID to numeric ID
+    const numericId = parseInt(newTheme.id.split('/').pop() ?? '0', 10);
+    return {
+      id: numericId,
+      name: newTheme.name,
+      role: newTheme.role as ShopifyTheme['role'],
+      created_at: newTheme.createdAt,
+      updated_at: newTheme.updatedAt,
+    };
+  }
+
+  /**
+   * Batch upsert up to 50 theme files via GraphQL.
+   * Much faster than sequential REST putAsset calls.
+   * Available in API version 2024-10+.
+   */
+  async upsertThemeFiles(
+    themeId: number,
+    files: Array<{ filename: string; body: { type: 'TEXT'; value: string } }>
+  ): Promise<{ upsertedCount: number; errors: string[] }> {
+    const gid = `gid://shopify/OnlineStoreTheme/${themeId}`;
+    const data = await this.graphql<{
+      themeFilesUpsert: {
+        upsertedThemeFiles: Array<{ filename: string }> | null;
+        userErrors: Array<{ field: string[]; message: string }>;
+      };
+    }>(
+      `mutation themeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) {
+        themeFilesUpsert(themeId: $themeId, files: $files) {
+          upsertedThemeFiles { filename }
+          userErrors { field message }
+        }
+      }`,
+      { themeId: gid, files }
+    );
+
+    const { upsertedThemeFiles, userErrors } = data.themeFilesUpsert;
+    return {
+      upsertedCount: upsertedThemeFiles?.length ?? 0,
+      errors: userErrors.map((e) => e.message),
+    };
+  }
+
+  /**
+   * Copy files from one theme to another via GraphQL.
+   * Avoids downloading and re-uploading content.
+   * Available in API version 2024-10+.
+   */
+  async copyThemeFiles(
+    sourceThemeId: number,
+    targetThemeId: number,
+    files: string[]
+  ): Promise<{ copiedCount: number; errors: string[] }> {
+    const sourceGid = `gid://shopify/OnlineStoreTheme/${sourceThemeId}`;
+    const targetGid = `gid://shopify/OnlineStoreTheme/${targetThemeId}`;
+    const fileInputs = files.map((f) => ({
+      src: sourceGid,
+      filename: f,
+    }));
+    const data = await this.graphql<{
+      themeFilesCopy: {
+        copiedThemeFiles: Array<{ filename: string }> | null;
+        userErrors: Array<{ field: string[]; message: string }>;
+      };
+    }>(
+      `mutation themeFilesCopy($themeId: ID!, $files: [OnlineStoreThemeFilesCopyFileInput!]!) {
+        themeFilesCopy(themeId: $themeId, files: $files) {
+          copiedThemeFiles { filename }
+          userErrors { field message }
+        }
+      }`,
+      { themeId: targetGid, files: fileInputs }
+    );
+
+    const { copiedThemeFiles, userErrors } = data.themeFilesCopy;
+    return {
+      copiedCount: copiedThemeFiles?.length ?? 0,
+      errors: userErrors.map((e) => e.message),
+    };
+  }
+
+  // ── Navigation (Online Store) ───────────────────────────────────────
+
+  /** List all navigation menus. */
+  async listMenus(): Promise<ShopifyMenu[]> {
+    const data = await this.graphql<{
+      menus: { edges: Array<{ node: { id: string; title: string; handle: string; items: Array<{ id: string; title: string; url: string; type: string; resourceId: string | null; items: Array<{ id: string; title: string; url: string; type: string }> }> } }> };
+    }>(`{
+      menus(first: 50) {
+        edges {
+          node {
+            id
+            title
+            handle
+            items {
+              id
+              title
+              url
+              type
+              resourceId
+              items { id title url type }
+            }
+          }
+        }
+      }
+    }`);
+
+    return data.menus.edges.map((e) => ({
+      id: e.node.id,
+      title: e.node.title,
+      handle: e.node.handle,
+      items: e.node.items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        type: item.type,
+        resource_id: item.resourceId ? parseInt(item.resourceId.split('/').pop() ?? '0', 10) : null,
+        items: item.items?.map((sub) => ({
+          id: sub.id,
+          title: sub.title,
+          url: sub.url,
+          type: sub.type,
+        })),
+      })),
+    }));
+  }
+
+  // ── Pages (REST) ────────────────────────────────────────────────────
+
+  /** List all pages. */
+  async listPages(limit = 50): Promise<ShopifyPage[]> {
+    const res = await this.request<{ pages: ShopifyPage[] }>('GET', `pages?limit=${limit}`);
+    return res.pages;
+  }
+
+  /** Get a page by ID. */
+  async getPage(pageId: number): Promise<ShopifyPage> {
+    const res = await this.request<{ page: ShopifyPage }>('GET', `pages/${pageId}`);
+    return res.page;
+  }
+
+  /** Create a page. */
+  async createPage(page: { title: string; body_html: string; published?: boolean }): Promise<ShopifyPage> {
+    const res = await this.request<{ page: ShopifyPage }>('POST', 'pages', { page });
+    return res.page;
+  }
+
+  /** Update a page. */
+  async updatePage(pageId: number, fields: Partial<Pick<ShopifyPage, 'title' | 'body_html' | 'handle' | 'template_suffix'> & { published: boolean }>): Promise<ShopifyPage> {
+    const res = await this.request<{ page: ShopifyPage }>('PUT', `pages/${pageId}`, { page: fields });
+    return res.page;
+  }
+
+  /** Delete a page. */
+  async deletePage(pageId: number): Promise<void> {
+    await this.request<void>('DELETE', `pages/${pageId}`);
+  }
+
+  // ── Price Rules + Discount Codes (REST) ─────────────────────────────
+
+  /** List price rules. */
+  async listPriceRules(limit = 50): Promise<ShopifyPriceRule[]> {
+    const res = await this.request<{ price_rules: ShopifyPriceRule[] }>('GET', `price_rules?limit=${limit}`);
+    return res.price_rules;
+  }
+
+  /** Create a price rule. */
+  async createPriceRule(rule: Partial<ShopifyPriceRule>): Promise<ShopifyPriceRule> {
+    const res = await this.request<{ price_rule: ShopifyPriceRule }>('POST', 'price_rules', { price_rule: rule });
+    return res.price_rule;
+  }
+
+  /** Update a price rule. */
+  async updatePriceRule(ruleId: number, fields: Partial<ShopifyPriceRule>): Promise<ShopifyPriceRule> {
+    const res = await this.request<{ price_rule: ShopifyPriceRule }>('PUT', `price_rules/${ruleId}`, { price_rule: fields });
+    return res.price_rule;
+  }
+
+  /** Delete a price rule. */
+  async deletePriceRule(ruleId: number): Promise<void> {
+    await this.request<void>('DELETE', `price_rules/${ruleId}`);
+  }
+
+  /** List discount codes for a price rule. */
+  async listDiscountCodes(priceRuleId: number): Promise<ShopifyDiscountCode[]> {
+    const res = await this.request<{ discount_codes: ShopifyDiscountCode[] }>('GET', `price_rules/${priceRuleId}/discount_codes`);
+    return res.discount_codes;
+  }
+
+  /** Create a discount code. */
+  async createDiscountCode(priceRuleId: number, code: string): Promise<ShopifyDiscountCode> {
+    const res = await this.request<{ discount_code: ShopifyDiscountCode }>('POST', `price_rules/${priceRuleId}/discount_codes`, { discount_code: { code } });
+    return res.discount_code;
+  }
+
+  /** Delete a discount code. */
+  async deleteDiscountCode(priceRuleId: number, codeId: number): Promise<void> {
+    await this.request<void>('DELETE', `price_rules/${priceRuleId}/discount_codes/${codeId}`);
+  }
+
+  // ── Inventory (REST + GraphQL) ──────────────────────────────────────
+
+  /** List products. */
+  async listProducts(limit = 50): Promise<ShopifyProduct[]> {
+    const res = await this.request<{ products: ShopifyProduct[] }>('GET', `products?limit=${limit}`);
+    return res.products;
+  }
+
+  /** List locations. */
+  async listLocations(): Promise<ShopifyLocation[]> {
+    const res = await this.request<{ locations: ShopifyLocation[] }>('GET', 'locations');
+    return res.locations;
+  }
+
+  /** Get inventory levels for items at locations. */
+  async getInventoryLevels(locationId: number, limit = 50): Promise<ShopifyInventoryLevel[]> {
+    const res = await this.request<{ inventory_levels: ShopifyInventoryLevel[] }>('GET', `inventory_levels?location_ids=${locationId}&limit=${limit}`);
+    return res.inventory_levels;
+  }
+
+  /** Set inventory level (adjust stock). Uses GraphQL inventorySetQuantities. */
+  async setInventoryLevel(inventoryItemId: number, locationId: number, quantity: number): Promise<void> {
+    await this.graphql(`mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+      inventorySetQuantities(input: $input) {
+        inventoryAdjustmentGroup { reason }
+        userErrors { field message }
+      }
+    }`, {
+      input: {
+        name: 'available',
+        reason: 'correction',
+        quantities: [{
+          inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`,
+          locationId: `gid://shopify/Location/${locationId}`,
+          quantity,
+        }],
+      },
+    });
+  }
+
+  // ── Files (CDN via GraphQL) ─────────────────────────────────────────
+
+  /** List files from Shopify CDN. */
+  async listFiles(first = 50, after?: string): Promise<{ files: ShopifyFile[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } }> {
+    const data = await this.graphql<{
+      files: {
+        edges: Array<{ node: ShopifyFile; cursor: string }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    }>(`query($first: Int!, $after: String) {
+      files(first: $first, after: $after) {
+        edges { node { id alt createdAt fileStatus preview { image { url } } } cursor }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`, { first, after });
+
+    return {
+      files: data.files.edges.map((e) => e.node),
+      pageInfo: data.files.pageInfo,
+    };
+  }
+
+  /** Delete files by IDs (GraphQL GIDs). */
+  async deleteFiles(fileIds: string[]): Promise<void> {
+    await this.graphql(`mutation($fileIds: [ID!]!) {
+      fileDelete(fileIds: $fileIds) { deletedFileIds userErrors { field message } }
+    }`, { fileIds });
+  }
+
+  // ── Storefront API bridge ───────────────────────────────────────────
+
+  /** Get the store's storefront access token for the Storefront API. */
+  get domain(): string {
+    return this.storeDomain.replace(/^https?:\/\//, '');
+  }
+
+  /** Fetch products via REST for preview data bridging. */
+  async listProductsForPreview(limit = 10): Promise<ShopifyProduct[]> {
+    const res = await this.request<{ products: ShopifyProduct[] }>('GET', `products?limit=${limit}&fields=id,title,handle,variants,images,status`);
+    return res.products;
   }
 }

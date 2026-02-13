@@ -8,6 +8,7 @@ const CURSOR_SIZE = 10;
 export function CustomCursor() {
   const [isPointer, setIsPointer] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
   const cursorRef = useRef<HTMLDivElement>(null);
 
   // Critically-damped spring: follows mouse tightly with zero overshoot
@@ -29,6 +30,8 @@ export function CustomCursor() {
     const move = (e: MouseEvent) => {
       x.set(e.clientX);
       y.set(e.clientY);
+      // Show cursor only after the first real mouse movement
+      if (!visible) setVisible(true);
     };
 
     const enter = () => {
@@ -58,7 +61,7 @@ export function CustomCursor() {
       document.body.removeEventListener('mouseleave', leave);
       document.body.classList.remove('cursor-none');
     };
-  }, [mounted, x, y]);
+  }, [mounted, visible, x, y]);
 
   if (!mounted) return null;
 
@@ -71,6 +74,7 @@ export function CustomCursor() {
         y,
         translateX: '-50%',
         translateY: '-50%',
+        opacity: visible ? 1 : 0,
       }}
     >
       {isPointer ? (

@@ -57,25 +57,22 @@ export async function GET(request: NextRequest) {
     // Exchange authorization code for a permanent access token
     const accessToken = await oauth.exchangeCodeForToken(shop, code);
 
-    // Store the encrypted connection (user-scoped, auto-activates)
+    // Store the encrypted connection with all Phase 1 scopes (user-scoped, auto-activates)
     const tokenManager = new ShopifyTokenManager();
-    await tokenManager.storeConnection(userId, shop, accessToken, [
-      'read_themes',
-      'write_themes',
-    ]);
+    await tokenManager.storeConnection(userId, shop, accessToken, oauth.scopes);
 
-    // Redirect to the projects page with success indicator
+    // Redirect back into the onboarding wizard at the Import Theme step
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     const redirectPath = projectId
       ? `/projects/${projectId}?shopify=connected`
-      : '/projects?shopify=connected';
+      : '/onboarding?step=import&shopify=connected';
     return NextResponse.redirect(`${appUrl}${redirectPath}`);
   } catch (error) {
     // For OAuth callback errors, redirect with error param instead of returning JSON
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     if (error instanceof APIError) {
       return NextResponse.redirect(
-        `${appUrl}/projects?shopify_error=${encodeURIComponent(error.message)}`
+        `${appUrl}/onboarding?step=connect&shopify_error=${encodeURIComponent(error.message)}`
       );
     }
     return handleAPIError(error);

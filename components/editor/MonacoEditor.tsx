@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTheme } from '@/hooks/useTheme';
 import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
 import { getLiquidDiagnostics } from '@/lib/monaco/diagnostics-provider';
@@ -9,13 +10,14 @@ import { createLiquidCompletionProvider } from '@/lib/monaco/liquid-completion-p
 import { createLiquidDefinitionProvider, type FileResolver } from '@/lib/monaco/liquid-definition-provider';
 import { createTranslationProvider } from '@/lib/monaco/translation-provider';
 import { createLinkedEditingProvider } from '@/lib/monaco/linked-editing-provider';
+import { registerLiquidLanguage } from '@/lib/liquid/monaco-liquid-language';
 import { formatLiquid } from '@/lib/liquid/formatter';
 import { detectUnusedVariables } from '@/lib/liquid/unused-detector';
 import { useEditorSettings } from '@/hooks/useEditorSettings';
 
 const MonacoEditorReact = dynamic(
   () => import('@monaco-editor/react').then((mod) => mod.Editor),
-  { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-gray-500">Loading editor…</div> }
+  { ssr: false, loading: () => <div className="flex items-center justify-center h-64 ide-text-3">Loading editor…</div> }
 );
 
 export type EditorLanguage = 'liquid' | 'javascript' | 'css' | 'other';
@@ -47,7 +49,7 @@ interface MonacoEditorProps {
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
-  liquid: 'html',
+  liquid: 'liquid',
   javascript: 'javascript',
   css: 'css',
   other: 'plaintext',
@@ -169,6 +171,7 @@ export function MonacoEditor({
   onToggleConsole,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
+  const { isDark } = useTheme();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
@@ -202,6 +205,9 @@ export function MonacoEditor({
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
       editorRef.current = editorInstance;
       monacoRef.current = monaco;
+
+      /* EPIC 4: Register Liquid language for syntax highlighting */
+      registerLiquidLanguage(monaco);
 
       /* Ctrl+S / Cmd+S save binding */
       if (onSaveKeyDownRef.current) {
@@ -268,7 +274,7 @@ export function MonacoEditor({
 
       /* Liquid code-action provider */
       if (language === 'liquid') {
-        monaco.languages.registerCodeActionProvider('html', {
+        monaco.languages.registerCodeActionProvider('liquid', {
           provideCodeActions: (
             model: editor.ITextModel,
             _range: Range,
@@ -276,7 +282,7 @@ export function MonacoEditor({
             _token: CancellationToken,
           ) => {
             const fixes = getLiquidCodeActions();
-            const actions = fixes
+            const actions: languages.CodeAction[] = fixes
               .map((fix) => {
                 const start = model.getPositionAt(fix.range.start);
                 const end = model.getPositionAt(fix.range.end);
@@ -487,7 +493,7 @@ export function MonacoEditor({
       /* ═══════════════════════════════════════════════════════════════════
          Feature 9 – Schema Setting Preview on Hover
          ═══════════════════════════════════════════════════════════════════ */
-      monaco.languages.registerHoverProvider('html', {
+      monaco.languages.registerHoverProvider('liquid', {
         provideHover(model, position) {
           const text = model.getValue();
           const sStartIdx = text.indexOf('{% schema %}');
@@ -645,14 +651,14 @@ export function MonacoEditor({
       if (language === 'liquid') {
         /* 1. Object-aware + schema-setting completions */
         monaco.languages.registerCompletionItemProvider(
-          'html',
+          'liquid',
           createLiquidCompletionProvider(monaco),
         );
 
         /* 2. Go-to-definition (render, section, include, asset_url) */
         if (fileResolver) {
           monaco.languages.registerDefinitionProvider(
-            'html',
+            'liquid',
             createLiquidDefinitionProvider(monaco, fileResolver),
           );
         }
@@ -660,49 +666,53 @@ export function MonacoEditor({
         /* 3. Translation completions {{ 'key' | t }} */
         if (getLocaleEntries) {
           monaco.languages.registerCompletionItemProvider(
-            'html',
+            'liquid',
             createTranslationProvider(monaco, getLocaleEntries),
           );
         }
 
         /* 5. Auto-close Liquid block pairs on typing %} */
-        editorInstance.onDidType((text) => {
-          if (!text.endsWith('}')) return;
-          const model = editorInstance.getModel();
-          const pos = editorInstance.getPosition();
-          if (!model || !pos) return;
+        const model = editorInstance.getModel();
+        if (model) {
+          model.onDidChangeContent((e) => {
+            const insert = e.changes.find((c) => c.text.length > 0);
+            const text = insert?.text ?? '';
+            if (!text.endsWith('}')) return;
+            const pos = editorInstance.getPosition();
+            if (!pos) return;
 
-          const lineContent = model.getLineContent(pos.lineNumber);
-          const beforeCursor = lineContent.substring(0, pos.column - 1);
+            const lineContent = model.getLineContent(pos.lineNumber);
+            const beforeCursor = lineContent.substring(0, pos.column - 1);
 
-          /* Match opening block tag: {% if ... %} or {%- for ... -%} */
-          const tagMatch = beforeCursor.match(
-            /\{%-?\s*(if|for|unless|case|capture|form|paginate|tablerow|comment|raw)\b[^%]*[-%]?\}$/,
-          );
-          if (!tagMatch) return;
+            /* Match opening block tag: {% if ... %} or {%- for ... -%} */
+            const tagMatch = beforeCursor.match(
+              /\{%-?\s*(if|for|unless|case|capture|form|paginate|tablerow|comment|raw)\b[^%]*[-%]?\}$/,
+            );
+            if (!tagMatch) return;
 
-          const tagName = tagMatch[1];
-          const closeTag = AUTO_CLOSE_TAGS[tagName];
-          if (!closeTag) return;
+            const tagName = tagMatch[1];
+            const closeTag = AUTO_CLOSE_TAGS[tagName];
+            if (!closeTag) return;
 
-          /* Don't auto-close if there's already content after cursor on this line */
-          const afterCursor = lineContent.substring(pos.column - 1).trim();
-          if (afterCursor.length > 0) return;
+            /* Don't auto-close if there's already content after cursor on this line */
+            const afterCursor = lineContent.substring(pos.column - 1).trim();
+            if (afterCursor.length > 0) return;
 
-          /* Insert newline + cursor position + closing tag */
-          const insertText = `\n\n{% ${closeTag} %}`;
-          editorInstance.executeEdits('auto-close-liquid', [
-            {
-              range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
-              text: insertText,
-            },
-          ]);
-          /* Move cursor to the blank line between tags */
-          editorInstance.setPosition({
-            lineNumber: pos.lineNumber + 1,
-            column: 1,
+            /* Insert newline + cursor position + closing tag */
+            const insertText = `\n\n{% ${closeTag} %}`;
+            editorInstance.executeEdits('auto-close-liquid', [
+              {
+                range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                text: insertText,
+              },
+            ]);
+            /* Move cursor to the blank line between tags */
+            editorInstance.setPosition({
+              lineNumber: pos.lineNumber + 1,
+              column: 1,
+            });
           });
-        });
+        }
 
         /* 10. Liquid formatting (Format Document action) */
         editorInstance.addAction({
@@ -736,9 +746,9 @@ export function MonacoEditor({
         });
       }
 
-      /* 9. HTML tag auto-rename (linked editing) – works for all languages with HTML */
+      /* 9. HTML tag auto-rename (linked editing) – works for liquid and html */
       monaco.languages.registerLinkedEditingRangeProvider(
-        'html',
+        'liquid',
         createLinkedEditingProvider(monaco),
       );
     },
@@ -880,7 +890,7 @@ export function MonacoEditor({
         value={value}
         onChange={(v) => onChange(v ?? '')}
         onMount={handleEditorDidMount}
-        theme="vs-dark"
+        theme={isDark ? 'vs-dark' : 'light'}
         options={{
           minimap: { enabled: settings.minimap },
           fontSize: settings.fontSize,
@@ -899,31 +909,31 @@ export function MonacoEditor({
       {/* Feature 12 – Image-paste dialog */}
       {pasteDialog && (
         <div
-          className="fixed z-50 rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] p-4 shadow-2xl"
+          className="fixed z-50 rounded-lg border ide-border ide-surface-pop p-4 shadow-2xl"
           style={{ left: pasteDialog.position.x, top: pasteDialog.position.y, minWidth: 240 }}
         >
-          <p className="mb-3 text-sm text-gray-300">
+          <p className="mb-3 text-sm ide-text-2">
             Image pasted &mdash; what would you like to do?
           </p>
           <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={handleInlineBase64}
-              className="rounded border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs text-blue-300 transition hover:bg-blue-600/40"
+              className="rounded border border-sky-500 bg-sky-500/20 dark:bg-sky-500/20 px-3 py-1.5 text-xs text-sky-600 dark:text-sky-300 transition hover:bg-sky-500/30"
             >
               Inline as base64
             </button>
             <button
               type="button"
               onClick={handleAddAsAsset}
-              className="rounded border border-green-600 bg-green-600/20 px-3 py-1.5 text-xs text-green-300 transition hover:bg-green-600/40"
+              className="rounded border border-accent bg-accent/20 px-3 py-1.5 text-xs text-accent transition hover:bg-accent/30"
             >
               Add as asset file
             </button>
             <button
               type="button"
               onClick={() => setPasteDialog(null)}
-              className="rounded border border-gray-600 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-700"
+              className="rounded border ide-border px-3 py-1.5 text-xs ide-text-3 ide-hover transition-colors"
             >
               Cancel
             </button>

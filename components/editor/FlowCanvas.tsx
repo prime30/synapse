@@ -211,8 +211,8 @@ export function FlowCanvas({
         className={`absolute top-2 right-2 z-10 flex items-center justify-center w-7 h-7
           rounded-md border transition-colors ${
           enabled
-            ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 hover:bg-blue-500/30'
-            : 'bg-gray-800/60 border-gray-700 text-gray-500 hover:text-gray-400 hover:border-gray-600'
+            ? 'ide-active border-sky-500/40 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20'
+            : 'ide-surface-panel ide-border ide-text-muted ide-hover'
         }`}
         title={enabled ? 'Hide flow visualization' : 'Show flow visualization'}
         aria-label={enabled ? 'Hide flow visualization' : 'Show flow visualization'}
@@ -226,7 +226,7 @@ export function FlowCanvas({
       {tooltip && (
         <div
           className="absolute z-20 px-2.5 py-1.5 rounded-md text-xs font-mono
-            bg-gray-900/95 text-gray-300 border border-gray-700 shadow-lg
+            ide-surface-pop ide-text-quiet ide-border shadow-lg
             pointer-events-none whitespace-nowrap"
           style={{ left: tooltip.x, top: tooltip.y }}
         >

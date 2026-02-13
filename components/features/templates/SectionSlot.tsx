@@ -53,15 +53,15 @@ function BlockRow({
       onDragEnd={onDragEnd}
       className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-all ${
         isDragging
-          ? 'opacity-40 border border-dashed border-blue-500/50'
-          : 'hover:bg-gray-700/30 border border-transparent'
+          ? 'opacity-40 border border-dashed border-sky-500/30'
+          : 'ide-hover border border-transparent'
       }`}
     >
-      <GripVertical className="w-3 h-3 text-gray-600 cursor-grab shrink-0" />
-      <span className="text-blue-400 font-mono truncate">{block.type}</span>
-      <span className="text-gray-600 truncate">{block.id}</span>
+      <GripVertical className="w-3 h-3 ide-text-quiet cursor-grab shrink-0" />
+      <span className="text-sky-500 dark:text-sky-400 font-mono truncate">{block.type}</span>
+      <span className="ide-text-quiet truncate">{block.id}</span>
       {settingsCount > 0 && (
-        <span className="ml-auto text-gray-600 shrink-0">
+        <span className="ml-auto ide-text-quiet shrink-0">
           {settingsCount} setting{settingsCount !== 1 ? 's' : ''}
         </span>
       )}
@@ -138,20 +138,20 @@ export function SectionSlot({
       onDragEnd={onDragEnd}
       className={`rounded-lg border transition-all ${
         isDragging
-          ? 'opacity-40 border-dashed border-blue-500/60 bg-blue-950/20'
-          : 'border-gray-800 bg-gray-900/50 hover:border-gray-700'
+          ? 'opacity-40 border-dashed border-sky-400/60 bg-sky-500/10'
+          : 'ide-border ide-surface-panel ide-hover'
       }`}
     >
       {/* Section header */}
       <div className="flex items-center gap-2 px-3 py-2.5">
-        <GripVertical className="w-4 h-4 text-gray-600 cursor-grab shrink-0" />
+        <GripVertical className="w-4 h-4 ide-text-quiet cursor-grab shrink-0" />
 
         {/* Expand toggle */}
         {hasBlocks ? (
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            className="ide-text-muted hover:ide-text transition-colors"
           >
             {expanded ? (
               <ChevronDown className="w-4 h-4" />
@@ -165,23 +165,23 @@ export function SectionSlot({
 
         {/* Section info */}
         <Layers className="w-4 h-4 text-purple-400 shrink-0" />
-        <span className="text-sm font-medium text-gray-100 truncate">
+        <span className="text-sm font-medium ide-text truncate">
           {section.type}
         </span>
-        <span className="text-xs text-gray-500 font-mono truncate">
+        <span className="text-xs ide-text-muted font-mono truncate">
           {section.id}
         </span>
 
         {/* Badges */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {hasBlocks && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs ide-text-muted">
               {section.blocks.length} block
               {section.blocks.length !== 1 ? 's' : ''}
             </span>
           )}
           {settingsCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-gray-500">
+            <span className="flex items-center gap-1 text-xs ide-text-muted">
               <Settings className="w-3 h-3" />
               {settingsCount}
             </span>
@@ -191,8 +191,8 @@ export function SectionSlot({
 
       {/* Expanded block list */}
       {expanded && hasBlocks && (
-        <div className="border-t border-gray-800/60 px-2 py-2 space-y-0.5">
-          <div className="px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-600">
+        <div className="border-t ide-border px-2 py-2 space-y-0.5">
+          <div className="px-3 pb-1 text-[10px] uppercase tracking-wider ide-text-quiet">
             Blocks
           </div>
           {section.blocks.map((block, bi) => (

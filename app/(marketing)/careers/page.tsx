@@ -192,10 +192,10 @@ export default function CareersPage() {
               tell us what you&apos;d bring to the team.
             </p>
             <a
-              href="mailto:careers@synapse.dev"
+              href="mailto:careers@synapse.shop"
               className="inline-block text-accent text-lg font-medium hover:underline"
             >
-              careers@synapse.dev
+              careers@synapse.shop
             </a>
           </div>
         </motion.div>

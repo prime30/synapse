@@ -19,12 +19,12 @@ interface TemplateComposerProps {
 
 function SectionSkeleton() {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-3 animate-pulse">
+    <div className="rounded-lg border ide-border ide-surface-panel p-3 animate-pulse">
       <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-gray-800" />
-        <div className="w-4 h-4 rounded bg-gray-800" />
-        <div className="w-24 h-4 rounded bg-gray-800" />
-        <div className="w-16 h-3 rounded bg-gray-800 ml-auto" />
+        <div className="w-4 h-4 rounded ide-surface-input" />
+        <div className="w-4 h-4 rounded ide-surface-input" />
+        <div className="w-24 h-4 rounded ide-surface-input" />
+        <div className="w-16 h-3 rounded ide-surface-input ml-auto" />
       </div>
     </div>
   );
@@ -107,14 +107,14 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-gray-950 text-gray-100">
+    <div className="flex flex-col h-full ide-surface ide-text">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800">
+      <div className="flex items-center gap-2 px-4 py-3 border-b ide-border">
         <Layout className="w-4 h-4 text-purple-400" />
         <h2 className="text-sm font-semibold">Template Composer</h2>
 
         {isSaving && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-blue-400">
+          <span className="ml-auto flex items-center gap-1 text-xs text-sky-500 dark:text-sky-400">
             <Loader2 className="w-3 h-3 animate-spin" />
             Saving…
           </span>
@@ -122,10 +122,10 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
       </div>
 
       {/* Template selector */}
-      <div className="px-4 py-3 border-b border-gray-800">
+      <div className="px-4 py-3 border-b ide-border">
         <label
           htmlFor="template-select"
-          className="block text-xs text-gray-500 mb-1"
+          className="block text-xs ide-text-muted mb-1"
         >
           Template
         </label>
@@ -134,7 +134,7 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
           value={activeTemplate ?? ''}
           onChange={(e) => setActiveTemplate(e.target.value)}
           disabled={templates.length === 0}
-          className="w-full rounded-md bg-gray-800 border border-gray-700 text-sm text-gray-100 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
+          className="w-full rounded-md ide-surface-input border ide-border text-sm ide-text px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
         >
           {templates.length === 0 && (
             <option value="">No templates found</option>
@@ -167,8 +167,8 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
 
         {/* Empty state */}
         {!isLoading && !layout && !error && (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500 gap-3">
-            <FileWarning className="w-8 h-8 text-gray-600" />
+          <div className="flex flex-col items-center justify-center py-12 ide-text-muted gap-3">
+            <FileWarning className="w-8 h-8 ide-text-quiet" />
             <p className="text-sm">
               {templates.length === 0
                 ? 'No template files found in this project.'
@@ -197,7 +197,7 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
 
         {/* Section count footer */}
         {!isLoading && layout && layout.sections.length > 0 && (
-          <p className="text-[11px] text-gray-600 pt-2 text-center">
+          <p className="text-[11px] ide-text-quiet pt-2 text-center">
             {layout.sections.length} section
             {layout.sections.length !== 1 ? 's' : ''} · Drag to reorder
           </p>

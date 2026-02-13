@@ -48,7 +48,7 @@ export default function FinalCTAV2() {
 
   const handleCtaAction = useCallback(() => {
     if (isAuthenticated) {
-      router.push('/projects');
+      router.push('/onboarding');
       return;
     }
     openAuthModal('signup');
@@ -77,7 +77,7 @@ export default function FinalCTAV2() {
             </motion.h2>
 
             <motion.p
-              className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-md"
+              className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-sm sm:max-w-md"
               initial={{ opacity: 0, y: 20 }}
               animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
               transition={{
@@ -105,11 +105,11 @@ export default function FinalCTAV2() {
                 <button
                   type="button"
                   onClick={handleCtaAction}
-                  className="h-12 px-8 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
+                  className="h-12 px-6 sm:px-8 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
                 >
                   {isAuthenticated
-                    ? 'See Projects'
-                    : 'Start Free — No Credit Card'}
+                    ? 'Open Editor'
+                    : 'Start Free'}
                 </button>
               </MagneticElement>
             </motion.div>

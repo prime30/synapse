@@ -27,7 +27,7 @@ const ISSUE_BADGES: Record<string, { label: string; className: string }> = {
   'no-webp': { label: 'WebP', className: 'bg-red-500/20 text-red-400 border-red-500/30' },
   'oversized': { label: 'Oversized', className: 'bg-red-500/20 text-red-400 border-red-500/30' },
   'no-alt': { label: 'Alt Text', className: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  'no-width-height': { label: 'Dimensions', className: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  'no-width-height': { label: 'Dimensions', className: 'ide-active text-sky-500 dark:text-sky-400 border-sky-500/30' },
 };
 
 function groupByFile(issues: ImageIssue[]): Map<string, ImageIssue[]> {
@@ -50,12 +50,12 @@ export function ImageOptPanel({ files }: ImageOptPanelProps) {
   const grouped = useMemo(() => groupByFile(report.issues), [report.issues]);
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+    <div className="flex flex-col h-full ide-surface ide-text">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-700">
+      <div className="px-4 py-3 border-b ide-border">
         <div className="flex items-center gap-2">
-          <FileImage className="w-4 h-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-200">Image Optimization</h2>
+          <FileImage className="w-4 h-4 ide-text-muted" />
+          <h2 className="text-sm font-semibold ide-text">Image Optimization</h2>
         </div>
       </div>
 
@@ -63,23 +63,23 @@ export function ImageOptPanel({ files }: ImageOptPanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="text-center px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-800">
-            <p className="text-lg font-bold tabular-nums text-gray-300">
+          <div className="text-center px-2 py-2 rounded-lg ide-surface-panel border ide-border">
+            <p className="text-lg font-bold tabular-nums ide-text">
               {report.totalImages}
             </p>
-            <p className="text-[10px] text-gray-500">Total Images</p>
+            <p className="text-[10px] ide-text-muted">Total Images</p>
           </div>
-          <div className="text-center px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-800">
+          <div className="text-center px-2 py-2 rounded-lg ide-surface-panel border ide-border">
             <p className="text-lg font-bold tabular-nums text-green-400">
               {report.optimizedCount}
             </p>
-            <p className="text-[10px] text-gray-500">Optimized</p>
+            <p className="text-[10px] ide-text-muted">Optimized</p>
           </div>
-          <div className="text-center px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-800">
+          <div className="text-center px-2 py-2 rounded-lg ide-surface-panel border ide-border">
             <p className="text-lg font-bold tabular-nums text-yellow-400">
               {report.potentialSavings}
             </p>
-            <p className="text-[10px] text-gray-500">Savings</p>
+            <p className="text-[10px] ide-text-muted">Savings</p>
           </div>
         </div>
 
@@ -87,35 +87,35 @@ export function ImageOptPanel({ files }: ImageOptPanelProps) {
         {report.issues.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">All images are optimised!</p>
+            <p className="text-sm ide-text-muted">All images are optimised!</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider px-1">
+            <h3 className="text-xs font-medium ide-text-muted uppercase tracking-wider px-1">
               Issues by File
             </h3>
             {Array.from(grouped.entries()).map(([filePath, issues]) => (
               <div
                 key={filePath}
-                className="border border-gray-800 rounded-lg overflow-hidden"
+                className="border ide-border rounded-lg overflow-hidden"
               >
                 {/* File header */}
-                <div className="px-3 py-2 bg-gray-800/40 flex items-center gap-2">
-                  <FileImage className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                  <span className="text-xs font-mono text-gray-300 truncate">
+                <div className="px-3 py-2 ide-surface-panel flex items-center gap-2">
+                  <FileImage className="w-3.5 h-3.5 ide-text-muted flex-shrink-0" />
+                  <span className="text-xs font-mono ide-text truncate">
                     {filePath}
                   </span>
-                  <span className="ml-auto text-[10px] text-gray-500 flex-shrink-0">
+                  <span className="ml-auto text-[10px] ide-text-muted flex-shrink-0">
                     {issues.length} issue{issues.length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
                 {/* Issues list */}
-                <div className="divide-y divide-gray-800/60">
+                <div className="divide-y ide-border">
                   {issues.map((issue, i) => {
                     const badge = ISSUE_BADGES[issue.issue] ?? {
                       label: issue.issue,
-                      className: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+                      className: 'ide-surface-input ide-text-muted ide-border',
                     };
                     return (
                       <div
@@ -131,13 +131,13 @@ export function ImageOptPanel({ files }: ImageOptPanelProps) {
                               {badge.label}
                             </span>
                             {issue.estimatedSavings && (
-                              <span className="text-[10px] text-gray-500 flex items-center gap-0.5">
+                              <span className="text-[10px] ide-text-muted flex items-center gap-0.5">
                                 <Info className="w-3 h-3" />
                                 {issue.estimatedSavings}
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-gray-400">
+                          <p className="text-[11px] ide-text-muted">
                             {issue.recommendation}
                           </p>
                         </div>

@@ -25,7 +25,7 @@ export function PageTypeSelector({ value, onChange }: PageTypeSelectorProps) {
           key={type.value}
           type="button"
           onClick={() => onChange(type.value)}
-          className={`rounded px-3 py-1 text-xs ${value === type.value ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200 hover:bg-gray-700'}`}
+          className={`rounded px-3 py-1 text-xs ${value === type.value ? 'bg-sky-500 dark:bg-sky-600 text-white' : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'}`}
         >
           {type.label}
         </button>

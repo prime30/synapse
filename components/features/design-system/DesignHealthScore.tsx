@@ -23,34 +23,34 @@ interface CategoryStat {
 
 function computeStats(tokens: DesignTokensResponse): CategoryStat[] {
   return [
-    { label: 'Colors', count: tokens.colors.length, color: 'bg-pink-500' },
-    { label: 'Fonts', count: tokens.fonts.length, color: 'bg-violet-500' },
-    { label: 'Font Sizes', count: tokens.fontSizes.length, color: 'bg-indigo-500' },
-    { label: 'Spacing', count: tokens.spacing.length, color: 'bg-blue-500' },
-    { label: 'Radii', count: tokens.radii.length, color: 'bg-teal-500' },
-    { label: 'Shadows', count: tokens.shadows.length, color: 'bg-amber-500' },
+    { label: 'Colors', count: tokens.colors?.length ?? 0, color: 'bg-pink-500' },
+    { label: 'Fonts', count: tokens.fonts?.length ?? 0, color: 'bg-violet-500' },
+    { label: 'Font Sizes', count: tokens.fontSizes?.length ?? 0, color: 'bg-indigo-500' },
+    { label: 'Spacing', count: tokens.spacing?.length ?? 0, color: 'bg-sky-500' },
+    { label: 'Radii', count: tokens.radii?.length ?? 0, color: 'bg-teal-500' },
+    { label: 'Shadows', count: tokens.shadows?.length ?? 0, color: 'bg-amber-500' },
   ];
 }
 
 function computeHealthScore(tokens: DesignTokensResponse): number {
   const total =
-    tokens.colors.length +
-    tokens.fonts.length +
-    tokens.fontSizes.length +
-    tokens.spacing.length +
-    tokens.radii.length +
-    tokens.shadows.length;
+    (tokens.colors?.length ?? 0) +
+    (tokens.fonts?.length ?? 0) +
+    (tokens.fontSizes?.length ?? 0) +
+    (tokens.spacing?.length ?? 0) +
+    (tokens.radii?.length ?? 0) +
+    (tokens.shadows?.length ?? 0);
 
   if (total === 0) return 0;
 
   // Categories that have at least 1 token count as "covered"
   const coveredCategories = [
-    tokens.colors.length,
-    tokens.fonts.length,
-    tokens.fontSizes.length,
-    tokens.spacing.length,
-    tokens.radii.length,
-    tokens.shadows.length,
+    tokens.colors?.length ?? 0,
+    tokens.fonts?.length ?? 0,
+    tokens.fontSizes?.length ?? 0,
+    tokens.spacing?.length ?? 0,
+    tokens.radii?.length ?? 0,
+    tokens.shadows?.length ?? 0,
   ].filter((c) => c > 0).length;
 
   // Score based on: category coverage (60%) + token richness (40%)
@@ -89,16 +89,16 @@ export function DesignHealthScore({ tokens, fileCount }: DesignHealthScoreProps)
           <span className={`text-2xl font-bold tabular-nums ${scoreColor(score)}`}>
             {score}
           </span>
-          <span className="text-[9px] text-gray-400 uppercase tracking-wider">
+          <span className="text-[9px] ide-text-muted uppercase tracking-wider">
             Score
           </span>
         </div>
         <div className="min-w-0">
-          <p className="text-xs text-gray-300">
+          <p className="text-xs ide-text">
             <span className="font-semibold">{total}</span> tokens across{' '}
             <span className="font-semibold">{fileCount}</span> files
           </p>
-          <p className="text-[10px] text-gray-500 mt-0.5">
+          <p className="text-[10px] ide-text-muted mt-0.5">
             {score >= 70
               ? 'Good design system coverage'
               : score >= 40
@@ -112,16 +112,16 @@ export function DesignHealthScore({ tokens, fileCount }: DesignHealthScoreProps)
       <div className="space-y-1.5">
         {stats.map((s) => (
           <div key={s.label} className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 w-16 text-right flex-shrink-0">
+            <span className="text-[10px] ide-text-muted w-16 text-right flex-shrink-0">
               {s.label}
             </span>
-            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 ide-surface-inset rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full ${s.color} transition-all duration-300`}
                 style={{ width: `${(s.count / maxCount) * 100}%` }}
               />
             </div>
-            <span className="text-[10px] text-gray-500 w-6 text-right tabular-nums flex-shrink-0">
+            <span className="text-[10px] ide-text-muted w-6 text-right tabular-nums flex-shrink-0">
               {s.count}
             </span>
           </div>

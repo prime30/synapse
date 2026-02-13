@@ -33,13 +33,16 @@ const TYPE_LABELS: Record<FileDependency['dependencyType'], string> = {
   js_import: 'JS import',
   template_section: 'Section',
   data_attribute: 'Data attr',
+  schema_setting: 'Schema setting',
+  css_section: 'CSS section',
+  snippet_variable: 'Snippet var',
 };
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-function DependencyEdgeInner(props: EdgeProps<CanvasEdgeData>) {
+function DependencyEdgeInner(props: EdgeProps) {
   const {
     id,
     sourceX,
@@ -51,11 +54,12 @@ function DependencyEdgeInner(props: EdgeProps<CanvasEdgeData>) {
     data,
     selected,
   } = props;
+  const edgeData = data as CanvasEdgeData | undefined;
 
   const [hovered, setHovered] = useState(false);
 
-  const depType = data?.dependencyType ?? 'liquid_include';
-  const refCount = data?.referenceCount ?? 0;
+  const depType = edgeData?.dependencyType ?? 'liquid_include';
+  const refCount = edgeData?.referenceCount ?? 0;
   const strokeColor = EDGE_COLORS[depType] ?? '#6b7280';
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
@@ -102,16 +106,16 @@ function DependencyEdgeInner(props: EdgeProps<CanvasEdgeData>) {
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             }}
           >
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-800/95 border border-gray-700 shadow-lg text-[10px] whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md ide-surface-pop border ide-border shadow-lg text-[10px] whitespace-nowrap">
               <span
                 className="inline-block w-2 h-2 rounded-full shrink-0"
                 style={{ backgroundColor: strokeColor }}
               />
-              <span className="text-gray-300 font-medium">
+              <span className="ide-text font-medium">
                 {TYPE_LABELS[depType]}
               </span>
               {refCount > 0 && (
-                <span className="text-gray-500">
+                <span className="ide-text-muted">
                   × {refCount}
                 </span>
               )}

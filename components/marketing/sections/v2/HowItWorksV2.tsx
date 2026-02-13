@@ -85,8 +85,8 @@ export function HowItWorksV2() {
               >
                 {/* Step number */}
                 <div className="relative z-10 mb-5">
-                  <div className="w-20 h-20 rounded-full bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
-                    <PixelAccent className="!text-3xl">{step.number}</PixelAccent>
+                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
+                    <PixelAccent className="!text-2xl md:!text-3xl">{step.number}</PixelAccent>
                   </div>
 
                   {/* Dot connectors on the line (desktop only) */}

@@ -99,24 +99,24 @@ function ConsoleEntryRow({ entry }: { entry: ThemeConsoleEntry }) {
   const colorClass = LEVEL_COLORS[entry.level];
 
   return (
-    <div className="group border-b border-gray-800/50 last:border-b-0">
+    <div className="group border-b ide-border-subtle last:border-b-0">
       <div
-        className={`flex items-start gap-2 px-3 py-2 text-[12px] hover:bg-gray-800/30 transition-colors ${
+        className={`flex items-start gap-2 px-3 py-2 text-[12px] ide-hover transition-colors ${
           hasDetails ? 'cursor-pointer' : ''
         }`}
         onClick={() => hasDetails && setExpanded((e) => !e)}
       >
         <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${colorClass}`} aria-hidden />
-        <span className="flex-1 min-w-0 text-gray-300 break-words">{entry.message}</span>
-        <span className="shrink-0 text-gray-600 text-[11px]">{formatRelativeTime(entry.timestamp)}</span>
+        <span className="flex-1 min-w-0 ide-text-2 break-words">{entry.message}</span>
+        <span className="shrink-0 ide-text-quiet text-[11px]">{formatRelativeTime(entry.timestamp)}</span>
         {hasDetails && (
-          <span className="shrink-0 text-gray-500 mt-0.5">
-            {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          <span className="shrink-0 ide-text-muted mt-0.5">
+            {expanded ? ChevronDownIcon : ChevronRightIcon}
           </span>
         )}
       </div>
       {hasDetails && expanded && (
-        <div className="px-3 pb-2 pl-7 text-[11px] text-gray-500 font-mono whitespace-pre-wrap break-words bg-gray-900/50">
+        <div className="px-3 pb-2 pl-7 text-[11px] ide-text-muted font-mono whitespace-pre-wrap break-words ide-surface-input">
           {entry.details}
         </div>
       )}
@@ -138,12 +138,12 @@ export function ThemeConsole({
   onClear,
 }: ThemeConsoleProps) {
   return (
-    <div className="flex flex-col border-t border-gray-800 bg-gray-900">
+    <div className="flex flex-col border-t ide-border ide-surface-panel">
       {/* Collapsed bar: always visible, click to expand */}
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-2 h-7 px-3 bg-gray-900/95 border-t border-gray-800 text-[11px] text-gray-400 hover:text-gray-300 hover:bg-gray-800/50 transition-colors shrink-0 select-none"
+        className="flex items-center gap-2 h-7 px-3 ide-surface border-t ide-border text-[11px] ide-text-3 hover:ide-text-2 ide-hover transition-colors shrink-0 select-none"
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Close console' : 'Open console'}
       >
@@ -155,7 +155,7 @@ export function ThemeConsole({
               <span
                 key={tab}
                 className={`px-1.5 py-0.5 rounded text-[10px] ${
-                  activeTab === tab ? 'bg-gray-700 text-gray-200' : 'bg-gray-800/80 text-gray-500'
+                  activeTab === tab ? 'ide-active ide-text-2' : 'ide-surface-inset ide-text-muted'
                 }`}
               >
                 {TAB_LABELS[tab].replace(/\s.+$/, '')} {n}
@@ -170,9 +170,9 @@ export function ThemeConsole({
         className="overflow-hidden transition-[max-height] duration-200 ease-out"
         style={{ maxHeight: isOpen ? 200 : 0 }}
       >
-        <div className="h-[200px] flex flex-col bg-gray-900">
+        <div className="h-[200px] flex flex-col ide-surface-panel">
           {/* Tab bar */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-800 shrink-0 bg-gray-950/50">
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b ide-border shrink-0 ide-surface-input">
             {(['diagnostics', 'push-log', 'theme-check'] as const).map((tab) => {
               const n = counts[tab] ?? 0;
               const isActive = activeTab === tab;
@@ -186,13 +186,13 @@ export function ThemeConsole({
                   }}
                   className={`px-3 py-1.5 rounded text-[11px] transition-colors ${
                     isActive
-                      ? 'bg-gray-700 text-gray-100'
-                      : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+                      ? 'ide-active ide-text'
+                      : 'ide-text-muted hover:ide-text-2 ide-hover'
                   }`}
                 >
                   {TAB_LABELS[tab]}
                   {n > 0 && (
-                    <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] ${isActive ? 'bg-gray-600 text-gray-200' : 'bg-gray-800 text-gray-500'}`}>
+                    <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] ${isActive ? 'ide-surface-panel ide-text-2' : 'ide-surface-inset ide-text-muted'}`}>
                       {n}
                     </span>
                   )}
@@ -208,7 +208,7 @@ export function ThemeConsole({
                 e.stopPropagation();
                 onClear();
               }}
-              className="p-1.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800/60 transition-colors"
+              className="p-1.5 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors"
               title="Clear"
               aria-label="Clear entries"
             >
@@ -221,7 +221,7 @@ export function ThemeConsole({
                 e.stopPropagation();
                 onToggle();
               }}
-              className="p-1.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800/60 transition-colors"
+              className="p-1.5 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors"
               title="Close"
               aria-label="Close console"
             >
@@ -232,7 +232,7 @@ export function ThemeConsole({
           {/* Entry list */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {entries.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-600 text-[12px]">No entries</div>
+              <div className="h-full flex items-center justify-center ide-text-quiet text-[12px]">No entries</div>
             ) : (
               <div className="py-1">
                 {entries.map((entry) => (

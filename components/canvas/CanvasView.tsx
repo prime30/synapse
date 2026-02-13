@@ -33,6 +33,7 @@ import {
   type AISuggestionNodeData,
   type CanvasFileData,
 } from '@/lib/ai/canvas-data-provider';
+import type { Node, Edge } from '@xyflow/react';
 
 /* ------------------------------------------------------------------ */
 /*  Lazy-loaded React Flow core + controls + minimap                   */
@@ -149,19 +150,19 @@ function SuggestionNodeInner({ suggestion, onDismiss }: {
         zIndex: 50,
       }}
     >
-      <div className="flex items-start gap-2 px-3 py-2 max-w-[240px] rounded-lg bg-blue-950/90 border border-blue-800/60 shadow-lg">
+      <div className="flex items-start gap-2 px-3 py-2 max-w-[240px] rounded-lg ide-surface-pop border ide-border shadow-lg">
         <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
           <path d="M9 18h6" />
           <path d="M10 22h4" />
           <path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
         </svg>
-        <span className="text-[11px] text-blue-200 leading-tight">
+        <span className="text-[11px] ide-text leading-tight">
           {suggestion.message}
         </span>
         <button
           type="button"
           onClick={() => onDismiss(suggestion.id)}
-          className="shrink-0 w-4 h-4 flex items-center justify-center text-blue-400 hover:text-blue-200 transition-colors"
+          className="shrink-0 w-4 h-4 flex items-center justify-center text-sky-500 dark:text-sky-400 hover:ide-text transition-colors"
           aria-label="Dismiss suggestion"
         >
           <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
@@ -219,8 +220,8 @@ function DropZone({ onDrop }: { onDrop: (fileIds: string[]) => void }) {
         text-xs font-medium transition-all duration-200
         ${
           isDragOver
-            ? 'border-blue-500 bg-blue-500/10 text-blue-300 scale-105'
-            : 'border-gray-700 bg-gray-900/80 text-gray-500 hover:border-gray-600'
+            ? 'border-sky-500 bg-sky-500/10 dark:bg-sky-500/10 text-sky-600 dark:text-sky-300 scale-105'
+            : 'ide-border ide-surface-panel ide-text-muted hover:ide-border transition-colors'
         }
       `}
     >
@@ -264,9 +265,9 @@ function CanvasChat({
   return (
     <form
       onSubmit={handleSubmit}
-      className="absolute bottom-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/95 border border-gray-700 shadow-lg"
+      className="absolute bottom-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-lg ide-surface-pop border ide-border shadow-lg"
     >
-      <span className="text-[10px] text-gray-500 shrink-0">
+      <span className="text-[10px] ide-text-muted shrink-0">
         {selectedFileIds.length > 0
           ? `${selectedFileIds.length} file${selectedFileIds.length > 1 ? 's' : ''}`
           : 'Canvas'}
@@ -277,12 +278,12 @@ function CanvasChat({
         value={input}
         onChange={(e) => setInput(e.target.value)}
         placeholder="Ask about selected files…"
-        className="w-64 bg-transparent text-xs text-gray-200 placeholder-gray-600 outline-none"
+        className="w-64 bg-transparent text-xs ide-text-2 placeholder-ide-text-quiet outline-none"
       />
       <button
         type="submit"
         disabled={!input.trim()}
-        className="text-blue-400 hover:text-blue-300 disabled:text-gray-700 transition-colors"
+        className="text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 disabled:ide-text-quiet transition-colors"
         aria-label="Send"
       >
         <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -309,8 +310,8 @@ function CanvasLegend() {
   ];
 
   return (
-    <div className="absolute top-3 right-3 z-40 flex flex-col gap-1 px-2.5 py-2 rounded-lg bg-gray-900/90 border border-gray-700/60 shadow-md">
-      <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">
+    <div className="absolute top-3 right-3 z-40 flex flex-col gap-1 px-2.5 py-2 rounded-lg ide-surface-pop border ide-border shadow-md">
+      <span className="text-[10px] ide-text-3 font-semibold uppercase tracking-wide mb-0.5">
         Dependencies
       </span>
       {legendItems.map((item) => (
@@ -319,7 +320,7 @@ function CanvasLegend() {
             className="inline-block w-3 h-0.5 rounded-full"
             style={{ backgroundColor: item.color }}
           />
-          <span className="text-[10px] text-gray-400">{item.label}</span>
+          <span className="text-[10px] ide-text-3">{item.label}</span>
         </div>
       ))}
     </div>
@@ -332,10 +333,10 @@ function CanvasLegend() {
 
 function CanvasLoading() {
   return (
-    <div className="flex-1 flex items-center justify-center bg-gray-950">
+    <div className="flex-1 flex items-center justify-center ide-surface">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-gray-500">Loading canvas…</span>
+        <div className="w-8 h-8 border-2 border-sky-500 dark:border-sky-400 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs ide-text-3">Loading canvas…</span>
       </div>
     </div>
   );
@@ -461,13 +462,13 @@ export function CanvasView({
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 bg-gray-950">
+    <div className="relative flex-1 flex flex-col min-h-0 ide-surface">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60 shrink-0">
-        <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide select-none">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b ide-border ide-surface-panel shrink-0">
+        <span className="text-[11px] font-semibold ide-text-2 uppercase tracking-wide select-none">
           Canvas
         </span>
-        <span className="text-[10px] text-gray-600">
+        <span className="text-[10px] ide-text-quiet">
           {nodes.length} file{nodes.length !== 1 ? 's' : ''} · {edges.length} dep{edges.length !== 1 ? 's' : ''}
         </span>
 
@@ -478,8 +479,8 @@ export function CanvasView({
           onClick={toggleFullGraph}
           className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
             showFullGraph
-              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-              : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-300'
+              ? 'bg-sky-500/20 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30'
+              : 'ide-surface-input ide-text-3 border ide-border hover:ide-text-2 ide-hover'
           }`}
         >
           {showFullGraph ? 'Full graph' : 'Focus mode'}
@@ -491,18 +492,18 @@ export function CanvasView({
         <Suspense fallback={<CanvasLoading />}>
           <ReactFlowProviderLazy>
             <ReactFlowInner
-              nodes={nodes}
-              edges={edges}
+              nodes={nodes as unknown as Node[]}
+              edges={edges as unknown as Edge[]}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              onSelectionChange={handleSelectionChange}
-              onNodeDoubleClick={handleNodeDoubleClick}
+              onSelectionChange={(params) => handleSelectionChange({ nodes: params.nodes as unknown as CanvasNode[] })}
+              onNodeDoubleClick={(e, node) => handleNodeDoubleClick(e, node as unknown as CanvasNode)}
               fitView
               fitViewOptions={{ padding: 0.2, maxZoom: 1.5 }}
               minZoom={0.1}
               maxZoom={3}
               proOptions={{ hideAttribution: true }}
-              className="bg-gray-950"
+              className="ide-surface"
               defaultEdgeOptions={{
                 type: 'dependency',
               }}
@@ -511,7 +512,7 @@ export function CanvasView({
                 <BackgroundLazy gap={20} size={1} color="#1e293b" />
                 <MiniMapLazy
                   nodeColor={(node) => {
-                    const data = node.data as CanvasFileData;
+                    const data = node.data as unknown as CanvasFileData;
                     switch (data?.fileType) {
                       case 'liquid': return '#22d3ee';
                       case 'javascript': return '#eab308';

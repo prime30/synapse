@@ -140,10 +140,10 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-[#0a0a0a] ${
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
       } ${
-        checked ? 'bg-blue-600' : 'bg-gray-700'
+        checked ? 'bg-sky-500 dark:bg-sky-500' : 'bg-stone-300 dark:bg-white/20'
       }`}
     >
       <span
@@ -167,8 +167,8 @@ function SettingRow({
   return (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="text-sm font-medium text-gray-200">{label}</p>
-        {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+        <p className="text-sm font-medium ide-text-2">{label}</p>
+        {description && <p className="text-xs ide-text-muted mt-0.5">{description}</p>}
       </div>
       {children}
     </div>
@@ -236,20 +236,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center ide-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
     >
-      <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-800 flex flex-col max-h-[90vh]">
+      <div className="ide-surface-pop rounded-xl shadow-2xl w-full max-w-lg mx-4 border ide-border flex flex-col max-h-[90vh]">
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4">
-          <h2 className="text-lg font-semibold text-white">Settings</h2>
+          <h2 className="text-lg font-semibold ide-text">Settings</h2>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-md ide-text-3 hover:ide-text ide-hover transition-colors"
             aria-label="Close"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -261,7 +261,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* ── Quick Presets ───────────────────────────────────────── */}
         <div className="px-6 pb-4">
-          <p className="text-[11px] font-medium tracking-widest uppercase text-gray-500 mb-3">
+          <p className="text-[11px] font-medium tracking-widest uppercase ide-text-muted mb-3">
             Quick Presets
           </p>
           <div className="grid grid-cols-3 gap-2">
@@ -274,20 +274,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   onClick={() => applyPreset(card.id)}
                   className={`relative flex flex-col items-center gap-1.5 rounded-lg border p-4 transition-all ${
                     isActive
-                      ? 'border-blue-500 bg-blue-500/10 text-white'
-                      : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                      ? 'border-sky-500 bg-sky-500/10 dark:bg-sky-500/10 ide-text'
+                      : 'ide-border ide-surface-inset ide-text-3 hover:ide-border hover:ide-text-2'
                   }`}
                 >
                   {isActive && (
                     <span className="absolute top-2 right-2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-sky-500 dark:text-sky-400">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </span>
                   )}
-                  <span className={isActive ? 'text-blue-400' : ''}>{card.icon}</span>
+                  <span className={isActive ? 'text-sky-500 dark:text-sky-400' : ''}>{card.icon}</span>
                   <span className="text-sm font-medium">{card.label}</span>
-                  <span className="text-[11px] text-gray-500">{card.description}</span>
+                  <span className="text-[11px] ide-text-muted">{card.description}</span>
                 </button>
               );
             })}
@@ -296,7 +296,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* ── Tab bar ─────────────────────────────────────────────── */}
         <div className="px-6">
-          <div className="inline-flex rounded-lg bg-gray-800/60 p-0.5">
+          <div className="inline-flex rounded-lg ide-surface-inset p-0.5">
             {TABS.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -306,8 +306,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   onClick={() => setActiveTab(tab.id)}
                   className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-500 hover:text-gray-300'
+                      ? 'ide-active ide-text'
+                      : 'ide-text-muted hover:ide-text-2 ide-hover'
                   }`}
                 >
                   {tab.icon}
@@ -321,7 +321,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         {/* ── Tab content ─────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
           {activeTab === 'editor' && (
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y ide-border-subtle">
               {/* Font Size */}
               <SettingRow label="Font Size">
                 <div className="flex items-center gap-3">
@@ -331,9 +331,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     max={24}
                     value={settings.fontSize}
                     onChange={(e) => updateSetting('fontSize', Number(e.target.value))}
-                    className="w-32 accent-blue-500"
+                    className="w-32 accent-sky-500"
                   />
-                  <span className="text-sm text-gray-400 tabular-nums w-10 text-right">
+                  <span className="text-sm ide-text-3 tabular-nums w-10 text-right">
                     {settings.fontSize}px
                   </span>
                 </div>
@@ -344,7 +344,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <select
                   value={settings.tabSize}
                   onChange={(e) => updateSetting('tabSize', Number(e.target.value) as 2 | 4)}
-                  className="rounded-md bg-gray-800 border border-gray-700 px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+                  className="rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500 dark:focus:border-sky-400"
                 >
                   <option value={2}>2 spaces</option>
                   <option value={4}>4 spaces</option>
@@ -389,10 +389,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     step={100}
                     value={settings.autoSaveDelay}
                     onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
-                    className="w-32 accent-blue-500"
+                    className="w-32 accent-sky-500"
                     disabled={!settings.autoSave}
                   />
-                  <span className={`text-sm tabular-nums w-14 text-right ${settings.autoSave ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <span className={`text-sm tabular-nums w-14 text-right ${settings.autoSave ? 'ide-text-3' : 'ide-text-quiet'}`}>
                     {settings.autoSaveDelay}ms
                   </span>
                 </div>
@@ -401,13 +401,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           )}
 
           {activeTab === 'appearance' && (
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y ide-border-subtle">
               {/* Section header */}
               <div className="pb-3">
-                <p className="text-xs font-medium tracking-widest uppercase text-gray-500">
+                <p className="text-xs font-medium tracking-widest uppercase ide-text-muted">
                   Chromatic IDE
                 </p>
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-xs ide-text-quiet mt-1">
                   IDE tints subtly based on your theme&apos;s color palette
                 </p>
               </div>
@@ -426,10 +426,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     max={100}
                     value={chromatic.settings.intensity}
                     onChange={(e) => chromatic.setIntensity(Number(e.target.value))}
-                    className="w-32 accent-blue-500"
+                    className="w-32 accent-sky-500"
                     disabled={!chromatic.settings.enabled}
                   />
-                  <span className={`text-sm tabular-nums w-10 text-right ${chromatic.settings.enabled ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <span className={`text-sm tabular-nums w-10 text-right ${chromatic.settings.enabled ? 'ide-text-3' : 'ide-text-quiet'}`}>
                     {chromatic.settings.intensity}%
                   </span>
                 </div>
@@ -491,9 +491,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     step={100}
                     value={chromatic.settings.transitionDuration}
                     onChange={(e) => chromatic.updateSetting('transitionDuration', Number(e.target.value))}
-                    className="w-32 accent-blue-500"
+                    className="w-32 accent-sky-500"
                   />
-                  <span className="text-sm text-gray-400 tabular-nums w-14 text-right">
+                  <span className="text-sm ide-text-3 tabular-nums w-14 text-right">
                     {chromatic.settings.transitionDuration}ms
                   </span>
                 </div>
@@ -503,13 +503,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
           {activeTab === 'preview' && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm text-gray-500">Preview settings coming soon.</p>
+              <p className="text-sm ide-text-muted">Preview settings coming soon.</p>
             </div>
           )}
 
           {activeTab === 'storage' && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm text-gray-500">Storage settings coming soon.</p>
+              <p className="text-sm ide-text-muted">Storage settings coming soon.</p>
             </div>
           )}
 
@@ -520,10 +520,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 if (bindings.length === 0) return null;
                 return (
                   <div key={cat}>
-                    <p className="text-xs font-medium tracking-widest uppercase text-gray-500 mb-3">
+                    <p className="text-xs font-medium tracking-widest uppercase ide-text-muted mb-3">
                       {CATEGORY_LABELS[cat]}
                     </p>
-                    <div className="divide-y divide-gray-800">
+                    <div className="divide-y ide-border-subtle">
                       {bindings.map((binding) => {
                         const effectiveKey = getEffectiveKey(binding);
                         const isCustom = binding.customKeys !== null;
@@ -538,12 +538,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               <button
                                 type="button"
                                 onClick={() => setRecordingId(isRecording ? null : binding.id)}
-                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 min-w-[100px] justify-center ${
+                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-100 dark:focus:ring-offset-[#0a0a0a] min-w-[100px] justify-center ${
                                   isRecording
-                                    ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                                    ? 'border-sky-500 bg-sky-500/20 text-sky-600 dark:text-sky-300'
                                     : isCustom
-                                      ? 'border-blue-500/60 bg-blue-500/10 text-blue-300'
-                                      : 'border-gray-600 bg-gray-800 text-gray-400'
+                                      ? 'border-sky-500/60 bg-sky-500/10 text-sky-600 dark:text-sky-300'
+                                      : 'ide-border ide-surface-input ide-text-3'
                                 }`}
                               >
                                 {isRecording ? 'Press keys...' : effectiveKey}
@@ -560,7 +560,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                       return next;
                                     });
                                   }}
-                                  className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                                  className="p-1 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors"
                                   title="Reset to default"
                                   aria-label="Reset to default"
                                 >
@@ -582,7 +582,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     setKeybindings(resetKeybindings());
                     setRecordingId(null);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-md ide-surface-input px-3 py-1.5 text-sm ide-text-2 hover:ide-text ide-hover transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -596,10 +596,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-800">
+        <div className="flex items-center justify-between px-6 py-4 border-t ide-border">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm ide-text-3 hover:ide-text-2 transition-colors"
             title="Start onboarding tour (coming soon)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -610,7 +610,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <button
             type="button"
             onClick={resetToDefaults}
-            className="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md ide-surface-input px-3 py-1.5 text-sm ide-text-2 hover:ide-text ide-hover transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 4 1 10 7 10" />

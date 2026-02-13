@@ -17,7 +17,7 @@ const CATEGORY_ICON: Record<Suggestion['category'], string> = {
 
 const CATEGORY_COLORS: Record<Suggestion['category'], { border: string; text: string; bg: string }> = {
   build: { border: 'border-emerald-500/30', text: 'text-emerald-400', bg: 'bg-emerald-500/5' },
-  optimize: { border: 'border-blue-500/30', text: 'text-blue-400', bg: 'bg-blue-500/5' },
+  optimize: { border: 'border-sky-500/30 dark:border-sky-500/30', text: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-500/5 dark:bg-sky-500/5' },
   test: { border: 'border-amber-500/30', text: 'text-amber-400', bg: 'bg-amber-500/5' },
   deploy: { border: 'border-purple-500/30', text: 'text-purple-400', bg: 'bg-purple-500/5' },
   explore: { border: 'border-cyan-500/30', text: 'text-cyan-400', bg: 'bg-cyan-500/5' },
@@ -44,8 +44,8 @@ function ChipTooltip({ text }: { text: string }) {
       className="
         pointer-events-none absolute left-1/2 top-full z-50
         mt-1.5 -translate-x-1/2 whitespace-normal
-        rounded-md border border-gray-700 bg-gray-900 px-2.5 py-1.5
-        text-[11px] leading-snug text-gray-300 shadow-lg
+        rounded-md border ide-border ide-surface px-2.5 py-1.5
+        text-[11px] leading-snug ide-text-2 shadow-lg
         max-w-[220px] text-center
         opacity-0 transition-opacity duration-150
         group-hover/chip:opacity-100 group-hover/chip:delay-300
@@ -134,6 +134,15 @@ export function SuggestionChips({
           }
           break;
         }
+        case 'Tab': {
+          e.preventDefault();
+          if (e.shiftKey) {
+            setFocusedIndex((prev) => (prev - 1 + count) % count);
+          } else {
+            setFocusedIndex((prev) => (prev + 1) % count);
+          }
+          break;
+        }
         default: {
           // Number keys 1-5 select chips by position
           const num = parseInt(e.key, 10);
@@ -207,12 +216,12 @@ export function SuggestionChips({
                 rounded-lg border text-xs font-medium
                 transition-all duration-200 cursor-pointer
                 hover:scale-[1.02] active:scale-[0.98]
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60
                 ${isRetry
                   ? `${CATEGORY_COLORS.fix.border} ${CATEGORY_COLORS.fix.bg} ${CATEGORY_COLORS.fix.text} hover:border-opacity-60 ring-1 ring-red-500/20`
                   : isPost
                     ? `${colors.border} ${colors.bg} ${colors.text} hover:border-opacity-60`
-                    : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:text-gray-200 hover:border-gray-600 hover:bg-gray-800'
+                    : 'ide-border ide-surface-inset ide-text-muted hover:ide-text hover:border-stone-300 dark:hover:border-white/20 ide-hover'
                 }
               `}
             >

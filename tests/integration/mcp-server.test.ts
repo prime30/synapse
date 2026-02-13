@@ -6,13 +6,13 @@ describe('MCP Server - Configuration', () => {
   it('should have default config values', async () => {
     // Config module uses dynamic imports, test the structure
     const defaultConfig = {
-      apiUrl: 'https://api.synapse.dev',
+      apiUrl: 'https://api.synapse.shop',
       logLevel: 'info',
       fileWatcherEnabled: true,
       autoRefreshToken: true,
       backupFiles: true,
     };
-    expect(defaultConfig.apiUrl).toBe('https://api.synapse.dev');
+    expect(defaultConfig.apiUrl).toBe('https://api.synapse.shop');
     expect(defaultConfig.logLevel).toBe('info');
     expect(defaultConfig.backupFiles).toBe(true);
   });
@@ -87,7 +87,7 @@ describe('MCP Server - Auth Token Structure', () => {
 
 describe('MCP Server - API Client Structure', () => {
   it('should build correct API paths', () => {
-    const baseUrl = 'https://api.synapse.dev';
+    const baseUrl = 'https://api.synapse.shop';
     const paths = {
       createProject: '/api/projects',
       listProjects: '/api/projects',
@@ -98,9 +98,9 @@ describe('MCP Server - API Client Structure', () => {
       preferences: '/api/agents/preferences',
     };
 
-    expect(`${baseUrl}${paths.createProject}`).toBe('https://api.synapse.dev/api/projects');
-    expect(`${baseUrl}${paths.listFiles('proj-1')}`).toBe('https://api.synapse.dev/api/projects/proj-1/files');
-    expect(`${baseUrl}${paths.executionStatus('exec-1')}`).toBe('https://api.synapse.dev/api/agents/executions/exec-1');
+    expect(`${baseUrl}${paths.createProject}`).toBe('https://api.synapse.shop/api/projects');
+    expect(`${baseUrl}${paths.listFiles('proj-1')}`).toBe('https://api.synapse.shop/api/projects/proj-1/files');
+    expect(`${baseUrl}${paths.executionStatus('exec-1')}`).toBe('https://api.synapse.shop/api/agents/executions/exec-1');
   });
 });
 

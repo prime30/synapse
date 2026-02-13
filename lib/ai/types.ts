@@ -1,4 +1,4 @@
-export type AIProvider = 'openai' | 'anthropic';
+export type AIProvider = 'openai' | 'anthropic' | 'google';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -21,6 +21,13 @@ export interface AICompletionResult {
   outputTokens?: number;
 }
 
+/** Returned by stream() — provides both the text stream and a way to get usage after completion. */
+export interface StreamResult {
+  stream: ReadableStream<string>;
+  /** Resolves when the stream closes with accumulated token usage. */
+  getUsage: () => Promise<{ inputTokens: number; outputTokens: number }>;
+}
+
 export interface AIProviderInterface {
   readonly name: AIProvider;
   complete(
@@ -30,5 +37,5 @@ export interface AIProviderInterface {
   stream(
     messages: AIMessage[],
     options?: Partial<AICompletionOptions>
-  ): Promise<ReadableStream<string>>;
+  ): Promise<StreamResult>;
 }

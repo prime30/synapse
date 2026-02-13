@@ -82,6 +82,10 @@ export function useActiveStore(projectId?: string) {
       queryClient.invalidateQueries({ queryKey: ['active-store'] });
       queryClient.invalidateQueries({ queryKey: ['all-stores'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Also invalidate the project-level shopify connection queries
+      // so the IDE TopBar/Preview/ShopifyConnectPanel sync states refresh.
+      queryClient.invalidateQueries({ queryKey: ['shopify-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-themes'] });
     },
   });
 
@@ -104,6 +108,8 @@ export function useActiveStore(projectId?: string) {
       queryClient.invalidateQueries({ queryKey: ['active-store'] });
       queryClient.invalidateQueries({ queryKey: ['all-stores'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-themes'] });
     },
   });
 
@@ -115,17 +121,20 @@ export function useActiveStore(projectId?: string) {
       themeName,
       createDevThemeForPreview,
       note,
+      projectId,
     }: {
       connectionId: string;
       themeId: number;
       themeName?: string;
       createDevThemeForPreview?: boolean;
       note?: string;
+      /** Optional client-generated UUID so polling can start before the POST returns */
+      projectId?: string;
     }) => {
       const res = await fetch(`/api/stores/${connectionId}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themeId, themeName, createDevThemeForPreview, note }),
+        body: JSON.stringify({ themeId, themeName, createDevThemeForPreview, note, projectId }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -140,11 +149,14 @@ export function useActiveStore(projectId?: string) {
         errors: string[];
         conflicts: string[];
         previewThemeId: string | null;
+        binaryPending: number;
       };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['active-store'] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['shopify-themes'] });
     },
   });
 

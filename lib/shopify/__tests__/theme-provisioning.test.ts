@@ -101,4 +101,76 @@ describe('ensureDevTheme', () => {
 
     if (origUrl !== undefined) process.env.SHOPIFY_DEV_THEME_ZIP_URL = origUrl;
   });
+
+  it('creates empty theme (no ZIP) when sourceThemeId is provided', async () => {
+    mocks.getConnectionById.mockResolvedValue({
+      id: 'conn-1',
+      project_id: 'proj-1',
+      store_domain: 'store.myshopify.com',
+      theme_id: null,
+    });
+    mocks.createTheme.mockResolvedValue({
+      id: 888,
+      name: 'Import theme',
+      role: 'unpublished',
+    });
+
+    const result = await ensureDevTheme('conn-1', {
+      themeName: 'Import theme',
+      sourceThemeId: 54321,
+    });
+
+    expect(result).toBe('888');
+    // Should create without a src URL (empty theme)
+    expect(mocks.createTheme).toHaveBeenCalledWith(
+      'Import theme',
+      undefined,
+      'unpublished'
+    );
+    expect(mocks.updateThemeId).toHaveBeenCalledWith('conn-1', '888');
+  });
+
+  it('falls back to ZIP URL when empty theme creation fails with sourceThemeId', async () => {
+    const origEnv = process.env.SHOPIFY_DEV_THEME_ZIP_URL;
+    process.env.SHOPIFY_DEV_THEME_ZIP_URL = 'https://example.com/theme.zip';
+
+    mocks.getConnectionById.mockResolvedValue({
+      id: 'conn-1',
+      project_id: 'proj-1',
+      store_domain: 'store.myshopify.com',
+      theme_id: null,
+    });
+    // First call (empty theme) fails, second call (ZIP) succeeds
+    mocks.createTheme
+      .mockRejectedValueOnce(new Error('Cannot create empty theme'))
+      .mockResolvedValueOnce({
+        id: 777,
+        name: 'Fallback theme',
+        role: 'unpublished',
+      });
+
+    const result = await ensureDevTheme('conn-1', {
+      themeName: 'Fallback theme',
+      sourceThemeId: 54321,
+    });
+
+    expect(result).toBe('777');
+    expect(mocks.createTheme).toHaveBeenCalledTimes(2);
+    // First call: empty theme (no src)
+    expect(mocks.createTheme).toHaveBeenNthCalledWith(
+      1,
+      'Fallback theme',
+      undefined,
+      'unpublished'
+    );
+    // Second call: fallback to ZIP
+    expect(mocks.createTheme).toHaveBeenNthCalledWith(
+      2,
+      'Fallback theme',
+      'https://example.com/theme.zip',
+      'unpublished'
+    );
+
+    process.env.SHOPIFY_DEV_THEME_ZIP_URL = origEnv;
+  });
 });

@@ -17,7 +17,7 @@ import type {
 /*  Public types                                                       */
 /* ------------------------------------------------------------------ */
 
-export interface CanvasFileData {
+export interface CanvasFileData extends Record<string, unknown> {
   fileId: string;
   fileName: string;
   filePath: string;
@@ -29,7 +29,7 @@ export interface CanvasFileData {
   directory: string;
 }
 
-export interface CanvasEdgeData {
+export interface CanvasEdgeData extends Record<string, unknown> {
   dependencyType: FileDependency['dependencyType'];
   referenceCount: number;
   references: DependencyReference[];
@@ -73,6 +73,9 @@ export const EDGE_COLORS: Record<FileDependency['dependencyType'], string> = {
   js_import: '#f97316', // orange (same family as css_import)
   template_section: '#06b6d4', // cyan
   data_attribute: '#6b7280', // gray
+  schema_setting: '#ec4899', // pink
+  css_section: '#f97316', // orange (same family as css)
+  snippet_variable: '#8b5cf6', // violet
 };
 
 /* ------------------------------------------------------------------ */

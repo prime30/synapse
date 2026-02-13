@@ -32,36 +32,85 @@ export async function GET(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         serviceKey,
       );
-      const { data: members, error: memError } = await admin
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', userId);
 
-      if (memError || !members?.length) {
-        return successResponse([]);
+      try {
+        const { data: members, error: memError } = await admin
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', userId);
+
+        if (memError || !members?.length) {
+          return successResponse([]);
+        }
+
+        const orgIds = [...new Set(members.map((m) => m.organization_id))];
+        // Optional: filter by store connection
+        const connectionId = request.nextUrl.searchParams.get('connectionId');
+
+        const selectCols = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id, status';
+        const selectColsNoStatus = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id';
+        const selectColsFallback = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name';
+
+        let projectsQuery = admin
+          .from('projects')
+          .select(selectCols)
+          .in('organization_id', orgIds)
+          .order('updated_at', { ascending: false });
+
+        if (connectionId) {
+          projectsQuery = projectsQuery.eq('shopify_connection_id', connectionId);
+        }
+
+        let { data: projects, error: projError } = await projectsQuery;
+
+        // If status column doesn't exist yet (pre-migration), retry without it
+        if (projError && (projError.code === '42703' || (projError.message ?? '').includes('status'))) {
+          let noStatusQuery = admin
+            .from('projects')
+            .select(selectColsNoStatus)
+            .in('organization_id', orgIds)
+            .order('updated_at', { ascending: false });
+          if (connectionId) {
+            noStatusQuery = noStatusQuery.eq('shopify_connection_id', connectionId);
+          }
+          const noStatusResult = await noStatusQuery;
+          projects = (noStatusResult.data ?? []).map((p) => ({ ...p, status: null }));
+          projError = noStatusResult.error;
+        }
+
+        // If dev_theme_id column doesn't exist yet (pre-migration), retry without it
+        if (projError && (projError.code === '42703' || (projError.message ?? '').includes('dev_theme_id'))) {
+          let fallbackQuery = admin
+            .from('projects')
+            .select(selectColsFallback)
+            .in('organization_id', orgIds)
+            .order('updated_at', { ascending: false });
+          if (connectionId) {
+            fallbackQuery = fallbackQuery.eq('shopify_connection_id', connectionId);
+          }
+          const fallback = await fallbackQuery;
+          projects = (fallback.data ?? []).map((p) => ({ ...p, dev_theme_id: null, status: null }));
+          projError = fallback.error;
+        }
+
+        if (projError) {
+          // Table might not exist yet — return empty gracefully
+          const msg = (projError.message ?? '').toLowerCase();
+          if (msg.includes('relation') || msg.includes('does not exist') || projError.code === '42P01') {
+            return successResponse([]);
+          }
+          throw APIError.internal(projError.message);
+        }
+
+        return successResponse(projects ?? []);
+      } catch (fallbackError) {
+        // If org_members or projects table doesn't exist, return empty
+        const msg = fallbackError instanceof Error ? fallbackError.message.toLowerCase() : '';
+        if (msg.includes('relation') || msg.includes('does not exist')) {
+          return successResponse([]);
+        }
+        throw fallbackError;
       }
-
-      const orgIds = [...new Set(members.map((m) => m.organization_id))];
-      // Optional: filter by store connection
-      const connectionId = request.nextUrl.searchParams.get('connectionId');
-
-      let projectsQuery = admin
-        .from('projects')
-        .select('id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name')
-        .in('organization_id', orgIds)
-        .order('updated_at', { ascending: false });
-
-      if (connectionId) {
-        projectsQuery = projectsQuery.eq('shopify_connection_id', connectionId);
-      }
-
-      const { data: projects, error: projError } = await projectsQuery;
-
-      if (projError) {
-        throw APIError.internal(projError.message);
-      }
-
-      return successResponse(projects ?? []);
     }
 
     // If the RPC doesn't exist and no service key, try direct query with anon client
@@ -72,13 +121,19 @@ export async function GET(request: NextRequest) {
         .order('updated_at', { ascending: false });
 
       if (projError) {
+        // Table might not exist yet — return empty gracefully
+        const msg = (projError.message ?? '').toLowerCase();
+        if (msg.includes('relation') || msg.includes('does not exist') || projError.code === '42P01') {
+          return successResponse([]);
+        }
         throw APIError.internal(projError.message);
       }
 
       return successResponse(projects ?? []);
     }
 
-    throw APIError.internal(rpcError.message);
+    // RPC failed for a reason other than "not found" — return empty rather than 500
+    return successResponse([]);
   } catch (error) {
     return handleAPIError(error);
   }

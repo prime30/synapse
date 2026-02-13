@@ -13,19 +13,19 @@ todos:
     status: completed
   - id: epic-2
     content: "EPIC 2: Quick Wins -- thinking label, keyboard nav chips, retry-with-context, why tooltip, pin message, token count, copy prompt, session summary"
-    status: pending
+    status: completed
   - id: epic-3
     content: "EPIC 3: IDE Polish -- breadcrumbs, timestamps, status bar, schema fold, command palette, drag tabs, color swatches, matching tags, snippet count, object path select, find references, schema preview on hover, paste image handling"
     status: completed
   - id: epic-4
     content: "EPIC 4: Liquid AST Parser (Foundational) -- full recursive-descent parser, lexer, core nodes, filter chains, block tags, schema block, source locations, error recovery"
-    status: pending
+    status: completed
   - id: epic-m
     content: "EPIC M: Motion-First AI Generation -- update all 5 agent prompts with animation recipes, IntersectionObserver pattern, schema motion controls, prefers-reduced-motion"
     status: completed
   - id: epic-5
     content: "EPIC 5: AI Intelligence (Phases 2-3) -- signal detection, plan mode, quick actions toolbar, fix with AI, output modes, conversation arc, weighted scoring, progressive disclosure, dampening"
-    status: pending
+    status: completed
   - id: epic-6
     content: "EPIC 6: Language Intelligence -- object-aware completions, schema completions, go-to-definition, translation completions, auto-close tags, unused detection, deprecated warnings, HTML auto-rename, rule-based Liquid formatting"
     status: completed
@@ -40,10 +40,10 @@ todos:
     status: completed
   - id: epic-10
     content: "EPIC 10: Store Management -- OAuth Phase 1 scopes (themes, content, navigation, files, discounts, inventory, products), GraphQL client, orders, inventory, navigation, files, discounts, pages, storefront preview bridge"
-    status: pending
+    status: completed
   - id: epic-11
     content: "EPIC 11: Customizer Mode -- useSchemaParser, SchemaSettingInput (20+ types), PreviewSyncContext, local Liquid renderer (substantial sub-project on EPIC 4), CustomizerMode layout, section list, block manager, schema builder, presets"
-    status: pending
+    status: completed
   - id: epic-12
     content: "EPIC 12: Ambient Intelligence -- session intent graph, useAmbientIntelligence hook, AmbientBar, nudge feedback loop, one-click resolutions"
     status: completed
@@ -52,7 +52,7 @@ todos:
     status: completed
   - id: epic-14
     content: "EPIC 14: Developer Memory -- data model + migration, convention detector, decision extractor, preference learner, Layer 8 injection, memory panel UI"
-    status: pending
+    status: completed
   - id: epic-15
     content: "EPIC 15: Spatial Canvas -- @xyflow/react + dagre, canvas data provider, FileNode, DependencyEdge, CanvasView, AI suggestion nodes"
     status: completed

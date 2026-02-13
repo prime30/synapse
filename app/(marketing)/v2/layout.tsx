@@ -22,14 +22,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://synapse.dev/v2',
+    url: 'https://synapse.shop/v2',
     siteName: 'Synapse',
     title: 'Synapse — AI-Powered Shopify Theme IDE',
     description:
       'Ship Shopify themes in hours, not weeks. AI code generation, Liquid intelligence, and one-click deploy.',
     images: [
       {
-        url: 'https://synapse.dev/og-image.png',
+        url: 'https://synapse.shop/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Synapse IDE — AI-powered Shopify theme development',
@@ -40,10 +40,10 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Synapse — AI-Powered Shopify Theme IDE',
     description: 'Ship Shopify themes in hours, not weeks.',
-    images: ['https://synapse.dev/og-image.png'],
+    images: ['https://synapse.shop/og-image.png'],
   },
   robots: { index: true, follow: true },
-  alternates: { canonical: 'https://synapse.dev/v2' },
+  alternates: { canonical: 'https://synapse.shop/v2' },
 };
 
 const jsonLd = {
@@ -56,7 +56,7 @@ const jsonLd = {
         'AI-powered Shopify theme IDE with Liquid intelligence, multi-agent code generation, performance scoring, and one-click deploy.',
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'Web',
-      url: 'https://synapse.dev',
+      url: 'https://synapse.shop',
       offers: {
         '@type': 'Offer',
         price: '0',
@@ -67,8 +67,14 @@ const jsonLd = {
     {
       '@type': 'Organization',
       name: 'Synapse',
-      url: 'https://synapse.dev',
-      logo: 'https://synapse.dev/logo.svg',
+      url: 'https://synapse.shop',
+      logo: 'https://synapse.shop/logo.svg',
+    },
+    {
+      '@type': 'WebPage',
+      name: 'AI hints for crawlers and agents',
+      url: 'https://synapse.shop/ai.txt',
+      description: 'Plain-text hints for AI crawlers and agents: preferred description, key URLs, audience, and indexing scope.',
     },
   ],
 };

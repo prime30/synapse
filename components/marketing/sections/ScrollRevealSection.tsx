@@ -84,8 +84,7 @@ export function ScrollRevealSection() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className="relative isolate bg-[#fafaf9] dark:bg-[#0a0a0a]"
-      style={{ height: '300vh' }}
+      className="relative isolate bg-[#fafaf9] dark:bg-[#0a0a0a] h-[200vh] md:h-[300vh]"
     >
       {/* Vertical frame lines (max-w-6xl) */}
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none z-[1]" aria-hidden="true">
@@ -133,7 +132,7 @@ export function ScrollRevealSection() {
 
         {/* Layer 3: Text content */}
         <div ref={textRef} className="relative max-w-4xl mx-auto px-6 text-center z-[2]">
-          <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight tracking-[-0.02em]">
+          <p className="text-3xl md:text-5xl lg:text-6xl font-medium leading-tight tracking-[-0.02em]">
             {WORDS.map((word, i) => (
               <span
                 key={i}

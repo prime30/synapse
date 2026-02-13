@@ -14,7 +14,7 @@ export function ContextPanel({ context, className = '' }: ContextPanelProps) {
   if (!hasContext) {
     return (
       <div
-        className={`rounded border border-gray-700/60 bg-gray-800/40 px-2 py-1.5 text-xs text-gray-500 ${className}`}
+        className={`rounded border ide-border-subtle ide-surface-inset px-2 py-1.5 text-xs ide-text-3 ${className}`}
         role="region"
         aria-label="Context"
       >
@@ -25,20 +25,20 @@ export function ContextPanel({ context, className = '' }: ContextPanelProps) {
 
   return (
     <div
-      className={`rounded border border-gray-700/60 bg-gray-800/40 px-2 py-1.5 text-xs text-gray-400 ${className}`}
+      className={`rounded border ide-border-subtle ide-surface-inset px-2 py-1.5 text-xs ide-text-muted ${className}`}
       role="region"
       aria-label="Context"
     >
       {context.filePath && (
-        <div className="truncate font-medium text-gray-300">
+        <div className="truncate font-medium ide-text-2">
           {context.filePath}
         </div>
       )}
       {context.fileLanguage && (
-        <div className="mt-0.5 text-gray-500">{context.fileLanguage}</div>
+        <div className="mt-0.5 ide-text-muted">{context.fileLanguage}</div>
       )}
       {context.selection && (
-        <div className="mt-1 truncate max-h-8 border-t border-gray-700/60 pt-1 text-gray-500">
+        <div className="mt-1 truncate max-h-8 border-t ide-border-subtle pt-1 ide-text-3">
           {context.selection}
         </div>
       )}

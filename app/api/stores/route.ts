@@ -96,7 +96,6 @@ export async function POST(request: NextRequest) {
       ['read_themes', 'write_themes'],
       { projectId }
     );
-
     return successResponse({
       connected: true,
       connection: {

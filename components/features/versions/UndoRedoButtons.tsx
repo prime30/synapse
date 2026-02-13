@@ -26,7 +26,7 @@ export function UndoRedoButtons({
         onClick={() => onUndo(currentVersion)}
         disabled={!canUndo || isUndoing}
         title="Undo"
-        className="inline-flex items-center justify-center w-8 h-8 rounded text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700 disabled:hover:text-gray-300 transition-colors"
+        className="inline-flex items-center justify-center w-8 h-8 rounded text-sm ide-surface-inset ide-text ide-hover hover:ide-text disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:ide-text transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -47,7 +47,7 @@ export function UndoRedoButtons({
         onClick={() => onRedo(currentVersion)}
         disabled={!canRedo || isRedoing}
         title="Redo"
-        className="inline-flex items-center justify-center w-8 h-8 rounded text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700 disabled:hover:text-gray-300 transition-colors"
+        className="inline-flex items-center justify-center w-8 h-8 rounded text-sm ide-surface-inset ide-text ide-hover hover:ide-text disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:ide-text transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -63,7 +63,7 @@ export function UndoRedoButtons({
         </svg>
       </button>
 
-      <span className="text-xs text-gray-500 ml-1">
+      <span className="text-xs ide-text-muted ml-1">
         v{currentVersion}
       </span>
     </div>

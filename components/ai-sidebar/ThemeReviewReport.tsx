@@ -79,7 +79,7 @@ function severityBadge(severity: CategoryIssue['severity']): {
       };
     case 'info':
     default:
-      return { text: 'text-blue-400', bg: 'bg-blue-500/20', label: 'Info' };
+      return { text: 'text-sky-500 dark:text-sky-400', bg: 'bg-sky-500/20 dark:bg-sky-500/20', label: 'Info' };
   }
 }
 
@@ -137,7 +137,7 @@ function ScoreBadge({
 function ScoreBar({ score }: { score: number }) {
   const { bar } = scoreColor(score);
   return (
-    <div className="h-1.5 w-full rounded-full bg-gray-700/60 overflow-hidden">
+    <div className="h-1.5 w-full rounded-full ide-surface-inset overflow-hidden">
       <div
         className={`h-full rounded-full transition-all duration-500 ${bar}`}
         style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
@@ -160,7 +160,7 @@ function IssueItem({
   const resolvedFile = issue.file ?? file;
 
   return (
-    <div className="group flex flex-col gap-1 rounded border border-gray-700/40 bg-gray-800/30 px-2 py-1.5 text-xs">
+    <div className="group flex flex-col gap-1 rounded border ide-border-subtle ide-surface-inset px-2 py-1.5 text-xs">
       <div className="flex items-start gap-1.5">
         {/* Severity badge */}
         <span
@@ -168,14 +168,14 @@ function IssueItem({
         >
           {badge.label}
         </span>
-        <span className="text-gray-300 leading-snug flex-1 break-words">
+        <span className="ide-text-2 leading-snug flex-1 break-words">
           {issue.message}
         </span>
       </div>
 
       {/* File + line reference */}
       {resolvedFile && (
-        <span className="text-[10px] text-gray-500 truncate pl-0.5">
+        <span className="text-[10px] ide-text-muted truncate pl-0.5">
           {resolvedFile}
           {issue.line != null && `:${issue.line}`}
         </span>
@@ -183,7 +183,7 @@ function IssueItem({
 
       {/* Suggestion */}
       {issue.suggestion && (
-        <span className="text-[10px] text-gray-400 italic pl-0.5 leading-snug">
+        <span className="text-[10px] ide-text-3 italic pl-0.5 leading-snug">
           {issue.suggestion}
         </span>
       )}
@@ -193,7 +193,7 @@ function IssueItem({
         <button
           type="button"
           onClick={() => onFix(resolvedFile, issue)}
-          className="mt-0.5 inline-flex items-center gap-1 self-start rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-blue-500/20"
+          className="mt-0.5 inline-flex items-center gap-1 self-start rounded border border-sky-500/30 bg-sky-500/10 dark:bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sky-500/20"
         >
           <Wrench className="h-3 w-3" />
           Fix
@@ -221,21 +221,21 @@ function CategoryCard({
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
-    <div className="rounded border border-gray-700/60 bg-gray-800/40 overflow-hidden">
+    <div className="rounded border ide-border ide-surface-panel overflow-hidden">
       {/* Header (clickable) */}
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-2 py-2 text-left hover:bg-gray-800/60 transition-colors"
+        className="flex w-full items-center gap-2 px-2 py-2 text-left ide-hover transition-colors"
         aria-expanded={expanded}
       >
-        <Chevron className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+        <Chevron className="h-3.5 w-3.5 shrink-0 ide-text-3" />
         <Icon className={`h-3.5 w-3.5 shrink-0 ${text}`} />
-        <span className="flex-1 text-xs font-medium text-gray-200 truncate">
+        <span className="flex-1 text-xs font-medium ide-text truncate">
           {label}
         </span>
         {category.issues.length > 0 && (
-          <span className="rounded-full bg-gray-700/60 px-1.5 py-px text-[10px] font-medium text-gray-400">
+          <span className="rounded-full ide-surface-inset px-1.5 py-px text-[10px] font-medium ide-text-muted">
             {category.issues.length}
           </span>
         )}
@@ -261,7 +261,7 @@ function CategoryCard({
       )}
 
       {expanded && category.issues.length === 0 && (
-        <div className="px-2 pb-2 text-[10px] text-gray-500">
+        <div className="px-2 pb-2 text-[10px] ide-text-3">
           No issues found — great work!
         </div>
       )}
@@ -287,24 +287,24 @@ function FileIssuesSection({
   ).length;
 
   return (
-    <div className="rounded border border-gray-700/40 bg-gray-800/30 overflow-hidden">
+    <div className="rounded border ide-border-subtle ide-surface-inset overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-gray-800/50 transition-colors"
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left ide-hover transition-colors"
         aria-expanded={expanded}
       >
-        <Chevron className="h-3 w-3 shrink-0 text-gray-500" />
-        <Code className="h-3 w-3 shrink-0 text-gray-500" />
-        <span className="flex-1 text-[11px] font-medium text-gray-300 truncate">
+        <Chevron className="h-3 w-3 shrink-0 ide-text-muted" />
+        <Code className="h-3 w-3 shrink-0 ide-text-muted" />
+        <span className="flex-1 text-[11px] font-medium ide-text-2 truncate">
           {fileIssue.file}
         </span>
         {criticalCount > 0 && (
-          <span className="rounded-full bg-red-500/20 px-1.5 py-px text-[10px] font-medium text-red-400">
+          <span className="rounded-full bg-red-500/20 px-1.5 py-px text-[10px] font-medium text-red-600 dark:text-red-400">
             {criticalCount}
           </span>
         )}
-        <span className="rounded-full bg-gray-700/60 px-1.5 py-px text-[10px] font-medium text-gray-400">
+        <span className="rounded-full ide-surface-panel px-1.5 py-px text-[10px] font-medium ide-text-3">
           {fileIssue.issues.length}
         </span>
       </button>
@@ -363,11 +363,11 @@ export function ThemeReviewReport({
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-gray-900 text-gray-200">
+    <div className="flex flex-col h-full min-h-0 ide-surface-panel ide-text">
       {/* ── Header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2 flex-shrink-0">
+      <div className="flex items-center justify-between border-b ide-border px-3 py-2 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-300">
+          <span className="text-xs font-medium ide-text-2">
             Theme Review
           </span>
           <ScoreBadge score={report.overallScore} size="lg" />
@@ -376,7 +376,7 @@ export function ThemeReviewReport({
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+            className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
             aria-label="Close review report"
           >
             <X className="h-4 w-4" />
@@ -387,7 +387,7 @@ export function ThemeReviewReport({
       {/* ── Scrollable body ───────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 space-y-3">
         {/* Summary stats */}
-        <div className="flex items-center gap-3 text-[10px] text-gray-500">
+        <div className="flex items-center gap-3 text-[10px] ide-text-muted">
           <span>
             {report.categories.length} categories &middot; {totalIssues} issues
           </span>
@@ -402,7 +402,7 @@ export function ThemeReviewReport({
 
         {/* ── Category cards ──────────────────────────────────────────── */}
         <div className="space-y-1.5">
-          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wider ide-text-muted">
             Categories
           </h3>
           {report.categories.map((cat) => (
@@ -419,9 +419,9 @@ export function ThemeReviewReport({
         {/* ── File issues ─────────────────────────────────────────────── */}
         {report.fileIssues.length > 0 && (
           <div className="space-y-1.5">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-              Issues by File
-            </h3>
+<h3 className="text-[10px] font-semibold uppercase tracking-wider ide-text-muted">
+            Issues by File
+          </h3>
             {report.fileIssues.map((fi) => (
               <FileIssuesSection
                 key={fi.file}

@@ -244,6 +244,14 @@ export function createLiquidCompletionProvider(
       const assigns = parseAssigns(text);
       const { sectionSettings, blockSettingsByType } = parseSchemaSettings(text);
 
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endLineNumber: position.lineNumber,
+        endColumn: word.endColumn,
+      };
+
       const suggestions: languages.CompletionItem[] = [];
 
       if (ctx.afterDot) {
@@ -260,6 +268,7 @@ export function createLiquidCompletionProvider(
               label: id,
               kind: monaco.languages.CompletionItemKind.Value,
               insertText: id,
+              range,
             });
           }
           return { suggestions };
@@ -280,6 +289,7 @@ export function createLiquidCompletionProvider(
               label: id,
               kind: monaco.languages.CompletionItemKind.Value,
               insertText: id,
+              range,
             });
           }
           return { suggestions };
@@ -296,6 +306,7 @@ export function createLiquidCompletionProvider(
                 kind: monaco.languages.CompletionItemKind.Property,
                 insertText: propName,
                 detail: `(${resolvedType})`,
+                range,
               });
             }
           }
@@ -311,6 +322,7 @@ export function createLiquidCompletionProvider(
             label: name,
             kind: monaco.languages.CompletionItemKind.Variable,
             insertText: name,
+            range,
           });
         }
         for (const [varName] of assigns) {
@@ -318,6 +330,7 @@ export function createLiquidCompletionProvider(
             label: varName,
             kind: monaco.languages.CompletionItemKind.Variable,
             insertText: varName,
+            range,
           });
         }
       }

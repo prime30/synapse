@@ -29,10 +29,11 @@ export interface MetafieldExplorerProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-/** Truncate a value for the table preview. */
-function truncateValue(value: string, max = 60): string {
-  if (value.length <= max) return value;
-  return value.slice(0, max) + '…';
+/** Truncate a value for the table preview. Handles non-string values safely. */
+function truncateValue(value: unknown, max = 60): string {
+  const str = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (str.length <= max) return str;
+  return str.slice(0, max) + '…';
 }
 
 /** Format an ISO date for display. */
@@ -55,8 +56,8 @@ function typeBadgeColor(type: string): string {
   const colors: Record<string, string> = {
     single_line_text_field: 'bg-emerald-500/20 text-emerald-400',
     multi_line_text_field: 'bg-emerald-500/20 text-emerald-400',
-    number_integer: 'bg-blue-500/20 text-blue-400',
-    number_decimal: 'bg-blue-500/20 text-blue-400',
+    number_integer: 'ide-active text-sky-500 dark:text-sky-400',
+    number_decimal: 'ide-active text-sky-500 dark:text-sky-400',
     json: 'bg-amber-500/20 text-amber-400',
     rich_text_field: 'bg-amber-500/20 text-amber-400',
     boolean: 'bg-purple-500/20 text-purple-400',
@@ -70,7 +71,7 @@ function typeBadgeColor(type: string): string {
     dimension: 'bg-teal-500/20 text-teal-400',
     volume: 'bg-teal-500/20 text-teal-400',
   };
-  return colors[type] ?? 'bg-gray-500/20 text-gray-400';
+  return colors[type] ?? 'bg-stone-500/20 ide-text-muted';
 }
 
 // ── Component ───────────────────────────────────────────────────────────────────
@@ -112,12 +113,14 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
   const filteredMetafields = useMemo(() => {
     if (!searchQuery.trim()) return metafields;
     const q = searchQuery.toLowerCase();
-    return metafields.filter(
-      (m) =>
+    return metafields.filter((m) => {
+      const valStr = typeof m.value === 'string' ? m.value : String(m.value ?? '');
+      return (
         m.key.toLowerCase().includes(q) ||
         m.namespace.toLowerCase().includes(q) ||
-        m.value.toLowerCase().includes(q)
-    );
+        valStr.toLowerCase().includes(q)
+      );
+    });
   }, [metafields, searchQuery]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -180,21 +183,21 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-gray-800 bg-gray-900/50">
+    <div className="flex h-full flex-col rounded-lg border ide-border ide-surface-panel">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+      <div className="flex items-center justify-between border-b ide-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Database className="h-5 w-5 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-100">Metafields</h2>
+          <Database className="h-5 w-5 ide-text-muted" />
+          <h2 className="text-sm font-semibold ide-text">Metafields</h2>
           {!isLoading && (
-            <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+            <span className="rounded-full ide-surface-panel px-2 py-0.5 text-xs ide-text-muted">
               {filteredMetafields.length}
             </span>
           )}
         </div>
         <button
           onClick={handleCreate}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-600 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Create Metafield
@@ -203,13 +206,13 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
 
       {/* ── Namespace filter tabs ───────────────────────────────────────── */}
       {namespaces.length > 0 && (
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-800 px-4 py-2">
+        <div className="flex items-center gap-1 overflow-x-auto border-b ide-border px-4 py-2">
           <button
             onClick={() => setNamespaceFilter(undefined)}
             className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               !namespaceFilter
-                ? 'bg-blue-600/20 text-blue-400'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-gray-300'
+                ? 'ide-active text-sky-500 dark:text-sky-400'
+                : 'ide-text-muted ide-hover hover:ide-text-2'
             }`}
           >
             All
@@ -222,8 +225,8 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
               }
               className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 namespaceFilter === ns
-                  ? 'bg-blue-600/20 text-blue-400'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-300'
+                  ? 'ide-active text-sky-500 dark:text-sky-400'
+                  : 'ide-text-muted ide-hover hover:ide-text-2'
               }`}
             >
               <Tag className="mr-1 inline h-3 w-3" />
@@ -234,20 +237,20 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
       )}
 
       {/* ── Search bar ──────────────────────────────────────────────────── */}
-      <div className="border-b border-gray-800 px-4 py-2">
+      <div className="border-b ide-border px-4 py-2">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 ide-text-muted" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by key, namespace, or value…"
-            className="w-full rounded-md border border-gray-700 bg-gray-800/60 py-1.5 pl-8 pr-3 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md py-1.5 pl-8 pr-3 text-sm ide-input"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 ide-text-muted hover:ide-text-2"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -257,7 +260,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
 
       {/* ── Slide-out form panel ────────────────────────────────────────── */}
       {showForm && (
-        <div className="border-b border-gray-800 bg-gray-800/60 px-4 py-4">
+        <div className="border-b ide-border ide-surface-panel px-4 py-4">
           <MetafieldForm
             metafield={editingMetafield}
             onSave={handleSave}
@@ -272,8 +275,8 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-            <span className="ml-2 text-sm text-gray-400">
+            <Loader2 className="h-6 w-6 animate-spin ide-text-muted" />
+            <span className="ml-2 text-sm ide-text-muted">
               Loading metafields…
             </span>
           </div>
@@ -290,13 +293,13 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
         {/* Empty state */}
         {!isLoading && !error && filteredMetafields.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Database className="mb-3 h-10 w-10 text-gray-600" />
-            <p className="text-sm font-medium text-gray-400">
+            <Database className="mb-3 h-10 w-10 ide-text-quiet" />
+            <p className="text-sm font-medium ide-text-muted">
               {searchQuery
                 ? 'No metafields match your search'
                 : 'No metafields found'}
             </p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs ide-text-muted">
               {searchQuery
                 ? 'Try a different search term'
                 : 'Create your first metafield to get started'}
@@ -308,7 +311,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
         {!isLoading && !error && filteredMetafields.length > 0 && (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <tr className="border-b ide-border text-left text-xs font-medium uppercase tracking-wider ide-text-muted">
                 <th className="px-4 py-2">Namespace / Key</th>
                 <th className="px-4 py-2">Type</th>
                 <th className="px-4 py-2">Value</th>
@@ -316,20 +319,20 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                 <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800/60">
+            <tbody className="divide-y ide-border">
               {filteredMetafields.map((mf) => (
                 <tr
                   key={mf.id}
-                  className="group cursor-pointer hover:bg-gray-800/40 transition-colors"
+                  className="group cursor-pointer ide-hover transition-colors"
                   onClick={() => handleEdit(mf)}
                 >
                   {/* Namespace / Key */}
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5">
-                      <ChevronRight className="h-3.5 w-3.5 text-gray-600 group-hover:text-gray-400 transition-colors" />
-                      <span className="text-gray-500">{mf.namespace}</span>
-                      <span className="text-gray-600">.</span>
-                      <span className="font-medium text-gray-200">
+                      <ChevronRight className="h-3.5 w-3.5 ide-text-quiet group-hover:ide-text-muted transition-colors" />
+                      <span className="ide-text-muted">{mf.namespace}</span>
+                      <span className="ide-text-quiet">.</span>
+                      <span className="font-medium ide-text">
                         {mf.key}
                       </span>
                     </div>
@@ -346,11 +349,11 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                   </td>
 
                   {/* Value preview */}
-                  <td className="max-w-[200px] truncate px-4 py-2.5 text-gray-400">
-                    {mf.type === 'color' && /^#[0-9a-fA-F]{6}$/.test(mf.value) ? (
+                  <td className="max-w-[200px] truncate px-4 py-2.5 ide-text-muted">
+                    {mf.type === 'color' && typeof mf.value === 'string' && /^#[0-9a-fA-F]{6}$/.test(mf.value) ? (
                       <div className="flex items-center gap-2">
                         <span
-                          className="inline-block h-4 w-4 rounded border border-gray-700"
+                          className="inline-block h-4 w-4 rounded border ide-border"
                           style={{ backgroundColor: mf.value }}
                         />
                         <span>{mf.value}</span>
@@ -358,12 +361,12 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                     ) : mf.type === 'boolean' ? (
                       <span
                         className={
-                          mf.value === 'true'
+                          String(mf.value) === 'true'
                             ? 'text-emerald-400'
-                            : 'text-gray-500'
+                            : 'ide-text-muted'
                         }
                       >
-                        {mf.value === 'true' ? 'True' : 'False'}
+                        {String(mf.value) === 'true' ? 'True' : 'False'}
                       </span>
                     ) : (
                       truncateValue(mf.value)
@@ -371,7 +374,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                   </td>
 
                   {/* Updated */}
-                  <td className="hidden px-4 py-2.5 text-gray-500 md:table-cell">
+                  <td className="hidden px-4 py-2.5 ide-text-muted md:table-cell">
                     {formatDate(mf.updated_at)}
                   </td>
 
@@ -384,7 +387,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                       <button
                         onClick={() => handleEdit(mf)}
                         title="Edit metafield"
-                        className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-gray-300 transition-colors"
+                        className="rounded p-1 ide-text-muted ide-hover hover:ide-text-2 transition-colors"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -400,7 +403,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                           </button>
                           <button
                             onClick={() => setDeletingId(null)}
-                            className="rounded p-0.5 text-gray-500 hover:text-gray-300"
+                            className="rounded p-0.5 ide-text-muted hover:ide-text-2"
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -409,7 +412,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
                         <button
                           onClick={() => setDeletingId(mf.id)}
                           title="Delete metafield"
-                          className="rounded p-1 text-gray-500 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+                          className="rounded p-1 ide-text-muted hover:bg-red-900/30 hover:text-red-400 transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

@@ -92,7 +92,7 @@ const SECTIONS = [
   {
     title: '11. Contact',
     paragraphs: [
-      'If you have any questions about these Terms of Service, please contact us at legal@synapse.dev.',
+      'If you have any questions about these Terms of Service, please contact us at legal@synapse.shop.',
     ],
   },
 ];

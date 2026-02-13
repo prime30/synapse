@@ -32,6 +32,8 @@ export interface SuggestionContext {
   fileCount: number;
   /** Last action that was taken (for arc detection) */
   lastAction?: string | null;
+  /** Current conversation turn count (for progressive disclosure) */
+  turnCount?: number;
 }
 
 // ── Signal weights ───────────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ const W_PATH_PATTERN = 0.9;
 const W_PROJECT_STATE = 0.7;
 const W_NOVELTY = 0.6;
 const FREQUENCY_PENALTY = 0.5;
+const W_RECENCY = 0.8;
+const W_ESCALATION = 0.5;
 
 // ── Pre-prompt suggestion catalog ────────────────────────────────────────────
 
@@ -57,6 +61,8 @@ interface CatalogEntry {
     emptyProject?: boolean;
     noFile?: boolean;
   };
+  /** Progressive disclosure tier (for turn-count gating) */
+  tier?: 'simple' | 'intermediate' | 'advanced';
 }
 
 const CATALOG: CatalogEntry[] = [
@@ -70,30 +76,30 @@ const CATALOG: CatalogEntry[] = [
   // ── CSS file context ─────────────────────────────────────────────
   { id: 'css-variables', label: 'Convert to CSS variables', prompt: 'Refactor hardcoded values in this CSS to use CSS custom properties. Create a clean variable system for colors, spacing, and typography.', category: 'optimize', signals: { fileLanguages: ['css'] } },
   { id: 'css-responsive', label: 'Add breakpoints', prompt: 'Add responsive breakpoints to this CSS. Use mobile-first approach with clean media queries for tablet and desktop.', category: 'build', signals: { fileLanguages: ['css'] } },
-  { id: 'css-darkmode', label: 'Add dark mode', prompt: 'Add dark mode support using CSS custom properties and prefers-color-scheme media query. Ensure smooth color transitions.', category: 'build', signals: { fileLanguages: ['css'] } },
+  { id: 'css-darkmode', label: 'Add dark mode', prompt: 'Add dark mode support using CSS custom properties and prefers-color-scheme media query. Ensure smooth color transitions.', category: 'build', signals: { fileLanguages: ['css'] }, tier: 'advanced' },
 
   // ── JavaScript file context ──────────────────────────────────────
   { id: 'js-errors', label: 'Add error handling', prompt: 'Add proper error handling to this JavaScript. Add try/catch blocks, null checks, graceful fallbacks, and user-friendly error messages.', category: 'fix', signals: { fileLanguages: ['javascript'] } },
   { id: 'js-a11y', label: 'Make interactive & accessible', prompt: 'Make the interactive elements in this file accessible. Add keyboard navigation, ARIA attributes, focus management, and screen reader announcements.', category: 'optimize', signals: { fileLanguages: ['javascript'] } },
-  { id: 'js-web-component', label: 'Convert to web component', prompt: 'Refactor this JavaScript into a proper Shopify web component (custom element). Follow Shopify Dawn patterns with connectedCallback and proper lifecycle.', category: 'optimize', signals: { fileLanguages: ['javascript'] } },
+  { id: 'js-web-component', label: 'Convert to web component', prompt: 'Refactor this JavaScript into a proper Shopify web component (custom element). Follow Shopify Dawn patterns with connectedCallback and proper lifecycle.', category: 'optimize', signals: { fileLanguages: ['javascript'] }, tier: 'advanced' },
 
   // ── Template patterns ────────────────────────────────────────────
   { id: 'template-dynamic', label: 'Add dynamic content', prompt: 'Add dynamic Liquid content to this template. Use metafields, product data, and collection properties to make it data-driven.', category: 'build', signals: { pathPatterns: [/templates\//] } },
-  { id: 'snippet-reusable', label: 'Extract to snippet', prompt: 'Extract the main component in this file into a reusable Shopify snippet. Make it accept parameters via render tag for maximum reusability.', category: 'optimize', signals: { pathPatterns: [/sections\//, /templates\//] } },
+  { id: 'snippet-reusable', label: 'Extract to snippet', prompt: 'Extract the main component in this file into a reusable Shopify snippet. Make it accept parameters via render tag for maximum reusability.', category: 'optimize', signals: { pathPatterns: [/sections\//, /templates\//] }, tier: 'advanced' },
 
   // ── JSON settings ────────────────────────────────────────────────
   { id: 'json-settings', label: 'Enhance theme settings', prompt: 'Review and enhance the settings in this JSON template. Add useful customization options that merchants would want in the theme editor.', category: 'build', signals: { fileLanguages: ['json'], pathPatterns: [/templates\//, /config\//] } },
 
   // ── No file selected / empty state ───────────────────────────────
-  { id: 'hero-section', label: 'Build a hero section', prompt: 'Create a new hero section with a full-width image/video background, headline, subheading, and CTA button. Include schema settings for all content.', category: 'build', signals: { noFile: true } },
-  { id: 'product-card', label: 'Create product card', prompt: 'Build a reusable product card snippet with image, title, price, compare-at price, badges (sale, sold out), and quick-add button.', category: 'build', signals: { noFile: true } },
-  { id: 'newsletter-form', label: 'Add newsletter signup', prompt: 'Create a newsletter signup section with email input, submit button, success/error states, and Shopify Customer API integration.', category: 'build', signals: { noFile: true } },
-  { id: 'collection-grid', label: 'Build collection grid', prompt: 'Create a collection page grid section with filtering, sorting, pagination, and responsive layout. Use Shopify section rendering API.', category: 'build', signals: { noFile: true } },
-  { id: 'explore-theme', label: 'Analyze theme structure', prompt: 'Analyze the overall structure of this theme. Identify the main sections, templates, and snippets. Suggest improvements to the architecture.', category: 'explore', signals: { noFile: true } },
+  { id: 'hero-section', label: 'Build a hero section', prompt: 'Create a new hero section with a full-width image/video background, headline, subheading, and CTA button. Include schema settings for all content.', category: 'build', signals: { noFile: true }, tier: 'simple' },
+  { id: 'product-card', label: 'Create product card', prompt: 'Build a reusable product card snippet with image, title, price, compare-at price, badges (sale, sold out), and quick-add button.', category: 'build', signals: { noFile: true }, tier: 'simple' },
+  { id: 'newsletter-form', label: 'Add newsletter signup', prompt: 'Create a newsletter signup section with email input, submit button, success/error states, and Shopify Customer API integration.', category: 'build', signals: { noFile: true }, tier: 'simple' },
+  { id: 'collection-grid', label: 'Build collection grid', prompt: 'Create a collection page grid section with filtering, sorting, pagination, and responsive layout. Use Shopify section rendering API.', category: 'build', signals: { noFile: true }, tier: 'simple' },
+  { id: 'explore-theme', label: 'Analyze theme structure', prompt: 'Analyze the overall structure of this theme. Identify the main sections, templates, and snippets. Suggest improvements to the architecture.', category: 'explore', signals: { noFile: true }, tier: 'simple' },
 
   // ── Shopify-connected actions ────────────────────────────────────
-  { id: 'push-review', label: 'Review before pushing', prompt: 'Review all pending changes before I push to Shopify. List what files changed and highlight any potential issues.', category: 'deploy', signals: { requiresShopify: true } },
-  { id: 'theme-audit', label: 'Full theme audit', prompt: 'Run a comprehensive audit of the entire theme. Check for performance issues, accessibility problems, Liquid best practices, and deprecated features.', category: 'test', signals: { requiresShopify: true } },
+  { id: 'push-review', label: 'Review before pushing', prompt: 'Review all pending changes before I push to Shopify. List what files changed and highlight any potential issues.', category: 'deploy', signals: { requiresShopify: true }, tier: 'intermediate' },
+  { id: 'theme-audit', label: 'Full theme audit', prompt: 'Run a comprehensive audit of the entire theme. Check for performance issues, accessibility problems, Liquid best practices, and deprecated features.', category: 'test', signals: { requiresShopify: true }, tier: 'intermediate' },
 
   // ── File linking suggestions ──────────────────────────────────────
   { id: 'link-related-css', label: 'Open related CSS', prompt: 'Open the CSS file that corresponds to this section so I can work on both the template and styles together.', category: 'explore', signals: { fileLanguages: ['liquid'], pathPatterns: [/sections\//] } },
@@ -199,6 +205,28 @@ function scoreEntry(
     score += W_NOVELTY;
   }
 
+  // Recency bonus: lastAction pairs with suggestion category
+  const lastAction = ctx.lastAction;
+  if (lastAction) {
+    if (lastAction === 'code_change' && (entry.category === 'test' || entry.category === 'deploy')) {
+      score += W_RECENCY;
+    } else if (lastAction === 'explanation' && entry.category === 'build') {
+      score += W_RECENCY;
+    } else if (lastAction === 'fix' && entry.category === 'test') {
+      score += W_RECENCY;
+    }
+  }
+
+  // Escalation bonus: based on turn count (progressive disclosure)
+  const turnCount = ctx.turnCount ?? 0;
+  const advancedCategories = ['optimize', 'deploy', 'test'];
+  const intermediateCategories = ['optimize', 'fix'];
+  if (turnCount >= 5 && advancedCategories.includes(entry.category)) {
+    score += W_ESCALATION;
+  } else if (turnCount >= 3 && intermediateCategories.includes(entry.category)) {
+    score += W_ESCALATION * 0.5;
+  }
+
   return score;
 }
 
@@ -246,10 +274,20 @@ export function getContextualSuggestions(
       // Apply dampening factor based on shown/used ratio
       score: score * getDampeningFactor(stats[entry.id]),
     }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
+    .sort((a, b) => b.score - a.score);
 
-  return scored.map(({ entry, score }) => ({
+  // Turn-count gating
+  const turnCount = ctx.turnCount ?? 0;
+  const gated = scored.filter(({ entry }) => {
+    const tier = entry.tier ?? 'simple';
+    if (tier === 'advanced' && turnCount < 5) return false;
+    if (tier === 'intermediate' && turnCount < 3) return false;
+    return true;
+  });
+
+  const top = gated.slice(0, 4);
+
+  return top.map(({ entry, score }) => ({
     id: entry.id,
     label: entry.label,
     prompt: entry.prompt,

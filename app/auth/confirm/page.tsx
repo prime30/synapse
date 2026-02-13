@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 function normalizeNextPath(raw: string | null): string {
-  const fallback = '/projects?signed_in=1';
+  const fallback = '/onboarding?signed_in=1';
   if (!raw) return fallback;
   const value = raw.trim();
   if (!value) return fallback;
@@ -157,16 +157,16 @@ function ConfirmContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950">
+    <div className="flex min-h-screen items-center justify-center ide-surface">
       <div className="text-center">
         {status === 'loading' && (
           <>
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
-            <p className="mt-4 text-sm text-gray-400">Confirming your request...</p>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 ide-border border-t-sky-500" />
+            <p className="mt-4 text-sm ide-text-muted">Confirming your request...</p>
           </>
         )}
         {status === 'error' && (
-          <p className="text-sm text-gray-400">Redirecting...</p>
+          <p className="text-sm ide-text-muted">Redirecting...</p>
         )}
       </div>
     </div>
@@ -177,8 +177,8 @@ export default function AuthConfirmPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-950">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+        <div className="flex min-h-screen items-center justify-center ide-surface">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 ide-border border-t-sky-500" />
         </div>
       }
     >

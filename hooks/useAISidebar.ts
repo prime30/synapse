@@ -49,6 +49,8 @@ export interface AISidebarContextValue {
   fileLanguage: string | null;
   /** Current selection text */
   selection: string | null;
+  /** Last action type for suggestion arc detection */
+  lastAction?: string | null;
 }
 
 export function useAISidebar(initialContext?: AISidebarContextValue) {

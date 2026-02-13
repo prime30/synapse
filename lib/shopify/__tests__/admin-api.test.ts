@@ -323,5 +323,32 @@ describe('ShopifyAdminAPI', () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.theme.role).toBe('unpublished');
     });
+
+    it('createTheme omits src when not provided (empty theme)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers(),
+        json: async () => ({
+          theme: {
+            id: 1001,
+            name: 'Empty Dev Theme',
+            role: 'unpublished',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        }),
+      });
+
+      const theme = await api.createTheme('Empty Dev Theme', undefined, 'unpublished');
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.theme).toEqual({
+        name: 'Empty Dev Theme',
+        role: 'unpublished',
+      });
+      expect(body.theme.src).toBeUndefined();
+      expect(theme.id).toBe(1001);
+    });
   });
 });

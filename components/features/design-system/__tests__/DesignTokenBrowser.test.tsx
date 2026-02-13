@@ -16,6 +16,7 @@ const mockTokensResponse = {
       radii: ['4px', '8px'],
       shadows: ['0 2px 4px rgba(0,0,0,0.1)'],
     },
+    tokenCount: 15,
     fileCount: 5,
     analyzedFiles: ['assets/base.css', 'layout/theme.liquid', 'config/settings_schema.json'],
   },
@@ -31,6 +32,7 @@ const emptyTokensResponse = {
       radii: [],
       shadows: [],
     },
+    tokenCount: 0,
     fileCount: 0,
     analyzedFiles: [],
   },
@@ -70,7 +72,7 @@ describe('DesignTokenBrowser', () => {
     });
 
     // Summary text
-    expect(screen.getByText(/15 tokens across 5 files/)).toBeDefined();
+    expect(screen.getByText(/15 tokens found/)).toBeDefined();
   });
 
   it('renders category sections', async () => {
