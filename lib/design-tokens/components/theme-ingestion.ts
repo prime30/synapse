@@ -116,7 +116,22 @@ export async function ingestTheme(
     }
   }
 
-  // 5. Persist components to DB
+  // 5. Build a map of file paths → token IDs for component-token linking
+  const allPersistedTokens = await listByProject(projectId);
+  const tokenIdByName = new Map(allPersistedTokens.map((t) => [t.name, t.id]));
+
+  // Build file → token names map from extracted tokens
+  const fileToTokenNames = new Map<string, Set<string>>();
+  for (const [name, tokens] of tokensByName) {
+    for (const t of tokens) {
+      if (!fileToTokenNames.has(t.filePath)) {
+        fileToTokenNames.set(t.filePath, new Set());
+      }
+      fileToTokenNames.get(t.filePath)!.add(name);
+    }
+  }
+
+  // 6. Persist components to DB
   // (Using service-role client directly for the design_components table)
   try {
     const { getClient } = await import('./component-persistence');
@@ -125,14 +140,26 @@ export async function ingestTheme(
     // Clear existing components for this project
     await supabase.from('design_components').delete().eq('project_id', projectId);
 
-    // Insert detected components
+    // Insert detected components with tokens_used populated
     for (const comp of components) {
+      // Collect token IDs from all files belonging to this component
+      const tokenIds = new Set<string>();
+      for (const filePath of comp.files) {
+        const names = fileToTokenNames.get(filePath);
+        if (names) {
+          for (const name of names) {
+            const id = tokenIdByName.get(name);
+            if (id) tokenIds.add(id);
+          }
+        }
+      }
+
       await supabase.from('design_components').insert({
         project_id: projectId,
         name: comp.name,
         file_path: comp.primaryFile,
         component_type: comp.type,
-        tokens_used: [],
+        tokens_used: Array.from(tokenIds),
         variants: [],
         usage_frequency: comp.files.length,
         preview_data: { files: comp.files },

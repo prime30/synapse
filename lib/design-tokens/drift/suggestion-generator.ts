@@ -28,13 +28,14 @@ export interface StoredTokenSummary {
 export function generateSuggestions(
   driftItems: DriftItem[],
   existingTokens: StoredTokenSummary[],
+  filePath?: string,
 ): TokenizationSuggestion[] {
   if (existingTokens.length === 0) return [];
 
   const suggestions: TokenizationSuggestion[] = [];
 
   for (const item of driftItems) {
-    const best = findBestMatch(item, existingTokens);
+    const best = findBestMatch(item, existingTokens, filePath);
     if (best) {
       suggestions.push(best);
     }
@@ -55,6 +56,7 @@ const MIN_CONFIDENCE = 0.3;
 function findBestMatch(
   item: DriftItem,
   tokens: StoredTokenSummary[],
+  filePath?: string,
 ): TokenizationSuggestion | null {
   let bestConfidence = 0;
   let bestToken: StoredTokenSummary | null = null;
@@ -83,7 +85,7 @@ function findBestMatch(
     hardcodedValue: item.value,
     lineNumber: item.lineNumber,
     suggestedToken: bestToken.name,
-    suggestedReplacement: buildReplacement(bestToken.name, item.context),
+    suggestedReplacement: buildReplacement(bestToken.name, item.context, filePath),
     confidence: bestConfidence,
     reason: bestReason,
   };
@@ -231,8 +233,10 @@ function parseNumeric(raw: string): number | null {
  * - Liquid context → `{{ settings.token_name }}`
  * - CSS/default   → `var(--token-name)`
  */
-function buildReplacement(tokenName: string, context: string): string {
+function buildReplacement(tokenName: string, context: string, filePath?: string): string {
+  const isLiquidFile = filePath?.endsWith('.liquid') ?? false;
   const isLiquid =
+    isLiquidFile ||
     context.includes('{{') ||
     context.includes('{%') ||
     context.includes('| ') ||

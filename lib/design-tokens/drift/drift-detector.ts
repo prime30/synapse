@@ -112,7 +112,7 @@ export class DriftDetector {
       value: t.value,
       category: t.category,
     }));
-    const suggestions = generateSuggestions(allDriftItems, tokenSummaries);
+    const suggestions = generateSuggestions(allDriftItems, tokenSummaries, filePath);
 
     return {
       filePath,
