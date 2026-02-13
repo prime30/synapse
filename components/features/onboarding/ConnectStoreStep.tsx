@@ -270,7 +270,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
               <button
                 type="button"
                 onClick={() => setShowAdvanced((v) => !v)}
-                className="flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-gray-400 hover:text-stone-700 dark:hover:text-gray-200 transition-colors"
+                className="flex items-center gap-2 text-xs font-medium ide-text-muted hover:ide-text transition-colors"
               >
                 <svg
                   width="14"

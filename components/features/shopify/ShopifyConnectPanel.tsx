@@ -21,7 +21,7 @@ function StatusDot({ status }: { status: string }) {
         ? 'bg-yellow-500 animate-pulse'
         : status === 'error'
           ? 'bg-red-500'
-          : 'bg-gray-500';
+          : 'bg-stone-500';
 
   return <span className={`inline-block w-2 h-2 rounded-full ${color}`} />;
 }

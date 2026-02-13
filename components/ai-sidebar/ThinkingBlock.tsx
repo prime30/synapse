@@ -97,7 +97,7 @@ const AGENT_BADGE_CLASSES: Record<string, string> = {
 };
 
 function getAgentBadgeClasses(agent: string): string {
-  return AGENT_BADGE_CLASSES[agent] ?? 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-950';
+  return AGENT_BADGE_CLASSES[agent] ?? 'ide-text-muted border-stone-200 dark:border-white/10 ide-surface-input';
 }
 
 // ── Component ───────────────────────────────────────────────────────────

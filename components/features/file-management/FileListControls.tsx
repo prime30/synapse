@@ -44,9 +44,9 @@ export function FileListControls({
   }, [localSearch, onSearchChange]);
 
   return (
-    <div className="space-y-2 p-2 border-b border-gray-700">
+    <div className="space-y-2 p-2 border-b ide-border">
       <div className="relative">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 ide-text-muted text-sm">
           🔍
         </span>
         <input
@@ -54,7 +54,7 @@ export function FileListControls({
           value={localSearch}
           onChange={(e) => setLocalSearch(e.target.value)}
           placeholder="Search files..."
-          className="w-full pl-8 pr-2 py-1.5 text-sm bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full pl-8 pr-2 py-1.5 text-sm ide-input"
         />
       </div>
       <div className="flex flex-wrap gap-1">

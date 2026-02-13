@@ -34,30 +34,30 @@ export function FileUploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <h2 className="text-lg font-medium text-gray-200">Add File to Project</h2>
+      <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-lg mx-4 border ide-border">
+        <div className="flex items-center justify-between px-4 py-3 border-b ide-border">
+          <h2 className="text-lg font-medium ide-text">Add File to Project</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white"
+            className="ide-text-muted hover:ide-text"
           >
             ×
           </button>
         </div>
 
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b ide-border">
           <button
             type="button"
             onClick={() => setTab('paste')}
-            className={`px-4 py-2 text-sm ${tab === 'paste' ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400 hover:text-gray-300'}`}
+            className={`px-4 py-2 text-sm ${tab === 'paste' ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400' : 'ide-text-muted hover:ide-text'}`}
           >
             Copy-Paste
           </button>
           <button
             type="button"
             onClick={() => setTab('upload')}
-            className={`px-4 py-2 text-sm ${tab === 'upload' ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400 hover:text-gray-300'}`}
+            className={`px-4 py-2 text-sm ${tab === 'upload' ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400' : 'ide-text-muted hover:ide-text'}`}
           >
             Upload File
           </button>

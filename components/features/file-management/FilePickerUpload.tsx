@@ -103,16 +103,16 @@ export function FilePickerUpload({
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded p-6 text-center cursor-pointer transition-colors ${
-          isDragActive ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 hover:border-gray-500'
+          isDragActive ? 'border-sky-500 ide-active' : 'ide-border hover:border-stone-400 dark:hover:border-white/20'
         }`}
       >
         <input {...getInputProps()} />
-        <p className="text-gray-400">
+        <p className="ide-text-muted">
           {isDragActive
             ? 'Drop files here...'
             : 'Drag & drop files, or click to select'}
         </p>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs ide-text-muted mt-1">
           .liquid, .js, .ts, .css, .scss • max 10MB each
         </p>
       </div>
@@ -123,9 +123,9 @@ export function FilePickerUpload({
             {selected.map((s, i) => (
               <div
                 key={`${s.file.name}-${i}`}
-                className="flex items-center justify-between py-1 px-2 bg-gray-800 rounded"
+                className="flex items-center justify-between py-1 px-2 ide-surface-panel rounded"
               >
-                <span className="text-sm text-gray-300 truncate flex-1">
+                <span className="text-sm ide-text truncate flex-1">
                   {s.file.name}
                   {s.error && <span className="text-red-400 ml-1">({s.error})</span>}
                 </span>
@@ -143,7 +143,7 @@ export function FilePickerUpload({
             type="button"
             onClick={upload}
             disabled={uploading || selected.every((s) => s.error)}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? 'Uploading...' : `Upload ${selected.length} file(s)`}
           </button>

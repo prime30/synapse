@@ -135,8 +135,8 @@ export function FAQAccordion({ categories, className = '' }: FAQAccordionProps) 
       <div className="flex-1 overflow-y-auto min-h-0">
         {filteredCategories.length === 0 ? (
           <div className="px-3 py-6 text-center">
-            <p className="text-xs text-gray-500">No results for &ldquo;{search}&rdquo;</p>
-            <p className="text-[10px] text-gray-600 mt-1">
+            <p className="text-xs ide-text-muted">No results for &ldquo;{search}&rdquo;</p>
+            <p className="text-[10px] ide-text-quiet mt-1">
               Try a different search or contact us for help.
             </p>
           </div>

@@ -50,7 +50,7 @@ export default async function AccountLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex">
+    <div className="min-h-screen ide-surface ide-text flex">
       <AccountSidebar
         user={{
           email: user.email ?? '',

@@ -41,7 +41,7 @@ export function FileContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-[100] py-1 bg-gray-800 border border-gray-600 rounded shadow-xl min-w-[160px]"
+      className="fixed z-[100] py-1 ide-surface-pop border ide-border rounded shadow-xl min-w-[160px]"
       style={{ left: x, top: y }}
     >
       {items.map((item) => (
@@ -52,8 +52,8 @@ export function FileContextMenu({
             item.onClick();
             onClose();
           }}
-          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors ${
-            item.dangerous ? 'text-red-400' : 'text-gray-200'
+          className={`w-full px-3 py-2 text-left text-sm ide-hover transition-colors ${
+            item.dangerous ? 'text-red-400' : 'ide-text'
           }`}
         >
           {item.label}

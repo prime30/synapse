@@ -96,14 +96,14 @@ export function FileTabs({
   return (
     <div className="flex flex-col">
       {hasGroups && (
-        <div className="bg-gray-900/80 border-b border-gray-800 px-2 py-1 flex gap-1.5 overflow-x-auto">
+        <div className="ide-surface-panel border-b ide-border px-2 py-1 flex gap-1.5 overflow-x-auto">
           <button
             type="button"
             onClick={() => onGroupSelect?.('__all__')}
             className={`px-2.5 py-1 text-xs rounded-full cursor-pointer transition-colors ${
               activeGroupId == null
-                ? 'bg-gray-700 text-white'
-                : 'bg-gray-800/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800'
+                ? 'ide-surface-inset ide-text'
+                : 'ide-surface-panel ide-text-muted hover:ide-text ide-hover'
             }`}
           >
             All
@@ -113,8 +113,8 @@ export function FileTabs({
               key={group.id}
               className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full cursor-pointer transition-colors ${
                 activeGroupId === group.id
-                  ? 'bg-gray-700 text-white'
-                  : 'bg-gray-800/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800'
+                  ? 'ide-surface-inset ide-text'
+                  : 'ide-surface-panel ide-text-muted hover:ide-text ide-hover'
               }`}
               role="button"
               tabIndex={0}
@@ -133,7 +133,7 @@ export function FileTabs({
                   e.stopPropagation();
                   onGroupClose?.(group.id);
                 }}
-                className="ml-0.5 hover:text-white transition-colors"
+                className="ml-0.5 hover:ide-text transition-colors"
                 aria-label={`Close group ${group.label}`}
               >
                 ×
@@ -142,7 +142,7 @@ export function FileTabs({
           ))}
         </div>
       )}
-      <div className="flex items-stretch bg-gray-900 border-b border-gray-700 overflow-x-auto">
+      <div className="flex items-stretch ide-surface-panel border-b ide-border overflow-x-auto">
         <div className="flex flex-1 min-w-0">
           {visibleTabs.map((fileId, idx) => {
             const meta = fileMetaMap.get(fileId);
@@ -168,7 +168,7 @@ export function FileTabs({
         <button
           type="button"
           onClick={onAddFile}
-          className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/30 border-l border-gray-700/50 transition-colors"
+          className="px-3 py-2 ide-text-muted hover:ide-text ide-hover border-l ide-border transition-colors"
           aria-label="Add file"
         >
           +

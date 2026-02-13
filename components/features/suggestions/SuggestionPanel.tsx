@@ -17,18 +17,18 @@ type FilterStatus = 'all' | 'pending' | 'applied' | 'history';
 
 function SkeletonCard() {
   return (
-    <div className="border border-gray-700 rounded-lg bg-gray-900/50 p-4 space-y-3 animate-pulse">
+    <div className="border ide-border rounded-lg ide-surface-panel p-4 space-y-3 animate-pulse">
       <div className="flex items-center gap-2">
-        <div className="w-16 h-5 bg-gray-700 rounded" />
-        <div className="w-20 h-4 bg-gray-700 rounded" />
+        <div className="w-16 h-5 ide-surface-inset rounded" />
+        <div className="w-20 h-4 ide-surface-inset rounded" />
       </div>
       <div className="space-y-2">
-        <div className="h-4 bg-gray-700 rounded w-full" />
-        <div className="h-4 bg-gray-700 rounded w-3/4" />
+        <div className="h-4 ide-surface-inset rounded w-full" />
+        <div className="h-4 ide-surface-inset rounded w-3/4" />
       </div>
-      <div className="flex gap-2 pt-2 border-t border-gray-700">
-        <div className="flex-1 h-8 bg-gray-700 rounded" />
-        <div className="flex-1 h-8 bg-gray-700 rounded" />
+      <div className="flex gap-2 pt-2 border-t ide-border">
+        <div className="flex-1 h-8 ide-surface-inset rounded" />
+        <div className="flex-1 h-8 ide-surface-inset rounded" />
       </div>
     </div>
   );
@@ -111,17 +111,17 @@ export function SuggestionPanel({
     : null;
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-700 bg-gray-900">
+    <div className="flex flex-col h-full border-l ide-border ide-surface-panel">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-700">
+      <div className="px-4 py-3 border-b ide-border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-200">Suggestions</h2>
+          <h2 className="text-sm font-semibold ide-text">Suggestions</h2>
           {fileId && filter !== 'history' && (
             <button
               type="button"
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 text-xs rounded bg-sky-500 hover:bg-sky-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isGenerating ? 'Generating…' : 'Generate'}
             </button>
@@ -145,8 +145,8 @@ export function SuggestionPanel({
               }}
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 filter === f
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
+                  ? 'bg-sky-500 text-white'
+                  : 'ide-text-muted ide-hover'
               }`}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -157,13 +157,13 @@ export function SuggestionPanel({
 
       {/* Diff preview drawer */}
       {viewingDiff && (
-        <div className="border-b border-gray-700">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/60">
-            <span className="text-xs font-medium text-gray-300">Diff Preview</span>
+        <div className="border-b ide-border">
+          <div className="flex items-center justify-between px-4 py-2 ide-surface-panel">
+            <span className="text-xs font-medium ide-text">Diff Preview</span>
             <button
               type="button"
               onClick={() => setViewingDiffId(null)}
-              className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
+              className="text-xs ide-text-muted hover:ide-text transition-colors"
             >
               Close
             </button>
@@ -192,7 +192,7 @@ export function SuggestionPanel({
             <SkeletonCard />
           </>
         ) : filteredSuggestions.length === 0 ? (
-          <div className="text-center py-8 text-sm text-gray-500">
+          <div className="text-center py-8 text-sm ide-text-muted">
             <p className="mb-2">No suggestions yet.</p>
             {fileId ? (
               <p className="text-xs">
@@ -223,7 +223,7 @@ export function SuggestionPanel({
                       viewingDiffId === suggestion.id ? null : suggestion.id
                     )
                   }
-                  className="mt-1 px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+                  className="mt-1 px-2 py-0.5 text-[11px] ide-text-muted hover:ide-text transition-colors"
                 >
                   {viewingDiffId === suggestion.id ? 'Hide diff' : 'View diff'}
                 </button>

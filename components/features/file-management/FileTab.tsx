@@ -43,10 +43,10 @@ export function FileTab({
       onDrop={() => { setIsDragOver(false); onDrop(index); }}
       className={`
         group flex items-center gap-1 px-3 py-2 min-w-0 max-w-[150px]
-        border-r border-gray-700/50 cursor-pointer
-        hover:bg-gray-700/30 transition-colors
-        ${isActive ? 'bg-gray-700/50 text-white' : 'bg-gray-800/50 text-gray-400'}
-        ${isDragOver ? 'border-l-2 border-l-blue-500' : ''}
+        border-r ide-border cursor-pointer
+        ide-hover transition-colors
+        ${isActive ? 'ide-surface-inset ide-text' : 'ide-surface-panel ide-text-muted'}
+        ${isDragOver ? 'border-l-2 border-l-sky-500' : ''}
       `}
       onClick={onSelect}
     >
@@ -68,7 +68,7 @@ export function FileTab({
           e.stopPropagation();
           onClose();
         }}
-        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-600 text-gray-400 hover:text-white transition-opacity"
+        className="opacity-0 group-hover:opacity-100 p-0.5 rounded ide-hover ide-text-muted hover:ide-text transition-opacity"
         aria-label="Close tab"
       >
         ×

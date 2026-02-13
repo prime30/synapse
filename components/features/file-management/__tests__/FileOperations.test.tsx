@@ -40,11 +40,11 @@ describe('FileContextMenu', () => {
     expect(deleteButton.className).toContain('text-red-400');
   });
 
-  it('non-dangerous items get gray text (text-gray-200)', () => {
+  it('non-dangerous items get ide-text', () => {
     render(<FileContextMenu {...defaultProps} />);
 
     const renameButton = screen.getByText('Rename');
-    expect(renameButton.className).toContain('text-gray-200');
+    expect(renameButton.className).toContain('ide-text');
   });
 
   it('calls onClick and onClose when item clicked', () => {

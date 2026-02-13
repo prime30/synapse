@@ -185,7 +185,7 @@ export function SectionListSidebar({
               </span>
 
               {/* Section name */}
-              <span className="flex-1 text-sm text-gray-200 truncate">
+              <span className="flex-1 text-sm ide-text truncate">
                 {formatSectionType(section.type)}
               </span>
 
@@ -197,7 +197,7 @@ export function SectionListSidebar({
                     e.stopPropagation();
                     onRemove(section.id);
                   }}
-                  className="flex-shrink-0 p-1 text-gray-500 hover:text-red-400 transition-colors rounded"
+                  className="flex-shrink-0 p-1 ide-text-muted hover:text-red-400 transition-colors rounded"
                   title="Remove section"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -211,11 +211,11 @@ export function SectionListSidebar({
       </ul>
 
       {/* Add Section button */}
-      <div className="p-3 border-t border-gray-800">
+      <div className="p-3 border-t ide-border">
         <button
           type="button"
           onClick={onAdd}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-md transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-sky-500 dark:text-sky-400 hover:text-sky-400 ide-active border border-sky-500/20 rounded-md transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

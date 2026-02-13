@@ -136,14 +136,14 @@ export default function SchemaSettingInput({
           <div className="flex items-center gap-3">
             <input
               type="range"
-              className="flex-1 accent-blue-500"
+              className="flex-1 accent-sky-500"
               value={rangeVal}
               min={setting.min}
               max={setting.max}
               step={setting.step}
               onChange={(e) => onChange(Number(e.target.value))}
             />
-            <span className="min-w-[3ch] text-right text-xs text-gray-400 tabular-nums">
+            <span className="min-w-[3ch] text-right text-xs ide-text-muted tabular-nums">
               {rangeVal}
               {setting.unit ? ` ${setting.unit}` : ''}
             </span>
@@ -179,7 +179,7 @@ export default function SchemaSettingInput({
                 <input
                   type="radio"
                   name={setting.id}
-                  className="accent-blue-500"
+                  className="accent-sky-500"
                   value={opt.value}
                   checked={(value as string) === opt.value}
                   onChange={() => onChange(opt.value)}

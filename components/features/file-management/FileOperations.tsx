@@ -102,15 +102,15 @@ export function FileOperations({
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/60">
-          <div className="bg-gray-900 rounded p-4 max-w-sm border border-gray-700">
-            <p className="text-gray-200 mb-4">
+          <div className="ide-surface-pop rounded p-4 max-w-sm border ide-border">
+            <p className="ide-text mb-4">
               Delete {fileName}? This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(false)}
-                className="px-3 py-1 text-gray-400 hover:text-white"
+                className="px-3 py-1 ide-text-muted hover:ide-text"
               >
                 Cancel
               </button>
@@ -128,8 +128,8 @@ export function FileOperations({
 
       {renameValue !== null && (
         <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/60">
-          <div className="bg-gray-900 rounded p-4 max-w-sm border border-gray-700 w-full mx-4">
-            <p className="text-gray-200 mb-2">Rename file</p>
+          <div className="ide-surface-pop rounded p-4 max-w-sm border ide-border w-full mx-4">
+            <p className="ide-text mb-2">Rename file</p>
             <input
               type="text"
               value={renameValue}
@@ -138,21 +138,21 @@ export function FileOperations({
                 if (e.key === 'Enter') handleRenameSubmit();
                 if (e.key === 'Escape') setRenameValue(null);
               }}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-gray-200 mb-4"
+              className="w-full px-3 py-2 ide-input mb-4"
               autoFocus
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRenameValue(null)}
-                className="px-3 py-1 text-gray-400 hover:text-white"
+                className="px-3 py-1 ide-text-muted hover:ide-text"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRenameSubmit}
-                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500"
+                className="px-3 py-1 bg-sky-600 text-white rounded hover:bg-sky-500"
               >
                 Rename
               </button>

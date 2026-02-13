@@ -18,12 +18,12 @@ export interface BudgetConfig {
 }
 
 export const DEFAULT_BUDGET: BudgetConfig = {
-  total: 120_000,
-  system: 4_000,
+  total: 180_000,   // Shopify themes + Claude's 200k window
+  system: 12_000,   // PM knowledge modules + specialist prompts
   history: 30_000,
-  files: 60_000,
-  user: 8_000,
-  reserve: 18_000,
+  files: 100_000,   // Manifest + selected file content
+  user: 12_000,     // Selection injection + DOM context
+  reserve: 24_000,  // Safety margin for response tokens
 };
 
 /**

@@ -88,7 +88,7 @@ function ProgressRing({
         y="50%"
         textAnchor="middle"
         dominantBaseline="central"
-        className="fill-white text-xs font-medium"
+        className="ide-text text-xs font-medium"
       >
         {used}/{total}
       </text>
@@ -120,7 +120,7 @@ export default function AccountOverviewPage() {
       {/* ── Heading ────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-semibold">Overview</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="ide-text-muted text-sm mt-1">
           A snapshot of your account activity and usage.
         </p>
       </div>
@@ -128,13 +128,13 @@ export default function AccountOverviewPage() {
       {/* ── Stats row ──────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Agent Requests */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 flex items-center gap-5">
+        <div className="ide-surface-panel ide-border rounded-lg p-6 flex items-center gap-5">
           <ProgressRing used={MOCK_USAGE.used} total={MOCK_USAGE.total} />
           <div>
-            <p className="text-sm text-gray-400">Agent Requests</p>
+            <p className="text-sm ide-text-muted">Agent Requests</p>
             <p className="text-xl font-semibold mt-1">
               {MOCK_USAGE.used}{' '}
-              <span className="text-gray-500 text-base font-normal">
+              <span className="ide-text-muted text-base font-normal">
                 / {MOCK_USAGE.total}
               </span>
             </p>
@@ -142,12 +142,12 @@ export default function AccountOverviewPage() {
         </div>
 
         {/* Estimated Cost */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 flex items-center gap-5">
-          <div className="h-20 w-20 rounded-full bg-gray-800 flex items-center justify-center shrink-0">
+        <div className="ide-surface-panel ide-border rounded-lg p-6 flex items-center gap-5">
+          <div className="h-20 w-20 rounded-full ide-surface-inset flex items-center justify-center shrink-0">
             <span className="text-emerald-400 text-lg font-semibold">$</span>
           </div>
           <div>
-            <p className="text-sm text-gray-400">Estimated Cost</p>
+            <p className="text-sm ide-text-muted">Estimated Cost</p>
             <p className="text-xl font-semibold mt-1">
               ${MOCK_COST.toFixed(2)}
             </p>
@@ -156,7 +156,7 @@ export default function AccountOverviewPage() {
       </div>
 
       {/* ── Analytics chart ────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+      <div className="ide-surface-panel ide-border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-medium">Request Activity</h2>
           <div className="flex gap-1">
@@ -166,8 +166,8 @@ export default function AccountOverviewPage() {
                 onClick={() => setRange(r.days)}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${
                   range === r.days
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                    ? 'ide-surface-inset ide-text'
+                    : 'ide-text-muted ide-hover'
                 }`}
               >
                 {r.label}
@@ -230,10 +230,10 @@ export default function AccountOverviewPage() {
       {/* ── Quick status ───────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Current Plan */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-400">Current Plan</h3>
+        <div className="ide-surface-panel ide-border rounded-lg p-6">
+          <h3 className="text-sm font-medium ide-text-muted">Current Plan</h3>
           <p className="text-xl font-semibold mt-2">{MOCK_PLAN}</p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs ide-text-muted mt-1">
             Renews {MOCK_RENEWAL}
           </p>
           <Link
@@ -245,17 +245,17 @@ export default function AccountOverviewPage() {
         </div>
 
         {/* Integrations */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-400">Integrations</h3>
+        <div className="ide-surface-panel ide-border rounded-lg p-6">
+          <h3 className="text-sm font-medium ide-text-muted">Integrations</h3>
           <div className="flex items-center gap-3 mt-3">
-            <div className="h-9 w-9 rounded-lg bg-gray-800 flex items-center justify-center">
-              <ShoppingBag className="h-4 w-4 text-gray-400" />
+            <div className="h-9 w-9 rounded-lg ide-surface-inset flex items-center justify-center">
+              <ShoppingBag className="h-4 w-4 ide-text-muted" />
             </div>
             <div>
               <p className="text-sm font-medium">Shopify</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <Plug className="h-3 w-3 text-gray-500" />
-                <span className="text-xs text-gray-500">Not connected</span>
+                <Plug className="h-3 w-3 ide-text-muted" />
+                <span className="text-xs ide-text-muted">Not connected</span>
               </div>
             </div>
           </div>

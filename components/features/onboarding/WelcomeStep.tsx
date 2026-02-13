@@ -81,7 +81,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
 
       {/* Subtitle */}
       <motion.p
-        className="mt-4 text-base text-stone-600 dark:text-gray-400 max-w-lg leading-relaxed"
+        className="mt-4 text-base ide-text-muted max-w-lg leading-relaxed"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
@@ -108,7 +108,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
                 <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
                   {prop.title}
                 </h3>
-                <p className="text-xs text-stone-600 dark:text-gray-400 leading-relaxed">
+                <p className="text-xs ide-text-muted leading-relaxed">
                   {prop.description}
                 </p>
                 <span className="text-[11px] font-medium text-emerald-400/80">
@@ -137,7 +137,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
-        <p className="mt-3 text-xs text-stone-500 dark:text-gray-500">Takes about 2 minutes</p>
+        <p className="mt-3 text-xs ide-text-muted">Takes about 2 minutes</p>
       </motion.div>
     </div>
   );

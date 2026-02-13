@@ -101,12 +101,12 @@ describe('FileListItem', () => {
   });
 
   describe('file type color coding', () => {
-    it('applies blue color for liquid files', () => {
+    it('applies sky color for liquid files', () => {
       const file = createMockFile({ file_type: 'liquid' });
       const { container } = render(
         <FileListItem file={file} onClick={() => {}} />
       );
-      const icon = container.querySelector('.text-blue-400');
+      const icon = container.querySelector('.text-sky-500');
       expect(icon).toBeDefined();
     });
 
@@ -128,12 +128,12 @@ describe('FileListItem', () => {
       expect(icon).toBeDefined();
     });
 
-    it('applies gray color for other file types', () => {
+    it('applies ide-text-muted for other file types', () => {
       const file = createMockFile({ file_type: 'other' });
       const { container } = render(
         <FileListItem file={file} onClick={() => {}} />
       );
-      const icon = container.querySelector('.text-gray-400');
+      const icon = container.querySelector('.ide-text-muted');
       expect(icon).toBeDefined();
     });
   });

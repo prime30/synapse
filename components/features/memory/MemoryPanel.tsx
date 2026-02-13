@@ -33,7 +33,7 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
       ? 'text-green-400 bg-green-400/10'
       : pct >= 60
         ? 'text-yellow-400 bg-yellow-400/10'
-        : 'text-gray-400 bg-gray-400/10';
+        : 'ide-text-muted bg-stone-200/50 dark:bg-white/10';
 
   return (
     <span
@@ -62,7 +62,7 @@ function FeedbackButtons({
         className={`p-1 rounded transition-colors ${
           currentFeedback === 'correct'
             ? 'text-green-400 bg-green-400/20'
-            : 'text-gray-500 hover:text-green-400 hover:bg-green-400/10'
+            : 'ide-text-muted hover:text-green-400 hover:bg-green-400/10'
         }`}
         title="Mark as correct"
       >
@@ -76,7 +76,7 @@ function FeedbackButtons({
         className={`p-1 rounded transition-colors ${
           currentFeedback === 'wrong'
             ? 'text-red-400 bg-red-400/20'
-            : 'text-gray-500 hover:text-red-400 hover:bg-red-400/10'
+            : 'ide-text-muted hover:text-red-400 hover:bg-red-400/10'
         }`}
         title="Mark as wrong"
       >
@@ -103,16 +103,16 @@ function ConventionItem({
   const convention = entry.content as Convention;
 
   return (
-    <div className="px-3 py-2.5 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors">
+    <div className="px-3 py-2.5 border-b ide-border last:border-b-0 ide-hover transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm text-gray-200 font-medium truncate">
+            <span className="text-sm ide-text font-medium truncate">
               {convention.pattern}
             </span>
             <ConfidenceBadge confidence={entry.confidence} />
           </div>
-          <div className="text-[11px] text-gray-500 mb-1">
+          <div className="text-[11px] ide-text-muted mb-1">
             Source: {convention.source}
           </div>
           {convention.examples.length > 0 && (
@@ -120,13 +120,13 @@ function ConventionItem({
               {convention.examples.slice(0, 3).map((example, i) => (
                 <code
                   key={i}
-                  className="px-1.5 py-0.5 bg-gray-800 rounded text-[10px] text-gray-400 font-mono"
+                  className="px-1.5 py-0.5 ide-surface-inset rounded text-[10px] ide-text-muted font-mono"
                 >
                   {example.length > 30 ? example.slice(0, 30) + '...' : example}
                 </code>
               ))}
               {convention.examples.length > 3 && (
-                <span className="text-[10px] text-gray-600">
+                <span className="text-[10px] ide-text-quiet">
                   +{convention.examples.length - 3} more
                 </span>
               )}
@@ -141,7 +141,7 @@ function ConventionItem({
           <button
             type="button"
             onClick={() => onForget(entry.id)}
-            className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            className="p-1 rounded ide-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
             title="Forget this convention"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -169,26 +169,26 @@ function DecisionItem({
   const decision = entry.content as Decision;
 
   return (
-    <div className="px-3 py-2.5 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors">
+    <div className="px-3 py-2.5 border-b ide-border last:border-b-0 ide-hover transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm text-gray-200 font-medium">
+            <span className="text-sm ide-text font-medium">
               {decision.choice}
             </span>
             <ConfidenceBadge confidence={entry.confidence} />
           </div>
-          <div className="text-[11px] text-gray-400 mb-1">
+          <div className="text-[11px] ide-text-muted mb-1">
             {decision.reasoning}
           </div>
-          <div className="text-[10px] text-gray-600">
+          <div className="text-[10px] ide-text-quiet">
             {new Date(decision.timestamp).toLocaleDateString(undefined, {
               month: 'short',
               day: 'numeric',
               year: 'numeric',
             })}
             {decision.context && (
-              <span className="ml-2 text-gray-600" title={decision.context}>
+              <span className="ml-2 ide-text-quiet" title={decision.context}>
                 — {decision.context.slice(0, 60)}
                 {decision.context.length > 60 ? '...' : ''}
               </span>
@@ -203,7 +203,7 @@ function DecisionItem({
           <button
             type="button"
             onClick={() => onForget(entry.id)}
-            className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            className="p-1 rounded ide-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
             title="Forget this decision"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -231,11 +231,11 @@ function PreferenceItem({
   const preference = entry.content as Preference;
 
   return (
-    <div className="px-3 py-2.5 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors">
+    <div className="px-3 py-2.5 border-b ide-border last:border-b-0 ide-hover transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm text-gray-200 font-medium">
+            <span className="text-sm ide-text font-medium">
               {preference.preference}
             </span>
             <ConfidenceBadge confidence={entry.confidence} />
@@ -245,8 +245,8 @@ function PreferenceItem({
               Avoids: {preference.antiPattern}
             </div>
           )}
-          <div className="flex items-center gap-2 text-[10px] text-gray-600">
-            <span className="px-1.5 py-0.5 bg-gray-800 rounded">
+          <div className="flex items-center gap-2 text-[10px] ide-text-quiet">
+            <span className="px-1.5 py-0.5 ide-surface-inset rounded">
               {preference.category}
             </span>
             <span>{preference.observationCount} observations</span>
@@ -260,7 +260,7 @@ function PreferenceItem({
           <button
             type="button"
             onClick={() => onForget(entry.id)}
-            className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            className="p-1 rounded ide-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
             title="Forget this preference"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -300,8 +300,8 @@ function EmptyState({ tab }: { tab: TabId }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
       <span className="text-2xl mb-2">{msg.icon}</span>
-      <div className="text-sm text-gray-400 font-medium mb-1">{msg.title}</div>
-      <div className="text-[11px] text-gray-600 max-w-[240px]">{msg.description}</div>
+      <div className="text-sm ide-text-muted font-medium mb-1">{msg.title}</div>
+      <div className="text-[11px] ide-text-quiet max-w-[240px]">{msg.description}</div>
     </div>
   );
 }
@@ -312,16 +312,16 @@ function SkeletonItem() {
   return (
     <div className="flex items-start gap-3 px-3 py-2.5 animate-pulse">
       <div className="flex-1 space-y-2">
-        <div className="h-4 bg-gray-700 rounded w-48" />
-        <div className="h-3 bg-gray-700 rounded w-32" />
+        <div className="h-4 ide-surface-inset rounded w-48" />
+        <div className="h-3 ide-surface-inset rounded w-32" />
         <div className="flex gap-1">
-          <div className="h-4 bg-gray-700 rounded w-16" />
-          <div className="h-4 bg-gray-700 rounded w-20" />
+          <div className="h-4 ide-surface-inset rounded w-16" />
+          <div className="h-4 ide-surface-inset rounded w-20" />
         </div>
       </div>
       <div className="flex gap-1 shrink-0">
-        <div className="w-6 h-6 bg-gray-700 rounded" />
-        <div className="w-6 h-6 bg-gray-700 rounded" />
+        <div className="w-6 h-6 ide-surface-inset rounded" />
+        <div className="w-6 h-6 ide-surface-inset rounded" />
       </div>
     </div>
   );
@@ -378,9 +378,9 @@ export function MemoryPanel({
   );
 
   return (
-    <div className="border border-gray-700 rounded-lg bg-gray-900/50 flex flex-col overflow-hidden">
+    <div className="border ide-border rounded-lg ide-surface-panel flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800">
+      <div className="flex items-center gap-2 px-4 py-3 border-b ide-border">
         <svg
           width="16"
           height="16"
@@ -397,14 +397,14 @@ export function MemoryPanel({
           <path d="M12 2a7 7 0 0 1 4.9 2" />
           <circle cx="12" cy="11" r="3" />
         </svg>
-        <span className="text-sm font-medium text-gray-200">Developer Memory</span>
-        <span className="text-[10px] text-gray-600 ml-auto">
+        <span className="text-sm font-medium ide-text">Developer Memory</span>
+        <span className="text-[10px] ide-text-quiet ml-auto">
           {memories.length} {memories.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800">
+      <div className="flex border-b ide-border">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -413,12 +413,12 @@ export function MemoryPanel({
             className={`flex-1 px-3 py-2 text-xs font-medium transition-colors relative ${
               activeTab === tab.id
                 ? 'text-purple-400'
-                : 'text-gray-500 hover:text-gray-300'
+                : 'ide-text-muted hover:ide-text ide-hover'
             }`}
           >
             {tab.label}
             {tabCounts[tab.id] > 0 && (
-              <span className="ml-1 text-[10px] text-gray-600">
+              <span className="ml-1 text-[10px] ide-text-quiet">
                 ({tabCounts[tab.id]})
               </span>
             )}

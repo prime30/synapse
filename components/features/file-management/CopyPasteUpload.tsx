@@ -116,7 +116,7 @@ export function CopyPasteUpload({
       </div>
 
       {detectedType && (
-        <p className="text-sm text-gray-400">
+        <p className="text-sm ide-text-muted">
           Detected Type: {getTypeLabel(detectedType)}
         </p>
       )}
@@ -130,7 +130,7 @@ export function CopyPasteUpload({
       <button
         type="submit"
         disabled={isSubmitting || !sizeOk}
-        className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Adding...' : 'Add File'}
       </button>

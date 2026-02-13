@@ -64,11 +64,11 @@ export function DiffPreview({
   const lines = diffLines(originalCode, suggestedCode);
 
   return (
-    <div className="grid grid-cols-2 gap-4 border border-gray-700 rounded-lg overflow-hidden bg-gray-900">
+    <div className="grid grid-cols-2 gap-4 border ide-border rounded-lg overflow-hidden ide-surface-pop">
       {/* Original column */}
       <div className="flex flex-col">
-        <div className="px-3 py-2 bg-gray-800 border-b border-gray-700">
-          <span className="text-xs font-medium text-gray-400">Original</span>
+        <div className="px-3 py-2 ide-surface-panel border-b ide-border">
+          <span className="text-xs font-medium ide-text-muted">Original</span>
         </div>
         <div className="overflow-x-auto">
           <div className="font-mono text-sm">
@@ -81,12 +81,12 @@ export function DiffPreview({
                     isChanged ? 'bg-red-500/10' : ''
                   }`}
                 >
-                  <span className="text-gray-500 px-2 py-1 text-xs select-none">
+                  <span className="ide-text-muted px-2 py-1 text-xs select-none">
                     {idx + 1}
                   </span>
                   <span
                     className={`flex-1 px-2 py-1 ${
-                      isChanged ? 'text-red-400 line-through' : 'text-gray-300'
+                      isChanged ? 'text-red-400 line-through' : 'ide-text'
                     }`}
                   >
                     {item.originalLine ?? ''}
@@ -100,8 +100,8 @@ export function DiffPreview({
 
       {/* Suggested column */}
       <div className="flex flex-col">
-        <div className="px-3 py-2 bg-gray-800 border-b border-gray-700">
-          <span className="text-xs font-medium text-gray-400">Suggested</span>
+        <div className="px-3 py-2 ide-surface-panel border-b ide-border">
+          <span className="text-xs font-medium ide-text-muted">Suggested</span>
         </div>
         <div className="overflow-x-auto">
           <div className="font-mono text-sm">
@@ -114,12 +114,12 @@ export function DiffPreview({
                     isChanged ? 'bg-green-500/10' : ''
                   }`}
                 >
-                  <span className="text-gray-500 px-2 py-1 text-xs select-none">
+                  <span className="ide-text-muted px-2 py-1 text-xs select-none">
                     {idx + 1}
                   </span>
                   <span
                     className={`flex-1 px-2 py-1 ${
-                      isChanged ? 'text-green-400' : 'text-gray-300'
+                      isChanged ? 'text-green-400' : 'ide-text'
                     }`}
                   >
                     {item.suggestedLine ?? ''}

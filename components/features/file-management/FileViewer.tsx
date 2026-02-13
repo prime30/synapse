@@ -25,7 +25,7 @@ export function FileViewer({ fileId, onEdit, onCopy }: FileViewerProps) {
 
   if (!fileId) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 ide-text-muted">
         Select a file
       </div>
     );
@@ -34,7 +34,7 @@ export function FileViewer({ fileId, onEdit, onCopy }: FileViewerProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+        <div className="animate-pulse ide-text-muted">Loading...</div>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function FileViewer({ fileId, onEdit, onCopy }: FileViewerProps) {
         <button
           type="button"
           onClick={() => refetch()}
-          className="text-blue-400 text-sm hover:underline"
+          className="text-sky-500 dark:text-sky-400 text-sm hover:underline"
         >
           Retry
         </button>
@@ -56,11 +56,11 @@ export function FileViewer({ fileId, onEdit, onCopy }: FileViewerProps) {
 
   return (
     <div className="relative flex flex-col h-full">
-      <div className="flex items-center justify-end gap-2 p-2 border-b border-gray-700 bg-gray-900/50">
+      <div className="flex items-center justify-end gap-2 p-2 border-b ide-border ide-surface-panel">
         <button
           type="button"
           onClick={handleCopy}
-          className="px-2 py-1 text-sm text-gray-400 hover:text-white"
+          className="px-2 py-1 text-sm ide-text-muted hover:ide-text"
         >
           Copy
         </button>
@@ -68,7 +68,7 @@ export function FileViewer({ fileId, onEdit, onCopy }: FileViewerProps) {
           <button
             type="button"
             onClick={onEdit}
-            className="px-2 py-1 text-sm text-blue-400 hover:text-blue-300"
+            className="px-2 py-1 text-sm text-sky-500 dark:text-sky-400 hover:text-sky-400 dark:hover:text-sky-300"
           >
             Edit
           </button>

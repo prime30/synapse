@@ -49,7 +49,7 @@ const TAB_LABELS: Record<ThemeConsoleTab, string> = {
 const LEVEL_COLORS: Record<ThemeConsoleEntry['level'], string> = {
   error: 'bg-red-500',
   warning: 'bg-amber-500',
-  info: 'bg-blue-500',
+  info: 'bg-sky-500',
   success: 'bg-emerald-500',
 };
 

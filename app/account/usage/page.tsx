@@ -165,7 +165,7 @@ function SortHeader({
   const active = current === field;
   return (
     <th
-      className={`px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-200 transition-colors ${
+      className={`px-4 py-3 text-xs font-medium ide-text-muted uppercase tracking-wider cursor-pointer select-none hover:ide-text transition-colors ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
       onClick={() => onSort(field)}
@@ -275,7 +275,7 @@ export default function UsagePage() {
       {/* ── Heading ────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-semibold">Usage</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="ide-text-muted text-sm mt-1">
           Track your AI agent usage across all projects.
         </p>
       </div>
@@ -283,7 +283,7 @@ export default function UsagePage() {
       {/* ── Controls ───────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Date range label */}
-        <span className="text-sm text-gray-300 bg-gray-900 border border-gray-800 rounded-md px-3 py-1.5">
+        <span className="text-sm ide-text-2 ide-surface-panel ide-border rounded-md px-3 py-1.5">
           {dateRangeLabel(rangeDays)}
         </span>
 
@@ -295,8 +295,8 @@ export default function UsagePage() {
               onClick={() => handleRangeChange(r.days)}
               className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
                 rangeDays === r.days
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                  ? 'ide-surface-inset ide-text'
+                  : 'ide-text-muted ide-hover'
               }`}
             >
               {r.label}
@@ -309,7 +309,7 @@ export default function UsagePage() {
         {/* Export CSV */}
         <button
           onClick={() => exportCsv(sorted)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md ide-border ide-text-muted ide-hover transition-colors"
         >
           <Download className="h-3.5 w-3.5" />
           Export CSV
@@ -317,10 +317,10 @@ export default function UsagePage() {
       </div>
 
       {/* ── Table ──────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+      <div className="ide-surface-panel ide-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-gray-800">
+            <thead className="border-b ide-border">
               <tr>
                 <SortHeader
                   label="Date"
@@ -361,12 +361,12 @@ export default function UsagePage() {
                 />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800/60">
+            <tbody className="divide-y divide-stone-200 dark:divide-white/10">
               {pageRecords.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-4 py-12 text-center text-gray-500"
+                    className="px-4 py-12 text-center ide-text-muted"
                   >
                     No usage records found.
                   </td>
@@ -375,23 +375,23 @@ export default function UsagePage() {
                 pageRecords.map((r) => (
                   <tr
                     key={r.id}
-                    className="hover:bg-gray-800/40 transition-colors"
+                    className="ide-hover transition-colors"
                   >
-                    <td className="px-4 py-3 text-gray-300 whitespace-nowrap">
+                    <td className="px-4 py-3 ide-text-2 whitespace-nowrap">
                       {formatDate(r.date)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="capitalize text-gray-300">
+                      <span className="capitalize ide-text-2">
                         {r.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-300 whitespace-nowrap">
+                    <td className="px-4 py-3 ide-text-2 whitespace-nowrap">
                       {MODEL_DISPLAY[r.model] ?? r.model}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-300 whitespace-nowrap tabular-nums">
+                    <td className="px-4 py-3 text-right ide-text-2 whitespace-nowrap tabular-nums">
                       {formatTokens(r.inputTokens + r.outputTokens)}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-300 whitespace-nowrap tabular-nums">
+                    <td className="px-4 py-3 text-right ide-text-2 whitespace-nowrap tabular-nums">
                       {formatCost(r.cost)}
                     </td>
                   </tr>
@@ -402,17 +402,17 @@ export default function UsagePage() {
         </div>
 
         {/* ── Footer: project filter + pagination ──── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-800 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t ide-border text-sm">
           {/* Project filter */}
           <div className="flex items-center gap-2">
-            <label htmlFor="project-filter" className="text-gray-500 text-xs">
+            <label htmlFor="project-filter" className="ide-text-muted text-xs">
               Project:
             </label>
             <select
               id="project-filter"
               value={project}
               onChange={handleProjectChange}
-              className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 focus:border-gray-600 focus:ring-0 focus:outline-none"
+              className="ide-input text-xs px-2 py-1"
             >
               <option value="all">All Projects</option>
               {MOCK_PROJECTS.map((p) => (
@@ -425,21 +425,21 @@ export default function UsagePage() {
 
           {/* Pagination */}
           <div className="flex items-center gap-3">
-            <span className="text-gray-500 text-xs">
+            <span className="ide-text-muted text-xs">
               Showing {showStart}–{showEnd} of {sorted.length}
             </span>
             <div className="flex gap-1">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-1 rounded-md ide-text-muted ide-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-1 rounded-md ide-text-muted ide-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

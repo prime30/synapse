@@ -151,23 +151,23 @@ function CustomizerInner({
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full bg-gray-950">
+    <div className="flex h-full ide-surface">
       {/* Left sidebar — Section list + settings */}
-      <div className="w-[320px] flex flex-col border-r border-gray-800 bg-gray-900/80 shrink-0">
+      <div className="w-[320px] flex flex-col border-r ide-border ide-surface-panel shrink-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-800">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b ide-border">
           <div className="flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sky-500 dark:text-sky-400">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M3 9h18" />
               <path d="M9 21V9" />
             </svg>
-            <span className="text-sm font-medium text-gray-200">Customizer</span>
+            <span className="text-sm font-medium ide-text">Customizer</span>
           </div>
           <button
             type="button"
             onClick={onExit}
-            className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+            className="p-1 rounded ide-text-muted ide-hover transition-colors"
             title="Exit Customizer"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -178,7 +178,7 @@ function CustomizerInner({
         </div>
 
         {/* Template selector */}
-        <div className="px-3 py-2 border-b border-gray-800">
+        <div className="px-3 py-2 border-b ide-border">
           <TemplateSelector
             templates={templates}
             selected={activeTemplate}
@@ -207,9 +207,9 @@ function CustomizerInner({
 
         {/* Selected section settings */}
         {selectedSection && schemaParser.schema && (
-          <div className="border-t border-gray-800 flex flex-col max-h-[50%]">
+          <div className="border-t ide-border flex flex-col max-h-[50%]">
             {/* Sub-panel tabs */}
-            <div className="flex border-b border-gray-800 shrink-0">
+            <div className="flex border-b ide-border shrink-0">
               {(['settings', 'blocks', 'schema', 'presets'] as SubPanel[]).map(
                 (panel) => (
                   <button
@@ -218,13 +218,13 @@ function CustomizerInner({
                     onClick={() => setActiveSubPanel(panel)}
                     className={`flex-1 px-2 py-1.5 text-[10px] font-medium capitalize transition-colors relative ${
                       activeSubPanel === panel
-                        ? 'text-blue-400'
-                        : 'text-gray-500 hover:text-gray-300'
+                        ? 'text-sky-500 dark:text-sky-400'
+                        : 'ide-text-muted ide-hover'
                     }`}
                   >
                     {panel}
                     {activeSubPanel === panel && (
-                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />
+                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-sky-500 dark:bg-sky-400" />
                     )}
                   </button>
                 )

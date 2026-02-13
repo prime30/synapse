@@ -156,7 +156,7 @@ function ArchivedRow({
   if (confirming) {
     return (
       <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-stone-100 dark:bg-white/[0.03] border border-stone-200 dark:border-white/10 text-sm">
-        <span className="text-stone-500 dark:text-gray-400 text-xs">Delete permanently?</span>
+        <span className="ide-text-muted text-xs">Delete permanently?</span>
         <div className="flex gap-1.5">
           <button
             type="button"
@@ -610,7 +610,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
               <button
                 type="button"
                 onClick={() => themesQuery.refetch()}
-                className="px-4 py-1.5 text-sm rounded-lg bg-white/10 text-white hover:bg-white/15 transition-colors"
+                className="px-4 py-1.5 text-sm rounded-lg ide-surface-input ide-text ide-hover transition-colors"
               >
                 Retry
               </button>
@@ -659,7 +659,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.05 }}
-                className="text-[11px] text-stone-500 dark:text-gray-500 text-left px-1 pt-2"
+                className="text-[11px] ide-text-muted text-left px-1 pt-2"
               >
                 Other themes
               </motion.p>
@@ -699,7 +699,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
       <motion.button
         type="button"
         onClick={onSkip}
-        className="mt-8 text-xs text-stone-400 dark:text-gray-500 hover:text-stone-600 dark:hover:text-gray-300 transition-colors"
+        className="mt-8 text-xs ide-text-quiet hover:ide-text-muted transition-colors"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5, delay: 0.25 }}
@@ -715,7 +715,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <p className="text-[11px] text-stone-500 dark:text-gray-500 text-left px-1">
+          <p className="text-[11px] ide-text-muted text-left px-1">
             Or open an existing project:
           </p>
           {activeProjects.map((project) => (
@@ -728,7 +728,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
             >
               <span className="block text-sm font-medium text-stone-900 dark:text-white">{project.name}</span>
               {project.shopify_theme_name && (
-                <span className="block text-xs text-stone-500 dark:text-gray-500 mt-0.5">{project.shopify_theme_name}</span>
+                <span className="block text-xs ide-text-muted mt-0.5">{project.shopify_theme_name}</span>
               )}
             </button>
           ))}
@@ -745,7 +745,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
         >
           <div className="flex items-center gap-2 mb-2">
             <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
-            <span className="text-[11px] text-stone-500 dark:text-gray-500 whitespace-nowrap">Archived Themes</span>
+            <span className="text-[11px] ide-text-muted whitespace-nowrap">Archived Themes</span>
             <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
           </div>
           <div className="space-y-1.5">

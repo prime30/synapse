@@ -57,9 +57,9 @@ export function RelatedFilesPrompt({
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="overflow-hidden"
         >
-          <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-blue-500/5 border border-blue-500/15 rounded-lg text-xs">
-            <span className="text-gray-400 shrink-0">
-              <span className="text-gray-200 font-medium">{triggerFileName}</span> has related files:
+          <div className="flex items-center gap-2 flex-wrap px-3 py-2 ide-active border border-sky-500/15 rounded-lg text-xs">
+            <span className="ide-text-muted shrink-0">
+              <span className="ide-text font-medium">{triggerFileName}</span> has related files:
             </span>
 
             {/* Individual file chips */}
@@ -68,10 +68,10 @@ export function RelatedFilesPrompt({
                 key={f.id}
                 type="button"
                 onClick={() => onOpenFile(f.id)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-700 bg-gray-800/60 text-gray-300 hover:text-white hover:border-gray-500 transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border ide-border ide-surface-panel ide-text ide-hover transition-colors"
                 title={f.path}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400/60 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400/60 shrink-0" />
                 {f.name}
               </button>
             ))}
@@ -85,7 +85,7 @@ export function RelatedFilesPrompt({
                   setVisible(false);
                   setTimeout(onDismiss, 300);
                 }}
-                className="px-2.5 py-1 rounded bg-blue-600/80 text-white text-[11px] font-medium hover:bg-blue-500 transition-colors"
+                className="px-2.5 py-1 rounded bg-sky-600/80 text-white text-[11px] font-medium hover:bg-sky-500 transition-colors"
               >
                 Open all
               </button>
@@ -99,7 +99,7 @@ export function RelatedFilesPrompt({
                     setVisible(false);
                     setTimeout(onDismiss, 300);
                   }}
-                  className="px-2.5 py-1 rounded bg-gray-700 text-gray-300 text-[11px] hover:bg-gray-600 transition-colors"
+                  className="px-2.5 py-1 rounded ide-surface-inset ide-text text-[11px] ide-hover transition-colors"
                   title="Link these files so they always open together"
                 >
                   Link
@@ -113,7 +113,7 @@ export function RelatedFilesPrompt({
                   setVisible(false);
                   setTimeout(onDismiss, 300);
                 }}
-                className="px-1.5 py-1 text-gray-500 hover:text-gray-300 transition-colors"
+                className="px-1.5 py-1 ide-text-muted hover:ide-text transition-colors"
                 aria-label="Dismiss"
               >
                 &times;

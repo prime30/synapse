@@ -56,16 +56,16 @@ export default function AcceptInvitePage() {
   }, [token, acceptInvite]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
+    <div className="min-h-screen flex items-center justify-center ide-surface px-4">
       <div className="w-full max-w-md text-center">
         {/* ── Loading ──────────────────────────────────────────── */}
         {state === 'loading' && (
           <div className="space-y-4">
-            <div className="mx-auto w-10 h-10 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-            <h1 className="text-xl font-semibold text-gray-100">
+            <div className="mx-auto w-10 h-10 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+            <h1 className="text-xl font-semibold ide-text">
               Accepting invitation&hellip;
             </h1>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm ide-text-muted">
               Please wait while we set up your account.
             </p>
           </div>
@@ -85,10 +85,10 @@ export default function AcceptInvitePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-gray-100">
+            <h1 className="text-xl font-semibold ide-text">
               Invitation accepted!
             </h1>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm ide-text-muted">
               Redirecting you to the team members page&hellip;
             </p>
           </div>
@@ -108,14 +108,14 @@ export default function AcceptInvitePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-gray-100">
+            <h1 className="text-xl font-semibold ide-text">
               Invitation failed
             </h1>
-            <p className="text-sm text-gray-400">{errorMessage}</p>
+            <p className="text-sm ide-text-muted">{errorMessage}</p>
             <div className="pt-2">
               <Link
                 href="/account"
-                className="inline-block rounded-full bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium px-5 py-2.5 transition-colors"
+                className="inline-block rounded-full ide-surface-panel ide-hover ide-text text-sm font-medium px-5 py-2.5 transition-colors"
               >
                 Go to Account
               </Link>
