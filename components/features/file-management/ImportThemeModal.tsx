@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useQuery } from '@tanstack/react-query';
 
+function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
 interface ImportThemeModalProps {
   projectId?: string;
   isOpen: boolean;
@@ -60,9 +64,13 @@ export function ImportThemeModal({
   const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
   const [storeError, setStoreError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [successProjectId, setSuccessProjectId] = useState<string | null>(null);
   const [createDevThemeForPreview, setCreateDevThemeForPreview] = useState(true);
   const [previewNote, setPreviewNote] = useState('');
   const [importProgress, setImportProgress] = useState<'idle' | 'importing'>('idle');
+  const [totalAssets, setTotalAssets] = useState(0);
+  const [importedCount, setImportedCount] = useState(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -161,12 +169,58 @@ export function ImportThemeModal({
     }
   };
 
+  // Stop polling helper
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  // Clean up polling on unmount
+  useEffect(() => stopPolling, [stopPolling]);
+
   // ── Store theme import (auto-creates project) ───────────────────────────
   const handleStoreImport = async () => {
     if (!selectedThemeId || !connection) return;
     setStoreError(null);
     setImportProgress('importing');
+    setImportedCount(0);
+    setTotalAssets(0);
 
+    // 1. Pre-flight: fetch asset count; use text count so bar reaches 100% when text import is done
+    let total = 0;
+    try {
+      const countRes = await fetch(
+        `/api/stores/${connection.id}/themes/${selectedThemeId}/asset-count`
+      );
+      if (countRes.ok) {
+        const countJson = await countRes.json();
+        total = countJson.data?.text ?? countJson.data?.total ?? 0;
+        setTotalAssets(total);
+      }
+    } catch {
+      // Non-critical — progress bar just won't show a total
+    }
+
+    // 2. Generate client-side project UUID for immediate polling
+    const clientProjectId = generateUUID();
+
+    // 3. Start polling file count (every 1s so progress and completion feel responsive)
+    stopPolling();
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/projects/${clientProjectId}/files/count`);
+        if (res.ok) {
+          const json = await res.json();
+          setImportedCount(json.data?.count ?? 0);
+        }
+      } catch {
+        // Polling may fail initially before the project row exists — ignore
+      }
+    }, 1000);
+
+    // 4. Start the import (blocks until done)
     try {
       const selectedTheme = themesQuery.data?.find((t) => t.id === selectedThemeId);
       const result = await importTheme({
@@ -175,7 +229,12 @@ export function ImportThemeModal({
         themeName: selectedTheme?.name,
         createDevThemeForPreview,
         note: previewNote.trim() || undefined,
+        projectId: clientProjectId,
       });
+
+      // 5. Import done — stop polling, show final count
+      stopPolling();
+      setImportedCount(result.pulled);
 
       if (result.errors.length > 0) {
         setImportSuccess(
@@ -188,14 +247,16 @@ export function ImportThemeModal({
       }
 
       setImportProgress('idle');
+      setSuccessProjectId(result.projectId);
       onImportSuccess?.();
 
-      // Navigate to the new project
+      // Navigate to the new project (extended delay so user sees success + design system note)
       setTimeout(() => {
         onClose();
         router.push(`/projects/${result.projectId}`);
-      }, 1000);
+      }, 2500);
     } catch (err) {
+      stopPolling();
       setStoreError(err instanceof Error ? err.message : 'Import failed');
       setImportProgress('idle');
     }
@@ -254,8 +315,20 @@ export function ImportThemeModal({
         <div className="p-4 space-y-4">
           {/* Success banner */}
           {importSuccess && (
-            <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-sm">
-              {importSuccess}
+            <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-sm space-y-2">
+              <p>{importSuccess}</p>
+              <p className="text-gray-400 dark:text-gray-400 text-xs">Design tokens are being extracted in the background.</p>
+              {successProjectId && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    router.push(`/projects/${successProjectId}/design-system`);
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  Open Design System
+                </button>
+              )}
             </div>
           )}
 
@@ -395,9 +468,33 @@ export function ImportThemeModal({
               )}
 
               {importProgress !== 'idle' && (
-                <p className="text-sm text-blue-400">
-                  Importing theme... (large themes can take a few minutes)
-                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-blue-400">
+                      Importing{totalAssets > 0 ? ` ${importedCount} of ${totalAssets} files` : '...'}
+                    </span>
+                    {totalAssets > 0 && (
+                      <span className="text-gray-500 text-xs tabular-nums">
+                        {Math.round((importedCount / totalAssets) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-gray-700 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                      style={{
+                        width: totalAssets > 0
+                          ? `${Math.min(100, (importedCount / totalAssets) * 100)}%`
+                          : '0%',
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {totalAssets > 0 && importedCount === 0
+                      ? 'Downloading first files from Shopify…'
+                      : 'Large themes can take a few minutes.'}
+                  </p>
+                </div>
               )}
 
               {storeError && (

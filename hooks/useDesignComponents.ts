@@ -9,6 +9,7 @@ export interface DesignComponent {
   component_type: string;
   files: string[];
   tokens_used: string[];
+  token_names: string[];
   usage_frequency: number;
 }
 

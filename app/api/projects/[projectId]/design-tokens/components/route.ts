@@ -3,6 +3,7 @@ import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { getClient } from '@/lib/design-tokens/components/component-persistence';
+import { listByProject } from '@/lib/design-tokens/models/token-model';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -33,15 +34,27 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (error) throw error;
 
-    const components = (rows ?? []).map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      name: row.name as string,
-      file_path: row.file_path as string,
-      component_type: row.component_type as string,
-      files: ((row.preview_data as Record<string, unknown>)?.files as string[]) ?? [],
-      tokens_used: (row.tokens_used as string[]) ?? [],
-      usage_frequency: (row.usage_frequency as number) ?? 0,
-    }));
+    // Resolve token IDs to names
+    const allTokens = await listByProject(projectId);
+    const tokenNameMap = new Map(allTokens.map((t) => [t.id, t.name]));
+
+    const components = (rows ?? []).map((row: Record<string, unknown>) => {
+      const rawTokenIds = (row.tokens_used as string[]) ?? [];
+      // Filter out stale references (deleted tokens)
+      const validTokenIds = rawTokenIds.filter((id) => tokenNameMap.has(id));
+      const tokenNames = validTokenIds.map((id) => tokenNameMap.get(id)!);
+
+      return {
+        id: row.id as string,
+        name: row.name as string,
+        file_path: row.file_path as string,
+        component_type: row.component_type as string,
+        files: ((row.preview_data as Record<string, unknown>)?.files as string[]) ?? [],
+        tokens_used: validTokenIds,
+        token_names: tokenNames,
+        usage_frequency: (row.usage_frequency as number) ?? 0,
+      };
+    });
 
     return successResponse({ components });
   } catch (error) {

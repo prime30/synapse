@@ -309,7 +309,7 @@ function FileGroup({ projectId, result, selected, onToggle, onToggleAll }: FileG
               type="checkbox"
               checked={allSelected}
               onChange={() => onToggleAll(result.filePath, allKeys)}
-              className="rounded border-gray-400 text-accent focus:ring-accent"
+              className="rounded ide-border text-accent focus:ring-accent"
             />
             <span className="text-xs ide-text-muted">Select all in file</span>
           </label>
@@ -325,7 +325,7 @@ function FileGroup({ projectId, result, selected, onToggle, onToggleAll }: FileG
                     type="checkbox"
                     checked={selected.has(key)}
                     onChange={() => onToggle(key)}
-                    className="mt-0.5 rounded border-gray-400 text-accent focus:ring-accent"
+                    className="mt-0.5 rounded ide-border text-accent focus:ring-accent"
                   />
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -347,7 +347,7 @@ function FileGroup({ projectId, result, selected, onToggle, onToggleAll }: FileG
                       <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); setCreateIdx(createIdx === i ? null : i); }}
-                        className="text-[10px] px-2 py-0.5 rounded border ide-border-subtle text-accent hover:bg-accent/10 transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded border ide-border-subtle text-accent hover:bg-accent/10 transition-colors focus:outline-none focus:ring-2 focus:ring-accent"
                       >
                         Create Token
                       </button>

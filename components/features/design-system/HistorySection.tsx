@@ -32,7 +32,8 @@ function VersionRow({
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="w-full flex items-center gap-3 px-4 py-3 ide-hover transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 ide-hover transition-colors text-left focus:outline-none focus:ring-2 focus:ring-accent"
+        aria-label={`Toggle version ${version.version_number} details`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -115,14 +116,14 @@ function VersionRow({
                 type="button"
                 onClick={() => { onRollback(version.id); setConfirmRollback(false); }}
                 disabled={isRollingBack}
-                className="px-3 py-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 {isRollingBack ? 'Rolling back…' : 'Confirm Rollback'}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmRollback(false)}
-                className="px-3 py-1.5 text-xs ide-text-2 border ide-border rounded-lg hover:ide-text transition-colors"
+                className="px-3 py-1.5 text-xs ide-text-2 border ide-border rounded-lg hover:ide-text transition-colors focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 Cancel
               </button>
@@ -131,7 +132,7 @@ function VersionRow({
             <button
               type="button"
               onClick={() => setConfirmRollback(true)}
-              className="px-3 py-1.5 text-xs font-medium ide-text-2 border ide-border rounded-lg hover:ide-text hover:border-red-500/50 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium ide-text-2 border ide-border rounded-lg hover:ide-text hover:border-red-500/50 transition-colors focus:outline-none focus:ring-2 focus:ring-accent"
             >
               Rollback this version
             </button>

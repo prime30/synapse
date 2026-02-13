@@ -31,21 +31,21 @@ function TypeBadge({ type }: { type: string }) {
 
 /* ── Token pills ──────────────────────────────────────────────────── */
 
-function TokenPills({ tokenIds, maxShow = 3 }: { tokenIds: string[]; maxShow?: number }) {
-  if (!tokenIds || tokenIds.length === 0) return null;
+function TokenPills({ names, maxShow = 3 }: { names: string[]; maxShow?: number }) {
+  if (!names || names.length === 0) return null;
 
-  const shown = tokenIds.slice(0, maxShow);
-  const overflow = tokenIds.length - maxShow;
+  const shown = names.slice(0, maxShow);
+  const overflow = names.length - maxShow;
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {shown.map((id) => (
+      {shown.map((name) => (
         <span
-          key={id}
-          className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded bg-accent/10 text-accent border border-accent/20 max-w-[100px] truncate"
-          title={id}
+          key={name}
+          className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded bg-accent/10 text-accent border border-accent/20 max-w-[120px] truncate"
+          title={name}
         >
-          {id.slice(0, 8)}
+          {name}
         </span>
       ))}
       {overflow > 0 && (
@@ -117,7 +117,7 @@ function ComponentRow({
       <button
         type="button"
         onClick={() => onOpen?.(component.file_path)}
-        className="text-xs px-2.5 py-1 rounded border ide-border-subtle ide-text-2 hover:ide-text hover:border-accent transition-colors flex-shrink-0"
+        className="text-xs px-2.5 py-1 rounded border ide-border-subtle ide-text-2 hover:ide-text hover:border-accent transition-colors flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-accent"
         aria-label={`Open ${component.name}`}
       >
         Open
@@ -240,7 +240,7 @@ export function ComponentsSection({ projectId, onOpenFile }: ComponentsSectionPr
                 {/* Token pills in grid */}
                 {tokenCount > 0 && (
                   <div className="mb-2">
-                    <TokenPills tokenIds={comp.tokens_used} maxShow={3} />
+                    <TokenPills names={comp.token_names ?? []} maxShow={3} />
                   </div>
                 )}
 
@@ -266,7 +266,7 @@ export function ComponentsSection({ projectId, onOpenFile }: ComponentsSectionPr
                   <button
                     type="button"
                     onClick={() => onOpenFile?.(comp.file_path)}
-                    className="text-xs px-2 py-1 rounded border ide-border-subtle ide-text-2 hover:ide-text hover:border-accent transition-colors ml-auto"
+                    className="text-xs px-2 py-1 rounded border ide-border-subtle ide-text-2 hover:ide-text hover:border-accent transition-colors ml-auto focus:outline-none focus:ring-2 focus:ring-accent"
                     aria-label={`Open ${comp.name}`}
                   >
                     Open
