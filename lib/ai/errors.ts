@@ -10,6 +10,7 @@
 export type AIErrorCode =
   | 'RATE_LIMITED'       // 429 -- temporary, auto-retry
   | 'CONTEXT_TOO_LONG'  // input exceeds model context window
+  | 'CONTEXT_TOO_LARGE' // request payload too large, auto-retry with reduced context
   | 'CONTENT_FILTERED'  // content policy violation
   | 'AUTH_ERROR'         // invalid/missing API key
   | 'MODEL_UNAVAILABLE' // model doesn't exist or is down
@@ -19,6 +20,7 @@ export type AIErrorCode =
   | 'PARSE_ERROR'       // malformed API response
   | 'PROVIDER_ERROR'    // generic provider error (5xx)
   | 'QUOTA_EXCEEDED'    // billing quota hit
+  | 'SOLO_EXECUTION_FAILED' // solo mode agent execution failed
   | 'UNKNOWN';
 
 // ── Retryable codes ───────────────────────────────────────────────────
@@ -28,6 +30,7 @@ const RETRYABLE_CODES = new Set<AIErrorCode>([
   'NETWORK_ERROR',
   'PROVIDER_ERROR',
   'EMPTY_RESPONSE',
+  'CONTEXT_TOO_LARGE',
 ]);
 
 const NON_RETRYABLE_CODES = new Set<AIErrorCode>([
@@ -49,6 +52,7 @@ export function isRetryable(code: AIErrorCode): boolean {
 const USER_MESSAGES: Record<AIErrorCode, string> = {
   RATE_LIMITED: 'The AI is temporarily busy. Retrying in a moment...',
   CONTEXT_TOO_LONG: 'Your files are too large for this model. Try selecting fewer files or using a model with a larger context window.',
+  CONTEXT_TOO_LARGE: 'Request was too large. Retrying with reduced context...',
   CONTENT_FILTERED: 'Your request was filtered by the AI safety system. Try rephrasing your message.',
   AUTH_ERROR: 'AI is not configured. Please ask your admin to add API keys in Settings.',
   MODEL_UNAVAILABLE: 'The selected AI model is currently unavailable. Try switching to a different model.',
@@ -58,6 +62,7 @@ const USER_MESSAGES: Record<AIErrorCode, string> = {
   PARSE_ERROR: 'Received an unexpected response from the AI. Please try again.',
   PROVIDER_ERROR: 'The AI service is experiencing issues. Please try again in a moment.',
   QUOTA_EXCEEDED: 'Your AI usage quota has been reached. Please upgrade your plan or wait for the quota to reset.',
+  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or switch to Team mode.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 
@@ -149,8 +154,22 @@ export function classifyProviderError(
     );
   }
 
+  // ── 413: Payload Too Large — retryable with reduced context ────────
+  if (status === 413) {
+    return new AIProviderError('CONTEXT_TOO_LARGE', `${provider}: request payload too large - ${errorMessage}`, provider, 413);
+  }
+
   // ── 400: Could be context too long, content filtered, etc. ─────────
   if (status === 400) {
+    // Check for "request too large" patterns (retryable with reduced context)
+    if (
+      bodyLower.includes('request too large') ||
+      bodyLower.includes('payload too large') ||
+      bodyLower.includes('body is too large')
+    ) {
+      return new AIProviderError('CONTEXT_TOO_LARGE', `${provider}: ${errorMessage}`, provider, 400);
+    }
+
     // Anthropic context length
     if (
       errorType === 'invalid_request_error' &&
@@ -158,12 +177,12 @@ export function classifyProviderError(
         bodyLower.includes('maximum context length') ||
         bodyLower.includes('prompt is too long'))
     ) {
-      return new AIProviderError('CONTEXT_TOO_LONG', `${provider}: ${errorMessage}`, provider, 400);
+      return new AIProviderError('CONTEXT_TOO_LARGE', `${provider}: ${errorMessage}`, provider, 400);
     }
 
     // OpenAI context length
     if (errorCode === 'context_length_exceeded' || bodyLower.includes('context_length_exceeded')) {
-      return new AIProviderError('CONTEXT_TOO_LONG', `${provider}: ${errorMessage}`, provider, 400);
+      return new AIProviderError('CONTEXT_TOO_LARGE', `${provider}: ${errorMessage}`, provider, 400);
     }
 
     // OpenAI content policy

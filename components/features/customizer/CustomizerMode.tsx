@@ -309,7 +309,7 @@ function CustomizerInner({
               <span className="text-[10px] text-sky-500 dark:text-sky-400 animate-pulse">Syncing...</span>
             )}
             {previewSync.syncError && (
-              <span className="text-[10px] text-red-400">{previewSync.syncError}</span>
+              <span className="text-[10px] text-red-500 dark:text-red-400">{previewSync.syncError}</span>
             )}
           </div>
 
@@ -325,9 +325,10 @@ function CustomizerInner({
                 className={`relative w-8 h-4 rounded-full transition-colors ${
                   previewSync.mode === 'server' ? 'bg-sky-500' : 'ide-surface-input'
                 }`}
+                aria-label={previewSync.mode === 'server' ? 'Switch to local preview' : 'Switch to server preview'}
               >
                 <span
-                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white dark:bg-stone-200 transition-transform ${
                     previewSync.mode === 'server' ? 'left-4' : 'left-0.5'
                   }`}
                 />

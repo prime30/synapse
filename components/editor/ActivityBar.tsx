@@ -4,6 +4,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 export type ActivityPanel =
   | 'files'
+  | 'search'
   | 'store'
   | 'design'
   | 'quality'
@@ -14,10 +15,6 @@ interface ActivityBarProps {
   activePanel: ActivityPanel;
   onPanelChange: (panel: ActivityPanel) => void;
   onSettingsClick?: () => void;
-  /** Project name shown in the sidebar header */
-  projectName?: string;
-  /** Whether a Shopify store is connected */
-  storeConnected?: boolean;
 }
 
 interface ActivityItem {
@@ -47,21 +44,20 @@ const FilesIcon = (
   </svg>
 );
 
-const StoreIcon = (
-  <svg {...iconProps}>
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <path d="M16 10a4 4 0 0 1-8 0" />
+const ShopifyBagIcon = (
+  <svg width={20} height={20} viewBox="0 0 109.5 124.5" fill="currentColor" aria-hidden="true">
+    <path d="M74.8,14.8c0,0-1.4,0.4-3.7,1.1c-0.4-1.3-1-2.8-1.8-4.4c-2.6-5-6.5-7.7-11.1-7.7c0,0,0,0,0,0 c-0.3,0-0.6,0-1,0.1c-0.1-0.2-0.3-0.3-0.4-0.5c-2-2.2-4.6-3.2-7.7-3.1c-6,0.2-12,4.5-16.8,12.2c-3.4,5.4-6,12.2-6.7,17.5 c-6.9,2.1-11.7,3.6-11.8,3.7c-3.5,1.1-3.6,1.2-4,4.5c-0.3,2.5-9.5,72.9-9.5,72.9l75.6,13.1V14.7C75.3,14.7,75,14.8,74.8,14.8z M57.3,20.2c-4,1.2-8.4,2.6-12.7,3.9c1.2-4.7,3.6-9.4,6.4-12.5c1.1-1.1,2.6-2.4,4.3-3.2C57,12,57.4,16.9,57.3,20.2z M49.1,4.4 c1.4,0,2.6,0.3,3.6,0.9c-1.6,0.8-3.2,2.1-4.7,3.6c-3.8,4.1-6.7,10.5-7.9,16.6c-3.6,1.1-7.2,2.2-10.5,3.2 C31.8,19.1,39.9,4.6,49.1,4.4z M37.5,59.4c0.4,6.4,17.3,7.8,18.3,22.9c0.7,11.9-6.3,20-16.4,20.6c-12.2,0.8-18.9-6.4-18.9-6.4 l2.6-11c0,0,6.7,5.1,12.1,4.7c3.5-0.2,4.8-3.1,4.7-5.1c-0.5-8.4-14.3-7.9-15.2-21.7C23.9,51.8,31.5,40.1,48.3,39 c6.5-0.4,9.8,1.2,9.8,1.2l-3.8,14.4c0,0-4.3-2-9.4-1.6C37.5,53.5,37.4,58.2,37.5,59.4z M61.3,19c0-3-0.4-7.3-1.8-10.9 c4.6,0.9,6.8,6,7.8,9.1C65.5,17.7,63.5,18.3,61.3,19z" />
+    <path d="M78.2,124l31.4-7.8c0,0-13.5-91.3-13.6-91.9c-0.1-0.6-0.6-1-1.1-1c-0.5,0-9.3-0.2-9.3-0.2s-5.4-5.2-7.4-7.2 V124z" />
   </svg>
 );
 
 const DesignIcon = (
   <svg {...iconProps}>
-    <circle cx="13.5" cy="6.5" r="2.5" />
-    <circle cx="6.5" cy="13.5" r="2.5" />
-    <circle cx="17.5" cy="17.5" r="2.5" />
-    <path d="M13.5 9a8 8 0 0 0-4 6.5" />
-    <path d="M9 13.5a8 8 0 0 0 8.5 4" />
+    <circle cx="13.5" cy="6.5" r=".5" />
+    <circle cx="17.5" cy="10.5" r=".5" />
+    <circle cx="8.5" cy="7.5" r=".5" />
+    <circle cx="6.5" cy="12.5" r=".5" />
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
   </svg>
 );
 
@@ -76,6 +72,13 @@ const HistoryIcon = (
   <svg {...iconProps}>
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const SearchIcon = (
+  <svg {...iconProps}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
 
@@ -126,7 +129,8 @@ const KeyboardIcon = (
 
 const MAIN_ITEMS: ActivityItem[] = [
   { id: 'files', label: 'Files', icon: FilesIcon },
-  { id: 'store', label: 'Store', icon: StoreIcon },
+  { id: 'search', label: 'Search', icon: SearchIcon },
+  { id: 'store', label: 'Shopify', icon: ShopifyBagIcon },
   { id: 'design', label: 'Design', icon: DesignIcon },
   { id: 'quality', label: 'Quality', icon: QualityIcon },
   { id: 'history', label: 'History', icon: HistoryIcon },
@@ -140,8 +144,6 @@ export function ActivityBar({
   activePanel,
   onPanelChange,
   onSettingsClick,
-  projectName,
-  storeConnected,
 }: ActivityBarProps) {
   const { isDark, toggle: toggleTheme } = useTheme();
 
@@ -151,24 +153,6 @@ export function ActivityBar({
 
   return (
     <div className="w-12 ide-surface border-r ide-border-subtle flex flex-col items-center shrink-0 select-none">
-      {/* ── Project header ─────────────────────────────────────────── */}
-      <div className="w-full flex flex-col items-center py-3 border-b ide-border-subtle">
-        <div
-          className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center cursor-default"
-          title={projectName ?? 'Project'}
-        >
-          <span className="text-[11px] font-bold text-white leading-none">
-            {projectName ? projectName.charAt(0).toUpperCase() : 'S'}
-          </span>
-        </div>
-        {storeConnected !== undefined && (
-          <span
-            className={`mt-1.5 w-1.5 h-1.5 rounded-full ${storeConnected ? 'bg-emerald-500' : 'bg-stone-300 dark:bg-white/30'}`}
-            title={storeConnected ? 'Store connected' : 'No store connected'}
-          />
-        )}
-      </div>
-
       {/* ── Main navigation icons ──────────────────────────────────── */}
       <div className="flex flex-col items-center gap-0.5 py-2">
         {MAIN_ITEMS.map((item) => {

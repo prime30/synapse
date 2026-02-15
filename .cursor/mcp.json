@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "synapse": {
+      "command": "node",
+      "args": ["c:\\Users\\alexm\\synapse1\\mcp-server\\dist\\index.js"],
+      "env": {
+        "SYNAPSE_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

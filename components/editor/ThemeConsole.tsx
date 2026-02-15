@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export type ThemeConsoleTab = 'diagnostics' | 'push-log' | 'theme-check';
+export type ThemeConsoleTab = 'diagnostics' | 'push-log' | 'theme-check' | 'tasks';
 
 export interface ThemeConsoleEntry {
   id: string;
@@ -44,6 +44,7 @@ const TAB_LABELS: Record<ThemeConsoleTab, string> = {
   diagnostics: 'Diagnostics',
   'push-log': 'Push Log',
   'theme-check': 'Theme Check',
+  tasks: 'Tasks',
 };
 
 const LEVEL_COLORS: Record<ThemeConsoleEntry['level'], string> = {
@@ -149,7 +150,7 @@ export function ThemeConsole({
       >
         <span>{isOpen ? '▼' : '▲'} Console</span>
         <span className="flex items-center gap-1.5">
-          {(['diagnostics', 'push-log', 'theme-check'] as const).map((tab) => {
+          {(['diagnostics', 'push-log', 'theme-check', 'tasks'] as const).map((tab) => {
             const n = counts[tab] ?? 0;
             return (
               <span
@@ -173,7 +174,7 @@ export function ThemeConsole({
         <div className="h-[200px] flex flex-col ide-surface-panel">
           {/* Tab bar */}
           <div className="flex items-center gap-1 px-2 py-1.5 border-b ide-border shrink-0 ide-surface-input">
-            {(['diagnostics', 'push-log', 'theme-check'] as const).map((tab) => {
+            {(['diagnostics', 'push-log', 'theme-check', 'tasks'] as const).map((tab) => {
               const n = counts[tab] ?? 0;
               const isActive = activeTab === tab;
               return (

@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { PreviewFrame } from './PreviewFrame';
 import type { PreviewFrameHandle } from './PreviewFrame';
 import { PageTypeSelector } from './PageTypeSelector';
-import { ResourcePicker } from './ResourcePicker';
+import { CreateTemplateModal } from './CreateTemplateModal';
 import { usePreviewRefresh } from '@/hooks/usePreviewRefresh';
 import { buildPreviewUrl } from '@/lib/preview/url-generator';
 import { formatDOMContext } from '@/lib/preview/dom-context-formatter';
 import type { DOMSnapshot } from '@/lib/preview/dom-context-formatter';
-import type { PreviewPageType, PreviewResourceType, PreviewResource } from '@/lib/types/preview';
+import type { PreviewResource } from '@/lib/types/preview';
+import { buildTemplateEntries, getTemplateVariants } from '@/lib/preview/template-classifier';
+import type { TemplateEntry } from '@/lib/preview/template-classifier';
+import { PreviewAnnotator } from './PreviewAnnotator';
+import type { AnnotationData } from './PreviewAnnotator';
 
 /** Element data returned by the bridge's element-selected action */
 export interface SelectedElement {
@@ -33,6 +37,20 @@ export interface PreviewPanelHandle {
    * is not available or times out.
    */
   getDOMContext(timeoutMs?: number): Promise<string>;
+  /**
+   * Request a raw DOM snapshot from the preview iframe for structural comparison.
+   * Returns the unformatted DOMSnapshot object, or null if unavailable.
+   * Used by EPIC V3 preview verification to capture before/after snapshots.
+   */
+  getRawSnapshot(timeoutMs?: number): Promise<DOMSnapshot | null>;
+  /**
+   * Phase 4a: Inject CSS into the preview for live hot-reload.
+   */
+  injectCSS(css: string): Promise<void>;
+  /**
+   * Phase 4a: Clear all injected CSS from the preview.
+   */
+  clearCSS(): Promise<void>;
 }
 
 interface PreviewPanelProps {
@@ -44,6 +62,16 @@ interface PreviewPanelProps {
   /** True when previewing the source theme while the dev theme syncs in background */
   isSourceThemePreview?: boolean;
   onElementSelected?: (element: SelectedElement) => void;
+  /** Callback when user submits a preview annotation (Phase 3a) */
+  onAnnotation?: (data: AnnotationData) => void;
+  /** Phase 4a: Number of live changes being streamed */
+  liveChangeCount?: number;
+  /** When true, the preview fills its parent container height instead of using fixed height */
+  fill?: boolean;
+  /** Theme files for template-driven dropdown */
+  themeFiles?: { id: string; path: string }[];
+  /** Callback to refresh files after template creation */
+  onFilesRefresh?: () => void;
 }
 
 /** Common desktop breakpoint width (px). Single source of truth. */
@@ -96,6 +124,11 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
       syncStatus,
       isSourceThemePreview,
       onElementSelected,
+      onAnnotation,
+      liveChangeCount = 0,
+      fill = false,
+      themeFiles,
+      onFilesRefresh,
     },
     ref
   ) {
@@ -103,51 +136,110 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const [refreshToken, setRefreshToken] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [inspecting, setInspecting] = useState(false);
+  const [annotating, setAnnotating] = useState(false);
   const [detachedWindow, setDetachedWindow] = useState<Window | null>(null);
   const [deviceWidth, setDeviceWidth] = useState<number>(DESKTOP_BREAKPOINT);
-  const [pageType, setPageType] = useState<PreviewPageType>('home');
-  const [browseOpen, setBrowseOpen] = useState(false);
   const [selectedResource, setSelectedResource] = useState<PreviewResource | null>(null);
+  const [createModalType, setCreateModalType] = useState<string | null>(null);
   const frameRef = useRef<PreviewFrameHandle>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
 
-  // Determine preview path from page type + selected resource
-  const previewPath = useCallback(() => {
-    const base = (() => {
-      switch (pageType) {
-        case 'home': return '/';
-        case 'cart': return '/cart';
-        case 'not_found': return '/404';
-        case 'product': return selectedResource ? `/products/${selectedResource.handle}` : '/';
-        case 'collection': return selectedResource ? `/collections/${selectedResource.handle}` : '/';
-        case 'blog': return selectedResource ? `/blogs/${selectedResource.handle}` : '/';
-        case 'page': return selectedResource ? `/pages/${selectedResource.handle}` : '/';
-        default: return '/';
+  // Live URL path — updated by the bridge's passive context messages
+  const [liveUrlPath, setLiveUrlPath] = useState<string | null>(null);
+
+  // Listen for passive bridge messages to track the actual iframe URL
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      const msg = event.data;
+      if (!msg || msg.type !== 'synapse-bridge-passive') return;
+      const rawUrl = msg.data?.url;
+      if (typeof rawUrl !== 'string') return;
+      try {
+        const parsed = new URL(rawUrl, window.location.origin);
+        // Strip the proxy prefix: /api/projects/<id>/preview?path=<path>
+        const proxyPath = parsed.searchParams.get('path');
+        if (proxyPath) {
+          setLiveUrlPath(proxyPath);
+        } else if (!parsed.pathname.startsWith('/api/projects/')) {
+          // Direct Shopify URL (e.g. in detached window) — use pathname
+          setLiveUrlPath(parsed.pathname);
+        }
+      } catch {
+        // Malformed URL — ignore
       }
-    })();
-    return base;
-  }, [pageType, selectedResource]);
-
-  // Resource-browsable page types
-  const RESOURCE_PAGE_TYPES: PreviewPageType[] = ['product', 'collection', 'blog', 'page'];
-  const needsResource = RESOURCE_PAGE_TYPES.includes(pageType);
-  const resourceType: PreviewResourceType | null = needsResource
-    ? (pageType as PreviewResourceType)
-    : null;
-
-  const handlePageTypeChange = useCallback((type: PreviewPageType) => {
-    setPageType(type);
-    setSelectedResource(null);
-    setBrowseOpen(false);
-    // Auto-open browse for resource-needing page types
-    if (['product', 'collection', 'blog', 'page'].includes(type)) {
-      setBrowseOpen(true);
     }
+
+    // Also capture the ready message for initial URL
+    function handleReady(event: MessageEvent) {
+      const msg = event.data;
+      if (msg?.type === 'synapse-bridge-response' && msg?.action === 'ready') {
+        const rawUrl = msg.data?.url;
+        if (typeof rawUrl === 'string') {
+          try {
+            const parsed = new URL(rawUrl, window.location.origin);
+            const proxyPath = parsed.searchParams.get('path');
+            if (proxyPath) setLiveUrlPath(proxyPath);
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
+    window.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleReady);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('message', handleReady);
+    };
   }, []);
+
+  // Build template entries from theme files
+  const templateEntries = useMemo(
+    () => buildTemplateEntries((themeFiles ?? []).map((f) => ({ id: f.id, path: f.path }))),
+    [themeFiles]
+  );
+
+  // Selected template state -- initialise lazily from first entries
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  // Derive the actual selected template from entries + stored id
+  const selectedTemplate = useMemo(() => {
+    if (selectedTemplateId) {
+      const match = templateEntries.find((t) => t.filePath === selectedTemplateId);
+      if (match) return match;
+    }
+    // Fallback: home or first entry
+    return templateEntries.find((t) => t.templateType === 'index') ?? templateEntries[0] ?? null;
+  }, [templateEntries, selectedTemplateId]);
+
+  // Wrapper to update the id
+  const setSelectedTemplate = useCallback((entry: TemplateEntry | null) => {
+    setSelectedTemplateId(entry?.filePath ?? null);
+  }, []);
+
+  // Determine preview path from selected template + resource
+  const previewPath = useCallback(() => {
+    if (!selectedTemplate) return '/';
+    const base = selectedTemplate.previewBasePath;
+    if (selectedTemplate.needsResource && selectedResource) {
+      return base.endsWith('/') ? `${base}${selectedResource.handle}` : base;
+    }
+    if (selectedTemplate.needsResource && !selectedResource) return '/';
+    return base;
+  }, [selectedTemplate, selectedResource]);
+
+  // Effective path for iframe and detached window
+  const effectivePath = selectedResource
+    ? previewPath()
+    : (selectedTemplate && !selectedTemplate.needsResource ? selectedTemplate.previewBasePath : path ?? '/');
+
+  const handleTemplateChange = useCallback((template: TemplateEntry) => {
+    setSelectedTemplate(template);
+    setSelectedResource(null);
+    setLiveUrlPath(null); // Reset so URL bar picks up new page from bridge
+  }, [setSelectedTemplate]);
 
   const handleResourceSelect = useCallback((resource: PreviewResource) => {
     setSelectedResource(resource);
-    setBrowseOpen(false);
   }, []);
 
   const isDetached = detachedWindow !== null && !detachedWindow.closed;
@@ -195,10 +287,46 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     }
   }, []);
 
-  // Expose getDOMContext to parent via ref
-  useImperativeHandle(ref, () => ({
-    getDOMContext,
-  }), [getDOMContext]);
+  // ── getRawSnapshot: return structured DOMSnapshot for comparison (EPIC V3)
+  const getRawSnapshot = useCallback(async (timeoutMs = 3000): Promise<DOMSnapshot | null> => {
+    try {
+      const iframe = frameRef.current?.getIframe();
+      if (!iframe?.contentWindow) return null;
+
+      const requestId = crypto.randomUUID();
+
+      return new Promise<DOMSnapshot | null>((resolve) => {
+        const timer = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          resolve(null);
+        }, timeoutMs);
+
+        function handler(event: MessageEvent) {
+          const msg = event.data;
+          if (
+            msg?.type === 'synapse-bridge-response' &&
+            msg?.action === 'dom-snapshot' &&
+            msg?.requestId === requestId
+          ) {
+            clearTimeout(timer);
+            window.removeEventListener('message', handler);
+            resolve((msg.data as DOMSnapshot) ?? null);
+          }
+        }
+
+        window.addEventListener('message', handler);
+
+        iframe.contentWindow!.postMessage({
+          type: 'synapse-bridge',
+          id: requestId,
+          action: 'getDOMSnapshot',
+          payload: {},
+        }, '*');
+      });
+    } catch {
+      return null;
+    }
+  }, []);
 
   // BroadcastChannel for syncing refresh with detached window
   useEffect(() => {
@@ -267,6 +395,18 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     [detachedWindow]
   );
 
+  // Expose handle to parent via ref
+  useImperativeHandle(ref, () => ({
+    getDOMContext,
+    getRawSnapshot,
+    async injectCSS(css: string) {
+      sendBridgeMessage('injectCSS', { css });
+    },
+    async clearCSS() {
+      sendBridgeMessage('clearCSS');
+    },
+  }), [getDOMContext, getRawSnapshot, sendBridgeMessage]);
+
   const toggleInspect = useCallback(() => {
     const next = !inspecting;
     setInspecting(next);
@@ -274,13 +414,13 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   }, [inspecting, sendBridgeMessage]);
 
   const handleDetach = useCallback(() => {
-    const previewUrl = buildPreviewUrl({ projectId, path });
+    const previewUrl = buildPreviewUrl({ projectId, path: effectivePath });
     const features = 'width=1280,height=900,menubar=no,toolbar=no,location=no,status=no';
     const win = window.open(previewUrl, `synapse-preview-${projectId}`, features);
     if (win) {
       setDetachedWindow(win);
     }
-  }, [projectId, path]);
+  }, [projectId, effectivePath]);
 
   const handleReattach = useCallback(() => {
     if (detachedWindow && !detachedWindow.closed) {
@@ -289,12 +429,12 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     setDetachedWindow(null);
   }, [detachedWindow]);
 
-  // When path changes, update the detached window
+  // When effective path changes, update the detached window
   useEffect(() => {
-    if (isDetached && path) {
-      broadcastRef.current?.postMessage({ type: 'navigate', path });
+    if (isDetached && effectivePath) {
+      broadcastRef.current?.postMessage({ type: 'navigate', path: effectivePath });
     }
-  }, [path, isDetached]);
+  }, [effectivePath, isDetached]);
 
   // Suppress unused var warnings -- these props are used for future features
   // (Customizer Mode V1 / direct Shopify API calls) and kept in props
@@ -306,12 +446,12 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
 
   return (
     <section
-      className={`flex flex-col gap-3 ${isFullscreen ? 'fixed inset-0 z-50 ide-surface p-4' : ''}`}
+      className={`flex flex-col ${fill ? 'h-full flex-1 min-h-0' : 'gap-2'} ${isFullscreen ? 'fixed inset-0 z-50 ide-surface p-4' : ''}`}
     >
       {/* ── Preview toolbar row ──────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1.5 border-b ide-border-subtle' : ''}`}>
+        {/* Left: device switcher */}
         <div className="flex items-center gap-2">
-          {/* Device breakpoint switcher */}
           <div className="flex items-center gap-0.5 rounded-md ide-surface-inset p-0.5">
             {DEVICES.map((device) => {
               const isActive = deviceWidth === device.width;
@@ -333,47 +473,57 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               );
             })}
           </div>
-
-          {/* Page type selector */}
-          <PageTypeSelector value={pageType} onChange={handlePageTypeChange} />
-
-          {/* Browse button for resource-needing page types */}
-          {needsResource && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setBrowseOpen((o) => !o)}
-                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                  browseOpen
-                    ? 'bg-sky-500 dark:bg-sky-600 text-white'
-                    : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'
-                }`}
-                title="Browse resources"
-              >
-                <span className="flex items-center gap-1">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  {selectedResource ? selectedResource.title : 'Browse'}
-                </span>
-              </button>
-
-              {/* Resource picker dropdown */}
-              {browseOpen && resourceType && (
-                <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded-lg border ide-border ide-surface-pop shadow-xl p-3">
-                  <ResourcePicker
-                    projectId={projectId}
-                    type={resourceType}
-                    label={`Select ${pageType}`}
-                    onSelect={handleResourceSelect}
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </div>
+
+        {/* Center: page type dropdown */}
+        <div className="flex-1 flex justify-center">
+          <PageTypeSelector
+            templates={templateEntries}
+            selectedTemplate={selectedTemplate}
+            onChange={handleTemplateChange}
+            selectedResource={selectedResource}
+            onResourceSelect={handleResourceSelect}
+            onCreateTemplate={(type) => setCreateModalType(type)}
+            projectId={projectId}
+          />
+        </div>
+
+        {/* Right: action buttons */}
         <div className="flex items-center gap-1.5">
+          {/* Refresh */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsRefreshing(true);
+              setRefreshToken((prev) => prev + 1);
+              broadcastRef.current?.postMessage({ type: 'refresh' });
+              setTimeout(() => setIsRefreshing(false), 1200);
+            }}
+            disabled={isRefreshing}
+            className="rounded ide-surface-input px-2.5 py-1 text-xs ide-text-2 hover:ide-text ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh preview"
+            aria-label="Refresh preview"
+          >
+            <span className="flex items-center gap-1">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={isRefreshing ? 'animate-spin' : ''}
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+              Refresh
+            </span>
+          </button>
+
           {/* Dev theme sync status badge */}
           {showSyncBadge && (
             <span className="flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400">
@@ -382,6 +532,17 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-500" />
               </span>
               {isSourceThemePreview ? 'Live — dev theme syncing' : 'Syncing'}
+            </span>
+          )}
+
+          {/* Phase 4a: Live change indicator */}
+          {liveChangeCount > 0 && (
+            <span className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              {liveChangeCount} live
             </span>
           )}
 
@@ -416,6 +577,32 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               {inspecting ? 'Inspecting' : 'Inspect'}
             </span>
           </button>
+
+          {/* Annotate button (Phase 3a) */}
+          {onAnnotation && (
+            <button
+              type="button"
+              onClick={() => {
+                setAnnotating((prev) => !prev);
+                if (inspecting) { setInspecting(false); sendBridgeMessage('disableInspect'); }
+              }}
+              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                annotating
+                  ? 'bg-amber-500 dark:bg-amber-600 text-white'
+                  : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'
+              }`}
+              title={annotating ? 'Exit Annotate mode' : 'Annotate area for AI'}
+            >
+              <span className="flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18" />
+                  <path d="M9 3v18" />
+                </svg>
+                {annotating ? 'Annotating' : 'Annotate'}
+              </span>
+            </button>
+          )}
 
           {/* Pop out / Bring back */}
           <button
@@ -463,6 +650,22 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
         </div>
       </div>
 
+      {/* ── URL path bar ─────────────────────────────────────────── */}
+      {!isDetached && (
+        <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1 border-b ide-border-subtle' : 'px-1 py-1'}`}>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 rounded-md ide-surface-inset px-2.5 py-1">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 ide-text-muted">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <span className="text-[11px] font-mono ide-text-3 truncate" title={liveUrlPath || effectivePath || '/'}>
+              {liveUrlPath || effectivePath || '/'}
+            </span>
+          </div>
+        </div>
+      )}
+
       {isDetached ? (
         /* Detached placeholder */
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -486,14 +689,43 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
           </button>
         </div>
       ) : (
-        <PreviewFrame
-          ref={frameRef}
+        <div className={fill ? 'flex-1 min-h-0 relative' : 'relative'}>
+          <PreviewFrame
+            ref={frameRef}
+            projectId={projectId}
+            path={effectivePath}
+            isFullscreen={isFullscreen}
+            refreshToken={refreshToken}
+            isRefreshing={isRefreshing || isSyncing}
+            deviceWidth={deviceWidth}
+            fill={fill}
+          />
+          {/* Phase 3a: Annotation overlay — key forces fresh state on each activation */}
+          {annotating && (
+            <PreviewAnnotator
+              key="annotator"
+              active
+              onClose={() => setAnnotating(false)}
+              onSubmit={(data) => { onAnnotation?.(data); setAnnotating(false); }}
+              previewPath={effectivePath}
+            />
+          )}
+        </div>
+      )}
+      {/* Create template modal */}
+      {createModalType && (
+        <CreateTemplateModal
+          templateType={createModalType}
+          existingTemplates={getTemplateVariants(templateEntries, createModalType)}
           projectId={projectId}
-          path={selectedResource ? previewPath() : path}
-          isFullscreen={isFullscreen}
-          refreshToken={refreshToken}
-          isRefreshing={isRefreshing || isSyncing}
-          deviceWidth={deviceWidth}
+          onCreated={(newFilePath) => {
+            setCreateModalType(null);
+            onFilesRefresh?.();
+            // Pre-set the ID so the derived selectedTemplate picks it up
+            // once templateEntries refresh with the new file
+            setSelectedTemplateId(newFilePath);
+          }}
+          onClose={() => setCreateModalType(null)}
         />
       )}
     </section>

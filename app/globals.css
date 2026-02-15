@@ -1,10 +1,78 @@
 @import "tailwindcss";
+@import "../lib/tailwind/polish.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ── Spacing Scale ───────────────────────────────────────────────── */
+  --space-px: 1px;
+  --space-0: 0px;
+  --space-0-5: 0.125rem;  /* 2px */
+  --space-1: 0.25rem;     /* 4px */
+  --space-1-5: 0.375rem;  /* 6px */
+  --space-2: 0.5rem;      /* 8px */
+  --space-3: 0.75rem;     /* 12px */
+  --space-4: 1rem;        /* 16px */
+  --space-5: 1.25rem;     /* 20px */
+  --space-6: 1.5rem;      /* 24px */
+  --space-8: 2rem;        /* 32px */
+  --space-10: 2.5rem;     /* 40px */
+  --space-12: 3rem;       /* 48px */
+
+  /* ── Border Radius Tiers ─────────────────────────────────────────── */
+  --radius-sm: 0.375rem;  /* 6px  — chips, badges, small inputs */
+  --radius-md: 0.5rem;    /* 8px  — buttons, cards, inputs */
+  --radius-lg: 0.75rem;   /* 12px — modals, panels, large cards */
+  --radius-xl: 1rem;      /* 16px — hero cards, marketing */
+  --radius-2xl: 1.5rem;   /* 24px — large marketing elements */
+  --radius-full: 9999px;  /* pills, avatars */
+
+  /* ── Shadow / Elevation ──────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.16);
+  --shadow-2xl: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* ── Z-Index Layers ──────────────────────────────────────────────── */
+  --z-base: 0;
+  --z-raised: 1;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+
+  /* ── Typography Scale ────────────────────────────────────────────── */
+  --text-2xs: 0.625rem;   /* 10px — badges, metadata, timestamps */
+  --text-xs: 0.6875rem;   /* 11px — chips, compact buttons, tab labels */
+  --text-sm: 0.75rem;     /* 12px — secondary body, descriptions */
+  --text-base: 0.875rem;  /* 14px — primary body, standard buttons */
+  --text-lg: 1rem;        /* 16px — subheadings */
+  --text-xl: 1.25rem;     /* 20px — headings */
+  --text-2xl: 1.5rem;     /* 24px — page titles */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* ── Transition / Easing ─────────────────────────────────────────── */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fastest: 50ms;
+  --duration-fast: 100ms;
+  --duration-normal: 150ms;
+  --duration-moderate: 200ms;
+  --duration-slow: 300ms;
+  --duration-enter: 200ms;
+  --duration-exit: 150ms;
 
   /* ── Chromatic IDE Ambient Theming (EPIC 16) ─────────────────────── */
   --ide-ambient-primary: oklch(0.5 0.1 264);
@@ -14,6 +82,16 @@
   --ide-ambient-secondary-hsl: hsl(245, 60%, 53%);
   --ide-ambient-accent-hsl: hsl(280, 55%, 58%);
   --ide-ambient-transition: 1.2s ease-in-out;
+}
+
+/* ── Dark Mode Shadow Overrides ────────────────────────────────────── */
+.dark {
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 20px 60px rgba(0, 0, 0, 0.7);
 }
 
 @theme inline {
@@ -62,37 +140,79 @@
 /* ── IDE Surface Tokens ──────────────────────────────────────────
    Aligned to the marketing design system's light/dark patterns.
    Use these classes in IDE components for consistent theming.
+   Written as plain CSS to avoid @apply resolution issues in Tailwind v4.
    ─────────────────────────────────────────────────────────────── */
-@layer components {
-  .ide-surface       { @apply bg-[#fafaf9] dark:bg-[#0a0a0a]; }
-  .ide-surface-panel { @apply bg-white dark:bg-white/5; }
-  .ide-surface-input { @apply bg-stone-50 dark:bg-white/[0.03]; }
-  .ide-surface-inset { @apply bg-stone-100 dark:bg-white/5; }
-  .ide-surface-pop   { @apply bg-white dark:bg-[#0a0a0a]; }
+.ide-surface       { background-color: #fafaf9; }
+.ide-surface-panel { background-color: #ffffff; }
+.ide-surface-input { background-color: #fafaf9; }
+.ide-surface-inset { background-color: #f5f5f4; }
+.ide-surface-pop   { background-color: #ffffff; }
 
-  .ide-border        { @apply border-stone-200 dark:border-white/10; }
-  .ide-border-subtle { @apply border-stone-200 dark:border-white/5; }
+.ide-border        { border-color: #e7e5e4; }
+.ide-border-subtle { border-color: #e7e5e4; }
 
-  .ide-text          { @apply text-stone-900 dark:text-white; }
-  .ide-text-2        { @apply text-stone-700 dark:text-white/70; }
-  .ide-text-3        { @apply text-stone-500 dark:text-white/50; }
-  .ide-text-muted    { @apply text-stone-400 dark:text-white/40; }
-  .ide-text-quiet    { @apply text-stone-300 dark:text-white/30; }
+.ide-text          { color: #1c1917; }
+.ide-text-2        { color: #44403c; }
+.ide-text-3        { color: #78716c; }
+.ide-text-muted    { color: #a8a29e; }
+.ide-text-quiet    { color: #d6d3d1; }
 
-  .ide-hover         { @apply hover:bg-stone-100 dark:hover:bg-white/5; }
-  .ide-active        { @apply bg-sky-50 dark:bg-sky-500/10; }
+.ide-hover:hover   { background-color: #f5f5f4; }
+.ide-active        { background-color: #f0f9ff; }
 
-  .ide-input {
-    @apply bg-stone-50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/10 rounded-md text-stone-900 dark:text-white
-      placeholder-stone-400 dark:placeholder-white/40
-      focus:outline-none focus:border-sky-500 dark:focus:border-sky-400
-      focus:ring-1 focus:ring-sky-500/20 dark:focus:ring-sky-400/20
-      transition-colors;
-  }
+.ide-input {
+  background-color: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 0.375rem;
+  color: #1c1917;
+  transition-property: border-color, box-shadow, background-color;
+  transition-duration: 150ms;
+}
+.ide-input::placeholder { color: #a8a29e; }
+.ide-input:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2);
+}
 
-  .ide-overlay {
-    @apply fixed inset-0 bg-black/40 dark:bg-black/60;
-  }
+.ide-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* ── IDE Surface Tokens: Dark mode ─────────────────────────────── */
+.dark .ide-surface       { background-color: #0a0a0a; }
+.dark .ide-surface-panel { background-color: rgba(255, 255, 255, 0.05); }
+.dark .ide-surface-input { background-color: rgba(255, 255, 255, 0.03); }
+.dark .ide-surface-inset { background-color: rgba(255, 255, 255, 0.05); }
+.dark .ide-surface-pop   { background-color: #0a0a0a; }
+
+.dark .ide-border        { border-color: rgba(255, 255, 255, 0.1); }
+.dark .ide-border-subtle { border-color: rgba(255, 255, 255, 0.05); }
+
+.dark .ide-text          { color: #ffffff; }
+.dark .ide-text-2        { color: rgba(255, 255, 255, 0.7); }
+.dark .ide-text-3        { color: rgba(255, 255, 255, 0.5); }
+.dark .ide-text-muted    { color: rgba(255, 255, 255, 0.4); }
+.dark .ide-text-quiet    { color: rgba(255, 255, 255, 0.3); }
+
+.dark .ide-hover:hover   { background-color: rgba(255, 255, 255, 0.05); }
+.dark .ide-active        { background-color: rgba(14, 165, 233, 0.1); }
+
+.dark .ide-input {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+.dark .ide-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.dark .ide-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2);
+}
+
+.dark .ide-overlay {
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 body {
@@ -502,4 +622,36 @@ body.cursor-none * {
   -webkit-background-clip: text;
   background-clip: text;
   animation: counter-shimmer-sweep 0.8s ease-out forwards;
+}
+
+/* ── Global scrollbar styling ──────────────────────────────────────── */
+/* Thin, subtle scrollbars consistent across the entire IDE.           */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.3);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 120, 120, 0.5);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Keep the .scrollbar-thin utility for backward compatibility */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.3) transparent;
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 import type { ValidationResult } from "../validator";
 import { ValidationCache } from "../validation-cache";
+import { setCacheAdapter, MemoryAdapter } from "@/lib/cache/cache-adapter";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -15,97 +16,60 @@ describe("ValidationCache", () => {
   let cache: ValidationCache;
 
   beforeEach(() => {
+    // Ensure a clean memory adapter for each test
+    setCacheAdapter(new MemoryAdapter());
     cache = new ValidationCache();
   });
 
   // ── Basic get / set ─────────────────────────────────────────────────────
 
-  it("returns null on cache miss", () => {
-    expect(cache.get("{% if true %}{% endif %}")).toBeNull();
+  it("returns null on cache miss", async () => {
+    expect(await cache.get("{% if true %}{% endif %}")).toBeNull();
   });
 
-  it("returns cached result on cache hit", () => {
+  it("returns cached result on cache hit", async () => {
     const template = "{% if product %}yes{% endif %}";
     const result = makeResult(true);
 
-    cache.set(template, result);
-    expect(cache.get(template)).toEqual(result);
+    await cache.set(template, result);
+    expect(await cache.get(template)).toEqual(result);
   });
 
-  it("treats different content as a cache miss", () => {
+  it("treats different content as a cache miss", async () => {
     const template1 = "{% if a %}{% endif %}";
     const template2 = "{% if b %}{% endif %}";
 
-    cache.set(template1, makeResult(true));
-    expect(cache.get(template2)).toBeNull();
+    await cache.set(template1, makeResult(true));
+    expect(await cache.get(template2)).toBeNull();
   });
 
-  // ── LRU eviction ───────────────────────────────────────────────────────
+  // ── TTL-based eviction (adapter handles expiry, no LRU) ────────────────
 
-  it("evicts the oldest entry when exceeding max size", () => {
-    const smallCache = new ValidationCache(3);
+  it("stores and retrieves multiple entries", async () => {
+    await cache.set("template-1", makeResult(true));
+    await cache.set("template-2", makeResult(true));
+    await cache.set("template-3", makeResult(true));
+    await cache.set("template-4", makeResult(false));
 
-    smallCache.set("template-1", makeResult(true));
-    smallCache.set("template-2", makeResult(true));
-    smallCache.set("template-3", makeResult(true));
-
-    // Cache is now full (3/3). Adding a 4th should evict template-1.
-    smallCache.set("template-4", makeResult(false));
-
-    expect(smallCache.size()).toBe(3);
-    expect(smallCache.get("template-1")).toBeNull();
-    expect(smallCache.get("template-4")).toEqual(makeResult(false));
-  });
-
-  it("evicts at the default 1000-entry limit", () => {
-    const bigCache = new ValidationCache(1000);
-
-    for (let i = 0; i < 1000; i++) {
-      bigCache.set(`t-${i}`, makeResult(true));
-    }
-    expect(bigCache.size()).toBe(1000);
-
-    // Adding entry 1001 should evict t-0
-    bigCache.set("t-1000", makeResult(true));
-    expect(bigCache.size()).toBe(1000);
-    expect(bigCache.get("t-0")).toBeNull();
-    expect(bigCache.get("t-1000")).toEqual(makeResult(true));
-  });
-
-  it("refreshes an entry on get so it is not evicted next", () => {
-    const smallCache = new ValidationCache(3);
-
-    smallCache.set("a", makeResult(true));
-    smallCache.set("b", makeResult(true));
-    smallCache.set("c", makeResult(true));
-
-    // Access "a" to refresh it — "b" is now the oldest
-    smallCache.get("a");
-
-    // Add "d" — should evict "b", not "a"
-    smallCache.set("d", makeResult(true));
-
-    expect(smallCache.get("a")).not.toBeNull();
-    expect(smallCache.get("b")).toBeNull();
+    // All entries are accessible (no LRU limit in adapter mode)
+    expect(await cache.get("template-4")).toEqual(makeResult(false));
   });
 
   // ── clear / size ──────────────────────────────────────────────────────
 
-  it("clear() empties the cache", () => {
-    cache.set("x", makeResult(true));
-    cache.set("y", makeResult(false));
-    expect(cache.size()).toBe(2);
+  it("clear() empties the cache", async () => {
+    await cache.set("x", makeResult(true));
+    await cache.set("y", makeResult(false));
 
-    cache.clear();
-    expect(cache.size()).toBe(0);
-    expect(cache.get("x")).toBeNull();
+    await cache.clear();
+    expect(await cache.get("x")).toBeNull();
   });
 
-  it("size() reflects the number of cached entries", () => {
-    expect(cache.size()).toBe(0);
-    cache.set("one", makeResult(true));
-    expect(cache.size()).toBe(1);
-    cache.set("two", makeResult(true));
-    expect(cache.size()).toBe(2);
+  it("size() reflects approximate entry count", async () => {
+    await cache.set("one", makeResult(true));
+    await cache.set("two", makeResult(true));
+    // size() returns total adapter size (may include other namespaces)
+    const s = await cache.size();
+    expect(s).toBeGreaterThanOrEqual(2);
   });
 });

@@ -1,7 +1,9 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { APIError } from '@/lib/errors/handler';
 import { decryptToken } from '@/lib/shopify/token-manager';
 import type { PreviewResource, PreviewResourceType } from '@/lib/types/preview';
+
+const API_VERSION = '2025-10';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const resourceCache = new Map<
@@ -13,8 +15,23 @@ function cacheKey(projectId: string, type: PreviewResourceType, query: string) {
   return `${projectId}:${type}:${query}`;
 }
 
+/**
+ * Service-role Supabase client — bypasses RLS so we can read
+ * the encrypted access token from shopify_connections.
+ */
+function adminSupabase() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for preview resource fetching');
+  }
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey,
+  );
+}
+
 async function getShopifyConnection(projectId: string) {
-  const supabase = await createClient();
+  const supabase = adminSupabase();
 
   // Store-first: look up the connection via project's shopify_connection_id
   const { data: project, error: projError } = await supabase
@@ -24,6 +41,15 @@ async function getShopifyConnection(projectId: string) {
     .maybeSingle();
 
   if (projError || !project?.shopify_connection_id) {
+    // Fallback: look for any connection linked to this project directly
+    const { data: conn } = await supabase
+      .from('shopify_connections')
+      .select('store_domain, access_token_encrypted')
+      .eq('project_id', projectId)
+      .maybeSingle();
+
+    if (conn) return conn;
+
     throw APIError.notFound('Shopify connection not found for this project');
   }
 
@@ -45,7 +71,7 @@ async function queryGraphQL<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const url = `https://${storeDomain.replace(/^https?:\/\//, '')}/admin/api/2024-01/graphql.json`;
+  const url = `https://${storeDomain.replace(/^https?:\/\//, '')}/admin/api/${API_VERSION}/graphql.json`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -56,11 +82,14 @@ async function queryGraphQL<T>(
   });
 
   if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('[resource-fetcher] Shopify GraphQL error', res.status, body);
     throw new APIError('Failed to fetch Shopify resources', 'SHOPIFY_API_ERROR', res.status);
   }
 
   const json = (await res.json()) as { data?: T; errors?: unknown };
   if (json.errors) {
+    console.error('[resource-fetcher] Shopify GraphQL errors', JSON.stringify(json.errors));
     throw new APIError('Shopify GraphQL error', 'SHOPIFY_GRAPHQL_ERROR', 500);
   }
   if (!json.data) {

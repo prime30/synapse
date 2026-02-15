@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
 import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
-import { AgentCoordinator } from '@/lib/agents/coordinator';
+import { AgentCoordinator, findFilesFromElementHint } from '@/lib/agents/coordinator';
 import type { ThinkingEvent } from '@/lib/agents/coordinator';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/admin';
+import { loadProjectFiles } from '@/lib/supabase/file-loader';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { buildSummaryMessages } from '@/lib/agents/summary-prompt';
 import type { SummaryMode } from '@/lib/agents/summary-prompt';
@@ -16,12 +18,15 @@ import { AIProviderError, formatSSEError, formatSSEDone, getUserMessage } from '
 import type { AIErrorCode } from '@/lib/ai/errors';
 import type { AIAction } from '@/lib/agents/model-router';
 import type { HistoryMessage } from '@/lib/agents/summary-prompt';
-import type { AIMessage } from '@/lib/ai/types';
+import type { AIMessage, AIToolProviderInterface } from '@/lib/ai/types';
 import { formatMemoryForPrompt, filterActiveMemories, rowToMemoryEntry, type MemoryRow } from '@/lib/ai/developer-memory';
 import { ContextEngine } from '@/lib/ai/context-engine';
-import type { FileContext } from '@/lib/types/agent';
+import type { FileContext, ElementHint } from '@/lib/types/agent';
 import { trimHistory } from '@/lib/ai/history-window';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
+import { buildDiagnosticContext } from '@/lib/agents/diagnostic-context';
+import { selectToolsForRequest } from '@/lib/agents/tools/definitions';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
 
 const streamSchema = z.object({
   projectId: z.string().uuid(),
@@ -40,10 +45,31 @@ const streamSchema = z.object({
     'explain', 'refactor', 'document', 'plan', 'chat',
   ] as const).optional(),
   model: z.string().optional(),
-  mode: z.enum(['orchestrated', 'solo']).optional(),
+  mode: z.enum(['orchestrated', 'solo', 'auto']).optional(),
   domContext: z.string().optional(),
   intentMode: z.enum(['code', 'ask', 'plan', 'debug']).optional(),
+  activeFilePath: z.string().optional(),
+  explicitFiles: z.array(z.string()).optional(),
+  openTabs: z.array(z.string()).optional(),
+  elementHint: z.object({
+    sectionId: z.string().optional(),
+    sectionType: z.string().optional(),
+    blockId: z.string().optional(),
+    elementId: z.string().optional(),
+    cssClasses: z.array(z.string()).optional(),
+    selector: z.string().optional(),
+  }).optional(),
+  /** EPIC V4: Current clarification round (0 = no prior clarification). */
+  clarificationRound: z.number().int().min(0).max(2).optional(),
+  /** EPIC V4: Prior clarification Q&A pairs for multi-round dialogue. */
+  clarificationHistory: z.array(z.object({
+    question: z.string(),
+    answer: z.string(),
+  })).optional(),
 });
+
+// Allow up to 5 minutes for streaming responses (Vercel Pro default is 60s)
+export const maxDuration = 300;
 
 // ── SSE helpers ─────────────────────────────────────────────────────────
 
@@ -117,7 +143,13 @@ ${fileList}${fileContexts.length > 60 ? `\n... and ${fileContexts.length - 60} m
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
+    const rateLimit = await checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
+    if (!rateLimit.allowed) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'X-RateLimit-Limit': String(rateLimit.limit), 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(Math.ceil(rateLimit.resetAt / 1000)) },
+      });
+    }
 
     // ── Usage guard (B4): enforce plan limits before running agents ──
     let usageCheck: Awaited<ReturnType<typeof checkUsageAllowance>>;
@@ -150,15 +182,15 @@ export async function POST(request: NextRequest) {
     const summaryMode = toSummaryMode(intentMode);
 
     const supabase = await createClient();
+    // Service client bypasses RLS — needed when requests arrive with a
+    // Bearer token (e.g. MCP server) instead of browser cookies.
+    const serviceClient = createServiceClient();
 
-    // Load project files for context
-    const { data: files } = await supabase
-      .from('files')
-      .select('id, name, path, file_type, content')
-      .eq('project_id', body.projectId);
+    // Load project files: stubs for all files + loadContent hydrator for on-demand content
+    const { allFiles: fileContexts_, loadContent } = await loadProjectFiles(body.projectId, serviceClient);
 
     // Load user preferences
-    const { data: preferences } = await supabase
+    const { data: preferences } = await serviceClient
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId);
@@ -180,13 +212,18 @@ export async function POST(request: NextRequest) {
       // developer_memory table may not exist yet — silently skip
     }
 
-    const fileContexts = (files ?? []).map((f) => ({
-      fileId: f.id,
-      fileName: f.name,
-      fileType: f.file_type as 'liquid' | 'javascript' | 'css' | 'other',
-      content: f.content ?? '',
-      path: f.path ?? undefined,
-    }));
+    const fileContexts = fileContexts_;
+
+    // ── Build diagnostic context (EPIC V2) ────────────────────────────
+    // Run Liquid validation pipeline on files with real content to give
+    // agents awareness of existing issues in the codebase.
+    let diagnosticContext = '';
+    try {
+      const diagResult = buildDiagnosticContext(fileContexts);
+      diagnosticContext = diagResult.formatted;
+    } catch {
+      // Diagnostic pipeline should never block agent execution
+    }
 
     const executionId = crypto.randomUUID();
     const orgId = usageCheck.organizationId || null;
@@ -203,6 +240,8 @@ export async function POST(request: NextRequest) {
         orgId,
         memoryContext,
         usageCheck,
+        loadContent,
+        elementHint: body.elementHint as ElementHint | undefined,
       });
     }
 
@@ -210,6 +249,7 @@ export async function POST(request: NextRequest) {
     // PLAN / CODE / DEBUG: Coordinator pipeline with thinking events
     // ══════════════════════════════════════════════════════════════════
 
+    const isAutoMode = body.mode === 'auto' || !body.mode;
     const isSoloMode = body.mode === 'solo';
 
     // The stream starts immediately so thinking events can be sent in real time.
@@ -220,37 +260,92 @@ export async function POST(request: NextRequest) {
           const coordinator = new AgentCoordinator();
           const action = body.action as AIAction | undefined ?? toAction(intentMode);
 
+          const recentMessages = body.history?.slice(-5).map((m: { content: string }) => m.content) ?? [];
           const coordinatorOptions = {
             action,
             model: body.model,
-            mode: body.mode,
+            mode: body.mode === 'auto' ? undefined : body.mode,
             domContext: body.domContext,
             memoryContext,
+            diagnosticContext,
             planOnly: intentMode === 'plan',
+            activeFilePath: body.activeFilePath,
+            openTabs: body.openTabs,
+            recentMessages,
+            loadContent,
+            elementHint: body.elementHint as ElementHint | undefined,
+            autoRoute: isAutoMode, // enable smart routing for auto/default mode
+            clarificationRound: body.clarificationRound,
+            clarificationHistory: body.clarificationHistory,
+            explicitFiles: body.explicitFiles,
             onProgress: (event: ThinkingEvent) => {
               try { controller.enqueue(formatSSEThinking(event)); } catch { /* stream closed */ }
             },
           };
 
-          const result = isSoloMode
-            ? await coordinator.executeSolo(
-                executionId,
-                body.projectId,
-                userId,
-                body.request,
-                fileContexts,
-                preferences ?? [],
-                coordinatorOptions,
-              )
-            : await coordinator.execute(
-                executionId,
-                body.projectId,
-                userId,
-                body.request,
-                fileContexts,
-                preferences ?? [],
-                coordinatorOptions,
-              );
+          // Emit context_stats SSE event for accurate ContextMeter in the UI
+          try {
+            controller.enqueue(`data: ${JSON.stringify({
+              type: 'context_stats',
+              loadedFiles: 0,
+              loadedTokens: 0,
+              totalFiles: fileContexts.length,
+            })}\n\n`);
+          } catch { /* stream closed */ }
+
+          // Execute coordinator with model fallback + auto-retry on CONTEXT_TOO_LARGE
+          const executeCoordinator = async (opts: typeof coordinatorOptions) => {
+            return isSoloMode
+              ? coordinator.executeSolo(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts)
+              : coordinator.execute(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts);
+          };
+
+          // Build deduplicated model fallback chain for coordinator
+          const coordUserModel = body.model || MODELS.CLAUDE_SONNET;
+          const coordFallbackChain = [coordUserModel, MODELS.CLAUDE_SONNET, MODELS.CLAUDE_HAIKU]
+            .filter((m, i, arr) => arr.indexOf(m) === i);
+
+          let result = await executeCoordinator(coordinatorOptions);
+
+          // Model fallback: if MODEL_UNAVAILABLE, try next model in chain
+          if (!result.success && result.error?.code === 'MODEL_UNAVAILABLE') {
+            for (let fi = 1; fi < coordFallbackChain.length; fi++) {
+              const fallbackModel = coordFallbackChain[fi];
+              controller.enqueue(formatSSEThinking({
+                type: 'thinking',
+                phase: 'analyzing' as const,
+                label: `Model unavailable — trying ${fallbackModel}`,
+              }));
+              const fallbackCoord = new AgentCoordinator();
+              const fallbackOpts = { ...coordinatorOptions, model: fallbackModel };
+              result = isSoloMode
+                ? await fallbackCoord.executeSolo(executionId + `-fb${fi}`, body.projectId, userId, body.request, fileContexts, preferences ?? [], fallbackOpts)
+                : await fallbackCoord.execute(executionId + `-fb${fi}`, body.projectId, userId, body.request, fileContexts, preferences ?? [], fallbackOpts);
+              if (result.success || result.error?.code !== 'MODEL_UNAVAILABLE') break;
+            }
+          }
+
+          // Auto-retry with reduced context if CONTEXT_TOO_LARGE
+          if (!result.success && result.error?.code === 'CONTEXT_TOO_LARGE') {
+            controller.enqueue(formatSSEThinking({
+              type: 'thinking',
+              phase: 'analyzing' as const,
+              label: 'Context too large — retrying with reduced budget',
+              detail: 'Reducing file context by 50% and retrying...',
+            }));
+
+            // Retry with a fresh coordinator (reset usage tracking)
+            const retryCoordinator = new AgentCoordinator();
+            // Reduce file budget by halving the open tabs to reduce files loaded
+            const retryOptions = {
+              ...coordinatorOptions,
+              openTabs: (coordinatorOptions.openTabs ?? []).slice(0, 3),
+            };
+
+            result = isSoloMode
+              ? await retryCoordinator.executeSolo(executionId + '-retry', body.projectId, userId, body.request, fileContexts, preferences ?? [], retryOptions)
+              : await retryCoordinator.execute(executionId + '-retry', body.projectId, userId, body.request, fileContexts, preferences ?? [], retryOptions);
+          }
 
           // ── Token usage recording (fire-and-forget) ────────────────
           try {
@@ -291,6 +386,16 @@ export async function POST(request: NextRequest) {
             return;
           }
 
+          // ── Fast-path: Clarification needed — skip summary stream ──
+          // The clarification text was already sent to the client via the
+          // onProgress -> formatSSEThinking(phase:'clarification') callback.
+          // We only need to close the stream.
+          if (result.needsClarification) {
+            controller.enqueue(formatSSEDone());
+            controller.close();
+            return;
+          }
+
           // ── Build and stream summary ────────────────────────────────
           const summaryMessages = buildSummaryMessages(
             body.request,
@@ -299,46 +404,144 @@ export async function POST(request: NextRequest) {
             summaryMode
           );
 
-          const summaryModel = MODELS.CLAUDE_HAIKU;
+          // Mark system message for prompt caching
+          if (AI_FEATURES.promptCaching) {
+            const sysMsg = summaryMessages.find(m => m.role === 'system');
+            if (sysMsg) sysMsg.cacheControl = { type: 'ephemeral' };
+          }
+
           const provider = getAIProvider('anthropic');
 
           // Apply total budget enforcement before streaming
           const budgetedSummary = enforceRequestBudget(summaryMessages);
 
-          let summaryStream: ReadableStream<string>;
+          // Select summary-phase tools when streaming tool use is enabled
+          const selectedTools = AI_FEATURES.streamingToolUse && intentMode !== 'ask'
+            ? selectToolsForRequest(intentMode, body.request, !!body.domContext)
+            : [];
+
+          const debugTools = process.env.DEBUG_TOOLS === 'true';
+
+          // Summary model fallback: Haiku → Sonnet
+          const summaryFallbackChain = [MODELS.CLAUDE_HAIKU, MODELS.CLAUDE_SONNET];
+          let actualSummaryModel = summaryFallbackChain[0];
           let summaryGetUsage: () => Promise<{ inputTokens: number; outputTokens: number }>;
-          try {
-            const streamResult = await provider.stream(budgetedSummary.messages, {
-              model: summaryModel,
-              maxTokens: 1024,
-              temperature: 0.3,
-            });
-            summaryStream = streamResult.stream;
-            summaryGetUsage = streamResult.getUsage;
-          } catch (streamError) {
-            console.error('[stream] summary stream failed to start:', streamError);
-            const sseError = streamError instanceof AIProviderError
-              ? streamError
-              : new AIProviderError('PROVIDER_ERROR', String(streamError), 'anthropic');
-            controller.enqueue(formatSSEError(sseError));
-            controller.close();
-            return;
+          let summaryStarted = false;
+
+          for (const candidateSummaryModel of summaryFallbackChain) {
+            try {
+              // Attempt streaming with tools if available
+              if (selectedTools.length > 0) {
+                const toolProvider = provider as AIToolProviderInterface;
+                if (toolProvider.streamWithTools) {
+                  try {
+                    const toolStreamResult = await toolProvider.streamWithTools(
+                      budgetedSummary.messages,
+                      selectedTools,
+                      { model: candidateSummaryModel, maxTokens: 1024, temperature: 0.3 },
+                    );
+
+                    // Consume ToolStreamEvent stream and translate to SSE
+                    const toolReader = toolStreamResult.stream.getReader();
+                    try {
+                      while (true) {
+                        const { done: toolDone, value: toolEvent } = await toolReader.read();
+                        if (toolDone) break;
+
+                        if (toolEvent.type === 'text_delta') {
+                          controller.enqueue(toolEvent.text);
+                        } else if (toolEvent.type === 'tool_start') {
+                          if (debugTools) console.log(`[stream:tools] tool_start: ${toolEvent.name} (${toolEvent.id})`);
+                          controller.enqueue(`data: ${JSON.stringify({ type: 'tool_start', name: toolEvent.name, id: toolEvent.id })}\n\n`);
+                        } else if (toolEvent.type === 'tool_end') {
+                          if (debugTools) console.log(`[stream:tools] tool_end: ${toolEvent.name} (${JSON.stringify(toolEvent.input).length} chars)`);
+                          controller.enqueue(`data: ${JSON.stringify({ type: 'tool_call', name: toolEvent.name, input: toolEvent.input })}\n\n`);
+                        }
+                        // tool_delta events are not sent to the client (accumulation only)
+                      }
+                    } finally {
+                      toolReader.releaseLock();
+                    }
+
+                    summaryGetUsage = toolStreamResult.getUsage;
+                    actualSummaryModel = candidateSummaryModel;
+                    summaryStarted = true;
+                    break;
+                  } catch (toolError) {
+                    // Fall back to text-only stream if streamWithTools fails
+                    console.error('[stream] streamWithTools failed, falling back to text stream:', {
+                      error: toolError instanceof Error ? toolError.message : String(toolError),
+                    });
+                    controller.enqueue(formatSSEThinking({
+                      type: 'thinking',
+                      phase: 'analyzing' as const,
+                      label: 'Tools unavailable, using text mode',
+                    }));
+                    // Fall through to regular stream() below
+                  }
+                }
+              }
+
+              // Regular text-only stream (no tools, or tool fallback)
+              const streamResult = await provider.stream(budgetedSummary.messages, {
+                model: candidateSummaryModel,
+                maxTokens: 1024,
+                temperature: 0.3,
+              });
+
+              // Pipe text stream
+              const textReader = streamResult.stream.getReader();
+              try {
+                while (true) {
+                  const { done: textDone, value: textValue } = await textReader.read();
+                  if (textDone) break;
+                  controller.enqueue(textValue);
+                }
+              } finally {
+                textReader.releaseLock();
+              }
+
+              summaryGetUsage = streamResult.getUsage;
+              actualSummaryModel = candidateSummaryModel;
+              summaryStarted = true;
+              break;
+            } catch (streamError) {
+              if (
+                streamError instanceof AIProviderError &&
+                streamError.code === 'MODEL_UNAVAILABLE' &&
+                candidateSummaryModel !== summaryFallbackChain[summaryFallbackChain.length - 1]
+              ) {
+                console.error('[stream] summary model unavailable, trying fallback:', {
+                  model: candidateSummaryModel,
+                });
+                controller.enqueue(formatSSEThinking({
+                  type: 'thinking',
+                  phase: 'analyzing' as const,
+                  label: `Summary model ${candidateSummaryModel} unavailable — trying next`,
+                }));
+                continue;
+              }
+              console.error('[stream] summary stream failed:', {
+                mode: intentMode,
+                model: candidateSummaryModel,
+                error: streamError instanceof AIProviderError ? streamError.code : 'UNKNOWN',
+                message: streamError instanceof Error ? streamError.message : String(streamError),
+              });
+              const sseError = streamError instanceof AIProviderError
+                ? streamError
+                : new AIProviderError('PROVIDER_ERROR', String(streamError), 'anthropic');
+              controller.enqueue(formatSSEError(sseError));
+              controller.close();
+              return;
+            }
           }
 
-          // Pipe summary stream to the response
-          const reader = summaryStream.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              controller.enqueue(value);
-            }
-          } catch (midStreamError) {
-            console.error('[stream] mid-stream error:', midStreamError);
-            const sseError = midStreamError instanceof AIProviderError
-              ? midStreamError
-              : new AIProviderError('PROVIDER_ERROR', String(midStreamError), 'anthropic');
-            controller.enqueue(formatSSEError(sseError));
+          if (!summaryStarted) {
+            controller.enqueue(formatSSEError(
+              new AIProviderError('MODEL_UNAVAILABLE', 'All summary models unavailable', 'anthropic')
+            ));
+            controller.close();
+            return;
           }
 
           // Record summary usage
@@ -351,8 +554,8 @@ export async function POST(request: NextRequest) {
                   userId,
                   projectId: body.projectId,
                   executionId,
-                  provider: getProviderForModel(summaryModel),
-                  model: summaryModel,
+                  provider: getProviderForModel(actualSummaryModel),
+                  model: actualSummaryModel,
                   inputTokens: su.inputTokens,
                   outputTokens: su.outputTokens,
                   isByok: usageCheck.isByok,
@@ -368,7 +571,12 @@ export async function POST(request: NextRequest) {
           controller.enqueue(formatSSEDone());
           controller.close();
         } catch (error) {
-          console.error('[stream] pipeline error:', error);
+          console.error('[stream] pipeline error:', {
+            mode: intentMode,
+            model: body.model ?? 'default',
+            error: error instanceof AIProviderError ? error.code : 'UNKNOWN',
+            message: error instanceof Error ? error.message : String(error),
+          });
           const sseError = error instanceof AIProviderError
             ? error
             : new AIProviderError('UNKNOWN', String(error), 'server');
@@ -383,7 +591,10 @@ export async function POST(request: NextRequest) {
     return new Response(responseStream, { headers: SSE_HEADERS });
   } catch (error) {
     // Unhandled exceptions before the stream starts
-    console.error('[stream] unhandled error:', error);
+    console.error('[stream] unhandled pre-stream error:', {
+      error: error instanceof AIProviderError ? error.code : 'UNKNOWN',
+      message: error instanceof Error ? error.message : String(error),
+    });
     const sseError = error instanceof AIProviderError
       ? error
       : new AIProviderError('UNKNOWN', String(error), 'server');
@@ -409,9 +620,11 @@ interface AskModeParams {
   orgId: string | null;
   usageCheck: { isByok: boolean; isIncluded: boolean };
   memoryContext?: string;
+  loadContent: (fileIds: string[]) => FileContext[];
+  elementHint?: ElementHint;
 }
 
-function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCheck, memoryContext }: AskModeParams) {
+function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCheck, memoryContext, loadContent, elementHint }: AskModeParams) {
   const responseStream = new ReadableStream<string>({
     async start(controller) {
       try {
@@ -428,14 +641,32 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
 
         // Use ContextEngine for smarter file selection within token budget
         const askContextEngine = new ContextEngine(12_000);
-        askContextEngine.indexFiles(fileContexts);
+        askContextEngine.indexFiles(fileContexts); // Indexes stubs (skip ref detection)
 
-        // Build context with all files; ContextEngine handles token budgeting
-        const allFileIds = fileContexts.map((f) => f.fileId);
-        const contextResult = askContextEngine.buildContext(allFileIds);
-        const includedFiles = contextResult.files;
+        // Select relevant files via fuzzy matching, then hydrate with real content
+        const askSelection = askContextEngine.selectRelevantFiles(
+          body.request,
+          body.history?.slice(-3).map(m => m.content) ?? [],
+          body.activeFilePath,
+          12_000,
+        );
+        const selectedIds = new Set(askSelection.files.map(f => f.fileId));
 
-        // Build file content summaries from prioritized files
+        // Element-driven file selection: prioritize section + related assets
+        if (elementHint?.sectionId) {
+          const elementFileIds = findFilesFromElementHint(elementHint, fileContexts);
+          for (const id of elementFileIds) selectedIds.add(id);
+          if (elementFileIds.length > 0) {
+            console.log(`[stream:ask] element hint matched ${elementFileIds.length} file(s)`);
+          }
+        }
+
+        // Hydrate selected files via loadContent
+        const includedFiles = selectedIds.size > 0
+          ? loadContent([...selectedIds])
+          : loadContent(fileContexts.slice(0, 15).map(f => f.fileId));
+
+        // Build file content summaries from hydrated files
         const fileSummaries = includedFiles
           .slice(0, 30)
           .map((f) => `### ${f.path ?? f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``)
@@ -445,9 +676,11 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
           ? `\n\n[Project file contents for reference]:\n${fileSummaries}`
           : '';
 
-        const messages: AIMessage[] = [
-          { role: 'system', content: systemPrompt },
-        ];
+        const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
+        if (AI_FEATURES.promptCaching) {
+          systemMsg.cacheControl = { type: 'ephemeral' };
+        }
+        const messages: AIMessage[] = [systemMsg];
 
         // Trim conversation history to fit budget
         const { messages: trimmedHistory, summary: historySummary } = trimHistory(
@@ -476,35 +709,70 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
         const budgeted = enforceRequestBudget(messages);
         const finalMessages = budgeted.messages;
 
-        // Stream directly from the provider (no coordinator)
-        const askModel = MODELS.CLAUDE_SONNET;
+        // Stream directly from the provider with model fallback chain
+        const userModel = body.model || MODELS.CLAUDE_SONNET;
         const provider = getAIProvider('anthropic');
 
-        const { stream, getUsage } = await provider.stream(finalMessages, {
-          model: askModel,
-          maxTokens: 2048,
-          temperature: 0.5,
-        });
+        // Build deduplicated fallback chain: user pick → Sonnet → Haiku
+        const askFallbackChain = [userModel, MODELS.CLAUDE_SONNET, MODELS.CLAUDE_HAIKU]
+          .filter((m, i, arr) => arr.indexOf(m) === i);
 
-        const reader = stream.getReader();
+        let actualAskModel = askFallbackChain[0];
+        let askStream: ReadableStream<string> | null = null;
+        let askGetUsage: (() => Promise<{ inputTokens: number; outputTokens: number }>) | null = null;
+
+        for (const candidateModel of askFallbackChain) {
+          try {
+            const streamResult = await provider.stream(finalMessages, {
+              model: candidateModel,
+              maxTokens: 2048,
+              temperature: 0.5,
+              citationsEnabled: AI_FEATURES.citations,
+            });
+            askStream = streamResult.stream;
+            askGetUsage = streamResult.getUsage;
+            actualAskModel = candidateModel;
+            break;
+          } catch (modelError) {
+            if (
+              modelError instanceof AIProviderError &&
+              modelError.code === 'MODEL_UNAVAILABLE' &&
+              candidateModel !== askFallbackChain[askFallbackChain.length - 1]
+            ) {
+              controller.enqueue(formatSSEThinking({
+                type: 'thinking',
+                phase: 'analyzing',
+                label: `Model ${candidateModel} unavailable — trying next model`,
+              }));
+              continue;
+            }
+            throw modelError;
+          }
+        }
+
+        if (!askStream || !askGetUsage) {
+          throw new AIProviderError('MODEL_UNAVAILABLE', 'All models in fallback chain are unavailable', 'anthropic');
+        }
+
+        const reader = askStream.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           controller.enqueue(value);
         }
 
-        // Record usage
+        // Record usage with the actual model that succeeded
         if (orgId) {
           const capturedOrgId = orgId;
-          getUsage()
+          askGetUsage()
             .then((u) =>
               recordUsage({
                 organizationId: capturedOrgId,
                 userId,
                 projectId: body.projectId,
                 executionId,
-                provider: getProviderForModel(askModel),
-                model: askModel,
+                provider: getProviderForModel(actualAskModel),
+                model: actualAskModel,
                 inputTokens: u.inputTokens,
                 outputTokens: u.outputTokens,
                 isByok: usageCheck.isByok,
@@ -518,7 +786,12 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
         controller.enqueue(formatSSEDone());
         controller.close();
       } catch (error) {
-        console.error('[stream:ask] error:', error);
+        console.error('[stream:ask] error:', {
+          mode: 'ask',
+          model: body.model ?? 'default',
+          error: error instanceof AIProviderError ? error.code : 'UNKNOWN',
+          message: error instanceof Error ? error.message : String(error),
+        });
         const sseError = error instanceof AIProviderError
           ? error
           : new AIProviderError('UNKNOWN', String(error), 'server');

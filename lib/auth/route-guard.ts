@@ -13,7 +13,7 @@ export interface ProtectedRouteConfig {
 }
 
 export const DEFAULT_ROUTE_CONFIG: ProtectedRouteConfig = {
-  publicPaths: ['/', '/auth/signin', '/auth/confirm', '/auth/error', '/auth/forgot-password', '/auth/reset-password', '/pricing', '/signup', '/welcome', '/docs', '/blog'],
+  publicPaths: ['/', '/auth/signin', '/auth/confirm', '/auth/error', '/auth/forgot-password', '/auth/reset-password', '/auth/mcp', '/pricing', '/signup', '/welcome', '/docs', '/blog'],
   apiPublicPaths: ['/api/auth/', '/api/health'],
 };
 

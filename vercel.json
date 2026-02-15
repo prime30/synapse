@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/report-overage",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/internal/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

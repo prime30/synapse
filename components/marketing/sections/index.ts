@@ -4,6 +4,7 @@ export { SocialProofStrip } from './SocialProofStrip';
 export { ValuePropGrid } from './ValuePropGrid';
 export { FeatureCards } from './FeatureCards';
 export { AgentHubDiagram } from './AgentHubDiagram';
+export { AgentScrollStory } from './AgentScrollStory';
 export { ScrollRevealSection } from './ScrollRevealSection';
 export { TestimonialCarousel } from './TestimonialCarousel';
 export { CaseStudySection } from './CaseStudySection';

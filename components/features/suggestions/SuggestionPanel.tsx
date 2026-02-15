@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { SuggestionCard } from './SuggestionCard';
 import { DiffPreview } from './DiffPreview';
+import { InlineDiffViewer } from './InlineDiffViewer';
 import { SuggestionHistory } from './SuggestionHistory';
 import type { SuggestionStatus } from '@/lib/types/suggestion';
 
@@ -42,6 +43,7 @@ export function SuggestionPanel({
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | undefined>(undefined);
   const [viewingDiffId, setViewingDiffId] = useState<string | null>(null);
+  const [useDiffEditor, setUseDiffEditor] = useState(false);
 
   const {
     suggestions,
@@ -159,7 +161,18 @@ export function SuggestionPanel({
       {viewingDiff && (
         <div className="border-b ide-border">
           <div className="flex items-center justify-between px-4 py-2 ide-surface-panel">
-            <span className="text-xs font-medium ide-text">Diff Preview</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium ide-text">Diff Preview</span>
+              <button
+                type="button"
+                onClick={() => setUseDiffEditor(!useDiffEditor)}
+                className={`text-[11px] px-2 py-0.5 rounded transition-colors ${
+                  useDiffEditor ? 'bg-sky-500 text-white' : 'ide-text-muted hover:ide-text'
+                }`}
+              >
+                {useDiffEditor ? 'Monaco' : 'Simple'}
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setViewingDiffId(null)}
@@ -169,10 +182,21 @@ export function SuggestionPanel({
             </button>
           </div>
           <div className="max-h-64 overflow-auto">
-            <DiffPreview
-              originalCode={viewingDiff.original_code}
-              suggestedCode={viewingDiff.suggested_code}
-            />
+            {useDiffEditor ? (
+              <div className="p-2">
+                <InlineDiffViewer
+                  originalContent={viewingDiff.original_code}
+                  proposedContent={viewingDiff.suggested_code}
+                  fileName={viewingDiff.file_paths[0] ?? 'code'}
+                  height={256}
+                />
+              </div>
+            ) : (
+              <DiffPreview
+                originalCode={viewingDiff.original_code}
+                suggestedCode={viewingDiff.suggested_code}
+              />
+            )}
           </div>
         </div>
       )}

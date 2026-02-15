@@ -7,7 +7,7 @@ import {
   SocialProofStrip,
   ValuePropGrid,
   FeatureCards,
-  AgentHubDiagram,
+  AgentScrollStory,
   ScrollRevealSection,
   TestimonialCarousel,
   CaseStudySection,
@@ -32,7 +32,7 @@ export default function MarketingPage() {
         <GridDivider />
         <FeatureCards />
         <GridDivider />
-        <AgentHubDiagram />
+        <AgentScrollStory />
         <GridDivider />
         <ScrollRevealSection />
         <TestimonialCarousel />

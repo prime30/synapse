@@ -1,14 +1,26 @@
 import type { AgentType, AgentTask, AgentResult, AgentError } from '@/lib/types/agent';
-import type { AIProviderInterface, AIMessage } from '@/lib/ai/types';
+import type { AIProviderInterface, AIMessage, ToolDefinition, ToolResult as AIToolResult, AIToolCompletionResult, AICompletionOptions, AIToolProviderInterface } from '@/lib/ai/types';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { AIProviderError, isRetryable } from '@/lib/ai/errors';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
 import {
   resolveModel,
   getProviderForModel,
+  ACTION_EFFORT,
+  THINKING_ACTIONS,
   type AIAction,
   type AgentRole,
   type ProviderName,
 } from './model-router';
+
+/** Type guard: does this provider support completeWithTools? */
+function isToolProvider(provider: AIProviderInterface): provider is AIToolProviderInterface {
+  return 'completeWithTools' in provider && typeof (provider as AIToolProviderInterface).completeWithTools === 'function';
+}
+import { enforceRequestBudget, getAgentBudget } from '@/lib/ai/request-budget';
+import { estimateTokens } from '@/lib/ai/token-counter';
+import { AGENT_TOOLS } from './tools/definitions';
+import { executeToolCall, type ToolExecutorContext } from './tools/tool-executor';
 
 export interface RetryConfig {
   maxRetries: number;
@@ -30,6 +42,10 @@ export interface AgentExecuteOptions {
   action?: AIAction;
   /** User's preferred model override. */
   model?: string;
+  /** JSON Schema for structured output (Phase 5). */
+  outputSchema?: Record<string, unknown>;
+  /** Routing tier for adaptive budget/model escalation (EPIC V5). */
+  tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
 }
 
 /** Accumulated token usage from the last AI call. */
@@ -64,7 +80,13 @@ export abstract class Agent {
   protected retryConfig: RetryConfig;
 
   /** The model string to use for the current request. */
-  private currentModel: string | undefined;
+  protected currentModel: string | undefined;
+
+  /** The current action (for thinking/effort routing). */
+  protected currentAction: AIAction | undefined;
+
+  /** The current output schema (for structured outputs). */
+  protected currentOutputSchema: Record<string, unknown> | undefined;
 
   /** Token usage from the most recent AI call. */
   private _lastUsage: AgentUsage | null = null;
@@ -102,16 +124,19 @@ export abstract class Agent {
   async execute(task: AgentTask, options?: AgentExecuteOptions): Promise<AgentResult> {
     const startTime = Date.now();
 
-    // Resolve model and set up the correct provider
+    // Resolve model and set up the correct provider (with tier-aware escalation)
     const model = resolveModel({
       action: options?.action,
       userOverride: options?.model,
       agentRole: this.agentRole,
+      tier: options?.tier,
     });
 
     const providerName = getProviderForModel(model);
     this.provider = getAIProvider(toAIProvider(providerName));
     this.currentModel = model;
+    this.currentAction = options?.action;
+    this.currentOutputSchema = options?.outputSchema;
 
     try {
       return await this.executeWithRetry(task);
@@ -146,6 +171,170 @@ export abstract class Agent {
   /** Get token usage from the most recent AI call. */
   getLastUsage(): AgentUsage | null {
     return this._lastUsage;
+  }
+
+  /**
+   * Execute with explicit user and system prompts (for solo mode).
+   * Handles model resolution, budget enforcement, usage tracking, and
+   * empty-response validation — matching the full `executeSingle` contract.
+   */
+  async executeDirectPrompt(
+    userPrompt: string,
+    systemPrompt: string,
+    options?: AgentExecuteOptions
+  ): Promise<string> {
+    // Resolve model and set up the correct provider (with tier-aware escalation)
+    const model = resolveModel({
+      action: options?.action,
+      userOverride: options?.model,
+      agentRole: this.agentRole,
+      tier: options?.tier,
+    });
+    const providerName = getProviderForModel(model);
+    this.provider = getAIProvider(toAIProvider(providerName));
+    this.currentModel = model;
+
+    // Build message array
+    const messages: AIMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
+
+    // Enforce budget
+    const agentBudget = getAgentBudget(this.type);
+    const budgeted = enforceRequestBudget(messages, agentBudget.total);
+
+    // Call provider with timeout
+    const result = await this.withTimeout(
+      this.provider.complete(budgeted.messages, {
+        model: this.currentModel,
+        maxTokens: 4096,
+      }),
+      this.retryConfig.timeoutMs
+    );
+
+    // Track usage
+    this._lastUsage = {
+      inputTokens: result.inputTokens ?? 0,
+      outputTokens: result.outputTokens ?? 0,
+      model: result.model,
+    };
+
+    // Validate non-empty response
+    if (!result.content || result.content.trim().length === 0) {
+      throw new AIProviderError(
+        'EMPTY_RESPONSE',
+        `Agent ${this.type} received empty response from ${result.provider}`,
+        result.provider
+      );
+    }
+
+    return result.content;
+  }
+
+  /**
+   * Execute the agent with tool-calling loop support.
+   * The agent can request tools (read_file, search_files, etc.) and iterate
+   * up to maxIterations times before producing a final response.
+   */
+  async executeWithTools(
+    task: AgentTask,
+    toolContext: ToolExecutorContext,
+    options?: AgentExecuteOptions & { maxIterations?: number; onToolUse?: (toolName: string) => void },
+  ): Promise<AgentResult> {
+    const maxIterations = options?.maxIterations ?? 10;
+
+    // If provider doesn't support tools, fall back to regular execution
+    if (!isToolProvider(this.provider)) {
+      return this.execute(task, options);
+    }
+
+    // Resolve model and set up the correct provider (with tier-aware escalation)
+    const model = resolveModel({
+      action: options?.action,
+      userOverride: options?.model,
+      agentRole: this.agentRole,
+      tier: options?.tier,
+    });
+    const providerName = getProviderForModel(model);
+    this.provider = getAIProvider(toAIProvider(providerName));
+    this.currentModel = model;
+
+    // Re-check after provider swap
+    if (!isToolProvider(this.provider)) {
+      return this.execute(task, options);
+    }
+
+    const toolProvider = this.provider;
+
+    const prompt = this.formatPrompt(task);
+    const systemPrompt = this.getSystemPrompt();
+
+    const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
+    if (AI_FEATURES.promptCaching) {
+      systemMsg.cacheControl = { type: 'ephemeral' };
+    }
+    const messages: AIMessage[] = [
+      systemMsg,
+      { role: 'user', content: prompt },
+    ];
+
+    for (let i = 0; i < maxIterations; i++) {
+      const result = await toolProvider.completeWithTools(
+        messages,
+        AGENT_TOOLS,
+        { model: this.currentModel, maxTokens: 4096 },
+      );
+
+      if (result.stopReason === 'end_turn' || !result.toolCalls?.length) {
+        // Final response - parse it
+        return this.parseResponse(result.content, task);
+      }
+
+      // Execute tool calls (some tools like semantic_search are async)
+      const toolResults: AIToolResult[] = [];
+      for (const toolCall of result.toolCalls) {
+        options?.onToolUse?.(toolCall.name);
+        const toolResult = await Promise.resolve(executeToolCall(toolCall, toolContext));
+        toolResults.push(toolResult);
+      }
+
+      // Append assistant message with tool calls and tool results
+      messages.push({
+        role: 'assistant',
+        content: result.content || '',
+        __toolCalls: (result as AIToolCompletionResult & { __rawContentBlocks?: unknown }).__rawContentBlocks,
+      } as AIMessage & { __toolCalls: unknown });
+
+      messages.push({
+        role: 'user',
+        content: '',
+        __toolResults: toolResults.map(r => ({
+          type: 'tool_result',
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error,
+        })),
+      } as AIMessage & { __toolResults: unknown });
+    }
+
+    // Max iterations reached -- try to parse whatever we have
+    console.warn(`[Agent:${this.type}] Tool loop reached max iterations (${maxIterations})`);
+    const lastAssistant = messages.filter(m => m.role === 'assistant').pop();
+    if (lastAssistant?.content) {
+      return this.parseResponse(lastAssistant.content, task);
+    }
+
+    return {
+      agentType: this.type,
+      success: false,
+      error: {
+        code: 'MAX_ITERATIONS',
+        message: `Agent reached maximum tool iterations (${maxIterations})`,
+        agentType: this.type,
+        recoverable: false,
+      },
+    };
   }
 
   private async executeWithRetry(task: AgentTask): Promise<AgentResult> {
@@ -198,16 +387,46 @@ export abstract class Agent {
     const systemPrompt = this.getSystemPrompt();
 
     // Convert to the AIMessage[] format expected by the unified provider
+    const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
+    if (AI_FEATURES.promptCaching) {
+      systemMsg.cacheControl = { type: 'ephemeral' };
+    }
     const messages: AIMessage[] = [
-      { role: 'system', content: systemPrompt },
+      systemMsg,
       { role: 'user', content: prompt },
     ];
 
+    // Safety net: enforce total budget before sending to provider
+    const agentBudget = getAgentBudget(this.type);
+    const beforeTokens = estimateTokens(messages.map(m => m.content).join(''));
+    const budgeted = enforceRequestBudget(messages, agentBudget.total);
+    console.log(
+      `[Agent:${this.type}] Budget: before=${beforeTokens}, after=${budgeted.totalTokens}, ` +
+      `truncated=${budgeted.truncated}, truncatedCount=${budgeted.truncatedCount}, ` +
+      `budgetTruncated=${budgeted.budgetTruncated}, limit=${agentBudget.total}`
+    );
+
+    // Build completion options with thinking/effort when applicable
+    const completionOpts: Partial<AICompletionOptions> = {
+      model: this.currentModel,
+      maxTokens: 4096,
+    };
+
+    // Enable thinking for actions that benefit from deep reasoning
+    if (AI_FEATURES.adaptiveThinking && this.currentAction && THINKING_ACTIONS.has(this.currentAction)) {
+      completionOpts.thinking = { type: 'adaptive' };
+      completionOpts.effort = ACTION_EFFORT[this.currentAction];
+    }
+
+    // Add structured output schema if provided
+    if (AI_FEATURES.structuredOutputs && this.currentOutputSchema) {
+      completionOpts.outputConfig = {
+        format: { type: 'json_schema', schema: this.currentOutputSchema },
+      };
+    }
+
     const result = await this.withTimeout(
-      this.provider.complete(messages, {
-        model: this.currentModel,
-        maxTokens: 4096,
-      }),
+      this.provider.complete(budgeted.messages, completionOpts),
       this.retryConfig.timeoutMs
     );
 

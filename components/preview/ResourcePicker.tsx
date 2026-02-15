@@ -35,7 +35,12 @@ export function ResourcePicker({
         if (searchQuery) params.set('query', searchQuery);
         const res = await fetch(`/api/v1/preview/resources?${params.toString()}`);
         const json = await res.json();
-        setResources((json.data?.resources ?? []) as PreviewResource[]);
+        if (!res.ok) {
+          setError(json.error ?? `Request failed (${res.status})`);
+          setResources([]);
+        } else {
+          setResources((json.data?.resources ?? []) as PreviewResource[]);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load resources');
       } finally {

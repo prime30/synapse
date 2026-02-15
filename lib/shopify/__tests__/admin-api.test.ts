@@ -26,7 +26,7 @@ describe('ShopifyAdminAPI', () => {
       // Access private method via type assertion
       const url = (api as unknown as TestableAdminAPI).apiUrl('themes');
       expect(url).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes.json'
       );
     });
 
@@ -37,7 +37,7 @@ describe('ShopifyAdminAPI', () => {
       );
       const url = (apiWithProtocol as unknown as TestableAdminAPI).apiUrl('themes');
       expect(url).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes.json'
       );
     });
 
@@ -46,10 +46,10 @@ describe('ShopifyAdminAPI', () => {
       const assetsUrl = (api as unknown as TestableAdminAPI).apiUrl('themes/123/assets');
       
       expect(themesUrl).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes.json'
       );
       expect(assetsUrl).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes/123/assets.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes/123/assets.json'
       );
     });
   });
@@ -62,8 +62,8 @@ describe('ShopifyAdminAPI', () => {
         id: 123,
         name: 'Dawn',
         role: 'main',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-02T00:00:00Z',
+        created_at: '2025-10-01T00:00:00Z',
+        updated_at: '2025-10-02T00:00:00Z',
       };
 
       expect(typeof theme.id).toBe('number');
@@ -81,8 +81,8 @@ describe('ShopifyAdminAPI', () => {
           id: 1,
           name: 'Test Theme',
           role,
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
+          created_at: '2025-10-01T00:00:00Z',
+          updated_at: '2025-10-01T00:00:00Z',
         };
         expect(theme.role).toBe(role);
       }
@@ -94,7 +94,7 @@ describe('ShopifyAdminAPI', () => {
         name: 'Custom Theme',
         role: 'unpublished',
         created_at: '2023-12-01T10:30:00Z',
-        updated_at: '2024-01-15T14:20:00Z',
+        updated_at: '2025-10-15T14:20:00Z',
       };
 
       expect(theme.id).toBe(456);
@@ -112,8 +112,8 @@ describe('ShopifyAdminAPI', () => {
         value: '<div>Product template</div>',
         content_type: 'text/x-liquid',
         size: 1024,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-02T00:00:00Z',
+        created_at: '2025-10-01T00:00:00Z',
+        updated_at: '2025-10-02T00:00:00Z',
       };
 
       expect(typeof asset.key).toBe('string');
@@ -129,8 +129,8 @@ describe('ShopifyAdminAPI', () => {
         key: 'assets/image.png',
         content_type: 'image/png',
         size: 2048,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
+        created_at: '2025-10-01T00:00:00Z',
+        updated_at: '2025-10-01T00:00:00Z',
       };
 
       expect(assetWithoutValue.value).toBeUndefined();
@@ -143,8 +143,8 @@ describe('ShopifyAdminAPI', () => {
         value: '{% section "header" %}',
         content_type: 'text/x-liquid',
         size: 512,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
+        created_at: '2025-10-01T00:00:00Z',
+        updated_at: '2025-10-01T00:00:00Z',
       };
 
       const cssAsset: ShopifyAsset = {
@@ -152,8 +152,8 @@ describe('ShopifyAdminAPI', () => {
         value: '.header { color: red; }',
         content_type: 'text/css',
         size: 256,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
+        created_at: '2025-10-01T00:00:00Z',
+        updated_at: '2025-10-01T00:00:00Z',
       };
 
       expect(liquidAsset.content_type).toBe('text/x-liquid');
@@ -178,7 +178,7 @@ describe('ShopifyAdminAPI', () => {
       const [url, options] = mockFetch.mock.calls[0];
       
       expect(url).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes.json'
       );
       expect(options.method).toBe('GET');
       expect(options.headers['X-Shopify-Access-Token']).toBe(accessToken);
@@ -196,8 +196,8 @@ describe('ShopifyAdminAPI', () => {
             value: 'test content',
             content_type: 'text/x-liquid',
             size: 12,
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
+            created_at: '2025-10-01T00:00:00Z',
+            updated_at: '2025-10-01T00:00:00Z',
           },
         }),
       });
@@ -208,7 +208,7 @@ describe('ShopifyAdminAPI', () => {
       const [url, options] = mockFetch.mock.calls[0];
       
       expect(url).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes/123/assets.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes/123/assets.json'
       );
       expect(options.method).toBe('PUT');
       expect(JSON.parse(options.body)).toEqual({
@@ -248,8 +248,8 @@ describe('ShopifyAdminAPI', () => {
             value: 'content',
             content_type: 'text/x-liquid',
             size: 7,
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
+            created_at: '2025-10-01T00:00:00Z',
+            updated_at: '2025-10-01T00:00:00Z',
           },
         }),
       });
@@ -272,8 +272,8 @@ describe('ShopifyAdminAPI', () => {
             id: 999,
             name: 'Synapse Dev - proj-1',
             role: 'unpublished',
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
+            created_at: '2025-10-01T00:00:00Z',
+            updated_at: '2025-10-01T00:00:00Z',
           },
         }),
       });
@@ -287,7 +287,7 @@ describe('ShopifyAdminAPI', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe(
-        'https://test-store.myshopify.com/admin/api/2024-01/themes.json'
+        'https://test-store.myshopify.com/admin/api/2025-10/themes.json'
       );
       expect(options.method).toBe('POST');
       expect(JSON.parse(options.body)).toEqual({
@@ -312,8 +312,8 @@ describe('ShopifyAdminAPI', () => {
             id: 1000,
             name: 'Dev Theme',
             role: 'unpublished',
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
+            created_at: '2025-10-01T00:00:00Z',
+            updated_at: '2025-10-01T00:00:00Z',
           },
         }),
       });
@@ -334,8 +334,8 @@ describe('ShopifyAdminAPI', () => {
             id: 1001,
             name: 'Empty Dev Theme',
             role: 'unpublished',
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
+            created_at: '2025-10-01T00:00:00Z',
+            updated_at: '2025-10-01T00:00:00Z',
           },
         }),
       });

@@ -58,10 +58,10 @@ describe('SignInPage - REQ-8 TASK-2', () => {
     expect(button.getAttribute('data-callback-url')).toBe('/dashboard?signed_in=1');
   });
 
-  it('should default callbackUrl to /projects?signed_in=1 when not provided', () => {
+  it('should default callbackUrl to /onboarding?signed_in=1 when not provided', () => {
     render(<SignInPage />);
     const button = screen.getByTestId('google-signin-button');
-    expect(button.getAttribute('data-callback-url')).toBe('/projects?signed_in=1');
+    expect(button.getAttribute('data-callback-url')).toBe('/onboarding?signed_in=1');
   });
 
   it('should show error message when error query param is present', () => {

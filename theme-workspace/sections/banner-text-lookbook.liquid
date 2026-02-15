@@ -1,0 +1,1293 @@
+{{ 'lookbook.css' | asset_url | stylesheet_tag }} 
+{{ 'section.css' | asset_url | stylesheet_tag }} 
+{{ 'collection-products.css' | asset_url | stylesheet_tag }}
+<link href="{{ 'base_drop.min.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'"> 
+{%- liquid
+  assign image_fix = image_nt | image_tag
+  assign sid = section.id
+  assign se_stts = section.settings 
+  assign se_blocks = section.blocks
+  assign image = se_stts.image
+  assign IsIMG = false
+  if image != blank
+  assign IsIMG = true
+  endif 
+  assign stt_layout = se_stts.layout
+  if stt_layout == 't4s-se-container' 
+    assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+  elsif stt_layout == 't4s-container-wrap'
+    assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+  else
+    assign html_layout = '__' | split: '__'
+  endif
+  assign root_url = routes.root_url 
+  if root_url != '/'
+    assign root_url = root_url | append: '/'
+  endif -%}
+
+<div class="t4s-section-inner t4s_se_{{ sid }} {{ stt_layout }}" {% render 'section_style', se_stts: se_stts %}>
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner">{%- endif -%}
+    {%- render 'section_tophead', se_stts: se_stts, get_height: true -%} 
+
+    <div class="t4s-pr t4s-lookbook-wrapper">
+      <div class="t4s-lookbook-img t4s-pr t4s-oh t4s_position_8 t4s_ratioadapt t4s_cover">
+        {%- if IsIMG -%}{%- assign ratio = image.aspect_ratio -%}
+          <div class="t4s-lookbook-img-wrap t4s_ratio" style="--aspect-ratioapt: {{ ratio | default: 1.7777 }}">
+            <img class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff t4s-img-as-bg pin__image" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+            <span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>  
+          </div>
+        {%- else -%}
+          {% capture current %}{% cycle 1, 2 %}{% endcapture %}
+          {{ 'lifestyle-' | append: current | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1' }} 
+        {%- endif -%}
+        {%- for block in section.blocks -%}{%- assign bk_stts = block.settings -%}
+          {%- case block.type -%}
+            {%- when 'pr' -%}{%- if bk_stts.product == blank -%}{%- continue -%}{%- endif -%}
+              <span data-bid="t4s_{{ sid }}{{ block.id }}" data-pin-popup data-position="{{ bk_stts.pos_popup }}" data-is-pr data-href="{{ root_url }}products/{{ bk_stts.product }}" data-sid="render-pr_lb{{ se_stts.pr_pin_des }}" class="t4s-lookbook-pin is-type__pr pin__size--{{ bk_stts.pos_size }} pin_ic_{{ bk_stts.type }} pin__type_{{ block.id }}" {{ block.shopify_attributes }} {% render 'pin_position', bk_stts: bk_stts %}>
+                <span class="t4s-zoompin"></span>
+                <span class="t4s-pin-tt">
+                  {%- if bk_stts.type != '3' -%}<i class="t4s-nav-link-icon"></i>
+                  {%- else -%}<span class="t4s-truncate">{{ bk_stts.shorttxt }}</span>
+                  {%- endif -%}
+                </span>
+              </span>
+            {%- when 'txt' -%}
+              <span data-bid="t4s_{{ sid }}{{ block.id }}" data-pin-popup data-position="{{ bk_stts.pos_popup }}" class="t4s-lookbook-pin is-type__text pin__size--{{ bk_stts.pos_size }} pin_ic_{{ bk_stts.type }} pin__type_{{ block.id }}" {{ block.shopify_attributes }} {% render 'pin_position', bk_stts: bk_stts %}>
+                <span class="t4s-zoompin"></span>
+                <span class="t4s-pin-tt">
+                  {%- if bk_stts.type != '3' -%}<i class="t4s-nav-link-icon"></i>
+                  {%- else -%}<span class="t4s-truncate">{{ bk_stts.shorttxt }}</span> 
+                  {%- endif -%}
+                </span>
+              </span>
+              <template id="temt4s_{{ sid }}{{ block.id }}">
+                <div data-pin-wrapper id="" class="t4s-lb__wrapper t4s-lb-txt-wrapper">
+                   <div class="t4s-lb-arrow"></div>
+                   <div class="t4s-lb__header">
+                     <span class="t4s-lb__title">{{ 'sections.lookbook.title.text' | t }}</span>
+                     <button data-pin-close aria-label="{{ 'general.aria.close' | t }}"><svg role="presentation" class="t4s-iconsvg-close" viewBox="0 0 16 14"><path d="M15 0L1 14m14 0L1 0" stroke="currentColor" fill="none" fill-rule="evenodd"></path></svg></button>
+                   </div>
+                   <div class="t4s-lb__content">
+                      <div class="t4s-lb-title">{{ bk_stts.heading }}</div>
+                      <div class="t4s-lb-content">{{ bk_stts.text }}</div>
+                   </div>
+                </div>
+              </template>
+            {%- when 'url' -%}
+              <a href="{{ bk_stts.url }}" target="{{ bk_stts.open_link }}" class="t4s-lookbook-pin is-type__ink pin__size--{{ bk_stts.pos_size }} pin_ic_{{ bk_stts.type }} pin__type_{{ block.id }}" {% render 'pin_position', bk_stts: bk_stts %} >
+                <span class="t4s-zoompin"></span>
+                 <span class="t4s-pin-tt">
+                  {%- if bk_stts.type != '3' -%}<i class="t4s-nav-link-icon"></i>
+                  {%- else -%}<span class="t4s-truncate">{{ bk_stts.shorttxt }}</span>
+                  {%- endif -%}
+                </span>
+              </a>
+          {%- endcase -%}
+      {%- endfor -%}
+      </div> 
+      <div class="banner-text-lookbook-content t4s-content-position t4s-pa {{ se_stts.content_width }} t4s-text-lg-{{ se_stts.content_align }} t4s-text-md-{{ se_stts.content_align_tb }} t4s-text-{{ se_stts.content_align_mb }}" style="{%- if IsIMG -%}--bg-conetnt-mb: url({{ image | image_url: width: 1 }});{%- endif -%}--content-pd: {{ se_stts.content_pd_tb }}px {{ se_stts.content_pd_lr }}px;--content-pd-mb: {{ se_stts.content_pd_tb_mb }}px {{ se_stts.content_pd_lr_mb }}px;{%- render 'content_position', ch_pos: se_stts.ch_pos, cv_pos: se_stts.cv_pos, ch_pos_tb: se_stts.ch_pos_tb, cv_pos_tb: se_stts.cv_pos_tb, ch_pos_mb: se_stts.ch_pos_mb, cv_pos_mb: se_stts.cv_pos_mb -%}">
+        {%- for block in se_blocks -%}
+          {%- assign bk_stts = block.settings -%}
+          {%- case block.type -%}
+            {%- when 'custom_text' -%}
+              {% if bk_stts.text != blank %}
+                {%- assign general_block = true -%}
+                <{{ bk_stts.tag }} data-lh="{{bk_stts.text_lh_mb}}" data-lh-md="{{bk_stts.text_lh_tb}}" data-lh-lg="{{bk_stts.text_lh}}" class=" t4s-text-bl t4s-fnt-fm-{{ bk_stts.fontf }} t4s-font-italic-{{ bk_stts.font_italic }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-hidden-br-mb-{{ bk_stts.remove_br_tag }} t4s-text-shadow-{{ bk_stts.text_shadow }} " id="b_{{ block.id }}" {%- render 'bk_cus_style', type: 'custom_text', bk_stts: bk_stts -%}>{{ bk_stts.text }}</{{ bk_stts.tag }}>
+              {% endif %}
+            {%- when 'space_html' -%}
+              {%- assign general_block = true -%}
+              <div class="t4s-space-html t4s-hidden-tablet-{{ bk_stts.hidden_tablet }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" {%- render 'bk_cus_style', type: 'space_html', bk_stts: bk_stts -%}></div>
+            {%- when 'custom_button' -%}
+              {%- if bk_stts.button_link != blank and bk_stts.button_text != blank -%}
+                {%- assign custom_button = true -%}
+                {%- assign  button_style = bk_stts.button_style -%}
+                <a href="{{ bk_stts.button_link }}" target="{{ bk_stts.target_link }}" class=" t4s-btn t4s-btn-custom  t4s-pe-auto t4s-fnt-fm-{{ bk_stts.fontf }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-btn-style-{{ button_style }} {% if button_style == 'default' or button_style == 'outline' or button_style == 'highlights_icon' %}t4s-btn-effect-{{ bk_stts.button_effect }}{% endif %}" id="b_{{ block.id }}" {{ block.shopify_attributes }} {%- render 'bk_cus_style', type: 'custom_button', bk_stts: bk_stts -%}>{{ bk_stts.button_text }} {%- if bk_stts.button_icon_w > 0 -%}<svg  class="t4s-btn-icon" viewBox="0 0 14 10"><use xlink:href="#t4s-icon-btn"></use></svg>{%- endif -%}</a>
+              {%- endif -%}
+          {%- endcase -%}
+        {%- endfor -%}
+      </div>
+    </div> 
+    {{- html_layout[1] -}}
+  </div> 
+  <style>.banner-text-lookbook-content {padding: var(--content-pd);}@media(max-width:767px){.banner-text-lookbook-content {position: static;transform: none;width: 100%!important;left: 0;right: 0;padding: var(--content-pd-mb);background: var(--bg-conetnt-mb); }}</style>
+{%- if general_block or custom_button -%}
+  {{ 'general-block.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{% schema %}
+  {
+    "name": "Banner text lookbook",
+    "tag": "section",
+    "class": "t4s-section t4s-section-all t4s_tp_lb",
+    "max_blocks": 40,
+    "settings": [
+      
+      {
+        "type": "header","content": "1. Image lookbook"
+      },
+      {
+        "type": "image_picker","id": "image","label": "Choose Image"
+      },
+      {
+        "type": "header","content": "2. Pin product"
+      },
+      {
+        "type": "select",
+        "id": "pr_pin_des",
+        "options": [
+            {
+                "value": "1",
+                "label": "Pin product design 1"
+            },
+            {
+                "value": "2",
+                "label": "Pin product design 2"
+            },
+            {
+                "value": "3",
+                "label": "Pin product design 3"
+            },
+            {
+                "value": "4",
+                "label": "Pin product design 4"
+            }
+        ],
+        "label": "Select pin product design",
+          "default": "1"
+      },
+      
+      {
+        "type": "header","content": "3. Content Design"
+      },
+      {
+        "type": "select",
+        "id": "content_align",
+        "label": "Content align",
+        "default": "center",
+        "options": [
+            {
+              "label": "Left",
+              "value": "start"
+            },
+            {
+              "label": "Center",
+              "value": "center"
+            },
+            {
+              "label": "Right",
+              "value": "end"
+            }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "content_align_tb",
+        "label": "Content align (Tablet)",
+        "default": "center",
+        "options": [
+            {
+              "label": "Left",
+              "value": "start"
+            },
+            {
+              "label": "Center",
+              "value": "center"
+            },
+            {
+              "label": "Right",
+              "value": "end"
+            }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "content_align_mb",
+        "label": "Content align (Mobile)",
+        "default": "center",
+        "options": [
+            {
+                "label": "Left",
+                "value": "start"
+            },
+            {
+                "label": "Center",
+                "value": "center"
+            },
+            {
+                "label": "Right",
+                "value": "end"
+            }
+        ]
+      },
+      {
+            "type": "number",
+            "id": "content_pd_tb",
+            "label": "Content padding top/bottom (px)",
+            "default": 30,
+            "info": "Working on the Desktop"   
+        },
+        {
+            "type": "number",
+            "id": "content_pd_lr",
+            "label": "Content padding left/right (px)",
+            "default": 30,
+            "info": "Working on the Desktop"   
+        },
+        {
+            "type": "number",
+            "id": "content_pd_tb_mb",
+            "label": "Content padding top/bottom (px)",
+            "default": 20,
+            "info": "Working on the Mobile"    
+        },
+        {
+            "type": "number",
+            "id": "content_pd_lr_mb",
+            "label": "Content padding left/right (px)",
+            "default": 20,
+            "info": "Working on the mobile"
+        },  
+      {
+        "type": "header",
+        "content": "+ Content position options"
+      },
+      {
+         "type": "range",
+         "id": "cv_pos",
+         "label": "Content vertical position",
+         "info": " <= 50: Top position , > 50 bottom position",
+         "default": 50,
+         "min": 0,
+         "max": 100,
+         "step": 1,
+         "unit": "%"
+      },
+      {
+         "type": "range",
+         "id": "ch_pos",
+         "label": "Content horizontal position",
+         "info": " <= 50: Left position , > 50 right position",
+         "default": 50,
+         "min": 0,
+         "max": 100,
+         "step": 1,
+         "unit": "%"
+      },
+      {
+        "type": "header",
+        "content": "+ Content position options (Tablet)"
+      },
+      {
+         "type": "range",
+         "id": "cv_pos_tb",
+         "label": "Content vertical position",
+         "info": " <= 50: Top position , > 50 bottom position",
+         "default": 50,
+         "min": 0,
+         "max": 100,
+         "step": 1,
+         "unit": "%"
+      },
+      {
+         "type": "range",
+         "id": "ch_pos_tb",
+         "label": "Content horizontal position",
+         "info": " <= 50: Left position , > 50 right position",
+         "default": 50,
+         "min": 0,
+         "max": 100,
+         "step": 1,
+         "unit": "%"
+      },
+      {
+        "type": "header","content": "4. Design Settings"
+      },
+     
+      {
+        "type": "select",
+        "id": "layout",
+        "default": "t4s-se-container",
+        "label": "Section Layout",
+        "options": [
+            { "value": "t4s-se-container", "label": "Container"},
+            { "value": "t4s-container-wrap", "label": "Wrapped Container"},
+            { "value": "t4s-container-fluid", "label": "Full width"}
+        ]
+      },
+      {
+          "type": "color",
+          "id": "cl_bg",
+          "label": "Background"
+      },
+      {
+          "type": "color_background",
+          "id": "cl_bg_gradient",
+          "label": "Background gradient"
+      },
+      {
+          "type": "text",
+          "id": "mg",
+          "label": "Margin",
+          "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+          "default": ",,50px,", 
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd",
+          "label": "Padding",
+          "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+          "placeholder": "50px,,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design Tablet Options"
+      },
+      {
+          "type": "text",
+          "id": "mg_tb",
+          "label": "Margin",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_tb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "header",
+          "content": "+ Design mobile options"
+      },
+      {
+          "type": "text",
+          "id": "mg_mb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_mb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      }
+    ],
+    "blocks": [
+      {
+        "type": "pr",
+        "name": "Product (Pin)",
+        "settings": [
+          {
+            "type": "header","content": "+ Pin options"
+          },
+          {
+             "type": "product","id": "product","label": "Choose product"
+          },
+          {
+            "type": "range","id": "pos_t","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Top","default": 50
+          },
+          {
+            "type": "range","id": "pos_l","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Left","default": 50
+          },
+          {
+           "type": "select","id": "pos_popup","label": "Position","default": "top",
+           "options": [
+              { "value": "top-start", "label": "Top start"},
+              { "value": "top", "label": "Top"},
+              { "value": "top-end", "label": "Top end"},
+              { "value": "bottom-start", "label": "Bottom start"},
+              { "value": "bottom", "label": "Bottom"},
+              { "value": "bottom-end", "label": "Bottom end"},
+              { "value": "left-start", "label": "Left start"},
+              { "value": "left", "label": "Left"},
+              { "value": "left-end", "label": "Left end"},
+              { "value": "right-start", "label": "Right start"},
+              { "value": "right", "label": "Right"},
+              { "value": "right-end", "label": "Right end"}
+           ]
+          },
+          {
+             "type": "select","id": "type","label": "Title type",
+             "options": [
+                { "value": "1", "label": "icon 1"},
+                { "value": "2", "label": "icon 2"},
+                { "value": "3", "label": "Short Text"}
+             ]
+          },
+          {
+          "type": "text","id": "shorttxt","label": "Short Text","default": "$59"
+          },
+          {
+           "type": "select","id": "pos_size","label": "Pin size","default": "medium",
+           "options": [
+              { "value": "small", "label": "Small"},
+              { "value": "medium", "label": "Medium"},
+              { "value": "exmedium", "label": "Large"},
+              { "value": "large", "label": "Extra large"}
+           ]
+          },
+          {
+           "type": "color","id": "bg_cl","label": "Background color","default": "#65affa"
+          },
+          {
+            "type": "color","id": "cl_text","label": "Icon/Text color","default": "#fff" 
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "name": "Text (Pin)",
+        "settings": [
+          {
+            "type": "header","content": "+ Pin options"
+          },
+          {
+            "type": "range","id": "pos_t","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Top","default": 50
+          },
+          {
+            "type": "range","id": "pos_l","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Left","default": 50
+          },
+          {
+           "type": "select","id": "pos_popup","label": "Position","default": "top",
+           "options": [
+              { "value": "top-start", "label": "Top start"},
+              { "value": "top", "label": "Top"},
+              { "value": "top-end", "label": "Top end"},
+              { "value": "bottom-start", "label": "Bottom start"},
+              { "value": "bottom", "label": "Bottom"},
+              { "value": "bottom-end", "label": "Bottom end"},
+              { "value": "left-start", "label": "Left start"},
+              { "value": "left", "label": "Left"},
+              { "value": "left-end", "label": "Left end"},
+              { "value": "right-start", "label": "Right start"},
+              { "value": "right", "label": "Right"},
+              { "value": "right-end", "label": "Right end"}
+           ]
+          },
+          {
+             "type": "select","id": "type","label": "Title type",
+             "options": [
+                { "value": "1", "label": "icon 1"},
+                { "value": "2", "label": "icon 2"},
+                { "value": "3", "label": "Short Text"}
+             ]
+          },
+         {
+          "type": "text","id": "shorttxt","label": "Short Text","default": "$59"
+          },
+          {
+           "type": "select","id": "pos_size","label": "Pin size","default": "medium",
+           "options": [
+              { "value": "small", "label": "Small"},
+              { "value": "medium", "label": "Medium"},
+              { "value": "exmedium", "label": "Large"},
+              { "value": "large", "label": "Extra large"}
+           ]
+          },
+          {
+           "type": "color","id": "bg_cl","label": "Background color","default": "#56cfe1"
+          },
+          {
+            "type": "color","id": "cl_text","label": "Icon/Text color","default": "#fff" 
+          },
+          
+         {
+          "type": "text","id": "heading","label": "Heading","default": "01 - Water Resistance"
+          },
+         {
+          "type": "richtext","id": "text","label": "Content","default": "<p>With groundbreaking water resistant capabilities, The Mission has the highest waterproof rating of any smartwatch on the market.</p>"
+          }
+         ]
+      },
+      {
+        "type": "url",
+        "name": "Link (Pin)",
+        "settings": [
+          {
+            "type": "header","content": "+ Pin options"
+          },
+          {
+            "type": "range","id": "pos_t","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Top","default": 50
+          },
+          {
+            "type": "range","id": "pos_l","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Left","default": 50
+          },
+          {
+             "type": "select","id": "type","label": "Title type",
+             "options": [
+                { "value": "1", "label": "icon 1"},
+                { "value": "2", "label": "icon 2"},
+                { "value": "3", "label": "Short Text"}
+             ]
+          },
+         {
+          "type": "text","id": "shorttxt","label": "Short Text","default": "$59"
+          },
+          {
+           "type": "select","id": "pos_size","label": "Pin size","default": "medium",
+           "options": [
+              { "value": "small", "label": "Small"},
+              { "value": "medium", "label": "Medium"},
+              { "value": "exmedium", "label": "Large"},
+              { "value": "large", "label": "Extra large"}
+           ]
+          },
+          {
+           "type": "color","id": "bg_cl","label": "Background color","default": "#334fb4"
+          },
+          {
+            "type": "color","id": "cl_text","label": "Icon/Text color","default": "#fff" 
+          },
+          {
+            "type": "header","content": "+ Popup options"
+          },
+         {
+          "type": "url","id": "url","label": "Link"
+          },
+          {
+            "type": "select",
+            "id": "open_link",
+            "options": [
+              {
+                "value": "_self",
+                "label": "Current window"
+              },
+             {
+                "value": "_blank",
+                "label": "New window"
+              }
+            ],
+            "label": "Open link in",
+            "default": "_blank"
+          }
+         ]
+      },
+      {
+        "type": "custom_text",
+        "name": "Text",
+        "settings": [
+
+            {
+                "type": "textarea",
+                "id": "text",
+                "label": "Input text",
+                "default": "Text",
+                "info": "If you want to line break, please add a <br> tag in the text"
+            },
+            {
+                "type": "checkbox",
+                "id": "remove_br_tag",
+                "label": "Remove <br> tag on tablet & mobile",
+                "default": false
+            },
+            {
+              "type": "select",
+              "id": "tag",
+              "default": "p",
+              "options": [
+                 {
+                    "value": "h2",
+                    "label": "H2"
+                 },
+                 {
+                    "value": "h3",
+                    "label": "H3"
+                 },
+                 {
+                    "value": "h4",
+                    "label": "H4"
+                 },
+                 {
+                    "value": "h5",
+                    "label": "H5"
+                 },
+                 {
+                    "value": "h6",
+                    "label": "H6"
+                 },
+                 {
+                    "value": "p",
+                    "label": "P"
+                  },
+                 {
+                    "value": "div",
+                    "label": "DIV"
+                  }
+              ],
+              "label": "Html tag"
+            },
+            {
+                "type": "select",
+                "id": "fontf",
+                "default": "inherit",
+                "label": "Font family",
+                "options": [
+                    {
+                        "label": "Inherit",
+                        "value": "inherit"
+                    },
+                    {
+                        "label": "Font family #1",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Font family #2",
+                        "value": "2"
+                    },
+                    {
+                        "label": "Font family #3",
+                        "value": "3"
+                    }
+                ]
+            },
+            
+            {
+                "type": "color",
+                "id": "text_cl",
+                "label": "Color text",
+                "default": "#fff"
+            },
+            {
+                "type": "range",
+                "id": "text_fs",
+                "label": "Font size",
+                "max": 100,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh",
+                "label": "Line height",
+                "max": 100,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_fw",
+                "label": "Font weight",
+                "min": 100,
+                "max": 900,
+                "step": 100,
+                "default": 400
+            },
+            {
+                "type": "range",
+                "id": "text_ls",
+                "label": "Letter spacing",
+                "max": 10,
+                "min": 0,
+                "default": 0,
+                "step": 0.1,
+                "unit": "px"
+            },
+            {
+                "type": "checkbox",
+                "id": "font_italic",
+                "label": "Enable font italic style",
+                "default": false
+            },
+            {
+                "type": "checkbox",
+                "id": "text_shadow",
+                "label": "Enable text shadow",
+                "default": false
+            },
+            {
+                "type": "number",
+                "id": "mgb",
+                "label": "Margin bottom (Unit: px)",
+                "default": 15
+            },
+            {
+                "type": "header",
+                "content": "+ Option on tablet"
+            },
+            {
+                "type": "range",
+                "id": "text_fs_tb",
+                "label": "Font size (Tablet)",
+                "max": 60,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh_tb",
+                "label": "Line height (Tablet)",
+                "max": 70,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_ls_tb",
+                "label": "Letter spacing (Tablet)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_tb",
+                "label": "Margin bottom (Tablet) (Unit: px)",
+                "default": 10
+            },
+            {
+                "type": "header",
+                "content": "+ Option mobile"
+            },
+            {
+                "type": "checkbox",
+                "id": "hidden_mobile",
+                "label": "Hidden on mobile ",
+                "default": false
+            },
+            {
+                "type": "range",
+                "id": "text_fs_mb",
+                "label": "Font size (Mobile)",
+                "max": 60,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh_mb",
+                "label": "Line height (Mobile)",
+                "max": 70,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_ls_mb",
+                "label": "Letter spacing (Mobile)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_mb",
+                "label": "Margin bottom (Mobile) (Unit: px)",
+                "default": 10
+            }
+        ]
+      },
+      {
+        "type": "space_html",
+        "name": "Space HTML",
+        "settings": [
+          {
+            "type": "color",
+            "id": "color",
+            "label": "Color",
+            "default": "#fff"
+          },
+          {
+              "type": "range",
+              "id": "width",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height",
+              "unit": "px",
+              "default": 2
+          },
+          {
+              "type": "number",
+              "id": "mgb",
+              "label": "Margin bottom (Unit: px)",
+              "default": 20
+          },
+          {
+              "type": "paragraph",
+              "content": "————————————————"
+          },
+          {
+              "type": "range",
+              "id": "width_tb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width (Tablet)",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height_tb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height (Tablet)",
+              "default": 2
+          },
+          {
+              "type": "checkbox",
+              "id": "hidden_tb",
+              "label": "Hidden on tablet",
+              "default": false
+          },
+          {
+              "type": "number",
+              "id": "mgb_tb",
+              "label": "Margin bottom on tablet(Unit: px)",
+              "default": 20
+          },
+          {
+              "type": "paragraph",
+              "content": "————————————————"
+          },
+          {
+              "type": "range",
+              "id": "width_mb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width (Mobile)",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height_mb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height (Mobile)",
+              "default": 2
+          },
+          {
+              "type": "checkbox",
+              "id": "hidden_mobile",
+              "label": "Hidden on mobile",
+              "default": false
+          },
+          {
+              "type": "number",
+              "id": "mgb_mb",
+              "label": "Margin bottom on mobile(Unit: px)",
+              "default": 20
+          }
+        ]
+      },
+      {
+        "type": "custom_button",
+        "name": "Button",
+        "settings": [
+            {
+                "type": "text",
+                "id": "button_text",
+                "label": "Button label",
+                "default": "Button label",
+                "info": "If set blank will not show"
+            },
+            {
+                "type": "url",
+                "id": "button_link",
+                "label": "Button link",
+                "info": "If set blank will not show"
+            },
+            {
+                "type": "select",
+                "id": "target_link",
+                "label": "Open link in",
+                "default": "_self",
+                "options": [
+                    {
+                        "value": "_self",
+                        "label": "Current window"
+                    },
+                    {
+                        "value": "_blank",
+                        "label": "New window"
+                    }
+                ]
+            },
+            {
+                "type": "select",
+                "id": "fontf",
+                "default": "inherit",
+                "label": "Font family",
+                "options": [
+                    {
+                        "label": "Inherit",
+                        "value": "inherit"
+                    },
+                    {
+                        "label": "Font family #1",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Font family #2",
+                        "value": "2" 
+                    },
+                    {
+                        "label": "Font family #3",
+                        "value": "3"
+                    }
+                ]
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w",
+                "label": "Button icon width",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "select",
+                "id": "button_style",
+                "label": "Button style",
+                "options": [
+                    {
+                        "label": "Default",
+                        "value": "default"
+                    },
+                    {
+                        "label": "Outline",
+                        "value": "outline"
+                    },
+                    {
+                        "label": "Bordered top",
+                        "value": "bordered_top"
+                    },
+                    {
+                        "label": "Bordered bottom", 
+                        "value": "bordered"
+                    },
+                    {
+                        "label": "Link",
+                        "value": "link"
+                    }
+                ]
+             },
+             {
+                "type": "range",
+                "id": "border_w",
+                "label": "Border width",
+                "min": 1,
+                "max": 3,
+                "step": 1,
+                "default": 1,
+                "unit": "px"
+            },
+             {
+                "type": "select",
+                "id": "button_effect",
+                "label": "Hover button effect",
+                "default": "default",
+                "info": "Only working button style default, outline",
+                "options": [
+                    {
+                        "label": "Default",
+                        "value": "default"
+                    },
+                    {
+                        "label": "Fade",
+                        "value": "fade"
+                    },
+                    {
+                        "label": "Rectangle out",
+                        "value": "rectangle-out"
+                    },
+                    {
+                        "label": "Sweep to right",
+                        "value": "sweep-to-right"
+                    },
+                    {
+                        "label": "Sweep to left",
+                        "value": "sweep-to-left"
+                    },
+                    {
+                        "label": "Sweep to bottom",
+                        "value": "sweep-to-bottom"
+                    },
+                    {
+                        "label": "Sweep to top",
+                        "value": "sweep-to-top"
+                    },
+                    {
+                        "label": "Shutter out horizontal",
+                        "value": "shutter-out-horizontal"
+                    },
+                    {
+                        "label": "Outline",
+                        "value": "outline"
+                    },
+                    {
+                        "label": "Shadow",
+                        "value": "shadow"
+                    }
+                ]
+            },
+            {
+                "type": "color",
+                "id": "pri_cl",
+                "label": "Primary color",
+                "default": "#222"
+            },
+            {
+                "type": "color",
+                "id": "second_cl",
+                "label": "Secondary color"
+            },
+            {
+                "type": "color",
+                "id": "pri_cl_hover",
+                "label": "Primary hover color",
+                "default": "#0ec1ae"
+            },
+            {
+                "type": "color",
+                "id": "second_cl_hover",
+                "label": "Secondary hover color",
+                "info": "Only working button style default, outline",
+                "default": "#fff"
+            },
+            {
+                "type": "range",
+                "id": "fsbutton",
+                "label": "Font size",
+                "max": 50,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 14
+            },
+            {
+                "type": "range",
+                "id": "fwbutton",
+                "label": "Font weight",
+                "min": 100,
+                "max": 900,
+                "step": 100,
+                "default": 400
+            },
+            {
+                "type": "range",
+                "id": "button_ls",
+                "label": "Letter spacing",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "button_mh",
+                "label": "Min height",
+                "min": 26,
+                "max": 80,
+                "step": 1,
+                "unit": "px",
+                "default": 42,
+                "info": "Only working button style default, outline, bordered top"
+            },
+            {
+                "type": "range",
+                "id": "button_bdr",
+                "label": "Border radius",
+                "min": 0,
+                "max": 40,
+                "step": 1,
+                "unit": "px",
+                "default": 0,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr",
+                "label": "Padding left/right",
+                "min": 0,
+                "max": 70,
+                "step": 1,
+                "unit": "px",
+                "default": 30,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "number",
+                "id": "mgb",
+                "label": "Margin bottom (Unit: px)",
+                "default": 0
+            },
+            {
+                "type": "header",
+                "content": "+ Options tablet"
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w_tb",
+                "label": "Button icon width",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "fsbutton_tb",
+                "label": "Font size",
+                "max": 50,
+                "min": 0,
+                "step": 1,
+                "unit": "px",
+                "default": 12
+            },
+            {
+                "type": "range",
+                "id": "button_mh_tb",
+                "label": "Min height",
+                "min": 10,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 36,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr_tb",
+                "label": "Padding left/right",
+                "min": 0,
+                "max": 60,
+                "step": 1,
+                "unit": "px",
+                "default": 15,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_ls_tb",
+                "label": "Letter spacing",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_tb",
+                "label": "Margin bottom",
+                "default": 0
+            },
+            {
+                "type": "header",
+                "content": "+ Option mobile"
+            },
+            {
+                "type": "checkbox",
+                "id": "hidden_mobile",
+                "label": "Hidden on mobile ",
+                "default": false
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w_mb",
+                "label": "Button icon width (Mobile)",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "fsbutton_mb",
+                "label": "Font size (Mobile)",
+                "max": 50,
+                "min": 0,
+                "step": 1,
+                "unit": "px",
+                "default": 12
+            },
+            {
+                "type": "range",
+                "id": "button_mh_mb",
+                "label": "Min height (Mobile)",
+                "min": 10,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 36,
+                "info": "Only working button style default, outline, bordered top"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr_mb",
+                "label": "Padding left/right (Mobile)",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 15,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_ls_mb",
+                "label": "Letter spacing (Mobile)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_mb",
+                "label": "Margin bottom (Mobile) (Unit: px)",
+                "default": 0
+            }
+        ]
+      }
+    ],
+    "presets": [
+      {
+        "name": "Banner text lookbook",
+        "category": "Homepage"
+      }
+    ]
+  }
+{% endschema %}

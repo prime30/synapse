@@ -76,6 +76,44 @@ export interface ShopifyPage {
   template_suffix: string | null;
 }
 
+// ── Collection types ──────────────────────────────────────────────────
+
+export interface ShopifyCollection {
+  id: number;
+  title: string;
+  handle: string;
+  body_html: string | null;
+  image: { src: string; alt: string | null } | null;
+  published_at: string | null;
+  sort_order: string;
+  updated_at: string;
+}
+
+// ── Blog types ───────────────────────────────────────────────────────
+
+export interface ShopifyBlog {
+  id: number;
+  title: string;
+  handle: string;
+  commentable: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopifyArticle {
+  id: number;
+  title: string;
+  handle: string;
+  author: string;
+  blog_id: number;
+  body_html: string;
+  image: { src: string; alt: string | null } | null;
+  published_at: string | null;
+  summary_html: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Discount types ────────────────────────────────────────────────────
 
 export interface ShopifyPriceRule {
@@ -650,6 +688,45 @@ export class ShopifyAdminAPI {
   /** Delete a page. */
   async deletePage(pageId: number): Promise<void> {
     await this.request<void>('DELETE', `pages/${pageId}`);
+  }
+
+  // ── Collections (REST) ─────────────────────────────────────────────
+
+  /** List custom collections. */
+  async listCustomCollections(limit = 50): Promise<ShopifyCollection[]> {
+    const res = await this.request<{ custom_collections: ShopifyCollection[] }>('GET', `custom_collections?limit=${limit}`);
+    return res.custom_collections;
+  }
+
+  /** List smart collections. */
+  async listSmartCollections(limit = 50): Promise<ShopifyCollection[]> {
+    const res = await this.request<{ smart_collections: ShopifyCollection[] }>('GET', `smart_collections?limit=${limit}`);
+    return res.smart_collections;
+  }
+
+  /** List all collections (custom + smart), merged and sorted by title. */
+  async listCollections(limit = 50): Promise<ShopifyCollection[]> {
+    const [custom, smart] = await Promise.all([
+      this.listCustomCollections(limit),
+      this.listSmartCollections(limit),
+    ]);
+    const all = [...custom, ...smart];
+    all.sort((a, b) => a.title.localeCompare(b.title));
+    return all;
+  }
+
+  // ── Blogs + Articles (REST) ────────────────────────────────────────
+
+  /** List blogs. */
+  async listBlogs(limit = 50): Promise<ShopifyBlog[]> {
+    const res = await this.request<{ blogs: ShopifyBlog[] }>('GET', `blogs?limit=${limit}`);
+    return res.blogs;
+  }
+
+  /** List articles for a blog. */
+  async listArticles(blogId: number, limit = 50): Promise<ShopifyArticle[]> {
+    const res = await this.request<{ articles: ShopifyArticle[] }>('GET', `blogs/${blogId}/articles?limit=${limit}`);
+    return res.articles;
   }
 
   // ── Price Rules + Discount Codes (REST) ─────────────────────────────

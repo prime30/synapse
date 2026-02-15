@@ -250,6 +250,9 @@ export function ImportThemeModal({
       setSuccessProjectId(result.projectId);
       onImportSuccess?.();
 
+      // Fire-and-forget thumbnail generation for the new project
+      fetch(`/api/projects/${result.projectId}/thumbnail`, { method: 'POST' }).catch(() => {});
+
       // Navigate to the new project (extended delay so user sees success + design system note)
       setTimeout(() => {
         onClose();

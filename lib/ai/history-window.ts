@@ -5,6 +5,8 @@ const KEEP_RECENT = 10;
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** Preserved from AIMessage for prompt caching. */
+  cacheControl?: { type: 'ephemeral' };
 }
 
 export interface TrimResult {

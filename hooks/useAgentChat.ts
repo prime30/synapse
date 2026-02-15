@@ -18,13 +18,15 @@ interface UseAgentChatReturn {
   /** Add a message to local state only -- no DB persist. For streaming placeholders. */
   addLocalMessage: (msg: ChatMessage) => void;
   /** Update a message's content in local state only (for streaming chunks). */
-  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete'>>) => void;
+  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations'>>) => void;
   /** Persist the final content of a streamed message to the DB. */
   finalizeMessage: (id: string) => void;
 
   // ── Multi-session ────────────────────────────────────────────────────────
-  /** All sessions for this project (newest first). */
+  /** Active (non-archived) sessions for this project (newest first). */
   sessions: ChatSession[];
+  /** Archived sessions for this project (newest first). */
+  archivedSessions: ChatSession[];
   /** ID of the currently active session (null if none yet). */
   activeSessionId: string | null;
   /** Create a new empty session and switch to it. */
@@ -35,12 +37,26 @@ interface UseAgentChatReturn {
   deleteSession: (sessionId: string) => Promise<void>;
   /** Rename a session. */
   renameSession: (sessionId: string, title: string) => Promise<void>;
+  /** Archive a session. Auto-switches if it's the active session. */
+  archiveSession: (sessionId: string) => Promise<void>;
+  /** Unarchive a session back to active list. */
+  unarchiveSession: (sessionId: string) => Promise<void>;
+  /** Load more active sessions (pagination). */
+  loadMore: () => Promise<void>;
+  /** Whether there are more active sessions to load. */
+  hasMore: boolean;
+  /** Whether more sessions are currently loading. */
+  isLoadingMore: boolean;
+  /** Record diff stats for a session after applying code. Non-blocking. */
+  recordApplyStats: (sessionId: string, stats: { linesAdded: number; linesDeleted: number; filesAffected: number }) => void;
   /** Clear local messages (visual clear). */
   clearMessages: () => void;
   /** Remove the last user + assistant pair and return the last user message content (for regenerate). */
   removeLastTurn: () => string | null;
   /** Truncate messages to the given index (inclusive) and return the remaining messages (for edit-and-resend). */
   truncateAt: (index: number) => void;
+  /** Phase 5a: Fork conversation at a specific message index. Returns new session ID. */
+  forkSession: (messageIndex: number) => Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +74,19 @@ function mapMessages(
   }));
 }
 
+function mapSessionFromApi(s: Record<string, unknown>): ChatSession {
+  return {
+    id: s.id as string,
+    title: (s.title as string) ?? 'Untitled',
+    updatedAt: (s.updatedAt as string) ?? new Date().toISOString(),
+    messageCount: (s.messageCount as number) ?? 0,
+    linesAdded: (s.linesAdded as number) ?? 0,
+    linesDeleted: (s.linesDeleted as number) ?? 0,
+    filesAffected: (s.filesAffected as number) ?? 0,
+    archivedAt: (s.archivedAt as string | null) ?? null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -71,11 +100,17 @@ function mapMessages(
  * - `createNewSession` / `switchSession` / `deleteSession` / `renameSession`:
  *   manage the session lifecycle.
  */
+const PAGE_SIZE = 20;
+
 export function useAgentChat(projectId: string): UseAgentChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [archivedSessions, setArchivedSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
   const messagesRef = useRef<ChatMessage[]>([]);
   const activeSessionRef = useRef<string | null>(null);
   const isFirstUserMessageRef = useRef(true);
@@ -96,26 +131,35 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
     (async () => {
       try {
-        // Load in parallel: session list + latest session messages
-        const [sessionsRes, latestRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}/agent-chat/sessions`),
+        // Load in parallel: active session list + archived list + latest session messages
+        const [sessionsRes, archivedRes, latestRes] = await Promise.all([
+          fetch(`/api/projects/${projectId}/agent-chat/sessions?archived=false&limit=${PAGE_SIZE}&offset=0`),
+          fetch(`/api/projects/${projectId}/agent-chat/sessions?archived=true&limit=100`),
           fetch(`/api/projects/${projectId}/agent-chat`),
         ]);
 
         if (cancelled) return;
 
-        // Sessions list
+        // Active sessions list
         if (sessionsRes.ok) {
           const sessionsJson = await sessionsRes.json();
-          const loaded: ChatSession[] = (sessionsJson?.data ?? []).map(
-            (s: { id: string; title: string; updatedAt: string; messageCount: number }) => ({
-              id: s.id,
-              title: s.title,
-              updatedAt: s.updatedAt,
-              messageCount: s.messageCount,
-            }),
-          );
-          if (!cancelled) setSessions(loaded);
+          const payload = sessionsJson?.data;
+          const list = payload?.sessions ?? payload ?? [];
+          const loaded: ChatSession[] = list.map(mapSessionFromApi);
+          if (!cancelled) {
+            setSessions(loaded);
+            setHasMore(payload?.hasMore ?? false);
+            offsetRef.current = loaded.length;
+          }
+        }
+
+        // Archived sessions list
+        if (archivedRes.ok) {
+          const archivedJson = await archivedRes.json();
+          const payload = archivedJson?.data;
+          const list = payload?.sessions ?? payload ?? [];
+          const loaded: ChatSession[] = list.map(mapSessionFromApi);
+          if (!cancelled) setArchivedSessions(loaded);
         }
 
         // Latest session messages
@@ -204,7 +248,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── updateMessage (local only) ──────────────────────────────────────────
 
-  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete'>>) => {
+  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison'>>) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content, ...meta } : m)),
     );
@@ -356,6 +400,151 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     [projectId],
   );
 
+  // ── archiveSession ──────────────────────────────────────────────────────
+
+  const archiveSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/agent-chat/sessions/${sessionId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archived: true }),
+          },
+        );
+        if (!res.ok) return;
+
+        setSessions((prev) => {
+          const session = prev.find((s) => s.id === sessionId);
+          const remaining = prev.filter((s) => s.id !== sessionId);
+
+          if (session) {
+            setArchivedSessions((archived) => [
+              { ...session, archivedAt: new Date().toISOString() },
+              ...archived,
+            ]);
+          }
+
+          // If we archived the active session, switch to the next one
+          if (sessionId === activeSessionRef.current) {
+            if (remaining.length > 0) {
+              setTimeout(() => switchSession(remaining[0].id), 0);
+            } else {
+              setActiveSessionId(null);
+              setMessages([]);
+            }
+          }
+
+          return remaining;
+        });
+      } catch {
+        // Silently fail
+      }
+    },
+    [projectId, switchSession],
+  );
+
+  // ── unarchiveSession ───────────────────────────────────────────────────
+
+  const unarchiveSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/agent-chat/sessions/${sessionId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archived: false }),
+          },
+        );
+        if (!res.ok) return;
+
+        setArchivedSessions((prev) => {
+          const session = prev.find((s) => s.id === sessionId);
+          const remaining = prev.filter((s) => s.id !== sessionId);
+
+          if (session) {
+            setSessions((active) => [
+              { ...session, archivedAt: null },
+              ...active,
+            ]);
+          }
+
+          return remaining;
+        });
+      } catch {
+        // Silently fail
+      }
+    },
+    [projectId],
+  );
+
+  // ── loadMore (pagination) ──────────────────────────────────────────────
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/agent-chat/sessions?archived=false&limit=${PAGE_SIZE}&offset=${offsetRef.current}`,
+      );
+      if (!res.ok) return;
+
+      const json = await res.json();
+      const payload = json?.data;
+      const list = payload?.sessions ?? payload ?? [];
+      const loaded: ChatSession[] = list.map(mapSessionFromApi);
+
+      setSessions((prev) => [...prev, ...loaded]);
+      setHasMore(payload?.hasMore ?? false);
+      offsetRef.current += loaded.length;
+    } catch {
+      // Silently fail
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [projectId, isLoadingMore, hasMore]);
+
+  // ── recordApplyStats ───────────────────────────────────────────────────
+
+  const recordApplyStats = useCallback(
+    (sessionId: string, stats: { linesAdded: number; linesDeleted: number; filesAffected: number }) => {
+      // Non-blocking: fire-and-forget
+      fetch(
+        `/api/projects/${projectId}/agent-chat/sessions/${sessionId}/apply-stats`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(stats),
+        },
+      )
+        .then((res) => {
+          if (res.ok) {
+            // Update local state optimistically
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId
+                  ? {
+                      ...s,
+                      linesAdded: (s.linesAdded ?? 0) + stats.linesAdded,
+                      linesDeleted: (s.linesDeleted ?? 0) + stats.linesDeleted,
+                      filesAffected: (s.filesAffected ?? 0) + stats.filesAffected,
+                    }
+                  : s,
+              ),
+            );
+          }
+        })
+        .catch(() => {
+          // Non-blocking -- if POST fails after apply succeeds, just log
+          console.warn('[useAgentChat] Failed to record apply stats');
+        });
+    },
+    [projectId],
+  );
+
   // ── clearMessages (visual only) ─────────────────────────────────────────
 
   const clearMessages = useCallback(() => {
@@ -392,6 +581,36 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     setMessages((prev) => prev.slice(0, index));
   }, []);
 
+  // ── Phase 5a: forkSession ────────────────────────────────────────────────
+
+  const forkSession = useCallback(async (messageIndex: number): Promise<string | null> => {
+    if (!activeSessionId) return null;
+    try {
+      const res = await fetch(
+        '/api/projects/' + projectId + '/agent-chat/sessions/' + activeSessionId + '/fork',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ branchPointIndex: messageIndex }),
+        }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const newSession: ChatSession = {
+        id: data.id,
+        title: data.title,
+        updatedAt: new Date().toISOString(),
+        messageCount: messageIndex + 1,
+      };
+      setSessions((prev) => [newSession, ...prev]);
+      // Switch to the new forked session
+      await switchSession(data.id);
+      return data.id;
+    } catch {
+      return null;
+    }
+  }, [activeSessionId, projectId, switchSession]);
+
   // ── Return ──────────────────────────────────────────────────────────────
 
   return {
@@ -402,13 +621,21 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     updateMessage,
     finalizeMessage,
     sessions,
+    archivedSessions,
     activeSessionId,
     createNewSession,
     switchSession,
     deleteSession,
     renameSession,
+    archiveSession,
+    unarchiveSession,
+    loadMore,
+    hasMore,
+    isLoadingMore,
+    recordApplyStats,
     clearMessages,
     removeLastTurn,
     truncateAt,
+    forkSession,
   };
 }

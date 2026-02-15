@@ -3,6 +3,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { FileGroup } from '@/lib/shopify/theme-grouping';
 
+/** Sentinel tab ID for the integrated preview tab */
+export const PREVIEW_TAB_ID = '__preview__';
+
 const STORAGE_KEY_PREFIX = 'synapse-file-tabs-';
 const GROUPS_KEY_PREFIX = 'synapse-tab-groups-';
 const LOCKED_KEY_PREFIX = 'synapse-locked-files-';
@@ -51,7 +54,9 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(openTabs));
+      // Filter out the virtual preview tab from persistence
+      const persistable = openTabs.filter((id) => id !== PREVIEW_TAB_ID);
+      localStorage.setItem(storageKey, JSON.stringify(persistable));
     } catch {
       // Ignore storage errors
     }
@@ -260,6 +265,27 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
   // Compute which tabs belong to the active group
   const activeGroup = tabGroups.find((g) => g.id === activeGroupId) ?? null;
 
+  // ── Preview tab helpers ──────────────────────────────────────────────────
+  const previewTabOpen = openTabs.includes(PREVIEW_TAB_ID);
+
+  const openPreviewTab = useCallback(() => {
+    setOpenTabs((prev) =>
+      prev.includes(PREVIEW_TAB_ID) ? prev : [PREVIEW_TAB_ID, ...prev]
+    );
+    setActiveFileId(PREVIEW_TAB_ID);
+  }, []);
+
+  const closePreviewTab = useCallback(() => {
+    setOpenTabs((prev) => {
+      const next = prev.filter((id) => id !== PREVIEW_TAB_ID);
+      setActiveFileId((current) => {
+        if (current !== PREVIEW_TAB_ID) return current;
+        return next[0] ?? null;
+      });
+      return next;
+    });
+  }, []);
+
   return {
     openTabs,
     activeFileId,
@@ -288,5 +314,10 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
     closeGroup,
     switchGroup,
     clearGroups,
+
+    // Preview tab support
+    previewTabOpen,
+    openPreviewTab,
+    closePreviewTab,
   };
 }

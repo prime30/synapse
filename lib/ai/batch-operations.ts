@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import { AI_FEATURES } from './feature-flags';
+import { messagesToBatchRequest, type BatchRequest, type BatchResultItem } from './batch-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -405,4 +407,83 @@ export function findMatchingFiles(
   }
 
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Batch API Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the Batch API path should be used for a bulk operation.
+ * Returns true when the feature flag is on and the number of files exceeds
+ * the threshold (default 5).
+ */
+export function shouldUseBatchAPI(fileCount: number, threshold = 5): boolean {
+  return AI_FEATURES.batchProcessing && fileCount >= threshold;
+}
+
+/**
+ * Convert a set of files + a system prompt into `BatchRequest[]` entries
+ * suitable for `createBatch()`.
+ *
+ * Each file gets its own request with a `custom_id` of `<operationType>:<fileId>`.
+ */
+export function buildBatchRequests(
+  operationType: string,
+  files: ThemeFileContext[],
+  systemPrompt: string,
+  userPromptBuilder: (file: ThemeFileContext) => string,
+  options?: { model?: string; maxTokens?: number },
+): BatchRequest[] {
+  return files.map(file =>
+    messagesToBatchRequest(
+      `${operationType}:${file.fileId}`,
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPromptBuilder(file) },
+      ],
+      {
+        model: options?.model ?? 'claude-sonnet-4-5-20250929',
+        maxTokens: options?.maxTokens ?? 4096,
+        temperature: 0.3,
+      },
+    ),
+  );
+}
+
+/**
+ * Convert batch results back into `FileChange[]`.
+ *
+ * Each result's `custom_id` is expected to be `<operationType>:<fileId>`.
+ * The AI response text is treated as the new file content.
+ */
+export function parseBatchResults(
+  results: BatchResultItem[],
+  fileMap: Map<string, ThemeFileContext>,
+): FileChange[] {
+  const changes: FileChange[] = [];
+
+  for (const item of results) {
+    if (item.result.type !== 'succeeded') continue;
+
+    const fileId = item.custom_id.split(':').slice(1).join(':');
+    const file = fileMap.get(fileId);
+    if (!file) continue;
+
+    const textBlock = item.result.message?.content?.find(b => b.type === 'text');
+    if (!textBlock?.text) continue;
+
+    const newContent = textBlock.text.trim();
+    if (newContent && newContent !== file.content) {
+      changes.push({
+        fileId: file.fileId,
+        fileName: file.fileName,
+        originalContent: file.content,
+        newContent,
+        changeDescription: `AI-processed ${file.fileName} via batch`,
+      });
+    }
+  }
+
+  return changes;
 }

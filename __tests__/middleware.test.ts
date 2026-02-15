@@ -120,13 +120,13 @@ describe('Middleware - REQ-8 TASK-3', () => {
       expect(response.headers.get('location')).toBeNull();
     });
 
-    it('should redirect authenticated users from /auth/signin to /', async () => {
+    it('should redirect authenticated users from /auth/signin to /onboarding', async () => {
       mockGetUser.mockResolvedValue({ data: { user: fakeUser } });
       const request = createRequest('/auth/signin');
       const response = await middleware(request);
       expect(response.status).toBe(307);
       const location = response.headers.get('location')!;
-      expect(new URL(location).pathname).toBe('/projects');
+      expect(new URL(location).pathname).toBe('/onboarding');
     });
 
     it('should redirect authenticated users from /auth/signin to callbackUrl', async () => {

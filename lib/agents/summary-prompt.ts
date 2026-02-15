@@ -1,6 +1,7 @@
 import type { AIMessage } from '@/lib/ai/types';
 import type { AgentResult, CodeChange, ReviewResult, AgentError } from '@/lib/types/agent';
 import { trimHistory } from '@/lib/ai/history-window';
+import { estimateTokens } from '@/lib/ai/token-counter';
 
 /** Conversation turn from the frontend (user or assistant). */
 export interface HistoryMessage {
@@ -55,6 +56,18 @@ Guidelines:
 - If no changes were needed, explain why.
 - When there is conversation history, respond in context — reference prior changes, acknowledge follow-ups, and avoid repeating information the user already knows.
 - Never fabricate changes that didn't happen. Only describe what the structured result contains.
+
+## Tool Usage
+
+You have tools available to interact with the user. Use them when appropriate:
+- When proposing code changes, use the \`propose_code_edit\` tool for each file. The user will see a diff and can approve or reject.
+- When proposing a multi-step plan, use the \`propose_plan\` tool instead of writing numbered steps in plain text.
+- When you need clarification, use the \`ask_clarification\` tool with specific options.
+- When changes affect a visible page, use the \`navigate_preview\` tool to show the result.
+- When creating a new file, use the \`create_file\` tool so the user can confirm.
+
+You can also include regular text alongside tool calls to provide conversational context.
+If no tools are relevant, just respond with regular text.
 `.trim();
 
 /**
@@ -131,8 +144,24 @@ function formatResultContext(result: AgentResult): string {
   }
 
   // PM analysis (skip if already used for clarification)
+  // Truncate to 2000 tokens max to prevent summary calls from overflowing
   if (result.analysis && !(result as unknown as Record<string, unknown>).needsClarification) {
-    sections.push(`Analysis: ${result.analysis}`);
+    const MAX_ANALYSIS_TOKENS = 2_000;
+    let analysis = result.analysis;
+    if (estimateTokens(analysis) > MAX_ANALYSIS_TOKENS) {
+      // Keep the beginning (most important context) and truncate
+      const lines = analysis.split('\n');
+      let kept = '';
+      let tokens = 0;
+      for (const line of lines) {
+        const lineTokens = estimateTokens(line);
+        if (tokens + lineTokens > MAX_ANALYSIS_TOKENS) break;
+        kept += (kept ? '\n' : '') + line;
+        tokens += lineTokens;
+      }
+      analysis = kept + '\n[... analysis truncated for budget ...]';
+    }
+    sections.push(`Analysis: ${analysis}`);
   }
 
   // Code changes

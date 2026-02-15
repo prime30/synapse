@@ -1,0 +1,1037 @@
+<!-- sections/shipping.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'shipping.css' | asset_url | stylesheet_tag }}
+{{ 't4s-animation.css' | asset_url | stylesheet_tag }}
+{%- liquid 
+    assign sid = section.id
+    assign se_stts = section.settings
+    assign se_blocks = section.blocks
+    assign stt_layout = se_stts.layout
+    assign stt_image_bg = se_stts.image_bg
+    assign pd_content = se_stts.padding_inner | remove: ' ' | split: ','
+    assign pd_content_tb = se_stts.padding_inner_tb | remove: ' ' | split: ','
+    assign pd_content_mb = se_stts.padding_inner_mb | remove: ' ' | split: ','
+    assign carousel_mobile = se_stts.carousel_mobile
+    if stt_layout == 't4s-se-container'
+        assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+    elsif stt_layout == 't4s-container-wrap'
+        assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+    else
+        assign html_layout = '__' | split: '__'
+    endif
+    -%}
+{%- if carousel_mobile -%}
+    {{ 'pre_flickityt4s.min.css' | asset_url | stylesheet_tag }}
+    {{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+<div class="t4s-section-inner t4s_se_{{ sid }} {{ stt_layout }}{% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto" data-optimumx="1.5"{% endif %} {% render 'section_style', se_stts: se_stts -%}>
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner {% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto" data-optimumx="1.5"{% endif %}>{% endif -%}
+    {%- render 'section_tophead', se_stts: se_stts -%}
+    <div class="t4s-shipping-list t4s-justify-content-center {% if carousel_mobile %}carousel-disable-md t4s-dots-cl-{{ se_stts.dots_cl }} t4s-dots-round-{{ se_stts.dots_round }} t4s-flickity-slider flickityt4s{% endif %} t4s-shipping-divided-{{ se_stts.divided }} t4s-shipping-icon-{{ se_stts.icon_size }} t4s-{{ se_stts.content_align }} t4s-ver-center-{{ se_stts.align_vertical }} t4s-row t4s-row-cols-lg-{{ se_stts.col_dk }} t4s-row-cols-md-{{ se_stts.col_tb }} t4s-row-cols-{{ se_stts.col_mb }} t4s-gx-md-{{ se_stts.space_h_item }} t4s-gy-md-{{ se_stts.space_v_item }} t4s-gx-{{ se_stts.space_h_item_mb }} t4s-gy-{{ se_stts.space_v_item_mb }}" data-flickityt4s-js='{"watchCSS": 1,"setPrevNextButtons": false,"arrowIcon": "1","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": false,"prevNextButtons": false,"percentPosition": 1,"pageDots": true, "autoPlay" : false, "pauseAutoPlayOnHover" : true }' style="--icon-cl: {{ se_stts.icon_cl }}; --bd-cl: {{ se_stts.cl_bd }}; --title-cl: {{ se_stts.hd_cl }}; --content-cl: {{ se_stts.content_cl }};--bg-wrap-cl:{{se_stts.bg_wrap_cl}}; --space-dots: 10px; --hd-fs: {{ se_stts.hd_fs }}px; --txt-fs: {{ se_stts.txt_fs }}px; --hd-fw: {{ se_stts.hd_fw }};--shipping-pd: {{ pd_content[0] | default: 0 }} {{ pd_content[1] | default: 0 }} {{ pd_content[2] | default: 0 }} {{ pd_content[3] | default: 0 }};--shipping-pd-tb: {{ pd_content_tb[0] | default: 0 }} {{ pd_content_tb[1] | default: 0 }} {{ pd_content_tb[2] | default: 0 }} {{ pd_content_tb[3] | default: 0 }};--shipping-pd-mb: {{ pd_content_mb[0] | default: 0 }} {{ pd_content_mb[1] | default: 0 }} {{ pd_content_mb[2] | default: 0 }} {{ pd_content_mb[3] | default: 0 }};">
+        {%- for block in se_blocks -%}
+            {%- assign bk_stts = block.settings -%}
+            {%- assign image = bk_stts.image_icon -%}
+            <div class="t4s-shipping-item t4s-col-item t4s-eff t4s-eff-img-{{ se_stts.icon_effect }}">
+                <div class="t4s-shipping-inner">
+                    {%- case se_stts.src_icon -%}
+                        {%- when 'themes_icon' -%}
+                            {%- if bk_stts.icon_themes != 'none' -%}
+                                <div class="t4s-col-auto t4s-shipping-icon t4s-shipping-icon-themes">
+                                    {%- render 'icon_shipping', icon_name: bk_stts.icon_themes, icon_class: 't4s-obj-eff' -%}
+                                </div>
+                            {%- endif -%}
+                        {%- when 'get_image' -%}
+                            {%- if image != blank -%}
+                            <div class="t4s-col-auto t4s-shipping-icon t4s-shipping-icon-img t4s-ship-img t4s-obj-eff lazyloadt4s" data-bgset="{{ image | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"></div>
+                            {%- endif -%}
+                        {%- when 'line_awesome' -%}
+                            {%- if bk_stts.icon != blank -%}
+                                <div class="t4s-col-auto t4s-shipping-icon t4s-shipping-icon-line">
+                                    <i class="{{ bk_stts.icon }} t4s-obj-eff"></i>
+                                </div>
+                            {%- endif -%}
+                    {%- endcase -%}
+                    <div class="t4s-col t4s-shipping-content">
+                        <h3 class="t4s-shipping-title">{{ bk_stts.title }}</h3>
+                        <div class="t4s-shipping-des t4s-rte">{{ bk_stts.text }}</div>
+                    </div>
+                </div>
+            </div>
+        {%- endfor -%}
+    </div>
+    {{- html_layout[1] -}}
+</div>
+{%- if se_stts.divided -%}
+    {%- style -%}
+        .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_dk }}n)::after {
+            width: 0;
+        }
+        @media screen and (max-width:1024px) {
+            .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_dk }}n)::after {
+                width: 1px;
+            }
+            .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_tb }}n)::after {
+                width: 0;
+            }
+        }
+        @media screen and (max-width:768px) {
+            .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_dk }}n)::after {
+                width: 1px;
+            }
+            .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_tb }}n)::after {
+                width: 1px;
+            }
+            .t4s_se_{{ sid }} .t4s-shipping-divided-true .t4s-shipping-item:nth-child({{ se_stts.col_mb }}n)::after {
+                width: 0;
+            }
+        }
+    {%- endstyle -%}
+{%- endif -%}
+{% schema %}
+{
+    "name": "Shipping",
+    "tag": "section",
+    "class": "t4s-section t4s-section-all t4s_tp_cdt t4s-shipping t4s_bk_flickity",
+    "settings": [
+        {
+            "type": "header",
+            "content": "1. Heading options"
+        },
+        {
+            "type": "select",
+            "id": "design_heading",
+            "label": "Heading design",
+            "default": "1",
+            "options": [
+                {
+                    "value": "1",
+                    "label": "Design 01"
+                },
+                {
+                    "value": "2",
+                    "label": "Design 02"
+                },
+                {
+                    "value": "3",
+                    "label": "Design 03"
+                },
+                {
+                    "value": "4",
+                    "label": "Design 04 (Working when description has content)"
+                },
+                {
+                    "value": "5",
+                    "label": "Design 05"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "heading_center",
+            "label": "Center align the heading",
+            "default": true
+        },
+        {
+            "type": "text",
+            "id": "top_heading",
+            "label": "Heading"
+        },
+        {
+            "type": "richtext",
+            "id": "top_subheading",
+            "label": "Description"
+        },
+        {
+            "type": "number",
+            "id": "tophead_mb",
+            "label": "Bottom space (Desktop)(px)",
+            "info": "The spacing is between the heading and the content",
+            "default": 30
+        },
+      {
+          "type": "number",
+          "id": "tophead_mb_tb",
+          "label": "Bottom space (Tablet)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 30
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb_mb",
+          "label": "Bottom space (Mobile)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 25
+      },
+        {
+            "type": "header",
+            "content": "2. General options"
+        },
+        {
+            "type": "select",
+            "label": "Content align",
+            "id": "content_align",
+            "options": [
+                {
+                    "label": "Left",
+                    "value": "text-start"
+                },
+                {
+                    "label": "Center",
+                    "value": "text-center"
+                },
+                {
+                    "label": "Right",
+                    "value": "text-end"
+                }
+            ],
+            "default": "text-start"
+        },
+        {
+            "type": "checkbox",
+            "label": "Content align vertical center",
+            "id": "align_vertical",
+            "default": false
+        },
+        {
+            "type": "checkbox",
+            "label": "Divided",
+            "id": "divided",
+            "default": false
+        },
+        {
+            "type": "select",
+            "label": "Source icon",
+            "id": "src_icon",
+            "options": [
+                {
+                    "label": "Themes icon",
+                    "value": "themes_icon"
+                },
+                {
+                    "label": "Use image",
+                    "value": "get_image"
+                },
+                {
+                    "label": "Line awesome",
+                    "value": "line_awesome"
+                }
+            ],
+            "default": "themes_icon"
+        },
+        {
+            "type": "select",
+            "label": "Icon size",
+            "id": "icon_size",
+            "options": [
+                {
+                    "label": "Small",
+                    "value": "small"
+                },
+                {
+                    "label": "Medium",
+                    "value": "medium"
+                },
+                {
+                    "label": "Large",
+                    "value": "large"
+                }
+            ],
+            "default": "medium"
+        },
+        {
+            "type": "select",
+            "id": "icon_effect",
+            "label": "Icon hover effect",
+            "default": "bounceIn",
+            "options": [
+                {
+                    "value": "none",
+                    "label": "None"
+                },
+                {
+                    "value": "zoom",
+                    "label": "Zoom in"
+                },
+                {
+                    "value": "rotate",
+                    "label": "Rotate"
+                },
+                {
+                    "value": "translateToTop",
+                    "label": "Move to top"
+                },
+                {
+                    "value": "translateToRight",
+                    "label": "Move to right"
+                },
+                {
+                    "value": "translateToBottom",
+                    "label": "Move to bottom"
+                },
+                {
+                    "value": "translateToLeft",
+                    "label": "Move to left"
+                },
+                {
+                    "value": "filter",
+                    "label": "Filter"
+                },
+                {
+                    "value": "bounceIn",
+                    "label": "BounceIn"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "label": "Items per row",
+            "id": "col_dk",
+            "options": [
+                {
+                    "label": "1",
+                    "value": "1"
+                },
+                {
+                    "label": "2",
+                    "value": "2"
+                },
+                {
+                    "label": "3",
+                    "value": "3"
+                },
+                {
+                    "label": "4",
+                    "value": "4"
+                },
+                {
+                    "label": "5",
+                    "value": "5"
+                },
+                {
+                    "label": "6",
+                    "value": "6"
+                }
+            ],
+            "default": "4"
+        },
+        {
+            "type": "select",
+            "label": "Items per row (Tablet)",
+            "id": "col_tb",
+            "options": [
+                {
+                    "label": "1",
+                    "value": "1"
+                },
+                {
+                    "label": "2",
+                    "value": "2"
+                },
+                {
+                    "label": "3",
+                    "value": "3"
+                },
+                {
+                    "label": "4",
+                    "value": "4"
+                }
+            ],
+            "default": "2"
+        },
+        {
+            "type": "select",
+            "label": "Items per row (Mobile)",
+            "id": "col_mb",
+            "options": [
+                {
+                    "label": "1",
+                    "value": "1"
+                },
+                {
+                    "label": "2",
+                    "value": "2"
+                }
+            ],
+            "default": "1"
+        },
+        {
+            "type": "color",
+            "label": "Icon color",
+            "id": "icon_cl",
+            "default": "#222222"
+        },
+        {
+            "type": "color",
+            "label": "Heading color",
+            "id": "hd_cl",
+            "default": "#222222"
+        },
+        {
+            "type": "color",
+            "label": "Content color",
+            "id": "content_cl",
+            "default": "#878787"
+        },
+        {
+            "type": "color",
+            "label": "Background wrap color",
+            "id": "bg_wrap_cl"
+        },
+        {
+            "type": "range",
+            "label": "Heading font size",
+            "id": "hd_fs",
+            "min": 10,
+            "max": 30,
+            "step": 1,
+            "unit": "px",
+            "default": 16
+        },
+        {
+            "type": "range",
+            "label": "Heading font weight",
+            "id": "hd_fw",
+            "min": 300,
+            "max": 800,
+            "step": 100,
+            "default": 500
+        },
+        {
+            "type": "range",
+            "label": "Text font size",
+            "id": "txt_fs",
+            "min": 10,
+            "max": 30,
+            "step": 1,
+            "unit": "px",
+            "default": 13
+        },
+        {
+            "type": "select",
+            "label": "Space horizontal items",
+            "id": "space_h_item",
+            "options": [
+                {
+                    "value": "0", 
+                    "label": "0"
+                },
+                {
+                    "value": "2", 
+                    "label": "2px"
+                },
+                {
+                    "value": "4", 
+                    "label": "4px"
+                },
+                {
+                    "value": "6", 
+                    "label": "6px"
+                },
+                {
+                    "value": "8", 
+                    "label": "8px"
+                },
+                {
+                    "value": "10", 
+                    "label": "10px"
+                },
+                {
+                  "value": "15",
+                  "label": "15px"
+                },
+                {
+                  "value": "20",
+                  "label": "20px"
+                },
+                {
+                  "value": "25",
+                  "label": "25px"
+                },
+                {
+                    "value": "30",
+                    "label": "30px"
+                }
+            ],
+            "default": "30"
+        },
+        {
+            "type": "select",
+            "id": "space_v_item",
+            "label": "Space vertical items",
+            "options": [
+                {
+                    "value": "0", 
+                    "label": "0"
+                },
+                {
+                    "value": "2", 
+                    "label": "2px"
+                },
+                {
+                    "value": "4", 
+                    "label": "4px"
+                },
+                {
+                    "value": "6", 
+                    "label": "6px"
+                },
+                {
+                    "value": "8", 
+                    "label": "8px"
+                },
+                {
+                    "value": "10", 
+                    "label": "10px"
+                },
+                {
+                  "value": "15",
+                  "label": "15px"
+                },
+                {
+                  "value": "20",
+                  "label": "20px"
+                },
+                {
+                  "value": "25",
+                  "label": "25px"
+                },
+                {
+                    "value": "30",
+                    "label": "30px"
+                }
+            ],
+            "default": "30"
+        },
+        {
+            "type": "select",
+            "label": "Space horizontal item (Mobile)",
+            "id": "space_h_item_mb",
+            "options": [
+                {
+                    "value": "0", 
+                    "label": "0"
+                },
+                {
+                    "value": "2", 
+                    "label": "2px"
+                },
+                {
+                    "value": "4", 
+                    "label": "4px"
+                },
+                {
+                    "value": "6", 
+                    "label": "6px"
+                },
+                {
+                    "value": "8", 
+                    "label": "8px"
+                },
+                {
+                    "value": "10", 
+                    "label": "10px"
+                },
+                {
+                  "value": "15",
+                  "label": "15px"
+                },
+                {
+                  "value": "20",
+                  "label": "20px"
+                },
+                {
+                  "value": "25",
+                  "label": "25px"
+                },
+                {
+                    "value": "30",
+                    "label": "30px"
+                }
+            ],
+            "default": "10"
+        },
+        {
+            "type": "select",
+            "label": "Space vertical item (Mobile)",
+            "id": "space_v_item_mb",
+            "options": [
+                {
+                    "value": "0", 
+                    "label": "0"
+                },
+                {
+                    "value": "2", 
+                    "label": "2px"
+                },
+                {
+                    "value": "4", 
+                    "label": "4px"
+                },
+                {
+                    "value": "6", 
+                    "label": "6px"
+                },
+                {
+                    "value": "8", 
+                    "label": "8px"
+                },
+                {
+                    "value": "10", 
+                    "label": "10px"
+                },
+                {
+                  "value": "15",
+                  "label": "15px"
+                },
+                {
+                  "value": "20",
+                  "label": "20px"
+                },
+                {
+                  "value": "25",
+                  "label": "25px"
+                },
+                {
+                    "value": "30",
+                    "label": "30px"
+                }
+            ],
+            "default": "10"
+        },
+        {
+            "type": "header",
+            "content": "+ Padding inner"
+        },
+        {
+            "type": "text",
+            "id": "padding_inner",
+            "label": "Padding inner",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "30px,,30px,"
+        },
+        {
+            "type": "text",
+            "id": "padding_inner_tb",
+            "label": "Padding inner (Tablet)",
+            "placeholder": "15px,,15px,"
+        },
+        {
+            "type": "text",
+            "id": "padding_inner_mb",
+            "label": "Padding inner (Mobile)",
+            "placeholder": "15px,,15px,"
+        },
+        {
+            "type": "header",
+            "content": "Carousel options"
+        },
+        {
+            "type": "checkbox",
+            "id": "carousel_mobile",
+            "label": "Enable carousel on mobile",
+            "default": true
+        },
+        {
+            "type": "select",
+            "id": "dots_cl",
+            "label": "Dots color",
+            "default": "dark",
+            "options": [
+                {
+                    "value": "light",
+                    "label": "Light (Best on dark background)"
+                },
+                {
+                    "value": "dark",
+                    "label": "Dark"
+                },
+                {
+                    "value": "primary",
+                    "label": "Primary"
+                },
+                {
+                    "value": "custom1",
+                    "label": "Custom color 1"
+                },
+                {
+                    "value": "custom2",
+                    "label": "Custom color 2"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "dots_round",
+            "label": "Enable round dots",
+            "default": true
+        },
+        {
+            "type": "header",
+            "content": "3. Design options"
+        },
+        {
+            "type": "select",
+            "id": "layout",
+            "label": "Layout",
+            "options": [
+                {
+                    "label": "Container",
+                    "value": "t4s-se-container"
+                },
+                {
+                    "label": "Wrapped container",
+                    "value": "t4s-container-wrap"
+                },
+                {
+                    "label": "Full width",
+                    "value": "t4s-container-fluid"
+                }
+            ],
+            "default": "t4s-container-wrap"
+        },
+        {
+            "type": "color",
+            "id": "cl_bg",
+            "label": "Background"
+        },
+        {
+            "type": "color_background",
+            "id": "cl_bg_gradient",
+            "label": "Background gradient"
+        },
+        {
+            "type": "image_picker",
+            "id": "image_bg",
+            "label": "Background image"
+        },
+        {
+            "type": "text",
+            "id": "mg",
+            "label": "Margin",
+            "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+            "default": ",,50px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd",
+            "label": "Padding",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "50px,,50px,"
+        },
+        {
+            "type": "header",
+            "content": "+ Design tablet options"
+        },
+        {
+            "type": "text",
+            "id": "mg_tb",
+            "label": "Margin",
+            "default": ",,50px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_tb",
+            "label": "Padding",
+            "placeholder": "50px,,50px,"
+        },
+        {
+            "type": "header",
+            "content": "+ Design mobile options"
+        },
+        {
+            "type": "text",
+            "id": "mg_mb",
+            "label": "Margin",
+            "default": ",,30px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_mb",
+            "label": "Padding",
+            "placeholder": ",,50px,"
+        }
+    ],
+    "blocks": [
+        {
+            "type": "shipping",
+            "name": "Shipping",
+            "settings": [
+                {
+                    "type": "header",
+                    "content": "+ Icon options"
+                },
+                {
+                    "type": "select",
+                    "label": "Select icon",
+                    "id": "icon_themes",
+                    "info": "Only used for source theme icon",
+                    "default": "car",
+                    "options": [
+                        {
+                            "value": "none",
+                            "label": "None"
+                        },
+                        {
+                            "value": "car",
+                            "label": "Car"
+                        },
+                        {
+                            "value": "diamond",
+                            "label": "Diamond"
+                        },
+                        {
+                            "value": "door-lock",
+                            "label": "Door lock"
+                        },
+                        {
+                            "value": "gym",
+                            "label": "Gym"
+                        },
+                        {
+                            "value": "hammer",
+                            "label": "Hammer"
+                        },
+                        {
+                            "value": "headphones",
+                            "label": "Headphones"
+                        },
+                        {
+                            "value": "helm",
+                            "label": "Helm"
+                        },
+                        {
+                            "value": "hourglass",
+                            "label": "Hourglass"
+                        },
+                        {
+                            "value": "map",
+                            "label": "Map"
+                        },
+                        {
+                            "value": "piggy",
+                            "label": "Piggy"
+                        },
+                        {
+                            "value": "refesh",
+                            "label": "Refesh"
+                        },
+                        {
+                            "value": "rocket",
+                            "label": "Rocket"
+                        },
+                        {
+                            "value": "shield",
+                            "label": "Shield"
+                        },
+                        {
+                            "value": "shield1",
+                            "label": "Shield 1"
+                        },
+                        {
+                            "value": "smile",
+                            "label": "Smile"
+                        },
+                        {
+                            "value": "cloud_upload",
+                            "label": "Cloud upload"
+                        },
+                        {
+                            "value": "cash",
+                            "label": "Cash"
+                        },
+                        {
+                            "value": "way",
+                            "label": "Way"
+                        },
+                        {
+                            "value": "wristwatch",
+                            "label": "Wristwatch"
+                        },
+                        {
+                            "value": "world",
+                            "label": "World"
+                        },
+                        {
+                            "value": "scissors",
+                            "label": "Scissors"
+                        },
+                        {
+                            "value": "wallet",
+                            "label": "Wallet"
+                        },
+                        {
+                            "value": "unlock",
+                            "label": "Unlock"
+                        },
+                        {
+                            "value": "umbrella",
+                            "label": "Umbrella"
+                        },
+                        {
+                            "value": "shuffle",
+                            "label": "Shuffle"
+                        },
+                        {
+                            "value": "repeat",
+                            "label": "Repeat"
+                        },
+                        {
+                            "value": "refesh-2",
+                            "label": "Refesh 2"
+                        },
+                        {
+                            "value": "medal",
+                            "label": "Medal"
+                        },
+                        {
+                            "value": "portfolio",
+                            "label": "Portfolio"
+                        },
+                        {
+                            "value": "like",
+                            "label": "Like"
+                        },
+                        {
+                            "value": "plance",
+                            "label": "Plance"
+                        },
+                        {
+                            "value": "map-maker",
+                            "label": "Map maker"
+                        },
+                        {
+                            "value": "help",
+                            "label": "Help"
+                        },
+                        {
+                            "value": "gift",
+                            "label": "Gift"
+                        },
+                        {
+                            "value": "cart",
+                            "label": "Cart"
+                        },
+                        {
+                            "value": "box",
+                            "label": "Box"
+                        },
+                        {
+                            "value": "box1",
+                            "label": "Box 1"
+                        },
+                        {
+                            "value": "box2",
+                            "label": "Box 2"
+                        },
+                        {
+                            "value": "customer-service",
+                            "label": "Customer service"
+                        },
+                        {
+                            "value": "back",
+                            "label": "Back"
+                        },
+                        {
+                            "value": "worldwide",
+                            "label": "Worldwide"
+                        },
+                        {
+                            "value": "payments",
+                            "label": "Payments"
+                        },
+                        {
+                            "value": "return",
+                            "label": "Return"
+                        },
+                        {
+                            "value": "support",
+                            "label": "Support"
+                        }
+                    ]
+                },
+                {
+                    "type": "image_picker",
+                    "id": "image_icon",
+                    "label": "Choose image",
+                    "info": "Only used for source image"
+                },
+                {
+                    "type": "text",
+                    "id": "icon",
+                    "label": "Enter icon",
+                    "info": "Only used for source line awesome icon",
+                    "default": "las la-headphones"
+                },
+                {
+                    "type": "paragraph",
+                    "content": "[Line awesome](https://kalles.the4.co/font-lineawesome)"
+                },
+                {
+                    "type": "header",
+                    "content": "+ Text options"
+                },
+                {
+                    "type": "text",
+                    "id": "title",
+                    "label": "Heading",
+                    "default": "Add a heading"
+                },
+                {
+                    "type": "richtext",
+                    "id": "text",
+                    "label": "Text",
+                    "default": "<p>Use this text to describe<\/p>"
+                }
+            ]
+        }
+    ],
+    "presets": [
+        {
+            "name": "Shipping",
+            "category": "group51",
+            "blocks": [
+                {
+                    "type": "shipping",
+                    "settings": {
+                        "icon_themes": "box1",
+                        "icon": "las la-truck",
+                        "title": "Shipping Worldwide",
+                        "text": "<p>Free shipping on all US order or order above $100</p>"
+                    }
+                },
+                {
+                    "type": "shipping",
+                    "settings": {
+                        "icon_themes": "box2",
+                        "icon": "las la-redo-alt",
+                        "title": "14 Days Return",
+                        "text": "<p>Simply return it within 30 days for an exchange.</p>"
+                    }
+                },
+                {
+                    "type": "shipping",
+                    "settings": {
+                        "icon_themes": "shield1",
+                        "icon": "las la-shield-alt",
+                        "title": "Security Payment",
+                        "text": "<p>We ensure secure payment with PEV</p>"
+                    }
+                },
+                {
+                    "type": "shipping",
+                    "settings": {
+                        "icon_themes": "customer-service",
+                        "icon": "las la-phone",
+                        "title": "24/7 Support",
+                        "text": "<p>Contact us 24 hours a day, 7 days a week</p>"
+                    }
+                }
+            ]
+        }
+    ]
+}
+{% endschema %}

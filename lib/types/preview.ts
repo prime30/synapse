@@ -2,9 +2,14 @@ export type PreviewPageType =
   | 'home'
   | 'product'
   | 'collection'
+  | 'collection_list'
+  | 'gift_card'
   | 'cart'
-  | 'blog'
+  | 'checkout'
   | 'page'
+  | 'blog'
+  | 'search'
+  | 'password'
   | 'not_found';
 
 export interface PreviewState {

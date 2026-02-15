@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
+import { BatchJobIndicator } from '@/components/features/batch/BatchJobIndicator';
+import type { BatchJobStatus } from '@/hooks/useBatchJobs';
 
 export interface TokenUsageDisplay {
   inputTokens: number;
@@ -20,6 +22,16 @@ interface StatusBarProps {
   hasOfflineChanges?: boolean;
   /** EPIC 14: Count of active developer memory conventions */
   activeMemoryCount?: number;
+  /** Cost of the last AI interaction in cents */
+  lastCostCents?: number | null;
+  /** Total session cost in cents */
+  sessionCostCents?: number | null;
+  /** Batch processing jobs to display */
+  batchJobs?: BatchJobStatus[];
+  /** Handler for canceling a batch job */
+  onCancelBatch?: (batchId: string) => void;
+  /** EPIC D: Cache backend status */
+  cacheBackend?: 'redis' | 'memory' | null;
   /** Optional slot for extra indicators (e.g. binary sync progress) */
   children?: ReactNode;
 }
@@ -58,7 +70,7 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, children }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, lastCostCents, sessionCostCents, batchJobs, onCancelBatch, cacheBackend, children }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -88,6 +100,14 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Batch processing indicator */}
+      {batchJobs && batchJobs.length > 0 && (
+        <>
+          <BatchJobIndicator jobs={batchJobs} onCancel={onCancelBatch} />
+          <Divider />
+        </>
+      )}
 
       {/* Extra indicators slot (e.g. binary sync progress) */}
       {children}
@@ -128,11 +148,49 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
         </>
       )}
 
+      {/* Cost indicator */}
+      {(lastCostCents != null && lastCostCents > 0) && (
+        <>
+          <span
+            className="inline-flex items-center gap-0.5 whitespace-nowrap text-emerald-400"
+            title={`Last request: $${(lastCostCents / 100).toFixed(4)}${sessionCostCents ? ` | Session total: $${((sessionCostCents ?? 0) / 100).toFixed(2)}` : ''}`}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            {(lastCostCents / 100).toFixed(lastCostCents < 1 ? 4 : 2)}
+          </span>
+          <Divider />
+        </>
+      )}
+
       {/* EPIC 2: Token count display */}
       {tokenUsage && (
         <>
           <span className="whitespace-nowrap ide-text-quiet" title={`Input: ${tokenUsage.inputTokens} tokens, Output: ${tokenUsage.outputTokens} tokens`}>
             ↑{formatTokenCount(tokenUsage.inputTokens)} ↓{formatTokenCount(tokenUsage.outputTokens)}
+          </span>
+          <Divider />
+        </>
+      )}
+
+      {/* EPIC D: Cache backend indicator */}
+      {cacheBackend && (
+        <>
+          <span
+            className={`inline-flex items-center gap-1 whitespace-nowrap ${
+              cacheBackend === 'redis' ? 'text-emerald-400' : 'text-amber-400'
+            }`}
+            title={
+              cacheBackend === 'redis'
+                ? 'Cache: Redis (distributed)'
+                : 'Cache: Memory (local only)'
+            }
+          >
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+              cacheBackend === 'redis' ? 'bg-emerald-400' : 'bg-amber-400'
+            }`} />
+            {cacheBackend === 'redis' ? 'Redis' : 'Mem'}
           </span>
           <Divider />
         </>

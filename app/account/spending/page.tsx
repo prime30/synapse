@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 /* ------------------------------------------------------------------ */
 /*  Toggle Switch (matches settings page pattern)                      */
@@ -9,18 +9,21 @@ import { useState, useCallback } from 'react';
 function Toggle({
   checked,
   onChange,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] dark:focus-visible:ring-offset-[#0a0a0a] ${
-        checked ? 'bg-emerald-600' : 'ide-surface-inset'
-      }`}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] dark:focus-visible:ring-offset-[#0a0a0a] ${
+        checked ? 'bg-accent' : 'ide-surface-inset'
+      } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
         className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg transform transition-transform duration-200 ${
@@ -63,7 +66,7 @@ function SpendProgressBar({
       </div>
       <div className="h-2 w-full rounded-full ide-surface-inset overflow-hidden">
         <div
-          className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+          className="h-full rounded-full bg-accent transition-all duration-500"
           style={{ width: isUnlimited ? '0%' : `${pct}%` }}
         />
       </div>
@@ -72,59 +75,92 @@ function SpendProgressBar({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mock data                                                          */
+/*  Model display names                                                */
 /* ------------------------------------------------------------------ */
 
 const MODEL_DISPLAY: Record<string, string> = {
-  'claude-sonnet-4-20250514': 'Claude Sonnet 4',
-  'claude-3-5-haiku-20241022': 'Claude Haiku 3.5',
+  'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5',
+  'claude-opus-4-6': 'Claude Opus 4.6',
+  'claude-haiku-4-5-20251001': 'Claude Haiku 4.5',
   'gpt-4o-mini': 'GPT-4o Mini',
-};
-
-const MOCK_BREAKDOWN = [
-  {
-    model: 'claude-sonnet-4-20250514',
-    requests: 45,
-    tokens: 234_500,
-    cost: 1.82,
-  },
-  {
-    model: 'claude-3-5-haiku-20241022',
-    requests: 112,
-    tokens: 89_200,
-    cost: 0.04,
-  },
-  {
-    model: 'gpt-4o-mini',
-    requests: 23,
-    tokens: 45_600,
-    cost: 0.03,
-  },
-];
-
-const MOCK_TOTAL = {
-  requests: MOCK_BREAKDOWN.reduce((s, r) => s + r.requests, 0),
-  tokens: MOCK_BREAKDOWN.reduce((s, r) => s + r.tokens, 0),
-  cost: MOCK_BREAKDOWN.reduce((s, r) => s + r.cost, 0),
 };
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
+const MOCK_BREAKDOWN = [
+  { model: 'claude-sonnet-4-5-20250929', requests: 0, tokens: 0, cost: 0 },
+  { model: 'claude-haiku-4-5-20251001', requests: 0, tokens: 0, cost: 0 },
+  { model: 'gpt-4o-mini', requests: 0, tokens: 0, cost: 0 },
+];
+
 export default function SpendingPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [onDemandEnabled, setOnDemandEnabled] = useState(false);
   const [spendLimit, setSpendLimit] = useState('10.00');
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [breakdown, setBreakdown] = useState(MOCK_BREAKDOWN);
+  const [plan, setPlan] = useState<string>('starter');
 
-  const currentSpend = MOCK_TOTAL.cost;
+  const currentSpend = breakdown.reduce((s, r) => s + r.cost, 0);
+  const totalRequests = breakdown.reduce((s, r) => s + r.requests, 0);
+  const totalTokens = breakdown.reduce((s, r) => s + r.tokens, 0);
   const limitValue = isUnlimited ? null : parseFloat(spendLimit) || 0;
 
-  const handleSave = useCallback(() => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/billing/subscription');
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        if (cancelled) return;
+        const sub = data.data ?? data;
+        setPlan(sub.plan ?? 'starter');
+        setOnDemandEnabled(sub.onDemandEnabled ?? false);
+        if (sub.onDemandLimitCents != null && sub.onDemandLimitCents > 0) {
+          setSpendLimit((sub.onDemandLimitCents / 100).toFixed(2));
+          setIsUnlimited(false);
+        } else {
+          setIsUnlimited(true);
+          setSpendLimit('');
+        }
+        if (sub.usageBreakdown?.length) {
+          setBreakdown(sub.usageBreakdown);
+        }
+      } catch (e) {
+        if (!cancelled) setError('Failed to load subscription.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/billing/on-demand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: onDemandEnabled,
+          limitCents: isUnlimited ? null : Math.round(parseFloat(spendLimit || '0') * 100),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Failed to save settings.');
+    } finally {
+      setSaving(false);
+    }
+  }, [onDemandEnabled, isUnlimited, spendLimit]);
 
   const handleSetUnlimited = useCallback(() => {
     setIsUnlimited(true);
@@ -138,6 +174,31 @@ export default function SpendingPage() {
     },
     []
   );
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-stone-200 dark:bg-white/10 rounded" />
+          <div className="h-64 bg-stone-200 dark:bg-white/10 rounded-lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-3">
+        <p className="text-red-500">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-accent hover:opacity-80 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -155,7 +216,7 @@ export default function SpendingPage() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-medium">On-Demand Usage</h2>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-900/40 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-accent bg-accent/20 px-2 py-0.5 rounded-full">
                 Recommended
               </span>
             </div>
@@ -168,14 +229,22 @@ export default function SpendingPage() {
 
         {/* Toggle */}
         <div className="flex items-center gap-3">
-          <Toggle checked={onDemandEnabled} onChange={setOnDemandEnabled} />
+          <Toggle
+            checked={onDemandEnabled}
+            onChange={setOnDemandEnabled}
+            disabled={plan === 'starter'}
+          />
           <span className="text-sm ide-text-2">
-            {onDemandEnabled ? 'Enabled' : 'Disabled'}
+            {plan === 'starter'
+              ? 'Upgrade to enable'
+              : onDemandEnabled
+                ? 'Enabled'
+                : 'Disabled'}
           </span>
         </div>
 
-        {/* Spend limit (shown when on-demand is enabled) */}
-        {onDemandEnabled && (
+        {/* Spend limit (shown when on-demand is enabled and not Starter) */}
+        {onDemandEnabled && plan !== 'starter' && (
           <div className="space-y-3 pt-2 border-t ide-border">
             <div className="flex items-center justify-between">
               <label
@@ -186,7 +255,7 @@ export default function SpendingPage() {
               </label>
               <button
                 onClick={handleSetUnlimited}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="text-xs text-accent hover:opacity-80 transition-colors"
               >
                 Set Unlimited
               </button>
@@ -213,9 +282,10 @@ export default function SpendingPage() {
 
             <button
               onClick={handleSave}
-              className="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+              disabled={saving}
+              className="px-4 py-2 text-sm rounded-md bg-accent text-white hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saved ? 'Saved!' : 'Save Limit'}
+              {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Limit'}
             </button>
           </div>
         )}
@@ -272,13 +342,13 @@ export default function SpendingPage() {
               <tr className="font-medium">
                 <td className="px-4 py-3 ide-text">Total</td>
                 <td className="px-4 py-3 text-right ide-text tabular-nums">
-                  {MOCK_TOTAL.requests.toLocaleString()}
+                  {totalRequests.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right ide-text tabular-nums">
-                  {MOCK_TOTAL.tokens.toLocaleString()}
+                  {totalTokens.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right ide-text tabular-nums">
-                  ${MOCK_TOTAL.cost.toFixed(2)}
+                  ${currentSpend.toFixed(2)}
                 </td>
               </tr>
             </tbody>

@@ -20,7 +20,7 @@ export class APIClient {
     return headers;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     if (!this.authManager.isAuthenticated()) {
       throw new Error('AUTH_REQUIRED: Please authenticate first using synapse_authenticate');
     }
@@ -81,7 +81,7 @@ export class APIClient {
   }
 
   // Agent endpoints
-  async executeAgents(projectId: string, userRequest: string): Promise<{ data: { executionId: string } }> {
+  async executeAgents(projectId: string, userRequest: string): Promise<Record<string, unknown>> {
     return this.request('POST', '/api/agents/execute', {
       projectId,
       request: userRequest,

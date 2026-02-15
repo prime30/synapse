@@ -1,13 +1,12 @@
 /**
- * Context cache with TTL and invalidation - REQ-5 TASK-4
+ * Context cache with TTL and invalidation -- EPIC D migration
+ *
+ * Now delegates to CacheAdapter (Upstash Redis or in-memory fallback).
+ * All methods are async.  Public API shape is preserved.
  */
 
 import type { ProjectContext } from './types';
-
-interface CacheEntry {
-  context: ProjectContext;
-  cachedAt: number;
-}
+import { createNamespacedCache, type CacheAdapter } from '@/lib/cache/cache-adapter';
 
 interface CacheStats {
   hits: number;
@@ -18,86 +17,48 @@ interface CacheStats {
 const DEFAULT_TTL_MS = 300_000; // 5 minutes
 
 export class ContextCache {
-  private cache: Map<string, CacheEntry> = new Map();
-  private hits = 0;
-  private misses = 0;
+  private adapter: CacheAdapter;
   private ttlMs: number;
 
   constructor(ttlMs: number = DEFAULT_TTL_MS) {
     this.ttlMs = ttlMs;
+    this.adapter = createNamespacedCache('ctx');
   }
 
   /**
    * Retrieve a cached context by project ID.
    * Returns null if the entry is expired or not found.
-   * Automatically cleans expired entries.
    */
-  get(projectId: string): ProjectContext | null {
-    this.cleanExpired();
-
-    const entry = this.cache.get(projectId);
-
-    if (!entry) {
-      this.misses++;
-      return null;
-    }
-
-    if (this.isExpired(entry)) {
-      this.cache.delete(projectId);
-      this.misses++;
-      return null;
-    }
-
-    this.hits++;
-    return entry.context;
+  async get(projectId: string): Promise<ProjectContext | null> {
+    return this.adapter.get<ProjectContext>(projectId);
   }
 
   /**
    * Store a context in the cache for the given project ID.
    */
-  set(projectId: string, context: ProjectContext): void {
-    this.cache.set(projectId, {
-      context,
-      cachedAt: Date.now(),
-    });
+  async set(projectId: string, context: ProjectContext): Promise<void> {
+    await this.adapter.set(projectId, context, this.ttlMs);
   }
 
   /**
    * Remove a specific project's cached context.
    */
-  invalidate(projectId: string): void {
-    this.cache.delete(projectId);
+  async invalidate(projectId: string): Promise<void> {
+    await this.adapter.delete(projectId);
   }
 
   /**
-   * Remove all cached entries and reset stats.
+   * Remove all cached entries.
    */
-  clear(): void {
-    this.cache.clear();
-    this.hits = 0;
-    this.misses = 0;
+  async clear(): Promise<void> {
+    await this.adapter.invalidatePattern('*');
   }
 
   /**
    * Return current cache statistics.
    */
-  getStats(): CacheStats {
-    return {
-      hits: this.hits,
-      misses: this.misses,
-      size: this.cache.size,
-    };
-  }
-
-  private isExpired(entry: CacheEntry): boolean {
-    return Date.now() - entry.cachedAt >= this.ttlMs;
-  }
-
-  private cleanExpired(): void {
-    for (const [key, entry] of this.cache) {
-      if (this.isExpired(entry)) {
-        this.cache.delete(key);
-      }
-    }
+  async getStats(): Promise<CacheStats> {
+    const s = await this.adapter.stats();
+    return { hits: s.hits, misses: s.misses, size: s.size };
   }
 }

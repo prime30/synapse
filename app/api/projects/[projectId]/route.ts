@@ -10,6 +10,47 @@ interface RouteParams {
 }
 
 /**
+ * PATCH /api/projects/[projectId]
+ * Update project properties (currently: name).
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { projectId } = await params;
+    await requireProjectAccess(request, projectId);
+
+    const body = await request.json().catch(() => ({}));
+    const name =
+      typeof body.name === 'string' ? body.name.trim().slice(0, 100) : null;
+
+    if (!name) {
+      throw APIError.badRequest(
+        'name is required and must be a non-empty string'
+      );
+    }
+
+    const supabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: project, error } = await supabase
+      .from('projects')
+      .update({ name })
+      .eq('id', projectId)
+      .select('id, name, updated_at')
+      .single();
+
+    if (error || !project) {
+      throw APIError.internal(error?.message ?? 'Failed to update project');
+    }
+
+    return successResponse(project);
+  } catch (error) {
+    return handleAPIError(error);
+  }
+}
+
+/**
  * DELETE /api/projects/[projectId]
  * Permanently delete a project and all associated data.
  */

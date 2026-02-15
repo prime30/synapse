@@ -1,6 +1,10 @@
 import { Agent } from '../base';
 import { JAVASCRIPT_AGENT_PROMPT } from '../prompts';
-import type { AgentTask, AgentResult, CodeChange } from '@/lib/types/agent';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
+import type { AgentTask, AgentResult, CodeChange, CodePatch } from '@/lib/types/agent';
+import { applyPatches } from '@/lib/types/agent';
+import { budgetFiles } from './prompt-budget';
+import { SPECIALIST_OUTPUT_SCHEMA } from './output-schema';
 
 /**
  * JavaScript specialist agent.
@@ -16,10 +20,12 @@ export class JavaScriptAgent extends Agent {
   }
 
   formatPrompt(task: AgentTask): string {
-    const jsFiles = task.context.files.filter(
+    // Budget files to 35k tokens, prioritizing JS files
+    const budgeted = budgetFiles(task.context.files, 35_000);
+    const jsFiles = budgeted.filter(
       (f) => f.fileType === 'javascript'
     );
-    const otherFiles = task.context.files.filter(
+    const otherFiles = budgeted.filter(
       (f) => f.fileType !== 'javascript'
     );
 
@@ -54,31 +60,57 @@ export class JavaScriptAgent extends Agent {
 
   parseResponse(raw: string): AgentResult {
     try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      let jsonString: string | null = null;
+      if (AI_FEATURES.structuredOutputs) {
+        try { JSON.parse(raw); jsonString = raw; } catch { /* fallthrough */ }
+      }
+      if (!jsonString) {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        jsonString = jsonMatch?.[0] ?? null;
+      }
+      if (!jsonString) {
         return { agentType: 'javascript', success: true, changes: [] };
       }
 
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = JSON.parse(jsonString) as {
         changes?: Array<{
           fileId?: string;
           fileName?: string;
           originalContent?: string;
           proposedContent?: string;
+          patches?: CodePatch[];
           reasoning?: string;
+          confidence?: number;
         }>;
       };
 
-      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => ({
-        fileId: c.fileId ?? '',
-        fileName: c.fileName ?? '',
-        originalContent: c.originalContent ?? '',
-        proposedContent: c.proposedContent ?? '',
-        reasoning: c.reasoning ?? '',
-        agentType: 'javascript' as const,
-      }));
+      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => {
+        const originalContent = c.originalContent ?? '';
+        const patches = c.patches ?? [];
+        // Prefer patches; reconstruct proposedContent from them.
+        // Fall back to proposedContent if no patches provided.
+        const proposedContent = patches.length > 0
+          ? applyPatches(originalContent, patches)
+          : (c.proposedContent ?? '');
 
-      return { agentType: 'javascript', success: true, changes };
+        return {
+          fileId: c.fileId ?? '',
+          fileName: c.fileName ?? '',
+          originalContent,
+          proposedContent,
+          patches: patches.length > 0 ? patches : undefined,
+          reasoning: c.reasoning ?? '',
+          agentType: 'javascript' as const,
+          confidence: c.confidence ?? 0.8,
+        };
+      });
+
+      // Aggregate confidence: average across all changes (fallback 0.8)
+      const avgConfidence = changes.length > 0
+        ? changes.reduce((sum, ch) => sum + (ch.confidence ?? 0.8), 0) / changes.length
+        : 0.8;
+
+      return { agentType: 'javascript', success: true, changes, confidence: avgConfidence };
     } catch {
       return { agentType: 'javascript', success: true, changes: [] };
     }

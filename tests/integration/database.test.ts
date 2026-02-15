@@ -66,7 +66,7 @@ describe('Database Types', () => {
       project_id: 'project-uuid',
       user_id: 'user-uuid',
       provider: 'anthropic',
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20251001',
       title: null,
       total_input_tokens: 100,
       total_output_tokens: 200,

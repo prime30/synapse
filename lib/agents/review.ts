@@ -1,11 +1,40 @@
 import { Agent } from './base';
 import { REVIEW_AGENT_PROMPT } from './prompts';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
 import type {
   AgentTask,
   AgentResult,
   ReviewResult,
   ReviewIssue,
 } from '@/lib/types/agent';
+import { budgetFiles } from './specialists/prompt-budget';
+
+/** JSON Schema for Review agent structured outputs. */
+export const REVIEW_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    approved: { type: 'boolean' },
+    issues: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          severity: { type: 'string', enum: ['error', 'warning', 'info'] },
+          file: { type: 'string' },
+          line: { type: 'number' },
+          description: { type: 'string' },
+          suggestion: { type: 'string' },
+          category: { type: 'string' },
+        },
+        required: ['severity', 'file', 'description'],
+        additionalProperties: false,
+      },
+    },
+    summary: { type: 'string' },
+  },
+  required: ['approved', 'issues', 'summary'],
+  additionalProperties: false,
+} as const;
 
 /**
  * Review agent for quality assurance and error detection.
@@ -218,7 +247,9 @@ export class ReviewAgent extends Agent {
   }
 
   formatPrompt(task: AgentTask): string {
-    const programmaticSection = this.runProgrammaticChecks(task.context.files);
+    // Budget files to 15k tokens for review context (leaves room for proposed changes in instruction)
+    const budgeted = budgetFiles(task.context.files, 15_000);
+    const programmaticSection = this.runProgrammaticChecks(budgeted);
     return [
       ...(programmaticSection ? [programmaticSection, ''] : []),
       `Review the following proposed code changes for the request: "${task.context.userRequest}"`,
@@ -235,7 +266,7 @@ export class ReviewAgent extends Agent {
       task.instruction,
       '',
       '## Original Project Files:',
-      ...task.context.files.map(
+      ...budgeted.map(
         (f) => `### ${f.fileName} (${f.fileType})\n\`\`\`\n${f.content}\n\`\`\``
       ),
       '',
@@ -245,8 +276,19 @@ export class ReviewAgent extends Agent {
 
   parseResponse(raw: string): AgentResult {
     try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      // Try direct parse first (structured outputs), fall back to regex
+      let jsonString: string | null = null;
+      if (AI_FEATURES.structuredOutputs) {
+        try {
+          JSON.parse(raw);
+          jsonString = raw;
+        } catch { /* fallthrough to regex */ }
+      }
+      if (!jsonString) {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        jsonString = jsonMatch?.[0] ?? null;
+      }
+      if (!jsonString) {
         // Default to approved if response can't be parsed
         const defaultResult: ReviewResult = {
           approved: true,
@@ -260,7 +302,7 @@ export class ReviewAgent extends Agent {
         };
       }
 
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = JSON.parse(jsonString) as {
         approved?: boolean;
         issues?: Array<{
           severity?: string;

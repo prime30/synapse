@@ -1,6 +1,7 @@
 import { Agent } from '../base';
 import { JSON_AGENT_PROMPT } from '../prompts';
 import type { AgentTask, AgentResult, CodeChange } from '@/lib/types/agent';
+import { budgetFiles } from './prompt-budget';
 
 /**
  * JSON/Config specialist agent.
@@ -20,10 +21,12 @@ export class JSONAgent extends Agent {
   }
 
   formatPrompt(task: AgentTask): string {
-    const jsonFiles = task.context.files.filter(
+    // Budget files to 25k tokens, prioritizing JSON files
+    const budgeted = budgetFiles(task.context.files, 25_000);
+    const jsonFiles = budgeted.filter(
       (f) => f.fileName.endsWith('.json'),
     );
-    const otherFiles = task.context.files.filter(
+    const otherFiles = budgeted.filter(
       (f) => !f.fileName.endsWith('.json'),
     );
 

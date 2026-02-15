@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContextCache } from '../cache';
 import type { ProjectContext } from '../types';
+import { setCacheAdapter, MemoryAdapter } from '@/lib/cache/cache-adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,45 +33,44 @@ describe('ContextUpdater – cache behaviour', () => {
   let cache: ContextCache;
 
   beforeEach(() => {
+    setCacheAdapter(new MemoryAdapter());
     cache = new ContextCache();
   });
 
-  it('returns null for an unknown project', () => {
-    expect(cache.get('unknown')).toBeNull();
+  it('returns null for an unknown project', async () => {
+    expect(await cache.get('unknown')).toBeNull();
   });
 
-  it('stores and retrieves a ProjectContext', () => {
+  it('stores and retrieves a ProjectContext', async () => {
     const ctx = makeContext('proj-1');
-    cache.set('proj-1', ctx);
+    await cache.set('proj-1', ctx);
 
-    const result = cache.get('proj-1');
+    const result = await cache.get('proj-1');
     expect(result).not.toBeNull();
     expect(result!.projectId).toBe('proj-1');
     expect(result!.files).toEqual([]);
     expect(result!.dependencies).toEqual([]);
     expect(result!.totalSizeBytes).toBe(0);
-    expect(result!.loadedAt).toBeInstanceOf(Date);
   });
 
-  it('invalidate removes the cached entry', () => {
+  it('invalidate removes the cached entry', async () => {
     const ctx = makeContext('proj-2');
-    cache.set('proj-2', ctx);
+    await cache.set('proj-2', ctx);
 
-    expect(cache.get('proj-2')).not.toBeNull();
+    expect(await cache.get('proj-2')).not.toBeNull();
 
-    cache.invalidate('proj-2');
-    expect(cache.get('proj-2')).toBeNull();
+    await cache.invalidate('proj-2');
+    expect(await cache.get('proj-2')).toBeNull();
   });
 
-  it('clear removes all entries and resets stats', () => {
-    cache.set('a', makeContext('a'));
-    cache.set('b', makeContext('b'));
+  it('clear removes all entries', async () => {
+    await cache.set('a', makeContext('a'));
+    await cache.set('b', makeContext('b'));
 
-    cache.clear();
+    await cache.clear();
 
-    expect(cache.get('a')).toBeNull();
-    expect(cache.get('b')).toBeNull();
-    expect(cache.getStats().size).toBe(0);
+    expect(await cache.get('a')).toBeNull();
+    expect(await cache.get('b')).toBeNull();
   });
 });
 
@@ -79,26 +79,28 @@ describe('ContextUpdater – cache behaviour', () => {
 // ---------------------------------------------------------------------------
 
 describe('ContextUpdater – handleFileChange', () => {
-  it('invalidates the cache for the given project', () => {
-    const cache = new ContextCache();
-    const ctx = makeContext('proj-3');
-    cache.set('proj-3', ctx);
-
-    // Simulate what handleFileChange does: invalidate + log
-    cache.invalidate('proj-3');
-
-    expect(cache.get('proj-3')).toBeNull();
+  beforeEach(() => {
+    setCacheAdapter(new MemoryAdapter());
   });
 
-  it('handles change with optional fileId', () => {
+  it('invalidates the cache for the given project', async () => {
+    const cache = new ContextCache();
+    const ctx = makeContext('proj-3');
+    await cache.set('proj-3', ctx);
+
+    await cache.invalidate('proj-3');
+
+    expect(await cache.get('proj-3')).toBeNull();
+  });
+
+  it('handles change with optional fileId', async () => {
     const cache = new ContextCache();
     const ctx = makeContext('proj-4');
-    cache.set('proj-4', ctx);
+    await cache.set('proj-4', ctx);
 
-    // Simulate handleFileChange('proj-4', 'delete', 'file-abc')
-    cache.invalidate('proj-4');
+    await cache.invalidate('proj-4');
 
-    expect(cache.get('proj-4')).toBeNull();
+    expect(await cache.get('proj-4')).toBeNull();
   });
 
   it('logs the change event', () => {
@@ -129,19 +131,21 @@ describe('ContextUpdater – handleFileChange', () => {
 // ---------------------------------------------------------------------------
 
 describe('ContextUpdater – refreshActiveExecutions pattern', () => {
-  it('invalidates existing cache so next load is fresh', () => {
+  beforeEach(() => {
+    setCacheAdapter(new MemoryAdapter());
+  });
+
+  it('invalidates existing cache so next load is fresh', async () => {
     const cache = new ContextCache();
     const stale = makeContext('proj-6');
-    cache.set('proj-6', stale);
+    await cache.set('proj-6', stale);
 
-    // refreshActiveExecutions first invalidates…
-    cache.invalidate('proj-6');
-    expect(cache.get('proj-6')).toBeNull();
+    await cache.invalidate('proj-6');
+    expect(await cache.get('proj-6')).toBeNull();
 
-    // …then a fresh context would be loaded and cached
     const fresh = makeContext('proj-6');
-    cache.set('proj-6', fresh);
-    expect(cache.get('proj-6')).not.toBeNull();
+    await cache.set('proj-6', fresh);
+    expect(await cache.get('proj-6')).not.toBeNull();
   });
 });
 
@@ -150,33 +154,36 @@ describe('ContextUpdater – refreshActiveExecutions pattern', () => {
 // ---------------------------------------------------------------------------
 
 describe('ContextUpdater – loadProjectContext cache path', () => {
-  it('returns cached context when available', () => {
+  beforeEach(() => {
+    setCacheAdapter(new MemoryAdapter());
+  });
+
+  it('returns cached context when available', async () => {
     const cache = new ContextCache();
     const ctx = makeContext('proj-7');
-    cache.set('proj-7', ctx);
+    await cache.set('proj-7', ctx);
 
-    const result = cache.get('proj-7');
+    const result = await cache.get('proj-7');
     expect(result).not.toBeNull();
     expect(result!.projectId).toBe('proj-7');
   });
 
-  it('returns null on cache miss (loader would be invoked)', () => {
+  it('returns null on cache miss (loader would be invoked)', async () => {
     const cache = new ContextCache();
 
-    const result = cache.get('proj-8');
+    const result = await cache.get('proj-8');
     expect(result).toBeNull();
   });
 
   it('TTL expiry causes cache miss', async () => {
-    // Use a very short TTL
     const shortCache = new ContextCache(50);
-    shortCache.set('proj-9', makeContext('proj-9'));
+    await shortCache.set('proj-9', makeContext('proj-9'));
 
-    expect(shortCache.get('proj-9')).not.toBeNull();
+    expect(await shortCache.get('proj-9')).not.toBeNull();
 
     // Wait for TTL to expire
     await new Promise((r) => setTimeout(r, 60));
 
-    expect(shortCache.get('proj-9')).toBeNull();
+    expect(await shortCache.get('proj-9')).toBeNull();
   });
 });

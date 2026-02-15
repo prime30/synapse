@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,14 @@ export interface TemplateSection {
 export interface TemplateLayout {
   sections: TemplateSection[];
   rawJson: Record<string, unknown>;
+}
+
+/** File entry returned by the project files API. */
+interface ProjectFile {
+  id: string;
+  name: string;
+  path: string;
+  file_type?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +100,45 @@ function withNewBlockOrder(
   return { ...rawJson, sections: sectionsMap };
 }
 
+/** Add a section to the raw JSON. */
+function withAddedSection(
+  rawJson: Record<string, unknown>,
+  sectionId: string,
+  sectionType: string,
+): Record<string, unknown> {
+  const sectionsMap = { ...(rawJson.sections as Record<string, unknown>) };
+  sectionsMap[sectionId] = { type: sectionType, settings: {} };
+  const order = [...((rawJson.order ?? Object.keys(sectionsMap)) as string[])];
+  if (!order.includes(sectionId)) order.push(sectionId);
+  return { ...rawJson, sections: sectionsMap, order };
+}
+
+/** Remove a section from the raw JSON. */
+function withRemovedSection(
+  rawJson: Record<string, unknown>,
+  sectionId: string,
+): Record<string, unknown> {
+  const sectionsMap = { ...(rawJson.sections as Record<string, unknown>) };
+  delete sectionsMap[sectionId];
+  const order = ((rawJson.order ?? Object.keys(sectionsMap)) as string[]).filter(
+    (k) => k !== sectionId,
+  );
+  return { ...rawJson, sections: sectionsMap, order };
+}
+
+/** Merge settings into a section in the raw JSON. */
+function withUpdatedSectionSettings(
+  rawJson: Record<string, unknown>,
+  sectionId: string,
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
+  const sectionsMap = { ...(rawJson.sections as Record<string, unknown>) };
+  const section = { ...(sectionsMap[sectionId] as Record<string, unknown>) };
+  section.settings = { ...((section.settings as Record<string, unknown>) ?? {}), ...settings };
+  sectionsMap[sectionId] = section;
+  return { ...rawJson, sections: sectionsMap };
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -101,18 +148,21 @@ export function useTemplateLayout(projectId: string) {
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
 
   // ── List template files ─────────────────────────────────────────────────
+  // Fetches all project files and filters to templates/*.json client-side.
   const templatesQuery = useQuery({
     queryKey: ['template-files', projectId],
-    queryFn: async (): Promise<{ name: string; path: string }[]> => {
-      const res = await fetch(
-        `/api/projects/${projectId}/files?path=templates/`,
-      );
+    queryFn: async (): Promise<ProjectFile[]> => {
+      const res = await fetch(`/api/projects/${projectId}/files`);
       if (!res.ok) throw new Error('Failed to fetch template files');
       const json = await res.json();
-      const files: { path: string; name?: string }[] = json.data ?? json.files ?? json ?? [];
+      const files: ProjectFile[] = json.data ?? json.files ?? json ?? [];
       return files
-        .filter((f) => f.path.endsWith('.json'))
+        .filter(
+          (f) =>
+            f.path.startsWith('templates/') && f.path.endsWith('.json'),
+        )
         .map((f) => ({
+          id: f.id,
           name: f.name ?? f.path.split('/').pop() ?? f.path,
           path: f.path,
         }));
@@ -120,38 +170,47 @@ export function useTemplateLayout(projectId: string) {
     enabled: !!projectId,
   });
 
+  // Stabilise the templates reference (react-query already memoises data)
+  const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
+
   // Auto-select first template when list arrives
-  const templates = templatesQuery.data ?? [];
   if (templates.length > 0 && activeTemplate === null) {
     // Use a callback so we don't set state during render
     // The query is settled so this is safe to schedule
     queueMicrotask(() => setActiveTemplate(templates[0].path));
   }
 
+  // Derive the file ID for the active template from the templates list.
+  const activeFileId = useMemo(
+    () => templates.find((t) => t.path === activeTemplate)?.id ?? null,
+    [templates, activeTemplate],
+  );
+
   // ── Fetch active template content ───────────────────────────────────────
+  // Uses the per-file GET /api/files/[id] endpoint which returns content.
   const layoutQuery = useQuery({
-    queryKey: ['template-layout', projectId, activeTemplate],
+    queryKey: ['template-layout', projectId, activeFileId],
     queryFn: async (): Promise<TemplateLayout> => {
-      const res = await fetch(
-        `/api/projects/${projectId}/files?path=${encodeURIComponent(activeTemplate!)}`,
-      );
+      const res = await fetch(`/api/files/${activeFileId}`);
       if (!res.ok) throw new Error('Failed to fetch template content');
       const json = await res.json();
-      const content: string = json.data?.content ?? json.content ?? '';
+      const file = json.data ?? json;
+      const content: string = file.content ?? '';
       const raw = JSON.parse(content) as Record<string, unknown>;
       return parseTemplateJson(raw);
     },
-    enabled: !!projectId && !!activeTemplate,
+    enabled: !!projectId && !!activeFileId,
   });
 
   // ── Save mutation ───────────────────────────────────────────────────────
+  // Uses PUT /api/files/[id] to update the template content.
   const saveMutation = useMutation({
     mutationFn: async (updatedJson: Record<string, unknown>) => {
-      const res = await fetch(`/api/projects/${projectId}/files`, {
+      if (!activeFileId) throw new Error('No active template file ID');
+      const res = await fetch(`/api/files/${activeFileId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          path: activeTemplate,
           content: JSON.stringify(updatedJson, null, 2),
         }),
       });
@@ -163,25 +222,31 @@ export function useTemplateLayout(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['template-layout', projectId, activeTemplate],
+        queryKey: ['template-layout', projectId, activeFileId],
       });
     },
   });
+
+  // ── Helper: optimistic update + mutate ──────────────────────────────────
+  const applyUpdate = useCallback(
+    (updatedJson: Record<string, unknown>) => {
+      queryClient.setQueryData(
+        ['template-layout', projectId, activeFileId],
+        parseTemplateJson(updatedJson),
+      );
+      saveMutation.mutate(updatedJson);
+    },
+    [queryClient, projectId, activeFileId, saveMutation],
+  );
 
   // ── Reorder sections ────────────────────────────────────────────────────
   const reorderSections = useCallback(
     (newOrder: string[]) => {
       const layout = layoutQuery.data;
       if (!layout) return;
-      const updated = withNewSectionOrder(layout.rawJson, newOrder);
-      // Optimistic update
-      queryClient.setQueryData(
-        ['template-layout', projectId, activeTemplate],
-        parseTemplateJson(updated),
-      );
-      saveMutation.mutate(updated);
+      applyUpdate(withNewSectionOrder(layout.rawJson, newOrder));
     },
-    [layoutQuery.data, queryClient, projectId, activeTemplate, saveMutation],
+    [layoutQuery.data, applyUpdate],
   );
 
   // ── Reorder blocks within a section ─────────────────────────────────────
@@ -189,15 +254,40 @@ export function useTemplateLayout(projectId: string) {
     (sectionId: string, newBlockOrder: string[]) => {
       const layout = layoutQuery.data;
       if (!layout) return;
-      const updated = withNewBlockOrder(layout.rawJson, sectionId, newBlockOrder);
-      // Optimistic update
-      queryClient.setQueryData(
-        ['template-layout', projectId, activeTemplate],
-        parseTemplateJson(updated),
-      );
-      saveMutation.mutate(updated);
+      applyUpdate(withNewBlockOrder(layout.rawJson, sectionId, newBlockOrder));
     },
-    [layoutQuery.data, queryClient, projectId, activeTemplate, saveMutation],
+    [layoutQuery.data, applyUpdate],
+  );
+
+  // ── Add section ─────────────────────────────────────────────────────────
+  const addSection = useCallback(
+    (sectionType: string) => {
+      const layout = layoutQuery.data;
+      if (!layout) return;
+      const sectionId = `section-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      applyUpdate(withAddedSection(layout.rawJson, sectionId, sectionType));
+    },
+    [layoutQuery.data, applyUpdate],
+  );
+
+  // ── Remove section ──────────────────────────────────────────────────────
+  const removeSection = useCallback(
+    (sectionId: string) => {
+      const layout = layoutQuery.data;
+      if (!layout) return;
+      applyUpdate(withRemovedSection(layout.rawJson, sectionId));
+    },
+    [layoutQuery.data, applyUpdate],
+  );
+
+  // ── Update section settings ─────────────────────────────────────────────
+  const updateSectionSettings = useCallback(
+    (sectionId: string, settings: Record<string, unknown>) => {
+      const layout = layoutQuery.data;
+      if (!layout) return;
+      applyUpdate(withUpdatedSectionSettings(layout.rawJson, sectionId, settings));
+    },
+    [layoutQuery.data, applyUpdate],
   );
 
   return {
@@ -209,12 +299,20 @@ export function useTemplateLayout(projectId: string) {
     // Layout
     layout: layoutQuery.data ?? null,
 
+    // Section CRUD
+    addSection,
+    removeSection,
+    updateSectionSettings,
+
     // Reorder actions
     reorderSections,
     reorderBlocks,
 
     // Status
-    isLoading: templatesQuery.isLoading || layoutQuery.isLoading,
+    // Use isPending (not isLoading) so disabled queries still count as "not ready"
+    isLoading:
+      templatesQuery.isPending ||
+      (templates.length > 0 && (activeFileId === null || layoutQuery.isPending)),
     isSaving: saveMutation.isPending,
     error:
       templatesQuery.error?.message ??

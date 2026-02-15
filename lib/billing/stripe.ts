@@ -82,3 +82,11 @@ export function getStripePriceId(
   // desired behaviour during development so it's obvious the env var is missing.
   return `price_placeholder_${plan}_${interval.toLowerCase()}`;
 }
+
+/**
+ * Returns the Stripe Price ID for overage metered usage.
+ * Create in Stripe Dashboard: Products → Overage Usage → Usage-based, $0.01/unit.
+ */
+export function getStripeOveragePriceId(): string | null {
+  return process.env.STRIPE_PRICE_OVERAGE_METERED?.trim() || null;
+}

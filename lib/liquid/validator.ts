@@ -460,11 +460,12 @@ export class LiquidValidator {
         const astScope = new ScopeTracker();
         astScope.buildFromAST(parseResult.ast);
 
-        // Run type checker with scope context
+        // Run type checker with scope context (pass customFilters so they're not flagged)
         const typeIssues = this.typeChecker.walkAndCheck(
           parseResult.ast,
           undefined,
           astScope,
+          customFilters,
         );
 
         // Merge AST-based issues into errors (avoid duplicates)

@@ -11,6 +11,7 @@ import {
   FileCode,
 } from 'lucide-react';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
+import { MiniAgentHub } from './MiniAgentHub';
 
 /* ------------------------------------------------------------------ */
 /*  Data                                                               */
@@ -87,44 +88,52 @@ export function ValuePropGrid() {
         />
       </div>
 
-      {/* ── Section header ─────────────────────────────────────────── */}
+      {/* ── Section header — two-column: copy + mini agent hub ────── */}
       <div className="relative z-[2] max-w-6xl mx-auto px-8 md:px-10">
-        <div>
-          <span className="section-badge">CAPABILITIES</span>
-          <h2 className="text-left max-w-xl text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
-            {['Five', 'agents.'].map((word, i) => (
-              <span key={i} className="inline-block overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-12 items-center">
+          {/* Left: copy */}
+          <div>
+            <span className="section-badge">CAPABILITIES</span>
+            <h2 className="text-left max-w-xl text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
+              {['Five', 'agents.'].map((word, i) => (
+                <span key={i} className="inline-block overflow-hidden">
+                  <motion.span
+                    className="inline-block"
+                    initial={{ opacity: 0, y: '100%' }}
+                    animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
+                    transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  >{word}</motion.span>
+                  {'\u00A0'}
+                </span>
+              ))}
+              <span className="inline-block overflow-hidden">
                 <motion.span
                   className="inline-block"
                   initial={{ opacity: 0, y: '100%' }}
                   animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
-                  transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-                >{word}</motion.span>
+                  transition={{ duration: 0.5, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                ><PixelAccent>Zero</PixelAccent></motion.span>
                 {'\u00A0'}
               </span>
-            ))}
-            <span className="inline-block overflow-hidden">
-              <motion.span
-                className="inline-block"
-                initial={{ opacity: 0, y: '100%' }}
-                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
-                transition={{ duration: 0.5, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
-              ><PixelAccent>Zero</PixelAccent></motion.span>
-              {'\u00A0'}
-            </span>
-            <span className="inline-block overflow-hidden">
-              <motion.span
-                className="inline-block"
-                initial={{ opacity: 0, y: '100%' }}
-                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
-                transition={{ duration: 0.5, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              >bottlenecks.</motion.span>
-            </span>
-          </h2>
-          <p className="text-left max-w-lg text-lg text-stone-500 dark:text-white/50 mt-6">
-            From code generation to automated review to deployment — every step
-            of theme development, orchestrated.
-          </p>
+              <span className="inline-block overflow-hidden">
+                <motion.span
+                  className="inline-block"
+                  initial={{ opacity: 0, y: '100%' }}
+                  animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
+                  transition={{ duration: 0.5, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                >bottlenecks.</motion.span>
+              </span>
+            </h2>
+            <p className="text-left max-w-lg text-lg text-stone-500 dark:text-white/50 mt-6">
+              From code generation to automated review to deployment — every step
+              of theme development, orchestrated.
+            </p>
+          </div>
+
+          {/* Right: mini animated agent hub diagram */}
+          <div className="hidden lg:flex items-center justify-center">
+            <MiniAgentHub inView={inView} />
+          </div>
         </div>
       </div>
 

@@ -126,7 +126,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             project_id: projectId,
             user_id: userId,
             provider: 'anthropic',
-            model: 'claude-opus-4-20250514',
+            model: 'claude-sonnet-4-5-20250929',
             title: 'Agent Chat',
           })
           .select('id')

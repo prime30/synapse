@@ -37,6 +37,27 @@ function adminClient(request?: NextRequest) {
 }
 
 export async function requireAuth(request: NextRequest): Promise<string> {
+  // Check for Bearer token in Authorization header (used by MCP server)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const { data: { user: bearerUser }, error: bearerError } = await createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: { getAll() { return []; }, setAll() {} },
+        global: {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    ).auth.getUser(token);
+
+    if (!bearerError && bearerUser) {
+      return bearerUser.id;
+    }
+  }
+
+  // Fall back to cookie-based auth
   const supabase = anonClient(request);
   const { data: { user }, error } = await supabase.auth.getUser();
 

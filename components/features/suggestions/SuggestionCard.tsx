@@ -1,6 +1,7 @@
 'use client';
 
 import type { Suggestion } from '@/lib/types/suggestion';
+import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
@@ -62,6 +63,9 @@ export function SuggestionCard({
         <div className="flex items-center gap-2 flex-wrap">
           <SourceBadge source={suggestion.source} />
           <ScopeIndicator scope={suggestion.scope} />
+          {suggestion.confidence != null && (
+            <ConfidenceBadge confidence={suggestion.confidence} />
+          )}
         </div>
         {suggestion.status !== 'pending' && (
           <span className="text-xs ide-text-muted capitalize">
@@ -99,7 +103,11 @@ export function SuggestionCard({
             disabled={isApplying}
             className="flex-1 px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isApplying ? 'Applying…' : 'Accept'}
+            {isApplying
+              ? 'Applying…'
+              : suggestion.confidence != null && suggestion.confidence < 0.7
+                ? 'Review & Apply'
+                : 'Accept'}
           </button>
           <button
             type="button"

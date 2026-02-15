@@ -169,6 +169,41 @@ export async function listPushHistory(
   }));
 }
 
+/**
+ * Fetch the most recent push snapshot for a project.
+ * Returns the full snapshot JSONB so callers can compare current files against
+ * what was last pushed to Shopify.
+ */
+export async function getLastPushSnapshot(
+  projectId: string
+): Promise<{ pushedAt: string; snapshot: PushHistorySnapshot } | null> {
+  const supabase = await adminSupabase();
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('shopify_connection_id')
+    .eq('id', projectId)
+    .maybeSingle();
+
+  if (!project?.shopify_connection_id) return null;
+
+  const { data: row } = await supabase
+    .from('theme_push_history')
+    .select('pushed_at, snapshot')
+    .eq('connection_id', project.shopify_connection_id)
+    .order('pushed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!row?.snapshot) return null;
+
+  const snapshot: PushHistorySnapshot = {
+    files: Array.isArray(row.snapshot?.files) ? row.snapshot.files : [],
+  };
+
+  return { pushedAt: row.pushed_at, snapshot };
+}
+
 export interface RollbackResult {
   restored: number;
   errors: string[];

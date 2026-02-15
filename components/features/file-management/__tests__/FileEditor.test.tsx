@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { FileEditor } from '../FileEditor';
+import React, { createRef } from 'react';
+import { FileEditor, type FileEditorHandle } from '../FileEditor';
 
 // Mock the useFileEditor hook
 vi.mock('@/hooks/useFileEditor', () => ({
@@ -94,112 +95,7 @@ describe('FileEditor', () => {
     expect(screen.getByText('Loading...')).toBeDefined();
   });
 
-  it('shows Save and Cancel buttons when fileId is provided', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'file content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: false,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    expect(screen.getByRole('button', { name: /save/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeDefined();
-  });
-
-  it('Save button is disabled initially (not dirty)', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'file content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: false,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    expect(saveButton).toBeDefined();
-    expect(saveButton).toHaveProperty('disabled', true);
-  });
-
-  it('Cancel button is disabled initially (not dirty)', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'file content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: false,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    const cancelButton = screen.getByRole('button', { name: /cancel/i });
-    expect(cancelButton).toBeDefined();
-    expect(cancelButton).toHaveProperty('disabled', true);
-  });
-
-  it('shows "Unsaved changes" when dirty', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'modified content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: true,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    expect(screen.getByText('Unsaved changes')).toBeDefined();
-  });
-
-  it('Save button is enabled when dirty', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'modified content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: true,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    expect(saveButton).toBeDefined();
-    expect(saveButton).toHaveProperty('disabled', false);
-  });
-
-  it('Cancel button is enabled when dirty', () => {
-    mockUseFileEditor.mockReturnValue({
-      content: 'modified content',
-      setContent: vi.fn(),
-      originalContent: 'file content',
-      isDirty: true,
-      isLoading: false,
-      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
-      save: vi.fn(),
-      cancel: vi.fn(),
-    });
-
-    render(<FileEditor fileId="file-1" />, { wrapper });
-    const cancelButton = screen.getByRole('button', { name: /cancel/i });
-    expect(cancelButton).toBeDefined();
-    expect(cancelButton).toHaveProperty('disabled', false);
-  });
-
-  it('renders textarea with content', () => {
+  it('renders textarea with content when fileId is provided', () => {
     mockUseFileEditor.mockReturnValue({
       content: 'file content',
       setContent: vi.fn(),
@@ -215,5 +111,86 @@ describe('FileEditor', () => {
     const textarea = screen.getByRole('textbox');
     expect(textarea).toBeDefined();
     expect(textarea).toHaveProperty('value', 'file content');
+  });
+
+  it('does not render a toolbar (Save/Cancel moved to FileTabs)', () => {
+    mockUseFileEditor.mockReturnValue({
+      content: 'file content',
+      setContent: vi.fn(),
+      originalContent: 'file content',
+      isDirty: false,
+      isLoading: false,
+      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
+      save: vi.fn(),
+      cancel: vi.fn(),
+    });
+
+    render(<FileEditor fileId="file-1" />, { wrapper });
+    // Save and Cancel buttons should not be in FileEditor anymore
+    expect(screen.queryByRole('button', { name: /save/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /cancel/i })).toBeNull();
+  });
+
+  it('exposes save() via imperative handle', async () => {
+    const mockSave = vi.fn().mockResolvedValue(undefined);
+    const mockOnSave = vi.fn();
+    mockUseFileEditor.mockReturnValue({
+      content: 'modified content',
+      setContent: vi.fn(),
+      originalContent: 'file content',
+      isDirty: true,
+      isLoading: false,
+      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
+      save: mockSave,
+      cancel: vi.fn(),
+    });
+
+    const ref = createRef<FileEditorHandle>();
+    render(<FileEditor ref={ref} fileId="file-1" onSave={mockOnSave} />, { wrapper });
+
+    expect(ref.current).toBeDefined();
+    await ref.current!.save();
+    expect(mockSave).toHaveBeenCalled();
+    expect(mockOnSave).toHaveBeenCalled();
+  });
+
+  it('save() is a no-op when file is locked', async () => {
+    const mockSave = vi.fn().mockResolvedValue(undefined);
+    mockUseFileEditor.mockReturnValue({
+      content: 'modified content',
+      setContent: vi.fn(),
+      originalContent: 'file content',
+      isDirty: true,
+      isLoading: false,
+      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
+      save: mockSave,
+      cancel: vi.fn(),
+    });
+
+    const ref = createRef<FileEditorHandle>();
+    render(<FileEditor ref={ref} fileId="file-1" locked />, { wrapper });
+
+    await ref.current!.save();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('exposes cancel() via imperative handle', () => {
+    const mockCancel = vi.fn();
+    mockUseFileEditor.mockReturnValue({
+      content: 'modified content',
+      setContent: vi.fn(),
+      originalContent: 'file content',
+      isDirty: true,
+      isLoading: false,
+      file: { id: 'file-1', name: 'test.liquid', content: 'file content', file_type: 'liquid' },
+      save: vi.fn(),
+      cancel: mockCancel,
+    });
+
+    const ref = createRef<FileEditorHandle>();
+    render(<FileEditor ref={ref} fileId="file-1" />, { wrapper });
+
+    ref.current!.cancel();
+    expect(mockCancel).toHaveBeenCalled();
   });
 });

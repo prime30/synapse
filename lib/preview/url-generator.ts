@@ -3,6 +3,8 @@ export interface PreviewUrlOptions {
   projectId: string;
   /** Optional storefront path, e.g. '/' or '/collections/all' */
   path?: string;
+  /** When true, append a cache-bust timestamp so the proxy bypasses in-memory cache */
+  cacheBust?: boolean;
 }
 
 /**
@@ -12,5 +14,9 @@ export interface PreviewUrlOptions {
  */
 export function buildPreviewUrl(options: PreviewUrlOptions): string {
   const path = options.path?.startsWith('/') ? options.path : options.path ? `/${options.path}` : '/';
-  return `/api/projects/${encodeURIComponent(options.projectId)}/preview?path=${encodeURIComponent(path)}`;
+  let url = `/api/projects/${encodeURIComponent(options.projectId)}/preview?path=${encodeURIComponent(path)}`;
+  if (options.cacheBust) {
+    url += `&_t=${Date.now()}`;
+  }
+  return url;
 }

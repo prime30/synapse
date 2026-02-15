@@ -72,7 +72,8 @@ export function useFileEditor(fileId: string | null) {
     const projectId = json.data?.project_id;
 
     if (json.data?.shopifyPushQueued && projectId) {
-      setTimeout(() => emitPreviewSyncComplete(projectId), 2000);
+      // Push-queue debounce is 800ms + push ~200-400ms; refresh shortly after
+      setTimeout(() => emitPreviewSyncComplete(projectId), 1200);
     }
 
     // Auto-sync: debounced push to Shopify after save

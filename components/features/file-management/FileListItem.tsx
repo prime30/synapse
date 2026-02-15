@@ -78,6 +78,11 @@ export function FileListItem({
         type="button"
         onClick={onClick}
         onContextMenu={handleContextMenu}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/synapse-file', JSON.stringify({ id: file.id, name: file.name, path: file.path }));
+          e.dataTransfer.effectAllowed = 'copy';
+        }}
         className="w-full flex items-center gap-2 px-3 py-2 text-left ide-hover rounded transition-colors group"
       >
         <span className={`flex-shrink-0 ${getFileTypeColor(file.file_type)}`}>

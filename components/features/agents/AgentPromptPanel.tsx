@@ -2,11 +2,17 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { ChatInterface } from '@/components/ai-sidebar/ChatInterface';
+import type { ThinkingStep } from '@/components/ai-sidebar/ThinkingBlock';
 import { ContextPanel } from '@/components/ai-sidebar/ContextPanel';
+import { SessionSidebar } from '@/components/ai-sidebar/SessionSidebar';
 import type { AISidebarContextValue } from '@/hooks/useAISidebar';
 import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentSettings } from '@/hooks/useAgentSettings';
+import { usePinnedPreferences } from '@/hooks/usePinnedPreferences';
+import { useStyleProfile } from '@/hooks/useStyleProfile';
+import { mapCoordinatorPhase } from '@/lib/agents/phase-mapping';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
+import type { ElementHint } from '@/lib/types/agent';
 import { extractDecisionsFromChat, type ChatMessage as DecisionChatMessage } from '@/lib/ai/decision-extractor';
 import {
   getContextualSuggestions,
@@ -29,6 +35,7 @@ import { trimHistory } from '@/lib/ai/history-window';
 import { detectFilePaths } from '@/lib/ai/file-path-detector';
 import { ConversationArc } from '@/lib/ai/conversation-arc';
 import type { AIErrorCode } from '@/lib/ai/errors';
+import { useFileTabs } from '@/hooks/useFileTabs';
 
 // ── SSE event types ────────────────────────────────────────────────────────────
 
@@ -44,17 +51,67 @@ interface SSEDoneEvent {
   type: 'done';
 }
 
+interface SSEContextStatsEvent {
+  type: 'context_stats';
+  loadedFiles: number;
+  loadedTokens: number;
+  totalFiles: number;
+}
+
 interface SSEThinkingEvent {
   type: 'thinking';
-  phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'complete';
+  phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'validating' | 'fixing' | 'change_ready' | 'clarification' | 'budget_warning' | 'reasoning' | 'complete';
   label: string;
   detail?: string;
   agent?: string;
   analysis?: string;
   summary?: string;
+  subPhase?: string;
+  metadata?: Record<string, unknown>;
 }
 
-type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent;
+interface SSEToolStartEvent {
+  type: 'tool_start';
+  name: string;
+  id: string;
+}
+
+interface SSEToolCallEvent {
+  type: 'tool_call';
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface SSECacheStatsEvent {
+  type: 'cache_stats';
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  cacheHit: boolean;
+}
+
+interface SSECitationEvent {
+  type: 'citation';
+  citedText: string;
+  documentTitle: string;
+  startIndex?: number;
+  endIndex?: number;
+}
+
+interface SSEDiagnosticsEvent {
+  type: 'diagnostics';
+  file: string;
+  errorCount: number;
+  warningCount: number;
+}
+
+interface SSEWorkerProgressEvent {
+  type: 'worker_progress';
+  workerId: string;
+  label: string;
+  status: 'running' | 'complete';
+}
+
+type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -65,10 +122,13 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   MODEL_UNAVAILABLE: 'The selected AI model is currently unavailable. Try switching to a different model.',
   NETWORK_ERROR: 'Connection lost. Check your internet and try again.',
   TIMEOUT: 'The AI took too long to respond. Try a simpler request or switch to Solo mode.',
-  EMPTY_RESPONSE: 'The AI returned an empty response. Retrying...',
+  EMPTY_RESPONSE: 'The AI returned an empty response. Try again or rephrase your message.',
   PARSE_ERROR: 'Received an unexpected response from the AI. Please try again.',
   PROVIDER_ERROR: 'The AI service is experiencing issues. Please try again in a moment.',
   QUOTA_EXCEEDED: 'Your AI usage quota has been reached. Please upgrade your plan or wait for the quota to reset.',
+  CONTEXT_TOO_LARGE: 'Request was too large. Retrying with reduced context...',
+  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or switch to Team mode.',
+  UNKNOWN: 'Something went wrong. Please try again.',
 };
 
 /** Parse an SSE event from a chunk of stream text. Returns null if not an SSE event. */
@@ -78,7 +138,13 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[1]);
-    if (parsed.type === 'error' || parsed.type === 'done' || parsed.type === 'thinking') {
+    if (
+      parsed.type === 'error' || parsed.type === 'done' ||
+      parsed.type === 'thinking' || parsed.type === 'context_stats' ||
+      parsed.type === 'tool_start' || parsed.type === 'tool_call' ||
+      parsed.type === 'cache_stats' || parsed.type === 'citation' ||
+      parsed.type === 'diagnostics' || parsed.type === 'worker_progress'
+    ) {
       return parsed as SSEEvent;
     }
   } catch {
@@ -88,7 +154,7 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
 }
 
 /** Auto-retryable codes (frontend will automatically retry once). */
-const AUTO_RETRY_CODES = new Set<string>(['EMPTY_RESPONSE', 'RATE_LIMITED']);
+const AUTO_RETRY_CODES = new Set<string>(['EMPTY_RESPONSE', 'RATE_LIMITED', 'CONTEXT_TOO_LARGE', 'TIMEOUT']);
 
 // ── Token count tracking ──────────────────────────────────────────────────────
 
@@ -120,6 +186,80 @@ function detectPromptAction(prompt: string): string {
   if (/\b(generate|create|build|add|make|write|implement)\b/.test(lower)) return 'generate';
   if (/\b(analyz)\b/.test(lower)) return 'analyze';
   return 'generate'; // default to generate for most prompts
+}
+
+// ── Element hint extraction ───────────────────────────────────────────────────
+
+/**
+ * Normalize a raw Shopify section ID by stripping common prefixes.
+ * e.g. "shopify-section-header" → "header"
+ * e.g. "template--17338826694973__featured_collection" → "featured_collection"
+ */
+function normalizeSectionId(raw: string): string {
+  let id = raw.replace(/^shopify-section-/, '');
+  const tplMatch = id.match(/^template--\d+__(.+)$/);
+  if (tplMatch) id = tplMatch[1];
+  return id;
+}
+
+/**
+ * Extract Shopify-specific element metadata from a preview selection.
+ * Returns undefined if no section/block context is found.
+ */
+function extractElementHint(el: SelectedElement | null | undefined): ElementHint | undefined {
+  if (!el?.dataAttributes) return undefined;
+  const attrs = el.dataAttributes;
+  const rawSectionId = attrs['data-section-id'] || attrs['data-section-type'];
+
+  // Fallback: parse parent section ID from the CSS selector
+  const fallbackMatch = !rawSectionId ? el.selector?.match(/#shopify-section-([^\s>.]+)/) : null;
+  const rawId = rawSectionId || fallbackMatch?.[1];
+  if (!rawId) return undefined;
+
+  return {
+    sectionId: normalizeSectionId(rawId),
+    sectionType: attrs['data-section-type'] || undefined,
+    blockId: attrs['data-block-id'] || undefined,
+    elementId: el.id || undefined,
+    cssClasses: (el.classes || []).filter((c: string) => !/^shopify-|^js-|^no-/.test(c)).slice(0, 8),
+    selector: el.selector || undefined,
+  };
+}
+
+/**
+ * Format a rich element context string for the AI prompt.
+ * Includes section ID, classes, and file path hints.
+ */
+function formatElementContext(el: SelectedElement): string {
+  const parts: string[] = [];
+  parts.push(`Selector: ${el.selector}`);
+  if (el.id) parts.push(`ID: ${el.id}`);
+
+  const attrs = el.dataAttributes || {};
+  const sectionId = attrs['data-section-id'];
+  const sectionType = attrs['data-section-type'];
+  const blockId = attrs['data-block-id'];
+  if (sectionId) parts.push(`Section: ${sectionId}`);
+  if (sectionType) parts.push(`Section type: ${sectionType}`);
+  if (blockId) parts.push(`Block: ${blockId}`);
+
+  if (!sectionId) {
+    const m = el.selector?.match(/#shopify-section-([^\s>.]+)/);
+    if (m) parts.push(`Parent section: ${m[1]}`);
+  }
+
+  const meaningful = (el.classes || []).filter((c: string) => !/^shopify-|^js-|^no-/.test(c));
+  if (meaningful.length > 0) {
+    parts.push(`Classes: ${meaningful.slice(0, 5).join(', ')}`);
+  }
+
+  const sid = sectionId ?? sectionType;
+  if (sid) {
+    const name = normalizeSectionId(sid).replace(/_/g, '-');
+    parts.push(`Look in: sections/${name}.liquid, assets/section-${name}.css`);
+  }
+
+  return parts.join(' | ');
 }
 
 interface AgentPromptPanelProps {
@@ -155,8 +295,42 @@ interface AgentPromptPanelProps {
   onOpenFile?: (filePath: string) => void;
   /** Resolve a file path to a fileId for code block Apply. Returns null if not found. */
   resolveFileId?: (path: string) => string | null;
+  /** Resolve a file path to its current content for diff views. Returns null if not found. */
+  resolveFileContent?: (path: string) => string | null;
   /** EPIC 5: Ref to expose send function for QuickActions/Fix with AI. Parent can call sendMessageRef.current?.(prompt) */
   sendMessageRef?: React.MutableRefObject<((content: string) => void) | null>;
+  /** Ref for parent to call when code is applied, so we can record diff stats on the active session. */
+  onApplyStatsRef?: React.MutableRefObject<((stats: { linesAdded: number; linesDeleted: number; filesAffected: number }) => void) | null>;
+
+  // ── Tool card handlers (wired from page.tsx) ──────────────────────────
+  /** Called when user clicks "View Plan" — opens the plan file in an editor tab. */
+  onOpenPlanFile?: (filePath: string) => void;
+  /** Called when user clicks "Build" on a plan card. */
+  onBuildPlan?: (checkedSteps: Set<number>) => void;
+  /** Called when navigate_preview auto-navigates — sets preview path. */
+  onNavigatePreview?: (path: string) => void;
+  /** Called when user confirms a new file creation from create_file tool. */
+  onConfirmFileCreate?: (fileName: string, content: string) => void;
+
+  // ── EPIC V3: Preview verification ─────────────────────────────────────
+  /** Capture a "before" DOM snapshot. Call before agent request. */
+  captureBeforeSnapshot?: () => Promise<boolean>;
+  /** Run preview verification after changes are applied. Returns regression result. */
+  verifyPreview?: (projectId: string) => Promise<import('@/lib/agents/preview-verifier').PreviewVerificationResult | null>;
+
+  // ── Phase 3a: Preview annotation ────────────────────────────────────
+  /** Pending annotation from the preview panel (region + note) */
+  pendingAnnotation?: import('@/components/preview/PreviewAnnotator').AnnotationData | null;
+  /** Clear the pending annotation after it's been consumed */
+  onClearAnnotation?: () => void;
+
+  // ── Phase 4a: Live preview hot-reload ──────────────────────────────
+  /** Push a live change to the preview during streaming */
+  onLiveChange?: (change: { filePath: string; newContent: string }) => void;
+  /** Signal start of a new live preview session */
+  onLiveSessionStart?: () => void;
+  /** Signal end of a live preview session */
+  onLiveSessionEnd?: () => void;
 }
 
 export function AgentPromptPanel({
@@ -175,7 +349,20 @@ export function AgentPromptPanel({
   getPassiveContext,
   onOpenFile,
   resolveFileId: resolveFileIdProp,
+  resolveFileContent,
   sendMessageRef,
+  onApplyStatsRef,
+  onOpenPlanFile,
+  onBuildPlan,
+  onNavigatePreview,
+  onConfirmFileCreate,
+  captureBeforeSnapshot,
+  verifyPreview,
+  pendingAnnotation,
+  onClearAnnotation,
+  onLiveChange,
+  onLiveSessionStart,
+  onLiveSessionEnd,
 }: AgentPromptPanelProps) {
   const {
     messages,
@@ -185,17 +372,29 @@ export function AgentPromptPanel({
     updateMessage,
     finalizeMessage,
     sessions,
+    archivedSessions,
     activeSessionId,
     createNewSession,
     switchSession,
     deleteSession,
     renameSession,
+    archiveSession,
+    unarchiveSession,
+    loadMore,
+    hasMore,
+    isLoadingMore,
+    recordApplyStats,
     clearMessages,
     removeLastTurn,
     truncateAt,
+    forkSession,
   } = useAgentChat(projectId);
 
-  const { mode, model, intentMode, setMode, setModel, setIntentMode } = useAgentSettings();
+  const { mode, model, intentMode, verbose, setMode, setModel, setIntentMode, setVerbose } = useAgentSettings();
+  const pinnedPrefs = usePinnedPreferences(projectId);
+  const { styleGuide } = useStyleProfile(projectId);
+
+  const { openTabs: openTabIds } = useFileTabs({ projectId });
 
   const [isLoading, setIsLoading] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
@@ -212,8 +411,25 @@ export function AgentPromptPanel({
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
+
+  // Phase 3b: Attached files from chat drag-and-drop
+  const attachedFilesRef = useRef<Array<{ id: string; name: string; path: string }>>([]);
+  const handleAttachedFilesChange = useCallback((files: Array<{ id: string; name: string; path: string }>) => {
+    attachedFilesRef.current = files;
+  }, []);
   const thinkingStepsRef = useRef<import('@/components/ai-sidebar/ThinkingBlock').ThinkingStep[]>([]);
   const lastDecisionScanRef = useRef(0);
+  const workersRef = useRef<Array<{ workerId: string; label: string; status: string }>>([]);
+
+  // Stall detection refs
+  const lastSSEEventTimeRef = useRef<number>(Date.now());
+  const stallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stallWarningEmittedRef = useRef(false);
+  const stallAlertEmittedRef = useRef(false);
+
+  // Content debounce refs
+  const contentBufferRef = useRef<string>('');
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Suggestion generation ───────────────────────────────────────────────
 
@@ -284,6 +500,12 @@ export function AgentPromptPanel({
       setCurrentAction(detectPromptAction(content));
       lastPromptRef.current = content;
       thinkingStepsRef.current = [];
+      workersRef.current = [];
+      // Reset stall detection
+      lastSSEEventTimeRef.current = Date.now();
+      stallWarningEmittedRef.current = false;
+      stallAlertEmittedRef.current = false;
+      contentBufferRef.current = '';
 
       // EPIC 5: Track user turn in conversation arc
       arcRef.current.addTurn('user');
@@ -291,6 +513,14 @@ export function AgentPromptPanel({
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+
+      // Phase 4a: Start live preview session
+      onLiveSessionStart?.();
+
+      // 4-minute client-side timeout — abort if the stream produces nothing
+      const clientTimeout = setTimeout(() => {
+        controller.abort();
+      }, 240_000);
 
       // EPIC 2: Detect [RETRY_WITH_FULL_CONTEXT] prefix
       let actualContent = content;
@@ -300,8 +530,17 @@ export function AgentPromptPanel({
         includeFullFile = true;
       }
 
-      // Passive IDE context injection (gated by getPassiveContext)
+      // Build enrichedContent for the API (includes all context metadata)
+      // The displayed user message uses actualContent (raw user input only)
       let enrichedContent = actualContent;
+
+      // Inject rich element context (section ID, classes, file hints) for the AI
+      if (selectedElement?.selector) {
+        const ctx = formatElementContext(selectedElement);
+        enrichedContent = `[IDE Context] Element: ${ctx}\n\n${enrichedContent}`;
+      }
+
+      // Passive IDE context injection (gated by getPassiveContext)
       const passiveCtx = getPassiveContext?.() ?? '';
       if (passiveCtx) {
         enrichedContent = `${passiveCtx}\n\n${enrichedContent}`;
@@ -309,7 +548,35 @@ export function AgentPromptPanel({
 
       // EPIC 1c: Selection injection — auto-include selected editor text as context
       if (context.selection) {
-        enrichedContent = `[Selected code in editor]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${actualContent}`;
+        enrichedContent = `[Selected code in editor]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${enrichedContent}`;
+      }
+
+      // Phase 3b: Inject explicit file context for dragged files
+      if (attachedFilesRef.current.length > 0) {
+        const filePaths = attachedFilesRef.current.map((f) => f.path).join(', ');
+        enrichedContent = '[Explicit file context \u2014 ' + filePaths + ']\n\n' + enrichedContent;
+      }
+
+      // Phase 3a: Inject annotation context from preview panel
+      if (pendingAnnotation) {
+        const r = pendingAnnotation.region;
+        const annotCtx = '[Preview annotation \u2014 ' + (pendingAnnotation.previewPath || '/') + ']\n' +
+          'Region: x=' + Math.round(r.x * 100) + '%, y=' + Math.round(r.y * 100) + '%, ' +
+          'width=' + Math.round(r.width * 100) + '%, height=' + Math.round(r.height * 100) + '%\n' +
+          (pendingAnnotation.note ? 'Note: ' + pendingAnnotation.note + '\n' : '');
+        enrichedContent = annotCtx + '\n' + enrichedContent;
+        onClearAnnotation?.();
+      }
+
+      // Phase 6a: Inject pinned preferences as system context
+      const prefInjection = pinnedPrefs.getPromptInjection();
+      if (prefInjection) {
+        enrichedContent = prefInjection + '\n\n' + enrichedContent;
+      }
+
+      // Phase 6b: Inject detected code style guide
+      if (styleGuide) {
+        enrichedContent = styleGuide + '\n\n' + enrichedContent;
       }
 
       // EPIC 2: If retry-with-full-context, prepend the active file content
@@ -336,13 +603,19 @@ export function AgentPromptPanel({
         ? `[Context from earlier conversation]:\n${historySummary}\n\n${enrichedContent}`
         : enrichedContent;
 
-      appendMessage('user', enrichedContent);
+      // Display only the raw user input in the chat bubble (no metadata)
+      appendMessage('user', actualContent);
       setIsLoading(true);
 
       const assistantMsgId = crypto.randomUUID();
       let streamedContent = '';
 
       try {
+        // EPIC V3: Capture "before" DOM snapshot for preview verification
+        if (captureBeforeSnapshot) {
+          try { await captureBeforeSnapshot(); } catch { /* best-effort */ }
+        }
+
         // EPIC 1a: Get DOM context from preview panel before sending (3s timeout)
         let domContext: string | undefined;
         if (getPreviewSnapshot) {
@@ -353,6 +626,9 @@ export function AgentPromptPanel({
           }
         }
 
+        // Extract element hint for smart file auto-selection on the server
+        const elementHint = extractElementHint(selectedElement);
+
         const res = await fetch('/api/agents/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -360,10 +636,16 @@ export function AgentPromptPanel({
             projectId,
             request: requestWithContext,
             history,
+            activeFilePath: context.filePath ?? undefined,
+            openTabs: openTabIds ?? undefined,
             domContext: domContext || undefined,
+            elementHint: elementHint || undefined,
             mode,          // EPIC 1c: agent mode (orchestrated/solo)
             model,         // EPIC 1c: user model preference
             intentMode,    // Intent mode: ask/plan/code/debug
+            explicitFiles: attachedFilesRef.current.length > 0
+              ? attachedFilesRef.current.map((f) => f.path)
+              : undefined,
           }),
           signal: controller.signal,
         });
@@ -392,6 +674,48 @@ export function AgentPromptPanel({
         let receivedError: SSEErrorEvent | null = null;
         let thinkingComplete = false;
 
+        // Local accumulators for tool card data (avoids reading message state mid-stream)
+        let accumulatedCodeEdits: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' }> = [];
+        let accumulatedFileCreates: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' }> = [];
+        let accumulatedCitations: Array<{ citedText: string; documentTitle: string; startIndex?: number; endIndex?: number }> = [];
+        // Agent Power Tools accumulators (Phase 7)
+        let accumulatedFileOps: Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }> = [];
+        let accumulatedShopifyOps: Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }> = [];
+
+        // Start stall detection timer (checks every 10s)
+        stallTimerRef.current = setInterval(() => {
+          const elapsed = (Date.now() - lastSSEEventTimeRef.current) / 1000;
+          if (elapsed >= 120 && !stallAlertEmittedRef.current) {
+            stallAlertEmittedRef.current = true;
+            const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+            steps.push({
+              phase: 'budget_warning' as const,
+              label: 'This is taking unusually long. You can Stop and retry.',
+              done: false,
+              startedAt: Date.now(),
+            });
+            thinkingStepsRef.current = steps;
+            updateMessage(assistantMsgId, streamedContent, {
+              thinkingSteps: [...steps],
+              thinkingComplete: false,
+            });
+          } else if (elapsed >= 60 && !stallWarningEmittedRef.current) {
+            stallWarningEmittedRef.current = true;
+            const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+            steps.push({
+              phase: 'analyzing' as const,
+              label: 'Taking longer than expected...',
+              done: false,
+              startedAt: Date.now(),
+            });
+            thinkingStepsRef.current = steps;
+            updateMessage(assistantMsgId, streamedContent, {
+              thinkingSteps: [...steps],
+              thinkingComplete: false,
+            });
+          }
+        }, 10_000);
+
         while (!done) {
           const result = await reader.read();
           done = result.done;
@@ -401,6 +725,11 @@ export function AgentPromptPanel({
             // Check for SSE events (error, done, thinking) in the chunk
             const sseEvent = parseSSEEvent(chunk);
             if (sseEvent) {
+              // Reset stall detection on any SSE event
+              lastSSEEventTimeRef.current = Date.now();
+              stallWarningEmittedRef.current = false;
+              stallAlertEmittedRef.current = false;
+
               if (sseEvent.type === 'done') {
                 receivedDone = true;
                 continue;
@@ -409,10 +738,217 @@ export function AgentPromptPanel({
                 receivedError = sseEvent;
                 continue;
               }
+              // Handle context_stats SSE event for accurate ContextMeter
+              if (sseEvent.type === 'context_stats') {
+                updateMessage(assistantMsgId, streamedContent, {
+                  contextStats: {
+                    loadedFiles: sseEvent.loadedFiles,
+                    loadedTokens: sseEvent.loadedTokens,
+                    totalFiles: sseEvent.totalFiles,
+                  },
+                });
+                continue;
+              }
+              // Handle tool_start: show loading skeleton
+              if (sseEvent.type === 'tool_start') {
+                updateMessage(assistantMsgId, streamedContent, {
+                  activeToolCall: { name: sseEvent.name, id: sseEvent.id },
+                });
+                continue;
+              }
+              // Handle tool_call: route completed tool calls to card data
+              if (sseEvent.type === 'tool_call') {
+                const input = sseEvent.input;
+                const toolName = sseEvent.name;
+
+                // Clear active tool call loading state
+                const clearActive = { activeToolCall: undefined };
+
+                if (toolName === 'propose_plan') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    planData: {
+                      title: (input.title as string) ?? 'Plan',
+                      description: (input.description as string) ?? '',
+                      steps: (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ?? [],
+                    },
+                  });
+                } else if (toolName === 'propose_code_edit') {
+                  const editFilePath = (input.filePath as string) ?? '';
+                  const editNewContent = (input.newContent as string) ?? '';
+                  const originalFileContent = resolveFileContent?.(editFilePath) ?? undefined;
+                  accumulatedCodeEdits = [
+                    ...accumulatedCodeEdits,
+                    {
+                      filePath: editFilePath,
+                      reasoning: input.reasoning as string | undefined,
+                      newContent: editNewContent,
+                      originalContent: originalFileContent,
+                      status: 'pending' as const,
+                    },
+                  ];
+                  // Phase 4a: Push live change to preview
+                  onLiveChange?.({ filePath: editFilePath, newContent: editNewContent });
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    codeEdits: [...accumulatedCodeEdits],
+                  });
+                } else if (toolName === 'ask_clarification') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    clarification: {
+                      question: (input.question as string) ?? '',
+                      options: (input.options as Array<{ id: string; label: string }>) ?? [],
+                      allowMultiple: input.allowMultiple as boolean | undefined,
+                    },
+                  });
+                } else if (toolName === 'navigate_preview') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    previewNav: {
+                      path: (input.path as string) ?? '/',
+                      description: input.description as string | undefined,
+                    },
+                  });
+                } else if (toolName === 'create_file') {
+                  accumulatedFileCreates = [
+                    ...accumulatedFileCreates,
+                    {
+                      fileName: (input.fileName as string) ?? '',
+                      content: (input.content as string) ?? '',
+                      reasoning: input.reasoning as string | undefined,
+                      status: 'pending' as const,
+                    },
+                  ];
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    fileCreates: [...accumulatedFileCreates],
+                  });
+                // ── Agent Power Tools card routing (Phase 7) ────────────
+                } else if (toolName === 'write_file' || toolName === 'delete_file' || toolName === 'rename_file') {
+                  const opType = toolName.replace('_file', '') as 'write' | 'delete' | 'rename';
+                  accumulatedFileOps = [
+                    ...accumulatedFileOps,
+                    {
+                      type: opType,
+                      fileName: (input.fileName as string) ?? '',
+                      success: true,
+                      newFileName: toolName === 'rename_file' ? (input.newFileName as string) : undefined,
+                    },
+                  ];
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    fileOps: [...accumulatedFileOps],
+                  });
+                } else if (toolName === 'push_to_shopify' || toolName === 'pull_from_shopify' || toolName === 'list_themes' || toolName === 'list_store_resources' || toolName === 'get_shopify_asset') {
+                  const shopifyType = ({
+                    push_to_shopify: 'push',
+                    pull_from_shopify: 'pull',
+                    list_themes: 'list_themes',
+                    list_store_resources: 'list_resources',
+                    get_shopify_asset: 'get_asset',
+                  } as const)[toolName];
+                  accumulatedShopifyOps = [
+                    ...accumulatedShopifyOps,
+                    {
+                      type: shopifyType,
+                      status: 'success' as const,
+                      summary: (input.reason as string) ?? `${shopifyType} completed`,
+                    },
+                  ];
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    shopifyOps: [...accumulatedShopifyOps],
+                  });
+                } else if (toolName === 'screenshot_preview') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    screenshots: [
+                      {
+                        url: (input.path as string) ?? '/',
+                        path: (input.path as string) ?? '/',
+                      },
+                    ],
+                  });
+                } else if (toolName === 'compare_screenshots') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    screenshotComparison: {
+                      beforeUrl: (input.beforeUrl as string) ?? '',
+                      afterUrl: (input.afterUrl as string) ?? '',
+                      threshold: (input.threshold as number) ?? 2.0,
+                    },
+                  });
+                } else {
+                  // Unknown tool — just clear the loading state
+                  updateMessage(assistantMsgId, streamedContent, clearActive);
+                }
+                continue;
+              }
+              // Handle cache_stats event
+              if (sseEvent.type === 'cache_stats') {
+                // Cache stats are informational; no UI update needed yet
+                continue;
+              }
+              // Handle citation events
+              if (sseEvent.type === 'citation') {
+                accumulatedCitations = [
+                  ...accumulatedCitations,
+                  {
+                    citedText: sseEvent.citedText,
+                    documentTitle: sseEvent.documentTitle,
+                    startIndex: sseEvent.startIndex,
+                    endIndex: sseEvent.endIndex,
+                  },
+                ];
+                updateMessage(assistantMsgId, streamedContent, {
+                  citations: [...accumulatedCitations],
+                });
+                continue;
+              }
+              // Handle diagnostics events — attach to most recent thinking step
+              if (sseEvent.type === 'diagnostics') {
+                const steps = thinkingStepsRef.current;
+                if (steps.length > 0) {
+                  const diagEvent = sseEvent as SSEDiagnosticsEvent;
+                  steps[steps.length - 1].diagnostics = {
+                    file: diagEvent.file,
+                    errorCount: diagEvent.errorCount,
+                    warningCount: diagEvent.warningCount,
+                  };
+                  updateMessage(assistantMsgId, streamedContent, {
+                    thinkingSteps: [...steps],
+                  });
+                }
+                continue;
+              }
+              // Handle worker_progress events — track parallel worker status
+              if (sseEvent.type === 'worker_progress') {
+                const workerEvent = sseEvent as SSEWorkerProgressEvent;
+                const workers = (workersRef.current ?? []) as Array<{ workerId: string; label: string; status: string }>;
+                const existingIdx = workers.findIndex(w => w.workerId === workerEvent.workerId);
+                if (existingIdx >= 0) {
+                  workers[existingIdx] = { workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status };
+                } else {
+                  workers.push({ workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status });
+                }
+                workersRef.current = workers;
+                // Phase 8: Pass workers to ThinkingBlock via message metadata
+                updateMessage(assistantMsgId, streamedContent, {
+                  thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
+                  workers: [...workers],
+                });
+                continue;
+              }
               if (sseEvent.type === 'thinking') {
                 // Mark previous steps as done
                 const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
-                // Add new step (only mark 'complete' phase as done)
+                // Add new step with startedAt timestamp
+                const metadata = sseEvent.metadata as Record<string, unknown> | undefined;
+                const rawTier = metadata?.routingTier as string | undefined;
+                const validTier = rawTier && ['TRIVIAL', 'SIMPLE', 'COMPLEX', 'ARCHITECTURAL'].includes(rawTier)
+                  ? rawTier as 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL'
+                  : undefined;
                 const newStep = {
                   phase: sseEvent.phase,
                   label: sseEvent.label,
@@ -421,10 +957,56 @@ export function AgentPromptPanel({
                   analysis: sseEvent.analysis,
                   summary: sseEvent.summary,
                   done: sseEvent.phase === 'complete',
+                  startedAt: Date.now(),
+                  // Extract routing tier metadata from smart routing events
+                  routingTier: validTier,
+                  model: metadata?.model as string | undefined,
+                  // Phase mapping for progress rail
+                  railPhase: mapCoordinatorPhase(sseEvent.phase),
+                  subPhase: (sseEvent.subPhase ?? undefined) as ThinkingStep['subPhase'],
+                  // Rich metadata for deep-link rendering
+                  metadata: metadata as ThinkingStep['metadata'],
                 };
                 steps.push(newStep);
                 thinkingStepsRef.current = steps;
                 if (sseEvent.phase === 'complete') thinkingComplete = true;
+
+                // B2: Clarification event — append a clarification message to the chat
+                // so the user sees the questions and can respond in the same thread.
+                // If structured options are available, wire them to ClarificationCard.
+                if (sseEvent.phase === 'clarification') {
+                  const clarificationText =
+                    sseEvent.detail ?? 'I need more information to proceed. Could you clarify your request?';
+                  streamedContent += clarificationText;
+
+                  // Extract structured options from metadata (sent by coordinator)
+                  const metaOptions = sseEvent.metadata?.options as
+                    | Array<{ id: string; label: string; recommended?: boolean }>
+                    | undefined;
+                  if (metaOptions && metaOptions.length > 0) {
+                    // Extract a short question from the first line or fallback
+                    const firstLine = clarificationText.split('\n').find(
+                      (l: string) => l.trim().length > 0 && !l.trim().match(/^\d+[.)]/),
+                    ) ?? 'Which option would you like?';
+                    updateMessage(assistantMsgId, streamedContent, {
+                      clarification: {
+                        question: firstLine.trim().slice(0, 200),
+                        options: metaOptions.map((o) => ({
+                          id: o.id,
+                          label: o.label,
+                          recommended: o.recommended,
+                        })),
+                      },
+                    });
+                  }
+                }
+
+                // Budget warning: track truncation state for ContextMeter
+                if (sseEvent.phase === 'budget_warning') {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    budgetTruncated: true,
+                  });
+                }
 
                 // Update message with thinking steps
                 updateMessage(assistantMsgId, streamedContent, {
@@ -440,9 +1022,15 @@ export function AgentPromptPanel({
             if (chunk.trim().startsWith('data: {')) {
               const innerEvent = parseSSEEvent(chunk);
               if (innerEvent) {
+                lastSSEEventTimeRef.current = Date.now();
                 if (innerEvent.type === 'error') receivedError = innerEvent;
                 if (innerEvent.type === 'done') receivedDone = true;
                 if (innerEvent.type === 'thinking') {
+                  const innerMeta = innerEvent.metadata as Record<string, unknown> | undefined;
+                  const innerRawTier = innerMeta?.routingTier as string | undefined;
+                  const innerValidTier = innerRawTier && ['TRIVIAL', 'SIMPLE', 'COMPLEX', 'ARCHITECTURAL'].includes(innerRawTier)
+                    ? innerRawTier as 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL'
+                    : undefined;
                   const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
                   steps.push({
                     phase: innerEvent.phase,
@@ -452,6 +1040,12 @@ export function AgentPromptPanel({
                     analysis: innerEvent.analysis,
                     summary: innerEvent.summary,
                     done: innerEvent.phase === 'complete',
+                    startedAt: Date.now(),
+                    routingTier: innerValidTier,
+                    model: innerMeta?.model as string | undefined,
+                    railPhase: mapCoordinatorPhase(innerEvent.phase),
+                    subPhase: ((innerEvent as SSEThinkingEvent).subPhase ?? undefined) as ThinkingStep['subPhase'],
+                    metadata: innerMeta as ThinkingStep['metadata'],
                   });
                   thinkingStepsRef.current = steps;
                   if (innerEvent.phase === 'complete') thinkingComplete = true;
@@ -464,6 +1058,9 @@ export function AgentPromptPanel({
               }
             }
 
+            // Reset stall detection on content chunk
+            lastSSEEventTimeRef.current = Date.now();
+
             // First text content arriving means thinking is done
             if (!thinkingComplete && thinkingStepsRef.current.length > 0) {
               thinkingComplete = true;
@@ -472,6 +1069,26 @@ export function AgentPromptPanel({
             }
 
             streamedContent += chunk;
+
+            // Debounced content update (100ms) to reduce react-markdown re-renders
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = setTimeout(() => {
+              updateMessage(assistantMsgId, streamedContent, {
+                thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
+                thinkingComplete: thinkingComplete || undefined,
+              });
+            }, 100);
+          }
+        }
+
+        // Clean up timers (client timeout, stall detection) and flush debounce
+        clearTimeout(clientTimeout);
+        if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+          // Flush any pending content update
+          if (streamedContent) {
             updateMessage(assistantMsgId, streamedContent, {
               thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
               thinkingComplete: thinkingComplete || undefined,
@@ -561,8 +1178,55 @@ export function AgentPromptPanel({
               onOpenFile(fp.path);
             }
           }
+
+          // EPIC V3: Trigger preview verification if code edits were proposed
+          if (verifyPreview && accumulatedCodeEdits.length > 0) {
+            // Fire non-blocking — don't await. Results surface as a thinking step
+            // and/or an inline note on the assistant message.
+            verifyPreview(projectId).then((verifyResult) => {
+              if (!verifyResult || verifyResult.regressions.length === 0) return;
+
+              const errorCount = verifyResult.regressions.filter(r => r.severity === 'error').length;
+              const warningCount = verifyResult.regressions.filter(r => r.severity === 'warning').length;
+              const regressionLabel = verifyResult.passed
+                ? `Preview check: ${warningCount} warning(s), no structural errors`
+                : `Preview regressions: ${errorCount} error(s), ${warningCount} warning(s) detected`;
+
+              // Add as a thinking step for the progress rail
+              const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+              steps.push({
+                phase: 'validating' as const,
+                label: regressionLabel,
+                done: true,
+                startedAt: Date.now(),
+              });
+              thinkingStepsRef.current = steps;
+
+              // Also append a visible note on the message
+              if (!verifyResult.passed) {
+                const details = verifyResult.regressions
+                  .filter(r => r.severity === 'error')
+                  .slice(0, 3)
+                  .map(r => `- ${r.description}`)
+                  .join('\n');
+                const regressionNote = `\n\n> **Preview check:** ${errorCount} potential regression(s) detected:\n${details}\n>\n> Please verify the preview visually.`;
+                updateMessage(assistantMsgId, streamedContent + regressionNote, {
+                  thinkingSteps: [...steps],
+                });
+              } else {
+                updateMessage(assistantMsgId, streamedContent, {
+                  thinkingSteps: [...steps],
+                });
+              }
+            }).catch(() => { /* best-effort — never block the UI */ });
+          }
         }
       } catch (err) {
+        // Clean up timers on error
+        clearTimeout(clientTimeout);
+        if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
+        if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
+
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : 'Request failed';
         setError(msg);
@@ -577,9 +1241,14 @@ export function AgentPromptPanel({
       } finally {
         setIsLoading(false);
         if (abortRef.current === controller) abortRef.current = null;
+        // Ensure timers are always cleaned up
+        if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
+        if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
+        // Phase 4a: End live preview session
+        onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -589,6 +1258,20 @@ export function AgentPromptPanel({
       if (sendMessageRef) sendMessageRef.current = null;
     };
   }, [onSend, sendMessageRef]);
+
+  // Wire onApplyStatsRef so the project page can report diff stats after applying code
+  useEffect(() => {
+    if (onApplyStatsRef) {
+      onApplyStatsRef.current = (stats) => {
+        if (activeSessionId) {
+          recordApplyStats(activeSessionId, stats);
+        }
+      };
+    }
+    return () => {
+      if (onApplyStatsRef) onApplyStatsRef.current = null;
+    };
+  }, [onApplyStatsRef, activeSessionId, recordApplyStats]);
 
   // Reset decision scan when session changes
   useEffect(() => {
@@ -635,6 +1318,16 @@ export function AgentPromptPanel({
   const handleReview = useCallback(() => {
     onSend('Review all the changes we have discussed so far. Check for issues, improvements, and verify correctness.');
   }, [onSend]);
+
+  // Phase 2: Update a code edit's status (applied/rejected) within a message
+  const handleEditStatusChange = useCallback((messageId: string, editIndex: number, status: 'applied' | 'rejected') => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg?.codeEdits) return;
+    const updatedEdits = msg.codeEdits.map((edit, i) =>
+      i === editIndex ? { ...edit, status } : edit,
+    );
+    updateMessage(messageId, msg.content, { codeEdits: updatedEdits });
+  }, [messages, updateMessage]);
 
   // EPIC 2: Clear chat — reset local state and clear messages from hook
   const handleClearChat = useCallback(() => {
@@ -734,11 +1427,30 @@ export function AgentPromptPanel({
   }, [errorCode, isRetrying, intentMode]);
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
-      <ContextPanel context={context} className="mb-2 flex-shrink-0" />
+    <div className={`flex flex-1 min-h-0 ${className}`}>
+      {/* Session sidebar (left edge of right panel) */}
+      <SessionSidebar
+        sessions={sessions}
+        archivedSessions={archivedSessions}
+        activeSessionId={activeSessionId ?? null}
+        isLoading={isLoading}
+        onSwitch={handleSwitchSession}
+        onNew={handleNewChat}
+        onDelete={deleteSession}
+        onRename={renameSession}
+        onArchive={archiveSession}
+        onUnarchive={unarchiveSession}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={loadMore}
+      />
+
+      {/* Chat area */}
+      <div className="flex flex-col flex-1 min-h-0 min-w-0">
+      <ContextPanel context={context} className="mb-2 flex-shrink-0 mx-2" />
       {error && (
         <div
-          className={`mb-2 rounded border px-2 py-1.5 text-xs flex-shrink-0 flex items-center justify-between gap-2 ${
+          className={`mb-2 mx-2 rounded border px-2 py-1.5 text-xs flex-shrink-0 flex items-center justify-between gap-2 ${
             isRetrying
               ? 'border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300'
               : 'border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300'
@@ -847,8 +1559,20 @@ export function AgentPromptPanel({
           historySummary={lastHistorySummary}
           summarizedCount={lastTrimmedCount}
           totalFiles={fileCount}
+          onOpenPlanFile={onOpenPlanFile}
+          onBuildPlan={onBuildPlan}
+          onNavigatePreview={onNavigatePreview}
+          onConfirmFileCreate={onConfirmFileCreate}
+          onEditStatusChange={handleEditStatusChange}
+          onAttachedFilesChange={handleAttachedFilesChange}
+          verbose={verbose}
+          onToggleVerbose={() => setVerbose(!verbose)}
+          onForkAtMessage={(messageIndex) => forkSession(messageIndex)}
+          projectId={projectId}
+          onPinAsPreference={(rule) => pinnedPrefs.addPin(rule)}
         />
       )}
+      </div>
     </div>
   );
 }

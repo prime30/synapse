@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { validateBody } from '@/lib/middleware/validation';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { stripe, PLAN_CONFIG, getStripePriceId, type PlanId } from '@/lib/billing/stripe';
+import { stripe, PLAN_CONFIG, getStripePriceId, getStripeOveragePriceId, type PlanId } from '@/lib/billing/stripe';
 import { getOrganizationId } from '@/lib/billing/org-resolver';
 
 // ---------------------------------------------------------------------------
@@ -45,8 +45,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve Stripe price ID
+    // Resolve Stripe price IDs
     const priceId = getStripePriceId(plan, body.annual);
+    const overagePriceId = getStripeOveragePriceId();
+
+    // Build line items: base plan + optional metered overage
+    const lineItems: { price: string; quantity?: number }[] = [
+      { price: priceId, quantity: 1 },
+    ];
+    if (overagePriceId) {
+      lineItems.push({ price: overagePriceId }); // metered: no quantity at checkout
+    }
 
     // Build URLs
     const origin =
@@ -58,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
       client_reference_id: userId,

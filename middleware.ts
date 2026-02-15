@@ -13,11 +13,12 @@ import { isPublicPath, getRedirectUrl } from '@/lib/auth/route-guard';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip static assets and internal Next.js routes
+  // Skip static assets, internal Next.js routes, and all API routes
+  // (API routes handle their own auth via requireAuth in lib/middleware/auth.ts)
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon.ico') ||
-    pathname.startsWith('/api/auth/')
+    pathname.startsWith('/api/')
   ) {
     return NextResponse.next();
   }

@@ -1,15 +1,12 @@
 /**
- * DOM context cache for preview bridge results.
+ * DOM context cache for preview bridge results -- EPIC D migration
  *
- * Stores inspection results with per-action TTLs so agents
- * don't re-scan the DOM on every query.
+ * Now delegates to CacheAdapter (Upstash Redis or in-memory fallback).
+ * Per-action TTLs are passed through as cache TTL values.
+ * All methods are async.
  */
 
-interface DOMCacheEntry<T = unknown> {
-  data: T;
-  cachedAt: number;
-  ttlMs: number;
-}
+import { createNamespacedCache, type CacheAdapter } from '@/lib/cache/cache-adapter';
 
 interface DOMCacheStats {
   hits: number;
@@ -17,20 +14,22 @@ interface DOMCacheStats {
   size: number;
 }
 
-/** Default TTLs per action type */
+/** Default TTLs per action type (milliseconds) */
 const DEFAULT_TTLS: Record<string, number> = {
-  getPageSnapshot: 30_000,      // 30s — pages change on file save
-  listAppElements: 600_000,     // 10 min — app elements don't change during a session
-  getStylesheets: 300_000,      // 5 min — stylesheets rarely change
-  inspect: 30_000,              // 30s — element state may change
+  getPageSnapshot: 30_000,      // 30s -- pages change on file save
+  listAppElements: 600_000,     // 10 min -- app elements don't change during a session
+  getStylesheets: 300_000,      // 5 min -- stylesheets rarely change
+  inspect: 30_000,              // 30s -- element state may change
   querySelector: 30_000,        // 30s
   ping: 5_000,                  // 5s
 };
 
 export class DOMContextCache {
-  private cache: Map<string, DOMCacheEntry> = new Map();
-  private hits = 0;
-  private misses = 0;
+  private adapter: CacheAdapter;
+
+  constructor() {
+    this.adapter = createNamespacedCache('dom');
+  }
 
   /**
    * Build a cache key from project + action + optional selector.
@@ -44,78 +43,51 @@ export class DOMContextCache {
   /**
    * Get a cached result. Returns null if expired or not found.
    */
-  get<T = unknown>(projectId: string, action: string, selector?: string): T | null {
-    const k = this.key(projectId, action, selector);
-    const entry = this.cache.get(k);
-
-    if (!entry) {
-      this.misses++;
-      return null;
-    }
-
-    if (Date.now() - entry.cachedAt > entry.ttlMs) {
-      this.cache.delete(k);
-      this.misses++;
-      return null;
-    }
-
-    this.hits++;
-    return entry.data as T;
+  async get<T = unknown>(projectId: string, action: string, selector?: string): Promise<T | null> {
+    return this.adapter.get<T>(this.key(projectId, action, selector));
   }
 
   /**
-   * Store a result in the cache.
+   * Store a result in the cache with per-action TTL.
    */
-  set<T = unknown>(projectId: string, action: string, data: T, selector?: string): void {
-    const k = this.key(projectId, action, selector);
+  async set<T = unknown>(projectId: string, action: string, data: T, selector?: string): Promise<void> {
     const ttlMs = DEFAULT_TTLS[action] ?? 30_000;
-    this.cache.set(k, { data, cachedAt: Date.now(), ttlMs });
+    await this.adapter.set(this.key(projectId, action, selector), data, ttlMs);
   }
 
   /**
    * Invalidate all cached entries for a project.
    * Call this when the preview refreshes (file save).
    */
-  invalidate(projectId: string): void {
-    const prefix = `${projectId}:`;
-    for (const k of this.cache.keys()) {
-      if (k.startsWith(prefix)) {
-        this.cache.delete(k);
-      }
-    }
+  async invalidate(projectId: string): Promise<void> {
+    await this.adapter.invalidatePattern(`${projectId}:*`);
   }
 
   /**
-   * Invalidate only short-TTL entries (snapshots, inspections) but keep
-   * long-lived ones (app elements, stylesheets).
+   * Invalidate volatile (short-TTL) entries for a project.
+   *
+   * Note: With a remote cache backend we cannot inspect per-key TTLs,
+   * so this invalidates ALL entries for the project -- equivalent to
+   * a full invalidate.  This is safe because long-lived entries will
+   * be repopulated on next access.
    */
-  invalidateVolatile(projectId: string): void {
-    const prefix = `${projectId}:`;
-    for (const [k, entry] of this.cache.entries()) {
-      if (k.startsWith(prefix) && entry.ttlMs <= 60_000) {
-        this.cache.delete(k);
-      }
-    }
+  async invalidateVolatile(projectId: string): Promise<void> {
+    await this.adapter.invalidatePattern(`${projectId}:*`);
   }
 
   /**
    * Get cache stats for debugging.
    */
-  stats(): DOMCacheStats {
-    return {
-      hits: this.hits,
-      misses: this.misses,
-      size: this.cache.size,
-    };
+  async stats(): Promise<DOMCacheStats> {
+    const s = await this.adapter.stats();
+    return { hits: s.hits, misses: s.misses, size: s.size };
   }
 
   /**
-   * Clear the entire cache.
+   * Clear the entire DOM cache.
    */
-  clear(): void {
-    this.cache.clear();
-    this.hits = 0;
-    this.misses = 0;
+  async clear(): Promise<void> {
+    await this.adapter.invalidatePattern('*');
   }
 }
 

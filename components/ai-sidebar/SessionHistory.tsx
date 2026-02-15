@@ -12,6 +12,11 @@ export interface ChatSession {
   title: string;
   updatedAt: string;
   messageCount: number;
+  linesAdded?: number;
+  linesDeleted?: number;
+  filesAffected?: number;
+  archivedAt?: string | null;
+  // status is derived client-side: activeSessionId + isLoading
 }
 
 interface SessionHistoryProps {

@@ -1,0 +1,301 @@
+---
+description: Synapse IDE Design System — opinionated defaults, tokens, patterns, and component checklist for AI-generated UI
+globs: ["**/*.tsx", "**/*.css", "app/**/*", "components/**/*"]
+alwaysApply: false
+---
+
+# Synapse IDE Design System
+
+This rule provides the canonical design reference for all AI-generated IDE UI code.
+Every component, layout, and interaction MUST follow these constraints.
+
+---
+
+## 1. Color System
+
+The IDE uses a **stone + sky** palette with an accent green.
+
+### Semantic Surface Classes (use these, not raw Tailwind colors)
+
+| Purpose | Class |
+|---------|-------|
+| App background | `ide-surface` |
+| Panel / sidebar | `ide-surface-panel` |
+| Inputs, search | `ide-surface-input` |
+| Inset areas | `ide-surface-inset` |
+| Popover, dialog | `ide-surface-pop` |
+
+### Border Classes
+
+| Purpose | Class |
+|---------|-------|
+| Standard border | `ide-border` |
+| Subtle / internal | `ide-border-subtle` |
+
+### Text Hierarchy
+
+| Purpose | Class |
+|---------|-------|
+| Primary text | `ide-text` |
+| Secondary text | `ide-text-2` |
+| Tertiary text | `ide-text-3` |
+| Muted labels | `ide-text-muted` |
+| Ghost / disabled | `ide-text-quiet` |
+
+### Interactive Colors
+
+- Primary action: `bg-sky-500 dark:bg-sky-400` with `text-white`
+- Accent CTA: `bg-accent` (`#28CD56`) — use sparingly for critical CTAs
+- Hover state: `ide-hover` class
+- Active/selected: `ide-active` class
+- Danger: `text-red-500 dark:text-red-400`
+
+### Rules
+
+- NEVER use raw hex colors. Always use the `ide-*` classes or the color tokens.
+- ALWAYS provide dark mode variants when using Tailwind colors directly.
+- Prefer `ide-*` semantic classes over `dark:` variants when a class exists.
+
+---
+
+## 2. Spacing
+
+Use the CSS custom property spacing scale (defined in `:root`):
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--space-0-5` | 2px | Tight inline gaps |
+| `--space-1` | 4px | Icon margins, chip padding |
+| `--space-1-5` | 6px | Tight button padding |
+| `--space-2` | 8px | Standard inline gaps, compact cards |
+| `--space-3` | 12px | Default gap between elements |
+| `--space-4` | 16px | Panel padding, section gaps |
+| `--space-6` | 24px | Section spacing |
+| `--space-8` | 32px | Large section dividers |
+| `--space-12` | 48px | Page-level vertical rhythm |
+
+### Tailwind Mapping
+
+When using Tailwind utility classes, prefer these spacings:
+- `gap-1` (4px), `gap-2` (8px), `gap-3` (12px), `gap-4` (16px)
+- `p-2` (8px) for compact cards, `p-4` (16px) for standard panels
+- `px-3 py-1.5` for small buttons, `px-4 py-2` for medium buttons
+
+---
+
+## 3. Typography
+
+IDE-specific font scale (smaller than typical web):
+
+| Token | Size | Use |
+|-------|------|-----|
+| `--text-2xs` | 10px | Timestamps, metadata, theme IDs |
+| `--text-xs` | 11px | Tab labels, badges, compact buttons |
+| `--text-sm` | 12px | Body text, descriptions, sidebar items |
+| `--text-base` | 14px | Primary body, standard buttons |
+| `--text-lg` | 16px | Subheadings, panel titles |
+| `--text-xl` | 20px | Page headings |
+| `--text-2xl` | 24px | Hero text, modal titles |
+
+### Rules
+
+- Default body text is `text-[13px]` or `var(--text-sm)`.
+- Headings use `font-medium` or `font-semibold`, never `font-bold` in the IDE.
+- Monospace content uses `font-mono` (Geist Mono).
+- NEVER exceed `text-2xl` inside the IDE shell.
+
+---
+
+## 4. Border Radius
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--radius-sm` | 6px | Chips, badges, small inputs |
+| `--radius-md` | 8px | Buttons, cards, inputs, dropdowns |
+| `--radius-lg` | 12px | Modals, panels, large cards |
+| `--radius-xl` | 16px | Marketing cards |
+| `--radius-full` | 9999px | Pills, avatars, toggles |
+
+### Rules
+
+- IDE components default to `--radius-md` (8px).
+- Buttons and inputs: `rounded-lg` (8px).
+- Cards and panels: `rounded-xl` (12px).
+- NEVER use `rounded-none` in the IDE. Minimum is `rounded-sm`.
+
+---
+
+## 5. Shadows / Elevation
+
+| Token | Use |
+|-------|-----|
+| `--shadow-xs` | Subtle lift on hover states |
+| `--shadow-sm` | Cards at rest |
+| `--shadow-md` | Dropdowns, floating panels |
+| `--shadow-lg` | Modals, toasts |
+| `--shadow-xl` | Dialogs, critical overlays |
+
+Dark mode automatically deepens shadows via overrides in globals.css.
+
+### Rules
+
+- Use CSS custom properties: `box-shadow: var(--shadow-md);`
+- Elevation should increase on hover for interactive cards.
+- NEVER use Tailwind `shadow-*` classes directly — use the tokens.
+
+---
+
+## 6. Z-Index Layers
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--z-base` | 0 | Default content |
+| `--z-raised` | 1 | Overlapping siblings |
+| `--z-dropdown` | 10 | Dropdowns, popovers |
+| `--z-sticky` | 20 | Sticky headers, sidebars |
+| `--z-overlay` | 30 | Modal backdrops |
+| `--z-modal` | 40 | Modal content |
+| `--z-toast` | 50 | Toast notifications |
+| `--z-tooltip` | 60 | Tooltips |
+
+### Rules
+
+- ALWAYS use token values. NEVER use arbitrary z-index values like `z-[999]`.
+- Use `z-index: var(--z-dropdown)` in style props or CSS.
+
+---
+
+## 7. Animations & Transitions
+
+### Easing
+
+| Token | Use |
+|-------|-----|
+| `--ease-default` | General purpose |
+| `--ease-out` | Enter animations |
+| `--ease-in` | Exit animations |
+| `--ease-spring` | Playful / bouncy entrances |
+
+### Duration
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--duration-fast` | 100ms | Hover color changes |
+| `--duration-normal` | 150ms | Standard transitions |
+| `--duration-moderate` | 200ms | Enter animations |
+| `--duration-slow` | 300ms | Complex layout shifts |
+
+### Animation Utility Classes (from polish.css)
+
+- `.animate-fade-in` — simple opacity entrance
+- `.animate-slide-up` — slide from below with fade
+- `.animate-slide-down` — slide from above with fade
+- `.animate-slide-right` / `.animate-slide-left` — horizontal slides
+- `.animate-scale-in` — scale + fade entrance (good for modals, popovers)
+- `.animate-pulse-gentle` — soft breathing pulse
+- `.animate-shimmer` — loading shimmer sweep
+- `.animate-bounce-subtle` — small bounce for success feedback
+- `.stagger-children` — add to parent to auto-stagger child animation delays
+
+### Rules
+
+- All entrance animations respect `prefers-reduced-motion`.
+- Buttons and interactive elements get transitions automatically via polish.css.
+- For React, prefer Framer Motion for complex orchestrated animations.
+- For simple CSS-only entrances, use the `.animate-*` classes.
+
+---
+
+## 8. Layout Patterns
+
+### Utility Classes (from polish.css)
+
+| Class | Description |
+|-------|-------------|
+| `.stack` | Vertical flex with 16px gap |
+| `.stack-tight` | Vertical flex with 8px gap |
+| `.stack-loose` | Vertical flex with 24px gap |
+| `.row` | Horizontal flex, centered, 12px gap |
+| `.row-tight` | Horizontal flex, centered, 6px gap |
+| `.center` | Flex center both axes |
+| `.panel` | Rounded + bordered panel with padding |
+| `.panel-flush` | Panel without padding |
+
+### Grid Helpers
+
+| Class | Column Min-Width |
+|-------|-----------------|
+| `.grid-auto-fill-sm` | 200px |
+| `.grid-auto-fill-md` | 280px |
+| `.grid-auto-fill-lg` | 360px |
+
+### IDE Layout Rules
+
+- The IDE is a fixed `100vh` app. NEVER add `overflow-y: auto` on `<body>`.
+- Sidebars are fixed-width. Use `flex-shrink-0` on sidebar containers.
+- Main content area uses `flex-1 overflow-auto`.
+- Panels use `ide-surface-panel` background with `ide-border-subtle` borders.
+
+---
+
+## 9. Dark Mode
+
+- The app uses class-based dark mode: `.dark` on `<html>`.
+- Custom variant: `@custom-variant dark (&:where(.dark, .dark *));`
+- ALL components MUST work in both light and dark.
+
+### Patterns
+
+- Use `ide-*` classes whenever possible (they handle dark mode).
+- For direct Tailwind: always pair light + dark, e.g., `text-stone-700 dark:text-white/70`.
+- Background opacity: in dark mode, use `white/5`, `white/10` etc. for surfaces.
+- Borders: `stone-200 dark:white/10` or `ide-border`.
+
+---
+
+## 10. Component Checklist
+
+Before submitting any new UI component, verify:
+
+- [ ] Uses `ide-*` surface/border/text classes (no raw hex)
+- [ ] Has dark mode coverage (test with `.dark` on root)
+- [ ] Border radius uses `--radius-*` tokens or Tailwind `rounded-*` ≥ `rounded-sm`
+- [ ] Shadows use `--shadow-*` tokens
+- [ ] Z-index uses `--z-*` layer tokens
+- [ ] Interactive elements have `transition-*` or inherit from polish.css
+- [ ] Entrance animations use `.animate-*` or Framer Motion
+- [ ] Font sizes are within the IDE scale (`10px` – `24px`)
+- [ ] Spacing follows the token scale (multiples of 4px)
+- [ ] `prefers-reduced-motion` is respected
+- [ ] Keyboard focus states are visible (`.focus-ring` or `focus-visible:`)
+- [ ] No `z-[999]`, no inline `color:`, no hardcoded `px` sizes without tokens
+- [ ] Loading states use `.skeleton` shimmer
+- [ ] Scrollable areas inherit global scrollbar styling
+
+---
+
+## 11. Skeleton Loading
+
+Use the `.skeleton` class for placeholder loading states:
+
+```html
+<div class="skeleton h-4 w-32"></div>
+<div class="skeleton h-10 w-full"></div>
+```
+
+The shimmer auto-adapts to dark mode.
+
+---
+
+## 12. Post-Processing Notes
+
+The following are applied globally via `polish.css`:
+
+- **Antialiasing**: `-webkit-font-smoothing: antialiased` on `<html>`
+- **Text rendering**: `text-rendering: optimizeLegibility`
+- **Selection color**: Sky-tinted selection highlighting
+- **Smooth scroll**: Enabled when `prefers-reduced-motion: no-preference`
+- **Button press**: All buttons get `scale(0.98)` on `:active`
+- **Input transitions**: All inputs get border/shadow/bg transitions
+
+These are automatic — no action needed from the component author.

@@ -1,0 +1,144 @@
+{% liquid
+  assign countdown = false
+  assign general_block = false
+  assign newsletter = false
+  assign custom_button = false
+ %}
+{%- case block.type -%}
+  {%- when 'custom_text' -%}
+    {% if bk_stts.text != blank %}
+      {%- assign general_block = true -%}
+      <{{ bk_stts.tag }} data-lh="{{bk_stts.text_lh_mb}}" data-lh-md="{{bk_stts.text_lh_tb}}" data-lh-lg="{{bk_stts.text_lh}}" class="t4s-pe-none t4s-text-bl t4s-fnt-fm-{{ bk_stts.fontf }} t4s-font-italic-{{ bk_stts.font_italic }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-hidden-br-mb-{{ bk_stts.remove_br_tag }} t4s-text-shadow-{{ bk_stts.text_shadow }} t4s-rte--list " id="b_{{ block.id }}" {%- render 'bk_cus_style',type: 'custom_text', bk_stts: bk_stts -%}>{{ bk_stts.text }}</{{ bk_stts.tag }}>
+    {% endif %}
+  {%- when 'space_html' -%}
+    {%- assign general_block = true -%}
+    <div class="t4s-space-html t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" id="b_{{ block.id }}" {%- render 'bk_cus_style',type: 'space_html', bk_stts: bk_stts -%}></div>
+  {%- when 'html' -%}
+    {% if bk_stts.html_content != blank %}
+      {%- assign general_block = true -%}
+        <div class="t4s-raw-html t4s-rte--list t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" id="b_{{ block.id }}" {%- render 'bk_cus_style',type: 'html', bk_stts: bk_stts -%}>{{ bk_stts.html_content }}</div>
+      {% endif %}
+  {%- when 'image' -%}
+    {%- assign image = bk_stts.image_child -%}
+    {%- if bk_stts.img_link != blank -%}
+      {%- assign image_parent = 'a,' | split: ',' -%}
+    {%- else -%}
+      {%- assign image_parent = 'div,data-' | split: ',' -%}
+    {%- endif -%}
+    {%- if image != blank -%}
+        {%- assign general_block = true -%}
+        {%- if bk_stts.animation != 'none' -%}{%- assign use_animation = true -%} {%- endif -%}
+        <{{ image_parent[0] }} {{ image_parent[1] }}href="{{ bk_stts.img_link }}" class="t4s-img-child t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" id="b_{{ block.id }}" {{ block.shopify_attributes }} {%- render 'bk_cus_style',type: 'image', bk_stts: bk_stts -%}>
+            <img class="lazyloadt4s t4s-lz--fadeIn" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+        </{{-image_parent[0]-}}>
+    {%- endif -%}
+  {%- when "countdown" -%}
+    {%- if bk_stts.date != blank -%}
+    {%- assign countdown = true -%}
+      <div class="t4s-countdown sepr_coun_dt_wrap t4s-countdown-des-{{ bk_stts.cdt_des }} t4s-countdown-size-{{ bk_stts.cdt_size }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" id="b_{{ block.id }}" {%- render 'bk_cus_style',type: 'countdown', bk_stts: bk_stts -%}>
+        <div class="t4s-time" data-countdown-t4s data-date='{{ bk_stts.date }}' data-keyid='#countdown-{{ sid }}'></div>
+      </div>
+    {% endif %}
+  {%- when 'custom_button' -%}
+    {%- if bk_stts.button_link != blank and bk_stts.button_text != blank -%}
+      {%- assign custom_button = true -%}
+      {%- assign  button_style = bk_stts.button_style -%}
+      <a href="{{ bk_stts.button_link }}" target="{{ bk_stts.target_link }}" class="t4s-btn t4s-btn-custom  t4s-pe-auto t4s-fnt-fm-{{ bk_stts.fontf }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-btn-style-{{ button_style }} {% if button_style == 'default' or button_style == 'outline' or button_style == 'highlights_icon' %}t4s-btn-effect-{{ bk_stts.button_effect }}{% endif %}" id="b_{{ block.id }}" {{ block.shopify_attributes }} {%- render 'bk_cus_style',type: 'custom_button', bk_stts: bk_stts -%}>{{ bk_stts.button_text }} {%- if bk_stts.button_icon_w > 0 -%}<svg  class="t4s-btn-icon" viewBox="0 0 14 10"><use xlink:href="#t4s-icon-btn"></use></svg>{%- endif -%}</a>
+    {%- endif -%}
+  {%- when 'newsletter' -%}
+    {%- assign newsletter = true -%}
+    {%- assign custom_button = true -%}
+    <div id="b_{{ block.id }}" class="t4s-newsletter-parent t4s-custom-width-{{ bk_stts.custom_width }} t4s_newsletter_se t4s-newsl-des-{{ bk_stts.newl_des }} t4s-newsl-{{ bk_stts.newl_size }} t4s-has-btn-{{ bk_stts.source_btn }}" {%- render 'bk_cus_style',type: 'newsletter', bk_stts: bk_stts -%}>
+      {%- render 'newsletter', layout: bk_stts.newl_des, form_id: block.id, source_btn: bk_stts.source_btn, buttonIcon: bk_stts.news_icon -%}
+    </div>
+  {%- when 'payments' -%} 
+    {%- assign arr = bk_stts.svg | remove: ' ' | split:"," -%}
+    <div class="t4s-payment-footer-svg t4s-pr t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" id="b_{{ block.id }}" style="--height: {{ bk_stts.height }}px;--mgb: {{ bk_stts.mgb }}px;--mgb-mb: {{ mgb.mgb_mb }}px;">
+      {%- for img in arr -%}
+          {%- if img contains 'cust4__' -%}
+              {%- assign getIMG = img | remove_first:"cust4__" -%}
+              {%- assign image = images[getIMG] -%}
+              {%- if image == blank %}{% continue %}{% endif -%}
+              <img loading="lazy" class="lazyloadt4s" src="https://cdn.shopify.com/s/assets/payment_icons/generic-dfdcaf09b6731ca14dd7441354c0ad8bc934184eb15ae1fda6a6b9e307675485.svg" data-src="{{ image | image_url: width: 100 }}" width="{{ image.width }}" height="{{ image.height }}"  alt="{{ image.alt | escape }}" />
+          {%- else -%}
+              <img loading="lazy" class="lazyloadt4s" src="https://cdn.shopify.com/s/assets/payment_icons/generic-dfdcaf09b6731ca14dd7441354c0ad8bc934184eb15ae1fda6a6b9e307675485.svg" data-src="{{ img | payment_type_img_url }}" width="{{ img.width }}" height="{{ img.height }}"  alt="{{ img | replace: '_',' ' }}" />
+          {%- endif -%}
+      {%- endfor -%}
+    </div>
+  {%- when 'cus_socials' -%}
+    {{ 'icon-social.css' | asset_url | stylesheet_tag }}
+    {% liquid 
+      assign pri_cl_lightness       = bk_stts.pri_cl | color_extract: 'lightness'
+      assign pri_hover_cl_lightness       = bk_stts.pri_hover_cl | color_extract: 'lightness'
+      if pri_cl_lightness < 85
+        assign pri_cl2 = "#fff"
+      else 
+        assign pri_cl2 = "#000"
+      endif
+      if pri_hover_cl_lightness < 85
+        assign pri_hover_cl2 = "#fff"
+      else 
+        assign pri_hover_cl2 = "#000"
+      endif
+    -%}
+    <div id="b_{{ block.id }}" class="t4s-socials-block social-{{ block.id }}" style="--pri-cl: {{ bk_stts.pri_cl }};--pri-cl2: {{ pri_cl2 }};--pri-hover-cl: {{ bk_stts.pri_hover_cl }};--pri-hover-cl2: {{ pri_hover_cl2 }};--mgb: {{ bk_stts.mgb }}px;--mgb-tb: {{ bk_stts.mgb_tb }}px;--mgb-mb: {{ bk_stts.mgb_mb }}px; --bd-radius: {{ bk_stts.bd_radius }}px;">
+      {% if bk_stts.title != blank %}
+        <h3 class="t4s-socials-title t4s-footer-title">{{bk_stts.title}}</h3>
+      {% endif %}
+      <div class="t4s-list-socials">
+       {%- if bk_stts.social_mode == '1' -%} 
+         {%- assign follow_social = true -%} 
+       {%- else -%} 
+         {%- assign share_image = settings.share_image | default: page_image | default: settings.logo -%} 
+       {%- endif -%} 
+        {%- render 'social_sharing',style: bk_stts.social_style,use_color_set: bk_stts.use_color_set,size: bk_stts.social_size,space_h_item: bk_stts.space_h_item,space_h_item_mb: bk_stts.space_h_item_mb,space_v_item: bk_stts.space_v_item,space_v_item_mb: bk_stts.space_v_item_mb,share_permalink: shop.url,share_title: shop.name,share_image: share_image,follow_social: follow_social -%} 
+      </div> 
+    </div> 
+  {%- when 'cus_menu' -%} 
+    <div id="b_{{ block.id }}" class="t4s-footer-menu t4s-menu-style-{{ bk_stts.menu_style | default:"default" }}" style="--space-item: {{ bk_stts.space_item }}px;--space-item-tb: {{ bk_stts.space_item_tb }}px;--space-item-mb: {{ bk_stts.space_item_mb }}px;--mgb: {{ bk_stts.mgb }}px;--mgb-tb: {{ bk_stts.mgb_tb }}px;--mgb-mb: {{ bk_stts.mgb_mb }}px;"> 
+      <ul class="t4s-footer-linklist">
+        {%- for link in bk_stts.menu.links -%}
+          <li>
+            <a href="{{ link.url }}" class="t4s-footer-link {% if link.current %}t4s-footer-link-active{% endif %}" {% if link.current %}  aria-current="page" {% endif %}>
+              {%- render 'title_menu2',title: link.title -%}
+            </a>
+          </li>
+        {%- endfor -%} 
+      </ul>
+    </div>
+  {%- when 'copyR' -%}
+    {%- assign now_y = 'now' | date: '%Y' -%}
+    <div id="b_{{ block.id }}" class="t4s-coppy-right" style="--mgb: {{ bk_stts.mgb }}px;--mgb-tb: {{ bk_stts.mgb_tb }}px;--mgb-mb: {{ bk_stts.mgb_mb }}px;">
+        {{- bk_stts.text | replace:"[year]",now_y -}}
+    </div>
+{%- endcase -%}
+{%- if general_block or custom_button or newsletter -%}
+  {{ 'general-block.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- if custom_button -%}
+  {{ 'button-style.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- if newsletter -%}
+  {{ 'newsletter.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- if countdown -%} 
+  {{ 'countdown.css' | asset_url | stylesheet_tag }}
+  <template id="countdown-{{ sid }}">
+      <span class="countdown-days">
+          <span class="cd_timet4 cd-number">%-D</span>
+          <span class="cd_txtt4 cd-text">%!D:{{ "sections.countdown_text.day" | t }},{{ "sections.countdown_text.day_plural" | t }};</span>
+      </span>
+      <span class="countdown-hours">
+          <span class="cd_timet4 cd-number">%H</span> 
+          <span class="cd_txtt4 cd-text">%!H:{{ "sections.countdown_text.hr" | t }},{{ "sections.countdown_text.hr_plural" | t }};</span>
+      </span>
+      <span class="countdown-min">
+          <span class="cd_timet4 cd-number">%M</span> 
+          <span class="cd_txtt4 cd-text">%!M:{{ "sections.countdown_text.min" | t }},{{ "sections.countdown_text.min_plural" | t }};</span>
+      </span>
+      <span class="countdown-sec">
+          <span class="cd_timet4 cd-number">%S</span> 
+          <span class="cd_txtt4 cd-text">%!S:{{ "sections.countdown_text.sec" | t }},{{ "sections.countdown_text.sec_plural" | t }};</span>
+      </span>
+  </template>
+{%- endif -%}

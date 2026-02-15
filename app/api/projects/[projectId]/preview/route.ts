@@ -33,7 +33,7 @@ function getCacheTTL(contentType: string): number {
   if (contentType.includes('javascript') || contentType.includes('css'))
     return 5 * 60 * 1000; // 5 minutes for JS/CSS
   if (contentType.includes('text/html'))
-    return 0; // Never cache HTML (needs fresh script injection)
+    return 3 * 1000; // 3 seconds — prevents duplicate fetches on rapid navigation/back-nav
   return 10 * 1000; // 10 seconds for everything else (section fragments, etc.)
 }
 
@@ -208,23 +208,19 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
     if(typeof u!=='string')return u;
     // Skip analytics/tracking and static CDN assets — let them go direct
     if(SKIP_RX.test(u)||CDN_RX.test(u))return u;
+    // Preserve hash fragment — must stay outside the encoded path param
+    var hi=u.indexOf('#'),hash='';
+    if(hi!==-1){hash=u.slice(hi);u=u.slice(0,hi);}
     // 0. Query-string-only relative URLs (e.g. '?sections=cart-drawer')
-    //    The browser would resolve these against the proxy path, losing the
-    //    sections param. Prepend the original store path so the proxy
-    //    forwards the query string to Shopify correctly.
-    if(u.charAt(0)==='?')return P+encodeURIComponent(SP+u);
-    // 1. Absolute URL to page origin (e.g. http://localhost:3000/cart.js)
-    //    Strip origin prefix and treat as relative
-    if(u.startsWith(O+'/')){
-      u=u.slice(O.length);
-      // fall through to relative checks below
+    if(u.charAt(0)==='?'){
+      var sep0=SP.indexOf('?')!==-1?'&':'';
+      return P+encodeURIComponent(SP+(sep0?sep0+u.slice(1):u))+hash;
     }
+    // 1. Absolute URL to page origin (e.g. http://localhost:3000/cart.js)
+    if(u.startsWith(O+'/')){u=u.slice(O.length);}
     // 2. URL contains our proxy path prefix (from location.pathname usage)
-    //    e.g. /api/projects/.../preview?sections=cart-drawer
     if(u.startsWith(PP)){
       var rest=u.slice(PP.length);
-      // If it already has ?path=, merge any extra query params (like
-      // sections=) into the path value so they reach Shopify.
       if(rest.indexOf('path=')===0||rest.indexOf('?path=')!==-1){
         try{
           var pu=new URL(u,O);
@@ -235,23 +231,23 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
           });
           if(extras.length){
             var sep=pp.indexOf('?')!==-1?'&':'?';
-            return P+encodeURIComponent(pp+sep+extras.join('&'));
+            return P+encodeURIComponent(pp+sep+extras.join('&'))+hash;
           }
         }catch(e){}
-        return O+u;
+        return O+u+hash;
       }
-      // Otherwise reconstruct: use original store path + any query string
       var qs=rest.indexOf('?')!==-1?rest.slice(rest.indexOf('?')):'';
-      return P+encodeURIComponent(SP+(qs||''));
+      if(qs&&SP.indexOf('?')!==-1)qs='&'+qs.slice(1);
+      return P+encodeURIComponent(SP+(qs||''))+hash;
     }
     // 3. Relative URL (e.g. /cart.js, /search/suggest?q=foo)
-    if(u.startsWith('/')&&!u.startsWith('/api/'))return P+encodeURIComponent(u);
+    if(u.startsWith('/')&&!u.startsWith('/api/'))return P+encodeURIComponent(u)+hash;
     // 4. Absolute store-domain URL
-    if(u.startsWith(S))return P+encodeURIComponent(u.slice(S.length));
+    if(u.startsWith(S))return P+encodeURIComponent(u.slice(S.length))+hash;
     // 5. Any .myshopify.com URL (catches alternate/custom domains)
     var m=u.match(/^https?:\\/\\/[^/]*\\.myshopify\\.com(.*)/);
-    if(m)return P+encodeURIComponent(m[1]||'/');
-    return u;
+    if(m)return P+encodeURIComponent(m[1]||'/')+hash;
+    return u+hash;
   }
   // Intercept fetch
   var _f=window.fetch;
@@ -274,6 +270,60 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
     var _b=navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon=function(u,d){return _b(rw(u),d);};
   }
+  // Intercept <a> link clicks for in-iframe navigation
+  document.addEventListener('click',function(e){
+    if(e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
+    var el=e.target;
+    while(el&&el.tagName!=='A')el=el.parentElement;
+    if(!el||!el.href)return;
+    var raw=el.getAttribute('href');
+    if(!raw||raw.charAt(0)==='#')return;
+    if(/^(javascript|mailto|tel):/i.test(el.href))return;
+    if(el.hasAttribute('download'))return;
+    var tgt=(el.getAttribute('target')||'').toLowerCase();
+    if(tgt==='_blank')return;
+    var rewritten=rw(el.href);
+    if(rewritten!==el.href){
+      e.preventDefault();
+      window.location.href=rewritten;
+    }
+  },true);
+  // Intercept form submissions
+  document.addEventListener('submit',function(e){
+    var form=e.target;
+    if(!form||!form.action)return;
+    var rewritten=rw(form.action);
+    if(rewritten!==form.action){form.action=rewritten;}
+  },true);
+  // Intercept location.assign / location.replace
+  try{
+    var _la=Location.prototype.assign;
+    var _lr=Location.prototype.replace;
+    Location.prototype.assign=function(u){return _la.call(this,rw(u));};
+    Location.prototype.replace=function(u){return _lr.call(this,rw(u));};
+  }catch(e){}
+  // Intercept location.href setter
+  try{
+    var desc=Object.getOwnPropertyDescriptor(Location.prototype,'href');
+    if(desc&&desc.set){
+      var _hs=desc.set;
+      Object.defineProperty(Location.prototype,'href',{
+        set:function(v){return _hs.call(this,rw(v));},
+        get:desc.get,
+        configurable:true
+      });
+    }
+  }catch(e){}
+  // Intercept history.pushState / replaceState (only absolute store-domain URLs)
+  var _ps=history.pushState;
+  var _rs=history.replaceState;
+  function rwNav(u){
+    if(typeof u!=='string')return u;
+    if(u.startsWith(S)||/^https?:\\/\\/[^/]*\\.myshopify\\.com/.test(u))return rw(u);
+    return u;
+  }
+  history.pushState=function(s,t,u){return _ps.call(this,s,t,u!=null?rwNav(String(u)):u);};
+  history.replaceState=function(s,t,u){return _rs.call(this,s,t,u!=null?rwNav(String(u)):u);};
 })();
 </script>`;
 }

@@ -1,7 +1,11 @@
 import { Agent } from '../base';
 import { LIQUID_AGENT_PROMPT } from '../prompts';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
 import { parseLiquidAST } from '@/lib/liquid/liquid-ast';
-import type { AgentTask, AgentResult, CodeChange } from '@/lib/types/agent';
+import type { AgentTask, AgentResult, CodeChange, CodePatch } from '@/lib/types/agent';
+import { applyPatches } from '@/lib/types/agent';
+import { budgetFiles } from './prompt-budget';
+import { SPECIALIST_OUTPUT_SCHEMA } from './output-schema';
 
 /**
  * Liquid specialist agent.
@@ -17,10 +21,12 @@ export class LiquidAgent extends Agent {
   }
 
   formatPrompt(task: AgentTask): string {
-    const liquidFiles = task.context.files.filter(
+    // Budget files to 35k tokens, prioritizing liquid files
+    const budgeted = budgetFiles(task.context.files, 35_000);
+    const liquidFiles = budgeted.filter(
       (f) => f.fileType === 'liquid'
     );
-    const otherFiles = task.context.files.filter(
+    const otherFiles = budgeted.filter(
       (f) => f.fileType !== 'liquid'
     );
 
@@ -111,31 +117,58 @@ export class LiquidAgent extends Agent {
 
   parseResponse(raw: string, _task: AgentTask): AgentResult {
     try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      // Try direct parse first (structured outputs), fall back to regex
+      let jsonString: string | null = null;
+      if (AI_FEATURES.structuredOutputs) {
+        try { JSON.parse(raw); jsonString = raw; } catch { /* fallthrough */ }
+      }
+      if (!jsonString) {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        jsonString = jsonMatch?.[0] ?? null;
+      }
+      if (!jsonString) {
         return { agentType: 'liquid', success: true, changes: [] };
       }
 
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = JSON.parse(jsonString) as {
         changes?: Array<{
           fileId?: string;
           fileName?: string;
           originalContent?: string;
           proposedContent?: string;
+          patches?: CodePatch[];
           reasoning?: string;
+          confidence?: number;
         }>;
       };
 
-      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => ({
-        fileId: c.fileId ?? '',
-        fileName: c.fileName ?? '',
-        originalContent: c.originalContent ?? '',
-        proposedContent: c.proposedContent ?? '',
-        reasoning: c.reasoning ?? '',
-        agentType: 'liquid' as const,
-      }));
+      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => {
+        const originalContent = c.originalContent ?? '';
+        const patches = c.patches ?? [];
+        // Prefer patches; reconstruct proposedContent from them.
+        // Fall back to proposedContent if no patches provided.
+        const proposedContent = patches.length > 0
+          ? applyPatches(originalContent, patches)
+          : (c.proposedContent ?? '');
 
-      return { agentType: 'liquid', success: true, changes };
+        return {
+          fileId: c.fileId ?? '',
+          fileName: c.fileName ?? '',
+          originalContent,
+          proposedContent,
+          patches: patches.length > 0 ? patches : undefined,
+          reasoning: c.reasoning ?? '',
+          agentType: 'liquid' as const,
+          confidence: c.confidence ?? 0.8,
+        };
+      });
+
+      // Aggregate confidence: average across all changes (fallback 0.8)
+      const avgConfidence = changes.length > 0
+        ? changes.reduce((sum, ch) => sum + (ch.confidence ?? 0.8), 0) / changes.length
+        : 0.8;
+
+      return { agentType: 'liquid', success: true, changes, confidence: avgConfidence };
     } catch {
       return { agentType: 'liquid', success: true, changes: [] };
     }

@@ -8,8 +8,12 @@ import { Check, Edit3, X, ChevronRight } from 'lucide-react';
 
 export interface PlanStep {
   number: number;
-  description: string;
+  /** Step description (legacy field used by parsePlanSteps). */
+  description?: string;
+  /** Step text (used by tool-based plan cards). Fallback to description. */
+  text?: string;
   complexity?: 'simple' | 'moderate' | 'complex';
+  files?: string[];
 }
 
 interface PlanApprovalModalProps {
@@ -137,7 +141,7 @@ function StepRow({ step, checked, onToggle }: StepRowProps) {
 
       {/* Description + complexity */}
       <span className="flex-1 text-xs ide-text-2 leading-relaxed">
-        {step.description}
+        {step.description ?? step.text}
         {step.complexity && <ComplexityBadge complexity={step.complexity} />}
       </span>
     </label>

@@ -54,6 +54,10 @@ export interface PreviewBridge {
   querySelector(selector: string): Promise<ElementDetail | null>;
   injectCSS(css: string): Promise<{ injected: boolean }>;
   clearCSS(): Promise<{ cleared: boolean }>;
+  /** Phase 4a: Inject HTML into an element for live preview */
+  injectHTML(selector: string, html: string): Promise<{ injected: boolean; selector: string }>;
+  /** Phase 4a: Restore all injected HTML to original content */
+  clearHTML(): Promise<{ cleared: boolean; count: number }>;
   ping(): Promise<{ version: number; ready: boolean; url: string }>;
   isReady: boolean;
 }
@@ -184,6 +188,16 @@ export function usePreviewBridge(frameRef: React.RefObject<PreviewFrameHandle | 
     [send]
   );
 
+  const injectHTML = useCallback(
+    (selector: string, html: string) => send<{ injected: boolean; selector: string }>('injectHTML', { selector, html }),
+    [send]
+  );
+
+  const clearHTML = useCallback(
+    () => send<{ cleared: boolean; count: number }>('clearHTML'),
+    [send]
+  );
+
   const ping = useCallback(
     () => send<{ version: number; ready: boolean; url: string }>('ping'),
     [send]
@@ -197,6 +211,8 @@ export function usePreviewBridge(frameRef: React.RefObject<PreviewFrameHandle | 
     querySelector,
     injectCSS,
     clearCSS,
+    injectHTML,
+    clearHTML,
     ping,
     isReady,
   };

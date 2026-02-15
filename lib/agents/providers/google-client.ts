@@ -3,7 +3,7 @@
  * This file is kept for backward compatibility but is no longer used by the Agent base class.
  */
 
-import type { AIProviderClient } from './anthropic-client';
+import type { AIProviderClient } from './index';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**

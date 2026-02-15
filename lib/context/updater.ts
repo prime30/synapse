@@ -29,7 +29,7 @@ export class ContextUpdater {
     changeType: FileChangeType,
     fileId?: string
   ): Promise<void> {
-    this.cache.invalidate(projectId);
+    await this.cache.invalidate(projectId);
     console.log(
       `[ContextUpdater] File change: ${changeType}${fileId ? ` (file: ${fileId})` : ''} — cache invalidated for project ${projectId}`
     );
@@ -41,14 +41,14 @@ export class ContextUpdater {
    * dependencies, caches the result, and returns it.
    */
   async loadProjectContext(projectId: string): Promise<ProjectContext> {
-    const cached = this.cache.get(projectId);
+    const cached = await this.cache.get(projectId);
     if (cached) {
       return cached;
     }
 
     const context = await this.loader.loadProjectContext(projectId);
     context.dependencies = this.detector.detectDependencies(context.files);
-    this.cache.set(projectId, context);
+    await this.cache.set(projectId, context);
     return context;
   }
 
@@ -57,7 +57,7 @@ export class ContextUpdater {
    * Invalidates the cache and reloads from source.
    */
   async refreshActiveExecutions(projectId: string): Promise<void> {
-    this.cache.invalidate(projectId);
+    await this.cache.invalidate(projectId);
     await this.loadProjectContext(projectId);
   }
 }

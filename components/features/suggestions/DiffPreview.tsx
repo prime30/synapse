@@ -78,7 +78,7 @@ export function DiffPreview({
                 <div
                   key={`orig-${idx}`}
                   className={`flex items-start ${
-                    isChanged ? 'bg-red-500/10' : ''
+                    isChanged ? 'bg-red-500/10 dark:bg-red-500/5' : ''
                   }`}
                 >
                   <span className="ide-text-muted px-2 py-1 text-xs select-none">
@@ -86,7 +86,7 @@ export function DiffPreview({
                   </span>
                   <span
                     className={`flex-1 px-2 py-1 ${
-                      isChanged ? 'text-red-400 line-through' : 'ide-text'
+                      isChanged ? 'text-red-400 dark:text-red-300 line-through' : 'ide-text'
                     }`}
                   >
                     {item.originalLine ?? ''}
@@ -111,7 +111,7 @@ export function DiffPreview({
                 <div
                   key={`sugg-${idx}`}
                   className={`flex items-start ${
-                    isChanged ? 'bg-green-500/10' : ''
+                    isChanged ? 'bg-green-500/10 dark:bg-green-500/5' : ''
                   }`}
                 >
                   <span className="ide-text-muted px-2 py-1 text-xs select-none">
@@ -119,7 +119,7 @@ export function DiffPreview({
                   </span>
                   <span
                     className={`flex-1 px-2 py-1 ${
-                      isChanged ? 'text-green-400' : 'ide-text'
+                      isChanged ? 'text-green-400 dark:text-green-300' : 'ide-text'
                     }`}
                   >
                     {item.suggestedLine ?? ''}

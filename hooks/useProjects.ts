@@ -19,6 +19,8 @@ export interface Project {
   dev_theme_id?: string | null;
   /** Project status: 'active' | 'archived'. Undefined treated as 'active' for pre-migration compat. */
   status?: 'active' | 'archived' | null;
+  /** Thumbnail URL for home modal project cards */
+  thumbnail_url?: string | null;
 }
 
 export interface ReconcileResult {
@@ -153,6 +155,38 @@ export function useProjects(connectionId?: string | null) {
     },
   });
 
+  // ── Rename project ──────────────────────────────────────────────────────
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? 'Failed to rename project');
+      }
+      return res.json();
+    },
+    onMutate: async ({ id, name }: { id: string; name: string }) => {
+      await queryClient.cancelQueries({ queryKey: ['projects'] });
+      const previous = queryClient.getQueryData<Project[]>(['projects']);
+      queryClient.setQueryData<Project[]>(['projects'], (old) =>
+        (old ?? []).map((p) => (p.id === id ? { ...p, name } : p))
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['projects'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
   // ── Computed: active vs archived ──────────────────────────────────────────
   const allProjects = useMemo(
     () => projectsQuery.data ?? [],
@@ -207,6 +241,9 @@ export function useProjects(connectionId?: string | null) {
 
     deleteProject: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+
+    renameProject: (id: string, name: string) => renameMutation.mutateAsync({ id, name }),
+    isRenaming: renameMutation.isPending,
 
     getLastProjectId,
     setLastProjectId,

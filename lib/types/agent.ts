@@ -1,6 +1,9 @@
 /** Agent type identifiers for the multi-agent orchestration system */
 export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'json' | 'review';
 
+/** Routing tier for smart request classification */
+export type RoutingTier = 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+
 /** Message types exchanged between agents via the coordinator */
 export type MessageType = 'task' | 'result' | 'error' | 'question';
 
@@ -27,14 +30,44 @@ export interface AgentMessage {
   timestamp: Date;
 }
 
+/** A targeted search/replace patch for a code change */
+export interface CodePatch {
+  /** The exact text to find in the original file */
+  search: string;
+  /** The replacement text */
+  replace: string;
+}
+
 /** A proposed code change from a specialist agent */
 export interface CodeChange {
   fileId: string;
   fileName: string;
   originalContent: string;
   proposedContent: string;
+  /** Targeted search/replace patches (optional; proposedContent is reconstructed from these) */
+  patches?: CodePatch[];
   reasoning: string;
   agentType: AgentType;
+  /** Agent's confidence in this change (0-1). Below 0.7 shown as "Suggestion". */
+  confidence?: number;
+}
+
+/**
+ * Apply search/replace patches to original content using exact literal matching (indexOf + slice).
+ * Skips patches whose search string is not found (logs a warning instead of failing).
+ * Always returns the result — even if some patches fail.
+ */
+export function applyPatches(original: string, patches: CodePatch[]): string {
+  let result = original;
+  for (const patch of patches) {
+    const idx = result.indexOf(patch.search);
+    if (idx === -1) {
+      console.warn(`[applyPatches] Search string not found, skipping patch (first 80 chars): ${patch.search.slice(0, 80)}`);
+      continue;
+    }
+    result = result.slice(0, idx) + patch.replace + result.slice(idx + patch.search.length);
+  }
+  return result;
 }
 
 /** File context provided to agents for awareness */
@@ -45,6 +78,22 @@ export interface FileContext {
   content: string;
   /** Theme-relative path (e.g. sections/header.liquid) for theme structure awareness */
   path?: string;
+}
+
+/** Element metadata extracted from Shopify preview selection for smart file auto-selection */
+export interface ElementHint {
+  /** Normalized section ID (e.g., "featured-collection") */
+  sectionId?: string;
+  /** Raw data-section-type value */
+  sectionType?: string;
+  /** Block ID if applicable */
+  blockId?: string;
+  /** Element ID attribute */
+  elementId?: string;
+  /** Filtered CSS classes (excluding shopify-/js-/no- prefixes) */
+  cssClasses?: string[];
+  /** CSS selector path */
+  selector?: string;
 }
 
 /** Error reported by an agent */
@@ -72,6 +121,8 @@ export interface AgentContext {
   domContext?: string;
   /** Developer memory context (conventions, decisions, preferences) from EPIC 14 */
   memoryContext?: string;
+  /** Liquid diagnostic context (errors/warnings from TypeChecker + AST parser) for agent awareness */
+  diagnosticContext?: string;
 }
 
 /** A task delegated from the PM to a specialist */
@@ -98,11 +149,15 @@ export interface AgentResult {
   delegations?: DelegationTask[];
   reviewResult?: ReviewResult;
   analysis?: string;
+  /** Overall confidence in the result (0-1). Low confidence triggers review prompt. */
+  confidence?: number;
   error?: AgentError;
   /** p0: Scope Assessment Gate — PM signals the request needs clarification */
   needsClarification?: boolean;
   /** p0: Testing Always First — signal to inject "Verify this works" chip */
   suggestVerification?: boolean;
+  /** PM's self-assessed routing tier (may trigger tier escalation). */
+  selfAssessedTier?: string;
 }
 
 /** In-memory state for an active execution */

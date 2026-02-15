@@ -7,6 +7,7 @@ import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
 import { AgentCoordinator } from '@/lib/agents/coordinator';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/admin';
 import { recordUsageBatch } from '@/lib/billing/usage-recorder';
 import { checkUsageAllowance } from '@/lib/billing/usage-guard';
 import type { AIAction } from '@/lib/agents/model-router';
@@ -34,7 +35,13 @@ const executeSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
+    const rateLimit = await checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'X-RateLimit-Limit': String(rateLimit.limit), 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(Math.ceil(rateLimit.resetAt / 1000)) } },
+      );
+    }
 
     // ── Usage guard (B4): enforce plan limits before running agents ──
     const usageCheck = await checkUsageAllowance(userId);
@@ -50,16 +57,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await validateBody(executeSchema)(request);
+
+    // Use service client to bypass RLS — user is already authenticated via requireAuth above.
+    // This is needed for MCP requests that use Bearer tokens instead of cookies.
+    const serviceClient = createServiceClient();
     const supabase = await createClient();
 
-    // Load project files for context
-    const { data: files } = await supabase
+    // Load project files for context (service client bypasses RLS)
+    const { data: files } = await serviceClient
       .from('files')
       .select('id, name, path, file_type, content')
       .eq('project_id', body.projectId);
 
     // Load user preferences
-    const { data: preferences } = await supabase
+    const { data: preferences } = await serviceClient
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId);

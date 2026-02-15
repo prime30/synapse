@@ -1,0 +1,215 @@
+<!-- sections/top-blog-tags.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{%-liquid
+    assign sid = section.id
+    assign se_stts = section.settings  
+    assign se_blocks = section.blocks  
+    assign all_tags = blog.all_tags
+    assign blog_url =  blog.url
+    assign source = se_stts.source
+    assign stt_layout = se_stts.layout
+    assign stt_image_bg = se_stts.image_bg
+    if stt_layout == 't4s-se-container' 
+        assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+    elsif stt_layout == 't4s-container-wrap'
+        assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+    else
+        assign html_layout = '__' | split: '__'
+    endif 
+ -%}
+<div class="t4s-section-inner {{ stt_layout }}{% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{% endif %} {% render 'section_style', se_stts: se_stts -%} >
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}
+        <div class="t4s-container-inner{% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{% endif %}>{% endif -%}
+            <div class="t4s-row t4s-gx-0 t4s-row-cols-1 t4s-blog-count-{{ se_stts.show_count }}">
+                <ul data-main-filters-links class="t4s-col-item t4s-tags-filter t4s-tags-filter__border-{{ se_stts.enable_border }} t4s-text-center t4s-active-filters" style="--tags-mgb: {{ se_stts.mgb }}px;--tags-mgb-mb: {{ se_stts.mgb_mb }}px;">
+                    {%- if source == '1' -%}
+                        <li class="t4s-d-inline-flex"><a data-main-filters-link class="{% unless current_tags %}is--selected{% endunless %}" href="{{ blog_url }}">{{ 'blogs.filter_all' | t }}</a></li>
+                        {%- for tag in all_tags -%}
+                            {%- if current_tags contains tag -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}" class="is--selected">{{ tag | remove : 'blog_' | strip }}<span class="t4s-blog-count">{{ tag.total_count }}</span></a></li>
+                            {%- else -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}/tagged/{{ tag | handle }}">{{ tag | remove : 'blog_' | strip }}<span class="t4s-blog-count">{{ tag.total_count }}</span></a></li>
+                            {%- endif -%}
+                        {%- endfor -%}
+                    {%- elsif source == '2' -%}
+                        <li class="t4s-d-inline-flex"><a data-main-filters-link class="{% unless current_tags %}is--selected{% endunless %}" href="{{ blog_url }}">{{ 'blogs.filter_all' | t }}</a></li>
+                        {%- assign blog_tags = all_tags | join: ';' | split: ';' -%}
+                        {%- assign blog_tags_filter = blog_tags | where: 'blog_' -%}
+                        {%- for tag in blog_tags_filter -%}
+                            {%- if current_tags contains tag -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}" class="is--selected">{{ tag | remove : 'blog_' | strip }}</a></li>
+                            {%- else -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}/tagged/{{ tag | handle }}">{{ tag | remove : 'blog_' | strip }}</a></li>
+                            {%- endif -%}
+                        {%- endfor -%}
+                    {%- else -%}
+                        <li class="t4s-d-inline-flex"><a data-main-filters-link class="{% unless current_tags %} is--selected{% endunless %}" href="{{ blog_url }}">{{ 'blogs.filter_all' | t }}</a></li>
+                        {%- for block in section.blocks -%}
+                            {%- assign tag = block.settings.title -%}
+                            {%- if current_tags contains tag -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}" class="is--selected">{{ tag | remove : 'blog_' | strip }}</a></li>
+                            {%- elsif all_tags contains tag -%}
+                                <li class="t4s-d-inline-flex"><a data-main-filters-link href="{{ blog_url }}/tagged/{{ tag | handle }}">{{ tag | remove : 'blog_' | strip }}</a></li>
+                            {%- endif -%}
+                        {%- endfor -%}
+                    {%- endif -%}
+                </ul>
+            </div>
+    {{- html_layout[1] -}}
+</div>
+{%- style -%}
+    .t4s-blog-tags .t4s-tags-filter{
+        margin: 0px auto;
+        padding: 15px 20px;
+        margin-bottom: var(--tags-mgb);
+    }
+    .t4s-blog-tags .t4s-tags-filter__border-true{
+        border: 1px solid var(--border-color);
+    }
+    .t4s-blog-tags .t4s-tags-filter li{margin: 0px 22px;}
+    .t4s-blog-tags .t4s-tags-filter li a {
+        font-size: 16px;
+        line-height: 34px;
+        font-weight: 500;
+        color: var(--text-color);
+        position: relative;
+        cursor: pointer;
+    }
+    .t4s-blog-tags .t4s-tags-filter li a::after{
+        content: '';
+        position: absolute;
+        width: 0;
+        height: 2px;
+        background-color: var(--secondary-color);
+        transition: 0.3s all;
+        z-index: 1;
+        left: 0;
+        bottom: 0;
+    }
+    .t4s-blog-tags .t4s-tags-filter li a.is--selected::after{
+        width: 100%;
+    }
+    .t4s-blog-tags .t4s-blog-count{
+        position: absolute;
+        font-size: 11px;
+        font-weight: 400;
+        top: -4px;
+        right: -8px;
+        line-height: 24px;
+    }
+    .t4s-blog-tags .t4s-tags-filter li a:focus,
+    .t4s-tags-filter li a:hover,
+    .t4s-blog-tags .t4s-tags-filter li a.is--selected{
+        color: var(--secondary-color);
+    }
+    .t4s-blog-count-false .t4s-blog-count{display: none;}
+    @media(max-width:1025px)
+    {
+        .t4s-blog-tags .t4s-tags-filter li a {font-size: 14px;}
+        .t4s-blog-tags .t4s-tags-filter li{margin: 0px 16px;}
+    }
+    @media(max-width:767px)
+    {
+        .t4s-blog-tags .t4s-tags-filter{ margin-bottom: var(--tags-mgb-mb);}
+        .t4s-blog-tags .t4s-tags-filter li{margin: 0px 10px;}
+    }
+    @media (min-width: 1025px){
+        .t4s-blog-tags .t4s-tags-filter{
+            width: fit-content;
+            padding: 20.5px 106px;
+        }
+    }
+{%- endstyle -%}
+{% schema %}
+{
+    "name": "Filter tags",
+    "tag": "section",
+    "class": "t4s-section t4s-section-main t4s-blog-tags",
+    "settings": [
+        {
+            "type": "header",
+            "content": "1.General options"
+        },
+        {
+            "type": "radio",
+            "id": "source",
+            "default": "1",
+            "label": "Show all \/ Manually block",
+            "options": [
+                {
+                    "value": "1",
+                    "label": "Show all"
+                },
+                {
+                    "value": "2",
+                    "label": "From tags contains 'blog_'"
+                },
+                {
+                    "value": "3",
+                    "label": "Manually block"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "show_count",
+            "label": "Show count",
+            "info": "Count only show all. Not working manually block,from tags contains 'blog_'",
+            "default": false
+        },
+        {
+            "type": "checkbox",
+            "id": "enable_border",
+            "label": "Enable border",
+            "default": true
+        },
+        {
+            "type": "header",
+            "content": "2.Design options"
+        },
+        {
+            "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+            "options": [
+                { "value": "t4s-se-container", "label": "Container"},
+                { "value": "t4s-container-wrap", "label": "Wrapped container"},
+                { "value": "t4s-container-fluid", "label": "Full width"}
+            ]
+        },
+        {
+            "type": "range",
+            "id": "mgb",
+            "label": "Bottom space (Desktop)",
+            "max": 100,
+            "min": 0,
+            "step": 1,
+            "unit": "px",
+            "default": 50
+        },
+        {
+            "type": "range",
+            "id": "mgb_mb",
+            "label": "Bottom space (Mobile)",
+            "max": 100,
+            "min": 0,
+            "step": 1,
+            "unit": "px",
+            "default": 50
+        } 
+    ],
+    "blocks": [
+        {
+            "type": "tag",
+            "name": "Tag",
+            "limit": 10,
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "title",
+                    "label": "Tag name"
+                }
+            ]
+        }
+    ]
+}
+{% endschema %}

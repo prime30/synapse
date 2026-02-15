@@ -125,6 +125,12 @@ export function CodeBlock({
 
         {/* Action buttons — subtle until hover */}
         <div className="flex items-center gap-1 opacity-60 group-hover/codeblock:opacity-100 transition-opacity">
+          {/* Line count badge for large blocks */}
+          {lines.length > 50 && (
+            <span className="text-[10px] tabular-nums ide-text-quiet font-mono px-1.5 py-0.5">
+              {lines.length} lines
+            </span>
+          )}
           {/* Copy */}
           <button
             type="button"

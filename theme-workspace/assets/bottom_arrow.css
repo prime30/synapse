@@ -1,0 +1,60 @@
+button.t4s-scroll-bottom_arrow {
+    position: absolute;
+    left: 50%;
+    -webkit-transform: translateX(-50%);
+    -ms-transform: translateX(-50%);
+    transform: translateX(-50%);
+    bottom: -25px;
+    background-color: var(--t4s-dark-color);
+    color:  var(--t4s-light-color);
+    border-radius: 50%;
+    padding: 0;
+    width: 50px;
+    height: 50px;
+    z-index: 222;
+    overflow: hidden;
+}
+button.t4s-scroll-bottom_arrow.is--pos_2 { 
+    bottom: -28px;
+}
+button.t4s-scroll-bottom_arrow.is--pos_2:not(.is--style_simple) {
+    box-shadow: rgb(54 54 54 / 15%) 0px 2px 10px;
+}
+button.t4s-scroll-bottom_arrow.is--cl_light {
+    background-color: var(--t4s-light-color);
+    color:  var(--t4s-dark-color);
+}
+svg.t4s-icon--arrow-bottom {
+    width: 18px;
+    fill: currentColor;
+}
+button.t4s-scroll-bottom_arrow.is--style_simple {
+      background-color: transparent;
+  color:  var(--t4s-dark-color);
+}
+button.t4s-scroll-bottom_arrow.is--style_simple.is--cl_light {
+  color:  var(--t4s-light-color);
+}
+button.t4s-scroll-bottom_arrow.is--pos_1 {
+   bottom: 15px; 
+}
+button.is--style_simple>svg.t4s-icon--arrow-bottom {
+    width: 30px;
+}
+@media (-moz-touch-enabled: 0), (hover: hover) and (min-width: 1025px) { 
+    button.t4s-scroll-bottom_arrow:hover svg {
+        animation: 0.5s ease-in-out 0s 1 normal forwards running aninFromTopToBottom;
+    }
+}
+@keyframes aninFromTopToBottom { 
+  0% { transform: translateY(0px); }
+  25% { opacity: 0; transform: translateY(100%); }
+  50% { opacity: 0; transform: translateY(-100%); }
+  75% { opacity: 1; transform: translateY(0px); }
+}
+@-webkit-keyframes aninFromTopToBottom { 
+  0% { transform: translateY(0px); }
+  25% { opacity: 0; transform: translateY(100%); }
+  50% { opacity: 0; transform: translateY(-100%); }
+  75% { opacity: 1; transform: translateY(0px); }
+}

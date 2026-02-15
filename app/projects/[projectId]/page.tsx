@@ -1,26 +1,26 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import React, { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
 import { FileList } from '@/components/features/file-management/FileList';
+import { SearchPanel } from '@/components/features/file-management/SearchPanel';
 
-import { FileEditor } from '@/components/features/file-management/FileEditor';
+import { FileEditor, type FileEditorHandle } from '@/components/features/file-management/FileEditor';
 import { FileUploadModal } from '@/components/features/file-management/FileUploadModal';
 import { ImportThemeModal } from '@/components/features/file-management/ImportThemeModal';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import type { PreviewPanelHandle } from '@/components/preview/PreviewPanel';
-import { ActiveUsersPanel } from '@/components/collaboration/ActiveUsersPanel';
 // DesignTokenBrowser moved to dedicated Design System page; panel now shows summary + link
 import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
 import { VersionHistoryPanel } from '@/components/features/versions/VersionHistoryPanel';
 import { DiagnosticsPanel } from '@/components/diagnostics/DiagnosticsPanel';
 import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
-import { useFileTabs } from '@/hooks/useFileTabs';
+import { useFileTabs, PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useVersionHistory } from '@/hooks/useVersionHistory';
@@ -37,6 +37,8 @@ import { getLinkedFileIds, linkMultiple, isDismissed, dismissGroup } from '@/lib
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { ActivityBar } from '@/components/editor/ActivityBar';
 import { TopBar } from '@/components/editor/TopBar';
+import { DevReportModal } from '@/components/editor/DevReportModal';
+import { useDevReport } from '@/hooks/useDevReport';
 import { SectionNav } from '@/components/ui/SectionNav';
 import { SettingsModal } from '@/components/editor/SettingsModal';
 import { FileBreadcrumb } from '@/components/editor/FileBreadcrumb';
@@ -44,6 +46,7 @@ import { StatusBar } from '@/components/editor/StatusBar';
 import { BinarySyncIndicator } from '@/components/features/sync/BinarySyncIndicator';
 import { LocalSyncIndicator } from '@/components/features/sync/LocalSyncIndicator';
 import { UndoToast } from '@/components/ui/UndoToast';
+import { HomeModal } from '@/components/features/home/HomeModal';
 import { CommandPalette } from '@/components/editor/CommandPalette';
 import type { PaletteCommand } from '@/components/editor/CommandPalette';
 import { ThemeConsole } from '@/components/editor/ThemeConsole';
@@ -56,15 +59,21 @@ import type { WorkflowMatch } from '@/lib/ai/workflow-patterns';
 import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
 import { ChromaticSettingsProvider } from '@/hooks/useChromaticSettings';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
+import type { AnnotationData } from '@/components/preview/PreviewAnnotator';
+import { useLivePreview } from '@/hooks/useLivePreview';
+import { classifyTemplateFile } from '@/lib/preview/template-classifier';
 import type { TokenUsage } from '@/components/features/agents/AgentPromptPanel';
 import type { ThemeReviewReport as ThemeReviewReportData } from '@/lib/ai/theme-reviewer';
 import { useCanvasData } from '@/hooks/useCanvasData';
+import { useTemplateLayout } from '@/hooks/useTemplateLayout';
 import { useAuth } from '@/components/features/auth/AuthProvider';
 import { usePassiveContext } from '@/hooks/usePassiveContext';
 import { useDesignTokens } from '@/hooks/useDesignTokens';
 import { useMemory } from '@/hooks/useMemory';
 import { resolveFileId } from '@/lib/ai/file-path-detector';
+import { usePreviewVerification } from '@/hooks/usePreviewVerification';
 import { detectConventions, type ThemeFile } from '@/lib/ai/convention-detector';
+import { analyzeDiff } from '@/lib/ai/diff-analyzer';
 
 // EPIC 15: Lazy-load canvas (zero bundle cost for non-canvas users)
 const CanvasView = React.lazy(() =>
@@ -118,15 +127,21 @@ const MemoryPanel = dynamic(
   () => import('@/components/features/memory/MemoryPanel').then(m => ({ default: m.MemoryPanel })),
   { ssr: false }
 );
+const CustomizerMode = dynamic(
+  () => import('@/components/features/customizer/CustomizerMode').then(m => ({ default: m.CustomizerMode })),
+  { ssr: false }
+);
 
-type ViewMode = 'editor' | 'canvas';
+type ViewMode = 'editor' | 'canvas' | 'customize';
 
-/** MVP: map theme file path to storefront preview path; fallback to / for unsupported paths. */
+/** Map theme file path to storefront preview path via the template classifier. */
 function previewPathFromFile(filePath: string | null | undefined): string {
   if (!filePath) return '/';
-  if (filePath === 'templates/index.liquid') return '/';
-  // Follow-up: full template-to-route mapping (e.g. product, collection, page)
-  return '/';
+  if (!filePath.startsWith('templates/')) return '/';
+  const entry = classifyTemplateFile(filePath);
+  if (!entry) return '/';
+  // Static templates return their base path; resource templates return '/' (need a resource)
+  return entry.needsResource ? '/' : entry.previewBasePath;
 }
 
 export default function ProjectPage() {
@@ -135,98 +150,27 @@ export default function ProjectPage() {
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
 
+  const searchParams = useSearchParams();
+  const [showHomeModal, setShowHomeModal] = useState(searchParams.get('home') === '1');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeActivity, setActiveActivity] = useState<import('@/components/editor/ActivityBar').ActivityPanel>('files');
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
+  const [pendingAnnotation, setPendingAnnotation] = useState<AnnotationData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [activeFileContent, setActiveFileContent] = useState('');
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
 
+  // Tool card: preview path override (cleared when user navigates manually)
+  const [previewPathOverride, setPreviewPathOverride] = useState<string | null>(null);
+
   // EPIC 15: View mode toggle (Editor / Canvas)
   const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
-  // Right-panel vertical split: preview height as percentage (persisted)
-  const [previewPct, setPreviewPct] = useState(() => {
-    if (typeof window === 'undefined') return 50;
-    try {
-      const saved = localStorage.getItem('synapse-preview-pct');
-      if (saved) { const n = Number(saved); if (n >= 20 && n <= 80) return n; }
-    } catch { /* ignore */ }
-    return 50;
-  });
-  const rightPanelRef = useRef<HTMLDivElement>(null);
-  const previewPctRef = useRef(previewPct);
-  previewPctRef.current = previewPct;
-  const vDragging = useRef(false);
-  /** Snapshot at drag start so we use delta from start instead of current rect (avoids jump/jitter). */
-  const vDragStart = useRef<{ startY: number; startPct: number; startHeight: number } | null>(null);
-  const vDragMoveCount = useRef(0);
-  const vPendingClientY = useRef<number | null>(null);
-  const vRafScheduled = useRef(false);
-  const vRafId = useRef<number | null>(null);
-
-  // Persist preview split ratio
-  useEffect(() => {
-    try { localStorage.setItem('synapse-preview-pct', String(previewPct)); } catch { /* ignore */ }
-  }, [previewPct]);
-
-  // Vertical drag handlers for the preview/chat split (delta-based + rAF throttle to avoid jitter)
-  useEffect(() => {
-    const applyPending = () => {
-      vRafScheduled.current = false;
-      vRafId.current = null;
-      if (!vDragging.current || !vDragStart.current) return;
-      const clientY = vPendingClientY.current;
-      if (clientY === null) return;
-      const { startY, startPct, startHeight } = vDragStart.current;
-      const deltaY = clientY - startY;
-      const deltaPct = startHeight > 0 ? (deltaY / startHeight) * 100 : 0;
-      const pct = startPct + deltaPct;
-      const clamped = Math.min(80, Math.max(20, pct));
-      vDragMoveCount.current += 1;
-      setPreviewPct(clamped);
-    };
-
-    const handleMove = (e: MouseEvent | PointerEvent) => {
-      if (!vDragging.current || !vDragStart.current) return;
-      vPendingClientY.current = e.clientY;
-      if (!vRafScheduled.current) {
-        vRafScheduled.current = true;
-        vRafId.current = requestAnimationFrame(applyPending);
-      }
-    };
-
-    const handleUp = (e?: MouseEvent | PointerEvent) => {
-      if (e && 'pointerId' in e && e.target instanceof HTMLElement) {
-        try { e.target.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-      }
-      if (vRafId.current !== null) {
-        cancelAnimationFrame(vRafId.current);
-        vRafId.current = null;
-      }
-      vRafScheduled.current = false;
-      vPendingClientY.current = null;
-      if (vDragging.current) {
-        vDragging.current = false;
-        vDragStart.current = null;
-        vDragMoveCount.current = 0;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp as (e: PointerEvent) => void);
-    window.addEventListener('pointercancel', handleUp as () => void);
-    return () => {
-      if (vRafId.current !== null) cancelAnimationFrame(vRafId.current);
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp as (e: PointerEvent) => void);
-      window.removeEventListener('pointercancel', handleUp as () => void);
-    };
-  }, []);
+  // Preview tab — auto-open when preview is available
+  const previewTabAutoOpenRef = useRef(false);
 
   // A5: ThemeConsole state
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -238,6 +182,8 @@ export default function ProjectPage() {
   const [batchDiff, setBatchDiff] = useState<{ title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }> } | null>(null);
   const [themeReview, setThemeReview] = useState<ThemeReviewReportData | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [devReportOpen, setDevReportOpen] = useState(false);
+  const [devReportPrePush, setDevReportPrePush] = useState(false);
 
   // A5: QuickActionsToolbar state
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
@@ -246,6 +192,9 @@ export default function ProjectPage() {
 
   // EPIC 5: Ref to send messages to agent chat (QuickActions, Fix with AI)
   const sendMessageRef = useRef<((content: string) => void) | null>(null);
+
+  // Ref for AgentPromptPanel to expose recordApplyStats callback
+  const onApplyStatsRef = useRef<((stats: { linesAdded: number; linesDeleted: number; filesAffected: number }) => void) | null>(null);
 
   // EPIC 14: Convention detection runs once per session when files + memory are ready
   const conventionDetectedRef = useRef(false);
@@ -279,6 +228,7 @@ export default function ProjectPage() {
   const activeStore = useActiveStore(projectId);
   const shopify = useShopifyConnection(projectId);
   const { data: tokenData } = useDesignTokens(projectId);
+  const devReport = useDevReport(projectId);
   const connected = !!activeStore.connection || shopify.connected;
   const connection = activeStore.connection
     ? {
@@ -324,6 +274,35 @@ export default function ProjectPage() {
 
   // EPIC 15: Canvas dependency data (lazy-fetched only when canvas is active)
   const canvasData = useCanvasData(viewMode === 'canvas' ? projectId : null);
+
+  // EPIC 11: Template layout for customizer mode (lazy-fetched only when customize is active)
+  const templateLayout = useTemplateLayout(viewMode === 'customize' ? projectId : '');
+
+  // Section content for customizer — enriched with Liquid file content for schema parsing
+  const [enrichedSections, setEnrichedSections] = useState<
+    Array<import('@/hooks/useTemplateLayout').TemplateSection & { content?: string }>
+  >([]);
+  const enrichedSectionsRef = useRef<string>('');
+
+  useEffect(() => {
+    if (viewMode !== 'customize' || !templateLayout.layout) {
+      setEnrichedSections([]);
+      enrichedSectionsRef.current = '';
+      return;
+    }
+    const sections = templateLayout.layout.sections;
+    const key = sections.map((s) => `${s.id}:${s.type}`).join(',');
+    if (key === enrichedSectionsRef.current) return; // skip if unchanged
+    enrichedSectionsRef.current = key;
+
+    // Resolve section content asynchronously
+    import('@/lib/customizer/section-resolver').then(({ resolveSectionContent }) =>
+      resolveSectionContent(projectId, sections).then(setEnrichedSections),
+    ).catch(() => {
+      // Fallback: use sections without content
+      setEnrichedSections(sections.map((s) => ({ ...s, content: undefined })));
+    });
+  }, [viewMode, templateLayout.layout, projectId]);
 
   // Passive IDE context reporter — always enabled for logged-in users
   const { user: authUser } = useAuth();
@@ -447,12 +426,44 @@ export default function ProjectPage() {
     }
   }, [projectId, isCurrentProjectAccessible, setLastProjectId]);
 
+  // Clean up ?home=1 from URL after opening the modal
+  useEffect(() => {
+    if (typeof window !== 'undefined' && searchParams.get('home') === '1') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('home');
+      url.searchParams.delete('signed_in');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ref for FileEditor to expose save/cancel imperatively
+  const editorRef = useRef<FileEditorHandle>(null);
+
   // EPIC 1a: Ref for PreviewPanel to get DOM context for agent pipeline
   const previewRef = useRef<PreviewPanelHandle>(null);
   const getPreviewSnapshot = useCallback(async () => {
     if (!previewRef.current) return '';
     return previewRef.current.getDOMContext(3000);
   }, []);
+
+  // EPIC V3: Preview verification — before/after DOM snapshot comparison
+  const { captureBeforeSnapshot, verify: verifyPreview } = usePreviewVerification(previewRef);
+
+  // Phase 4a: Live preview hot-reload
+  const [livePreviewState, livePreviewActions] = useLivePreview();
+  const handleLiveChange = useCallback((change: { filePath: string; newContent: string }) => {
+    livePreviewActions.pushChange({ ...change, appliedAt: Date.now() });
+    // Inject CSS changes immediately into preview
+    const css = livePreviewActions.getAggregatedCSS();
+    if (css && previewRef.current) {
+      previewRef.current.injectCSS(css);
+    }
+  }, [livePreviewActions]);
+  const handleLiveSessionEnd = useCallback(() => {
+    livePreviewActions.endSession();
+    // Clear injected CSS after session — user reviews actual changes via ReviewBlock
+    previewRef.current?.clearCSS();
+  }, [livePreviewActions]);
 
   // Cmd/Ctrl+Shift+A: focus agent chat; Ctrl+P: command palette
   const agentChatRef = useRef<HTMLDivElement>(null);
@@ -497,6 +508,13 @@ export default function ProjectPage() {
     [tabs.activeFileId, rawFiles]
   );
 
+  // Clear preview path override when user manually navigates away from the preview tab
+  useEffect(() => {
+    if (tabs.activeFileId && tabs.activeFileId !== PREVIEW_TAB_ID && previewPathOverride) {
+      setPreviewPathOverride(null);
+    }
+  }, [tabs.activeFileId, previewPathOverride]);
+
   const presence = useWorkspacePresence(projectId, {
     filePath: activeFilePath ?? undefined,
   });
@@ -527,6 +545,15 @@ export default function ProjectPage() {
     !!previewThemeId &&
     !devThemeReady &&
     previewThemeId === (currentProject?.shopify_theme_id ?? null);
+
+  // Auto-open preview tab when preview becomes available (once)
+  const openPreviewTab = tabs.openPreviewTab;
+  useEffect(() => {
+    if (showPreview && !previewTabAutoOpenRef.current) {
+      previewTabAutoOpenRef.current = true;
+      openPreviewTab();
+    }
+  }, [showPreview, openPreviewTab]);
 
   const hasFiles = rawFiles.length > 0;
 
@@ -749,6 +776,21 @@ export default function ProjectPage() {
     setImportModalOpen(true);
   };
 
+  // ── Push to Shopify ──────────────────────────────────────────────────────
+  const handlePush = useCallback(async () => {
+    try {
+      await shopify.sync({ action: 'push' });
+      devReport.reset();
+      setDevReportOpen(false);
+      setDevReportPrePush(false);
+      setToast('Pushed to Shopify');
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setToast(`Push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setTimeout(() => setToast(null), 5000);
+    }
+  }, [shopify, devReport]);
+
   // ── Import success — generate worksets ─────────────────────────────────────
   const handleImportSuccess = () => {
     refreshFiles();
@@ -780,6 +822,16 @@ export default function ProjectPage() {
     setActiveFileContent(content);
   }, []);
 
+  // ── Derived state for Save + Lock in FileTabs ──────────────────────────────
+  const isActiveFileDirty = tabs.activeFileId ? tabs.unsavedFileIds.has(tabs.activeFileId) : false;
+  const isActiveFileLocked = tabs.activeFileId ? tabs.isLocked(tabs.activeFileId) : false;
+  const handleSaveActiveFile = useCallback(() => {
+    editorRef.current?.save();
+  }, []);
+  const handleLockToggle = useCallback(() => {
+    if (tabs.activeFileId) tabs.toggleLock(tabs.activeFileId);
+  }, [tabs]);
+
   // EPIC 2: Provide active file content for [RETRY_WITH_FULL_CONTEXT]
   const activeFileContentRef = useRef('');
   useEffect(() => {
@@ -802,6 +854,116 @@ export default function ProjectPage() {
     return resolveFileId(filePath, rawFiles);
   }, [rawFiles]);
 
+  // Phase 2: Resolve file path to its cached content (for diff views)
+  const handleResolveFileContent = useCallback((filePath: string) => {
+    const fileId = resolveFileId(filePath, rawFiles);
+    if (!fileId) return null;
+    const cached = queryClient.getQueryData<{ id: string; content: string }>(['file', fileId]);
+    return cached?.content ?? null;
+  }, [rawFiles, queryClient]);
+
+  // ── Tool card handlers (passed to AgentPromptPanel -> ChatInterface) ──
+
+  /** Open a plan file in the editor by path. Falls back to handleOpenFile. */
+  const handleOpenPlanFile = useCallback((filePath: string) => {
+    handleOpenFile(filePath);
+  }, [handleOpenFile]);
+
+  /** Navigate the preview panel to a specific path (from navigate_preview tool). */
+  const handleNavigatePreview = useCallback((path: string) => {
+    setPreviewPathOverride(path);
+    // Auto-switch to preview tab so user sees the navigation
+    if (tabs.activeFileId !== PREVIEW_TAB_ID) {
+      tabs.openTab(PREVIEW_TAB_ID);
+    }
+  }, [tabs]);
+
+  /** Create a new file from create_file tool, then open it in a tab. */
+  const handleConfirmFileCreate = useCallback(async (fileName: string, content: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fileName, content, fileType: 'liquid' }),
+      });
+      if (!res.ok) {
+        console.error('[handleConfirmFileCreate] Failed to create file:', await res.text());
+        return;
+      }
+      const json = await res.json();
+      const newFileId = json?.data?.id;
+
+      // Refresh files list so the tree picks it up
+      refreshFiles();
+
+      // Open the new file in a tab
+      if (newFileId) {
+        setTimeout(() => tabs.openTab(newFileId), 300);
+      }
+    } catch (err) {
+      console.error('[handleConfirmFileCreate] Error:', err);
+    }
+  }, [projectId, refreshFiles, tabs]);
+
+  // Handle applying code from AI response to an existing file
+  const handleApplyCode = useCallback(async (code: string, fileId: string, _fileName: string) => {
+    try {
+      // 1. Fetch current file content for diff
+      const getRes = await fetch(`/api/files/${fileId}`);
+      const oldContent = getRes.ok ? ((await getRes.json())?.data?.content ?? '') : '';
+
+      // 2. Update file with new content
+      const putRes = await fetch(`/api/files/${fileId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: code }),
+      });
+      if (!putRes.ok) {
+        console.error('[handleApplyCode] Failed to update file');
+        return;
+      }
+
+      // 3. Refresh files
+      refreshFiles();
+
+      // 4. Compute diff and report stats (non-blocking)
+      const diff = analyzeDiff(oldContent, code);
+      onApplyStatsRef.current?.({
+        linesAdded: diff.added + diff.modified,
+        linesDeleted: diff.removed + diff.modified,
+        filesAffected: 1,
+      });
+    } catch (err) {
+      console.error('[handleApplyCode] Error:', err);
+    }
+  }, [refreshFiles]);
+
+  // Handle saving a new file from AI response
+  const handleSaveCode = useCallback(async (code: string, fileName: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fileName, path: fileName, content: code }),
+      });
+      if (!res.ok) {
+        console.error('[handleSaveCode] Failed to create file');
+        return;
+      }
+
+      refreshFiles();
+
+      // Report stats for new file (non-blocking)
+      onApplyStatsRef.current?.({
+        linesAdded: code.split('\n').length,
+        linesDeleted: 0,
+        filesAffected: 1,
+      });
+    } catch (err) {
+      console.error('[handleSaveCode] Error:', err);
+    }
+  }, [projectId, refreshFiles]);
+
   // EPIC 2: Token usage handler
   const handleTokenUsage = useCallback((usage: TokenUsage) => {
     setTokenUsage(usage);
@@ -821,13 +983,19 @@ export default function ProjectPage() {
     if (selectedText && selectedText.length > 2) {
       setQuickActionsText(selectedText);
       setQuickActionsVisible(true);
-      // Position relative to editor container; use a fixed fallback position
-      // since we don't have direct Monaco cursor coords piped here yet
-      setQuickActionsPosition({ top: 80, left: 60 });
+      // Position is set by handleSelectionPosition below; keep current if available
     } else {
       setQuickActionsVisible(false);
     }
   }, [sidebar]);
+
+  // Selection position handler — receives coords from Monaco via FileEditor
+  const handleSelectionPosition = useCallback((pos: { top: number; left: number; text: string } | null) => {
+    if (!pos) return;
+    // Flip logic: if too close to top, show below the selection instead of above
+    const top = pos.top < 50 ? pos.top + 20 : pos.top;
+    setQuickActionsPosition({ top, left: pos.left });
+  }, []);
 
   // EPIC 1c + A5: Combined selection handler
   const handleEditorSelectionChange = useCallback((selectedText: string | null) => {
@@ -994,14 +1162,42 @@ export default function ProjectPage() {
 
       {/* ── Top Bar (push/pull, view toggle, command palette, user menu) ── */}
       <TopBar
-        onPush={() => {/* wired to Shopify sync later */}}
-        onPull={() => {/* wired to Shopify sync later */}}
+        onPush={async () => {
+          // If there are pending report changes, show the report with a pre-push warning
+          if (devReport.activated && devReport.data && devReport.data.summary.totalFiles > 0) {
+            setDevReportPrePush(true);
+            setDevReportOpen(true);
+            return;
+          }
+          await handlePush();
+        }}
+        onPull={async () => {
+          try {
+            await shopify.sync({ action: 'pull' });
+            refreshFiles();
+            setToast('Pulled from Shopify');
+            setTimeout(() => setToast(null), 3000);
+          } catch (err) {
+            setToast(`Pull failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            setTimeout(() => setToast(null), 5000);
+          }
+        }}
         syncStatus={connected ? (connection?.sync_status === 'syncing' ? 'syncing' : connection?.sync_status === 'error' ? 'error' : 'idle') : 'idle'}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onCommandPalette={() => setCommandPaletteOpen((prev) => !prev)}
         storeDomain={connection?.store_domain ?? null}
         connected={connected}
+        themeId={previewThemeId}
+        devReport={devReport.data?.summary ?? null}
+        isLoadingReport={devReport.isLoading}
+        onOpenReport={() => {
+          if (!devReport.data) devReport.refresh();
+          setDevReportOpen(true);
+        }}
+        onRefreshReport={devReport.refresh}
+        presence={presence}
+        onHomeClick={() => setShowHomeModal(true)}
       />
 
       {/* Toast notification overlay */}
@@ -1015,17 +1211,17 @@ export default function ProjectPage() {
 
       {/* ── Main 4-column layout ──────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
-        {/* ── Col 1: Activity Bar (icon rail) ────────────────────────────── */}
-        <ActivityBar
-          activePanel={activeActivity}
-          onPanelChange={setActiveActivity}
-          onSettingsClick={() => setSettingsOpen(true)}
-          projectName={currentProject?.name}
-          storeConnected={connected}
-        />
+        {/* ── Col 1: Activity Bar (icon rail) — hidden in customize mode ── */}
+        {viewMode !== 'customize' && (
+          <ActivityBar
+            activePanel={activeActivity}
+            onPanelChange={setActiveActivity}
+            onSettingsClick={() => setSettingsOpen(true)}
+          />
+        )}
 
         {/* ── Col 2: Left Panel (dynamic by activeActivity) ──────────────── */}
-        {activeActivity !== null && (
+        {viewMode !== 'customize' && activeActivity !== null && (
           <aside
             className="relative border-r ide-border-subtle flex-shrink-0 flex flex-col min-h-0 ide-surface"
             style={{ width: leftResize.width }}
@@ -1035,7 +1231,7 @@ export default function ProjectPage() {
               {activeActivity === 'files' && (
                 <>
                   <SectionNav
-                    title="Files"
+                    title={currentProject?.name ?? 'Files'}
                     sections={[{ header: 'Theme', items: [
                       { id: 'files', label: 'Files' },
                       { id: 'assets', label: 'Assets' },
@@ -1073,7 +1269,6 @@ export default function ProjectPage() {
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {filesNav === 'files' && (
                       <>
-                        <ActiveUsersPanel presence={presence} />
                         {hasFiles ? (
                           <FileList
                             projectId={projectId}
@@ -1081,6 +1276,10 @@ export default function ProjectPage() {
                             onAddFile={handleAddFile}
                             presence={presence}
                             snippetUsageCounts={snippetUsageCounts}
+                            activeFileId={tabs.activeFileId ?? null}
+                            activeFileContent={activeFileContent || null}
+                            activeFilePath={activeFile?.path ?? null}
+                            activeFileType={(activeFile?.file_type ?? null) as string | null}
                           />
                         ) : (
                           <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
@@ -1107,6 +1306,16 @@ export default function ProjectPage() {
                     )}
                   </div>
                 </>
+              )}
+
+              {/* ── Search panel ────────────────────────────────────────── */}
+              {activeActivity === 'search' && (
+                <SearchPanel
+                  projectId={projectId}
+                  onFileClick={handleFileClick}
+                  presence={presence}
+                  snippetUsageCounts={snippetUsageCounts}
+                />
               )}
 
               {/* ── Store panel ─────────────────────────────────────────── */}
@@ -1302,6 +1511,12 @@ export default function ProjectPage() {
                   onGroupSelect={handleGroupSelect}
                   onGroupClose={tabs.closeGroup}
                   onReorderTabs={tabs.reorderTabs}
+                  previewTabOpen={tabs.previewTabOpen}
+                  onClosePreviewTab={tabs.closePreviewTab}
+                  isActiveFileDirty={isActiveFileDirty}
+                  isActiveFileLocked={isActiveFileLocked}
+                  onSaveClick={handleSaveActiveFile}
+                  onLockToggle={handleLockToggle}
                 />
               </div>
             </div>
@@ -1339,7 +1554,63 @@ export default function ProjectPage() {
                 </div>
               )}
 
-              {tabs.activeFileId ? (
+              {/* ── Preview tab content (always-mounted, hidden when inactive) ── */}
+              {tabs.previewTabOpen && (
+                <div
+                  className={`flex-1 min-h-0 flex flex-col ${tabs.activeFileId === PREVIEW_TAB_ID ? '' : 'sr-only'}`}
+                  style={tabs.activeFileId !== PREVIEW_TAB_ID ? { position: 'absolute', width: 0, height: 0, overflow: 'hidden' } : undefined}
+                >
+                  {showPreview && previewThemeId ? (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                      <PreviewPanel
+                        ref={previewRef}
+                        storeDomain={connection!.store_domain}
+                        themeId={previewThemeId}
+                        projectId={projectId}
+                        path={previewPathOverride ?? previewPathFromFile(activeFilePath)}
+                        syncStatus={connection!.sync_status}
+                        isSourceThemePreview={isPreviewUsingSourceTheme}
+                        fill
+                        themeFiles={rawFiles.map((f) => ({ id: f.id, path: f.path }))}
+                        onFilesRefresh={() => queryClient.invalidateQueries({ queryKey: ['project-files', projectId] })}
+                        onElementSelected={(el) => {
+                          setSelectedElement(el);
+                          agentChatRef.current?.querySelector('textarea')?.focus();
+                        }}
+                        liveChangeCount={livePreviewState.changeCount}
+                        onAnnotation={(data) => {
+                          setPendingAnnotation(data);
+                          // Pre-fill the chat input with the annotation note
+                          const textarea = agentChatRef.current?.querySelector('textarea');
+                          if (textarea && data.note) {
+                            textarea.value = data.note;
+                            textarea.focus();
+                            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                          } else if (textarea) {
+                            textarea.focus();
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                      <div className="w-14 h-14 mb-3 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
+                        <svg className="w-7 h-7 ide-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm ide-text-muted font-medium">
+                        {connected && !previewThemeId
+                          ? 'Setting up preview theme…'
+                          : 'Import a theme or connect Shopify to see preview'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── File editor content ── */}
+              {tabs.activeFileId && tabs.activeFileId !== PREVIEW_TAB_ID ? (
                 <>
                   {/* EPIC 3: File breadcrumb */}
                   <FileBreadcrumb
@@ -1350,16 +1621,18 @@ export default function ProjectPage() {
                   {/* Editor area with relative positioning for QuickActionsToolbar overlay */}
                   <div ref={editorContainerRef} className="relative flex-1 min-h-0 flex flex-col">
                     <FileEditor
+                      ref={editorRef}
                       fileId={tabs.activeFileId}
                       fileType={
                         rawFiles.find((f) => f.id === tabs.activeFileId)?.file_type ??
                         'liquid'
                       }
+                      onSave={() => devReport.refresh()}
                       onMarkDirty={handleMarkDirty}
                       cursors={cursorsForActiveFile}
                       locked={tabs.isLocked(tabs.activeFileId)}
-                      onToggleLock={() => tabs.toggleLock(tabs.activeFileId!)}
                       onSelectionChange={handleEditorSelectionChange}
+                      onSelectionPosition={handleSelectionPosition}
                       onContentChange={handleContentChange}
                       onFixWithAI={handleFixWithAI}
                     />
@@ -1369,6 +1642,7 @@ export default function ProjectPage() {
                       isVisible={quickActionsVisible}
                       position={quickActionsPosition}
                       selectedText={quickActionsText}
+                      fileType={(activeFile?.file_type ?? 'liquid') as 'liquid' | 'javascript' | 'css' | 'other'}
                       onAction={handleQuickAction}
                       onDismiss={() => setQuickActionsVisible(false)}
                     />
@@ -1397,12 +1671,13 @@ export default function ProjectPage() {
                     filePath={activeFile?.path ?? null}
                     tokenUsage={tokenUsage}
                     activeMemoryCount={memory.activeConventionCount}
+                    cacheBackend={process.env.NEXT_PUBLIC_CACHE_BACKEND as 'redis' | 'memory' | undefined ?? undefined}
                   >
                     <LocalSyncIndicator projectId={projectId} />
                     <BinarySyncIndicator projectId={projectId} />
                   </StatusBar>
                 </>
-              ) : (
+              ) : tabs.activeFileId !== PREVIEW_TAB_ID ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 relative">
                   <h2 className="text-lg font-medium ide-text-2 mb-1">
                     No file selected
@@ -1418,7 +1693,7 @@ export default function ProjectPage() {
                     <BinarySyncIndicator projectId={projectId} />
                   </div>
                 </div>
-              )}
+              ) : null}
             </>
           )}
 
@@ -1450,11 +1725,98 @@ export default function ProjectPage() {
               />
             </Suspense>
           )}
+
+          {/* ── Customize view (EPIC 11) ───────────────────────────────── */}
+          {viewMode === 'customize' && (
+            templateLayout.isLoading ? (
+              <div className="flex-1 flex items-center justify-center ide-surface">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-sky-500 dark:border-sky-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs ide-text-3">Loading customizer…</span>
+                </div>
+              </div>
+            ) : templateLayout.error ? (
+              <div className="flex-1 flex items-center justify-center ide-surface">
+                <div className="flex flex-col items-center gap-3 text-center px-6">
+                  <div className="w-14 h-14 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
+                    <svg className="w-7 h-7 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" strokeWidth={1.5} />
+                      <line x1="12" y1="8" x2="12" y2="12" strokeWidth={1.5} />
+                      <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth={1.5} />
+                    </svg>
+                  </div>
+                  <p className="text-sm ide-text-muted font-medium">{templateLayout.error}</p>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('editor')}
+                    className="text-xs text-sky-500 hover:text-sky-400 transition-colors"
+                  >
+                    Back to Editor
+                  </button>
+                </div>
+              </div>
+            ) : templateLayout.templates.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center ide-surface">
+                <div className="flex flex-col items-center gap-3 text-center px-6">
+                  <div className="w-14 h-14 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
+                    <svg className="w-7 h-7 ide-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={1.5} />
+                      <path d="M3 9h18" strokeWidth={1.5} />
+                      <path d="M9 21V9" strokeWidth={1.5} />
+                    </svg>
+                  </div>
+                  <p className="text-sm ide-text-muted font-medium">
+                    No JSON templates found
+                  </p>
+                  <p className="text-xs ide-text-3 max-w-[280px]">
+                    The customizer requires JSON templates (templates/*.json). Import a Shopify Online Store 2.0 theme to use this feature.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('editor')}
+                    className="text-xs text-sky-500 hover:text-sky-400 transition-colors"
+                  >
+                    Back to Editor
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <CustomizerMode
+                previewUrl={`/api/projects/${projectId}/preview?path=/`}
+                templates={templateLayout.templates.map((t) => t.name)}
+                activeTemplate={templateLayout.activeTemplate ?? ''}
+                sections={enrichedSections}
+                connectionId={connection?.id ?? null}
+                themeId={previewThemeId ?? null}
+                projectId={projectId}
+                onTemplateChange={(templateName) => {
+                  const match = templateLayout.templates.find((t) => t.name === templateName);
+                  if (match) templateLayout.setActiveTemplate(match.path);
+                }}
+                onSectionsReorder={(fromIndex, toIndex) => {
+                  const layout = templateLayout.layout;
+                  if (!layout) return;
+                  const order = layout.sections.map((s) => s.id);
+                  const [moved] = order.splice(fromIndex, 1);
+                  order.splice(toIndex, 0, moved);
+                  templateLayout.reorderSections(order);
+                }}
+                onAddSection={() => {
+                  // Default: add a generic section (future: show section picker modal)
+                  templateLayout.addSection('custom-content');
+                }}
+                onRemoveSection={(sectionId) => templateLayout.removeSection(sectionId)}
+                onSettingsChange={(sectionId, settings) =>
+                  templateLayout.updateSectionSettings(sectionId, settings)
+                }
+                onExit={() => setViewMode('editor')}
+              />
+            )
+          )}
         </main>
 
-        {/* ── Col 4: Right — Preview (top) + Agent Chat (bottom) ─────────── */}
+        {/* ── Col 4: Right — Full-height Agent Chat ─────────────────────── */}
         <aside
-          ref={rightPanelRef}
           className="relative border-l ide-border-subtle flex-shrink-0 flex flex-col min-h-0 ide-surface"
           style={{ width: rightResize.width }}
         >
@@ -1465,66 +1827,6 @@ export default function ProjectPage() {
             currentWidth={rightResize.width}
             onResize={rightResize.setWidth}
             onDoubleClick={rightResize.resetWidth}
-          />
-
-          {/* Top: Preview (resizable via previewPct) */}
-          <div className="flex flex-col min-h-0 border-b ide-border-subtle" style={{ height: `${previewPct}%` }}>
-            {showPreview && previewThemeId ? (
-              <div className="flex-1 overflow-auto p-3">
-                <PreviewPanel
-                  ref={previewRef}
-                  storeDomain={connection!.store_domain}
-                  themeId={previewThemeId}
-                  projectId={projectId}
-                  path={previewPathFromFile(activeFilePath)}
-                  syncStatus={connection!.sync_status}
-                  isSourceThemePreview={isPreviewUsingSourceTheme}
-                  onElementSelected={(el) => {
-                    setSelectedElement(el);
-                    agentChatRef.current?.querySelector('textarea')?.focus();
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                <div className="w-14 h-14 mb-3 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
-                  <svg className="w-7 h-7 ide-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
-                  </svg>
-                </div>
-                <p className="text-sm ide-text-muted font-medium">
-                  {connected && !previewThemeId
-                    ? 'Setting up preview theme…'
-                    : 'Import a theme or connect Shopify to see preview'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* ── Vertical resize handle between preview and chat ──────── */}
-          <button
-            type="button"
-            className="relative h-[5px] shrink-0 cursor-row-resize bg-transparent hover:bg-accent/30 dark:hover:bg-accent/40 active:bg-accent/50 transition-colors duration-75 focus:outline-none"
-            onPointerDown={(e) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              const latestPct = previewPctRef.current;
-              if (rightPanelRef.current) {
-                const rect = rightPanelRef.current.getBoundingClientRect();
-                vDragStart.current = {
-                  startY: e.clientY,
-                  startPct: latestPct,
-                  startHeight: rect.height,
-                };
-              }
-              vDragging.current = true;
-              vDragMoveCount.current = 0;
-              document.body.style.cursor = 'row-resize';
-              document.body.style.userSelect = 'none';
-            }}
-            onDoubleClick={() => setPreviewPct(50)}
-            aria-label="Resize preview and chat"
           />
 
           {/* A5: IntentCompletionPanel — workflow step tracker (when a workflow is active) */}
@@ -1555,14 +1857,14 @@ export default function ProjectPage() {
             />
           )}
 
-          {/* Bottom: Agent Chat (fills remaining space) */}
+          {/* Agent Chat — fills full right sidebar */}
           <div ref={agentChatRef} className="flex-1 flex flex-col min-h-0 p-2">
-            {/* A7: Agent chat header with Memory button */}
+            {/* Agent chat header with Memory button */}
             <div className="flex items-center justify-end mb-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setMemoryOpen(true)}
-                className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium ide-text-3 hover:text-purple-400 ide-hover rounded transition-colors"
+                className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium ide-text-3 hover:text-accent ide-hover rounded transition-colors"
                 title="Open Developer Memory"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -1582,12 +1884,26 @@ export default function ProjectPage() {
               hasShopifyConnection={connected}
               fileCount={rawFiles.length}
               getPreviewSnapshot={getPreviewSnapshot}
+              onApplyCode={handleApplyCode}
+              onSaveCode={handleSaveCode}
               getActiveFileContent={getActiveFileContent}
               onTokenUsage={handleTokenUsage}
               getPassiveContext={passiveContext.getContextString}
               onOpenFile={handleOpenFile}
               resolveFileId={handleResolveFileId}
+              resolveFileContent={handleResolveFileContent}
               sendMessageRef={sendMessageRef}
+              onApplyStatsRef={onApplyStatsRef}
+              onOpenPlanFile={handleOpenPlanFile}
+              onNavigatePreview={handleNavigatePreview}
+              onConfirmFileCreate={handleConfirmFileCreate}
+              captureBeforeSnapshot={captureBeforeSnapshot}
+              verifyPreview={verifyPreview}
+              pendingAnnotation={pendingAnnotation}
+              onClearAnnotation={() => setPendingAnnotation(null)}
+              onLiveChange={handleLiveChange}
+              onLiveSessionStart={livePreviewActions.startSession}
+              onLiveSessionEnd={handleLiveSessionEnd}
             />
           </div>
         </aside>
@@ -1606,6 +1922,20 @@ export default function ProjectPage() {
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         onImportSuccess={handleImportSuccess}
+      />
+
+      <HomeModal
+        isOpen={showHomeModal}
+        onClose={() => setShowHomeModal(false)}
+        currentProjectId={projectId}
+        onSelectProject={(id) => {
+          setShowHomeModal(false);
+          router.push(`/projects/${id}`);
+        }}
+        onImportSuccess={(id) => {
+          setShowHomeModal(false);
+          if (id) router.push(`/projects/${id}`);
+        }}
       />
 
       <SettingsModal
@@ -1692,6 +2022,20 @@ export default function ProjectPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {devReportOpen && devReport.data && (
+        <DevReportModal
+          report={devReport.data}
+          prePush={devReportPrePush}
+          onClose={() => {
+            setDevReportOpen(false);
+            setDevReportPrePush(false);
+          }}
+          onConfirmPush={async () => {
+            await handlePush();
+          }}
+        />
       )}
     </div>
     </EditorSettingsProvider>

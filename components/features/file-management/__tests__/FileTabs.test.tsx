@@ -16,6 +16,10 @@ describe('FileTabs', () => {
     onAddFile: () => {},
     onNextTab: () => {},
     onPrevTab: () => {},
+    isActiveFileDirty: false,
+    isActiveFileLocked: false,
+    onSaveClick: () => {},
+    onLockToggle: () => {},
   };
 
   it('renders open tabs', () => {
@@ -24,8 +28,8 @@ describe('FileTabs', () => {
     expect(screen.getByText(/theme/)).toBeDefined();
   });
 
-  it('renders add button', () => {
+  it('renders save button when file is active', () => {
     render(<FileTabs {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /add file/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /save/i })).toBeDefined();
   });
 });

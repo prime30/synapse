@@ -168,3 +168,84 @@ function truncate(str: string, maxLen: number): string {
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
+
+// ── EPIC V3: Diff-friendly output mode ──────────────────────────────────────
+
+/**
+ * Format a DOM snapshot into a flat, diff-friendly representation.
+ *
+ * Unlike formatDOMContext (which produces indented tree output for LLM prompts),
+ * this produces a flat list of element descriptors suitable for structural
+ * comparison between before/after snapshots.
+ *
+ * Each line describes one element:
+ *   tag#id.class1.class2 [section:X] [visible:true] [src:url]
+ *
+ * Returns empty string if the snapshot is empty or undefined.
+ */
+export function formatDOMForDiff(snapshot: DOMSnapshot | undefined | null): string {
+  if (!snapshot || !snapshot.elements?.length) return '';
+
+  const lines: string[] = [];
+  flattenForDiff(snapshot.elements, lines);
+
+  let result = lines.join('\n');
+  if (result.length > MAX_CHARS) {
+    result = result.slice(0, MAX_CHARS - 50) + '\n... (truncated)';
+  }
+
+  return result;
+}
+
+/**
+ * Convert a DOMSnapshot to the lightweight DOMElement format used by
+ * preview-verifier's compareSnapshots function.
+ */
+export function snapshotToDOMElements(snapshot: DOMSnapshot | undefined | null): import('@/lib/agents/preview-verifier').DOMElement[] {
+  if (!snapshot || !snapshot.elements?.length) return [];
+  return snapshot.elements.map(convertElement);
+}
+
+function convertElement(el: DOMSnapshotElement): import('@/lib/agents/preview-verifier').DOMElement {
+  return {
+    tag: el.tag,
+    id: el.id ?? undefined,
+    classes: el.classes,
+    text: el.textPreview,
+    visible: el.styles?.display !== 'none' && el.styles?.visibility !== 'hidden',
+    src: el.tag === 'img' ? el.dataAttributes?.src ?? el.styles?.backgroundImage : undefined,
+    children: el.children?.map(convertElement),
+  };
+}
+
+/** Recursively flatten elements into diff-friendly single-line descriptors. */
+function flattenForDiff(elements: DOMSnapshotElement[], lines: string[]): void {
+  for (const el of elements) {
+    const parts: string[] = [];
+
+    // Element descriptor
+    let desc = el.tag;
+    if (el.id) desc += `#${el.id}`;
+    if (el.classes?.length) desc += `.${el.classes.slice(0, 4).join('.')}`;
+    parts.push(desc);
+
+    // Section info
+    if (el.sectionId) parts.push(`[section:${el.sectionId}]`);
+
+    // Visibility
+    const isHidden = el.styles?.display === 'none' || el.styles?.visibility === 'hidden';
+    parts.push(`[visible:${isHidden ? 'false' : 'true'}]`);
+
+    // Image src
+    if (el.tag === 'img' && el.dataAttributes?.src) {
+      parts.push(`[src:${truncate(el.dataAttributes.src, 80)}]`);
+    }
+
+    lines.push(parts.join(' '));
+
+    // Recurse
+    if (el.children?.length) {
+      flattenForDiff(el.children, lines);
+    }
+  }
+}

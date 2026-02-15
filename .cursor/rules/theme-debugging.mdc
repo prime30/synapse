@@ -1,0 +1,110 @@
+---
+description: Systematic search and debugging methodology for Shopify themes. Always apply when investigating theme display bugs or searching for files.
+alwaysApply: true
+---
+
+# Theme File Search and Debugging Methodology
+
+## 1. Start From Intent, Not Filenames
+
+Translate user intent into the rendering chain BEFORE searching:
+
+- "product image not showing" -> templates/product*.json -> sections/main-product*.liquid -> snippets/product-thumbnail*.liquid -> assets/lazysizes*.js
+- "header menu broken" -> layout/theme.liquid -> sections/header*.liquid -> snippets/menu-*.liquid -> assets/header*.js
+- "cart not updating" -> templates/cart*.json -> sections/main-cart*.liquid -> assets/cart*.js
+
+Rule: Always trace the full rendering chain. Never grep a single keyword and stop.
+
+## 2. Multi-Strategy Search (Parallel)
+
+Use at least 2 strategies simultaneously:
+
+1. Glob for file name patterns
+2. Grep for code patterns (image_url, lazyload, opacity:0, display:none)
+3. Reference trace: read a file, follow its render/include/asset_url calls
+4. Semantic search for concepts when keywords are not enough
+
+## 3. The Rendering Chain
+
+```
+layout/theme.liquid           <- Global wrapper
+  templates/<page>.json       <- Section declarations (NOT rendering code)
+    sections/<type>.liquid    <- Actual rendering logic
+      snippets/<name>.liquid  <- Reusable partials
+        assets/<name>.js|css  <- Behavior and styling
+```
+
+Key insight: Template JSON only declares section order. Rendering code is in sections and snippets. JavaScript in assets controls visibility.
+
+## 4. Form Multiple Hypotheses
+
+For "X not showing" issues, check ALL of these:
+
+- Liquid rendering: conditional logic, variable assignment
+- CSS visibility: opacity:0, display:none, visibility:hidden, height:0
+- JS interference: lazy-load failures, slider errors, DOM manipulation
+- Asset loading: 404 errors, CORS, parse errors
+- Specificity conflicts: !important, inline styles, JS-injected styles
+
+Rule: Check at least 2-3 hypotheses before proposing a fix.
+
+## 5. The Escalation Ladder
+
+Widen systematically when the obvious file does not have the answer:
+
+1. Check the snippet (markup is often one level deeper)
+2. Check JavaScript assets (lazy-loaders, sliders control visibility)
+3. Check CSS assets (search for element classes in all CSS files)
+4. Check layout/theme.liquid (global scripts, preloaders, body class)
+5. Check config/settings_data.json (feature toggles)
+6. Check third-party scripts (app scripts, CDN scripts, jQuery)
+7. Ask for browser diagnostics (console, computed styles, DOM inspector)
+
+Rule: Never say "I cannot find it." Say what you checked and what file you still need.
+
+## 6. Cross-File Awareness
+
+The bug is rarely where expected:
+
+- Image not showing -> check JS lazy-loader, not just Liquid
+- Layout broken -> check CSS asset, not just section HTML
+- Content flickering -> check JS that manipulates display/opacity after load
+- Style not applying -> check specificity and !important rules
+- Works on one template but not another -> check template.suffix in theme.liquid
+
+## 7. Confidence Gating
+
+- HIGH (above 80%): See the exact line. Propose fix directly.
+- MEDIUM (40-80%): Likely cause found. Propose fix AND mention alternatives.
+- LOW (below 40%): Not enough context. DO NOT GUESS. List needed files and why.
+
+## 8. When the First Fix Fails
+
+DO NOT repeat the same approach. Escalate:
+
+1. Re-read files for patterns you missed (especially JS on page load)
+2. Search element classes across ALL asset files
+3. Check !important, inline styles, JS-injected styles
+4. Check layout/theme.liquid for global interference
+5. Consider third-party scripts
+6. Ask for browser console output or computed styles
+
+Rule: Same fix twice without result means the problem is in a different file. Widen search.
+
+## 9. Third-Party Theme Patterns
+
+- Custom lazy-loading: lazySizesT4, lozad, IntersectionObservers
+- Slider libraries: Slick, Flickity, Swiper, Glide
+- jQuery dependency: check layout/theme.liquid for script tags
+- CSS prefixes: t4s-, tt-, nt-, tc-
+- Opacity patterns: hide with opacity:0, reveal via JS class toggle
+- Template suffixes: template.suffix controls page variant rendering
+
+## 10. Verification Protocol
+
+After every fix:
+1. Re-trace the rendering chain to confirm the fix location
+2. Check for other files that reference the same element/class
+3. Consider edge cases: other templates, mobile, JS disabled
+4. Confirm the script/stylesheet loads on the affected page
+5. Check CSS specificity against existing rules

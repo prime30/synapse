@@ -62,38 +62,27 @@ describe('registerAgentTools', () => {
     expect(agentTool!.inputSchema.required).toContain('userRequest');
   });
 
-  it('handler calls API and polls until completion', async () => {
-    // Mock getExecutionStatus to return 'running' once, then 'completed'
-    let callCount = 0;
-    apiClient.getExecutionStatus.mockImplementation(async () => {
-      callCount++;
-      if (callCount < 2) {
-        return {
-          data: {
-            status: 'running',
-            activeAgents: ['coder'],
+  it('handler calls API and returns synchronous result', async () => {
+    // Implementation now executes synchronously — no polling
+    apiClient.executeAgents.mockResolvedValue({
+      success: true,
+      data: {
+        executionId: 'exec-123',
+        proposedChanges: [
+          {
+            fileId: 'file-1',
+            fileName: 'layout.liquid',
+            originalContent: '<div>old</div>',
+            proposedContent: '<div>new</div>',
+            reasoning: 'Improved layout structure',
+            agentType: 'coder',
           },
-        };
-      }
-      return {
-        data: {
-          status: 'completed',
-          proposedChanges: [
-            {
-              fileId: 'file-1',
-              fileName: 'layout.liquid',
-              originalContent: '<div>old</div>',
-              proposedContent: '<div>new</div>',
-              reasoning: 'Improved layout structure',
-              agentType: 'coder',
-            },
-          ],
-          reviewResult: {
-            approved: true,
-            issues: [],
-          },
+        ],
+        reviewResult: {
+          approved: true,
+          issues: [],
         },
-      };
+      },
     });
 
     registerAgentTools(registry, apiClient as never, authManager as never);
@@ -107,17 +96,15 @@ describe('registerAgentTools', () => {
     // Should have called executeAgents
     expect(apiClient.executeAgents).toHaveBeenCalledWith('proj-1', 'Add a hero section');
 
-    // Should have polled execution status
-    expect(apiClient.getExecutionStatus).toHaveBeenCalledWith('exec-123');
-    expect(apiClient.getExecutionStatus).toHaveBeenCalledTimes(2);
+    // Synchronous — no polling
+    expect(apiClient.getExecutionStatus).not.toHaveBeenCalled();
 
-    // Should return the completed result
+    // Should return the full result
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.executionId).toBe('exec-123');
-    expect(parsed.status).toBe('completed');
-    expect(parsed.proposedChanges).toHaveLength(1);
-    expect(parsed.proposedChanges[0].fileName).toBe('layout.liquid');
-    expect(parsed.reviewResult.approved).toBe(true);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data.proposedChanges).toHaveLength(1);
+    expect(parsed.data.proposedChanges[0].fileName).toBe('layout.liquid');
+    expect(parsed.data.reviewResult.approved).toBe(true);
   });
 
   it('throws AUTH_REQUIRED when not authenticated', async () => {

@@ -246,7 +246,16 @@ export class TypeChecker {
     nodes: LiquidASTNode[],
     assignedTypes?: Map<string, string>,
     scopeTracker?: ScopeTracker,
+    customFilters?: string[],
   ): TypeIssue[] {
+    // Register custom filters as pass-through (any -> any) so they aren't flagged
+    if (customFilters) {
+      for (const name of customFilters) {
+        if (!this.filterMap.has(name)) {
+          this.filterMap.set(name, { inputType: 'any', outputType: 'any' });
+        }
+      }
+    }
     const issues: TypeIssue[] = [];
     const varTypes = assignedTypes ?? new Map<string, string>();
 

@@ -62,24 +62,15 @@ export function registerAgentTools(registry, apiClient, authManager) {
             const projectId = args.projectId;
             const userRequest = args.userRequest;
             logger.info('Starting agent execution', { projectId, userRequest });
-            // Start execution
+            // Execute synchronously — the API returns the full result
             const execResult = await apiClient.executeAgents(projectId, userRequest);
-            const executionId = execResult.data.executionId;
-            // Poll for completion
-            const poller = new ExecutionPoller(apiClient);
-            const result = await poller.poll(executionId);
             logger.info('Agent execution complete', {
-                executionId,
-                status: result.status,
-                changeCount: result.proposedChanges?.length ?? 0,
+                status: execResult.success ? 'completed' : 'failed',
             });
             return {
                 content: [{
                         type: 'text',
-                        text: JSON.stringify({
-                            executionId,
-                            ...result,
-                        }),
+                        text: JSON.stringify(execResult),
                     }],
             };
         },

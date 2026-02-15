@@ -68,13 +68,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 const patchSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1).max(200).optional(),
+  archived: z.boolean().optional(),
 });
 
 /**
  * PATCH /api/projects/[projectId]/agent-chat/sessions/[sessionId]
  *
- * Update session title.
+ * Update session title and/or archive status.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -87,17 +88,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json().catch(() => ({}));
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) {
-      throw APIError.badRequest('title is required (1-200 chars)');
+      throw APIError.badRequest('Invalid request body');
+    }
+
+    const updates: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (parsed.data.title !== undefined) {
+      updates.title = parsed.data.title;
+    }
+
+    if (parsed.data.archived !== undefined) {
+      updates.archived_at = parsed.data.archived ? new Date().toISOString() : null;
     }
 
     const { error } = await supabase
       .from('ai_sessions')
-      .update({ title: parsed.data.title, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', sessionId);
 
     if (error) throw error;
 
-    return successResponse({ id: sessionId, title: parsed.data.title });
+    return successResponse({ id: sessionId, ...updates });
   } catch (error) {
     return handleAPIError(error);
   }

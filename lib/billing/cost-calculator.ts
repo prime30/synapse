@@ -8,10 +8,9 @@
 // Per-million-token rates in dollars
 const MODEL_RATES: Record<string, { input: number; output: number }> = {
   // Anthropic
-  'claude-sonnet-4-20250514': { input: 3.0, output: 15.0 },
-  'claude-opus-4-20250514': { input: 15.0, output: 75.0 },
-  'claude-3-5-haiku-20241022': { input: 0.25, output: 1.25 },
-  'claude-haiku-3-20250515': { input: 0.25, output: 1.25 },
+  'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0 },
+  'claude-opus-4-6': { input: 15.0, output: 75.0 },
+  'claude-haiku-4-5-20251001': { input: 1.0, output: 5.0 },
 
   // OpenAI
   'gpt-4o': { input: 2.5, output: 10.0 },

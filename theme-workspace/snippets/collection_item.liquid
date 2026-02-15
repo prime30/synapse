@@ -1,0 +1,61 @@
+{%- liquid
+  assign collection = collections[bk_stts.collection]
+  assign image = bk_stts.image | default: collection.image
+  assign title = bk_stts.title | default: collection.title
+  assign collection_link = bk_stts.collection_link | default: collection.url
+  assign all_products_count = collection.all_products_count | default: 0
+ -%}
+<div class="t4s-collection-content t4s-pr t4s-eff-img-{{ img_effect }}">
+  <div class="t4s-coll-img t4s-pr t4s-oh t4s-eff t4s-eff-{{ b_effect }}" data-cacl-slide>
+    {% if bk_stts.collection_badge != blank %}
+      <span class="t4s-collection-badge t4s-text-center t4s-pa">{{ bk_stts.collection_badge }}</span>
+    {% endif %}
+    <a class="t4s_collection_item_link t4s-img-wrap t4s-d-block" href="{{ collection_link }}" target="{{ open_link }}">
+      <div class="t4s_ratio t4s-bg-11" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1.2 }}; {%- if image != blank -%}background: url({{ image | image_url: width: 1 }}); {%- endif -%}" >
+        {%- if image != blank -%}
+          <img {% if image.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image.presentation.focal_point}}"{% endif %} loading="lazy" class="xx lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+        {%- else -%}
+          {{ 'collection-' | append: current | placeholder_svg_tag: 't4s-placeholder-svg t4s-obj-eff' }}  
+        {%- endif -%}
+      </div>
+    </a>
+  </div>
+  {%- if title != blank -%}
+    {%- if collection_des != "11" -%}
+      <div class="t4s-collection-wrapper">
+        <span class="t4s-collection-wrapper-content t4s-pr">
+          <a class="t4s-collection-title" href="{{ collection_link }}" target="{{ open_link }}">
+            {%- if collection_des == "1" or collection_des == "2" or collection_des == "8" -%}
+              {%- if bk_stts.image_icon != blank -%}
+                {%- assign image_icon = bk_stts.image_icon  -%}
+                <img {% if image_icon.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image_icon.presentation.focal_point}}"{% endif %} class="lazyloadt4s t4s-lz--fadeIn" data-src="{{ image_icon | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image_icon.width }}" height="{{ image_icon.height }}" alt="{{ image_icon.alt | escape }}">
+              {%- endif -%}
+            {%- endif -%}
+            <span class="t4s-d-block t4s-text">{{ title }}</span>
+          </a>
+          {%- if collection_des == "9" and all_products_count > 0 -%}
+            <div class="t4s-collec-list-pr t4s_ratio1_1 t4s_position_8 t4s_cover t4s-d-flex">
+              {%- for product in collection.products limit: 3 -%}
+                {% if product.tags contains "shsdchildproduct" %}
+                {% continue %}
+                {% endif %} 
+                {%- assign image = product.featured_image -%}
+                <a href="{{ product.url }}" data-tooltip="top" title="{{ product.title }}" class="t4s-collec-pr-item t4s-d-inline-flex t4s_ratio"><img loading="lazy" src="{{ image | image_url: width: 60 }}" width="{{ image.width }}" height="{{ image.height }}" ></a>
+              {%- endfor -%}
+              {%- if all_products_count > 3 -%}
+                <a class="t4s-collec-pr-item t4s-d-inline-flex t4s-collec-viewall" href="{{ collection.url }}" data-tooltip="top" title="{{ 'collections.pagination.view_all' | t }}">+{{ all_products_count | minus : 3 }} </a>
+              {%- endif -%}
+            </div>
+          {%- endif -%}
+        </span>
+        {%- if bk_stts.button_label != blank -%}
+          {%- if collection_des == "3" or collection_des == "5" or collection_des == "6"  -%}
+            <a class="t4s-collection-btn" href="{{ collection_link }}" target="{{ open_link }}">
+              <span class="t4s-text">{{ bk_stts.button_label }}</span>
+            </a>
+          {%- endif -%}
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+</div> 

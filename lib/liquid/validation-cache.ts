@@ -1,87 +1,63 @@
-import { createHash } from "crypto";
-
-import type { ValidationResult } from "./validator";
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
 /**
- * Produce a SHA-256 hex digest of the template string.
- * Used as the cache key so content changes always invalidate.
+ * Validation cache -- EPIC D migration
+ *
+ * Maps template content (by SHA-256 hash) to validation results.
+ * Now delegates to CacheAdapter with a 1-hour TTL.
+ * LRU eviction is handled by the cache backend (Redis TTL or memory adapter).
  */
+
+import { createHash } from 'crypto';
+
+import type { ValidationResult } from './validator';
+import { createNamespacedCache, type CacheAdapter } from '@/lib/cache/cache-adapter';
+
+// -- Helpers ------------------------------------------------------------------
+
 function hashContent(template: string): string {
-  return createHash("sha256").update(template).digest("hex");
+  return createHash('sha256').update(template).digest('hex');
 }
 
-// ── LRU Validation Cache ────────────────────────────────────────────────────
+// -- Constants ----------------------------------------------------------------
 
-const DEFAULT_MAX_ENTRIES = 1000;
+/** Validation results are keyed by content hash, so 1 hour is safe. */
+const VALIDATION_TTL_MS = 3_600_000; // 1 hour
 
-/**
- * An LRU cache that maps template content (by SHA-256 hash) to its
- * {@link ValidationResult}.
- *
- * Insertion order is tracked via `Map` iteration order.  When the cache
- * exceeds `maxEntries`, the *oldest* entry (first key) is evicted.
- */
+// -- Cache --------------------------------------------------------------------
+
 export class ValidationCache {
-  private cache: Map<string, ValidationResult>;
-  private readonly maxEntries: number;
+  private adapter: CacheAdapter;
 
-  constructor(maxEntries: number = DEFAULT_MAX_ENTRIES) {
-    this.cache = new Map();
-    this.maxEntries = maxEntries;
+  constructor(_maxEntries?: number) {
+    // maxEntries kept for backward compat but no longer used --
+    // eviction is handled by TTL in the cache adapter.
+    this.adapter = createNamespacedCache('val');
   }
 
   /**
    * Look up a cached validation result for `template`.
    * Returns `null` on cache miss.
-   *
-   * On a hit the entry is "refreshed" (moved to the end of the Map) so it
-   * won't be the next eviction candidate.
    */
-  get(template: string): ValidationResult | null {
+  async get(template: string): Promise<ValidationResult | null> {
     const key = hashContent(template);
-    const result = this.cache.get(key);
-
-    if (result === undefined) {
-      return null;
-    }
-
-    // Refresh: delete + re-insert moves entry to the end
-    this.cache.delete(key);
-    this.cache.set(key, result);
-
-    return result;
+    return this.adapter.get<ValidationResult>(key);
   }
 
   /**
-   * Store a validation result for `template`.
-   * If the cache is already at capacity the oldest entry is evicted first.
+   * Store a validation result for `template` with a 1-hour TTL.
    */
-  set(template: string, result: ValidationResult): void {
+  async set(template: string, result: ValidationResult): Promise<void> {
     const key = hashContent(template);
-
-    // If key already exists, delete first so re-insert moves it to the end
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    }
-
-    // Evict oldest entry when at capacity
-    if (this.cache.size >= this.maxEntries) {
-      const oldest = this.cache.keys().next().value as string;
-      this.cache.delete(oldest);
-    }
-
-    this.cache.set(key, result);
+    await this.adapter.set(key, result, VALIDATION_TTL_MS);
   }
 
-  /** Remove all entries from the cache. */
-  clear(): void {
-    this.cache.clear();
+  /** Remove all validation cache entries. */
+  async clear(): Promise<void> {
+    await this.adapter.invalidatePattern('*');
   }
 
-  /** Return the number of entries currently in the cache. */
-  size(): number {
-    return this.cache.size;
+  /** Return approximate number of entries (from cache stats). */
+  async size(): Promise<number> {
+    const s = await this.adapter.stats();
+    return s.size;
   }
 }

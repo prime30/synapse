@@ -44,7 +44,7 @@ export async function POST(
     }
 
     // Check cache first
-    const cached = domCache.get(projectId, action, selector);
+    const cached = await domCache.get(projectId, action, selector);
     if (cached) {
       return NextResponse.json({
         success: true,
@@ -95,7 +95,7 @@ export async function PUT(
       throw APIError.badRequest('action and data are required');
     }
 
-    domCache.set(projectId, action, data, selector);
+    await domCache.set(projectId, action, data, selector);
 
     return NextResponse.json({ success: true, cached: true });
   } catch (error) {

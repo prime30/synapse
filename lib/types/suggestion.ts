@@ -14,6 +14,8 @@ export interface Suggestion {
   suggested_code: string;
   applied_code: string | null;
   explanation: string;
+  /** Agent confidence in this suggestion (0-1). Populated from AgentResult/CodeChange confidence. */
+  confidence?: number;
   created_at: string;
   applied_at: string | null;
   rejected_at: string | null;

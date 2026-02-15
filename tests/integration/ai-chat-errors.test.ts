@@ -77,7 +77,7 @@ describe('classifyProviderError', () => {
     expect(err.retryable).toBe(false);
   });
 
-  it('should classify Anthropic context too long', () => {
+  it('should classify Anthropic context too long as CONTEXT_TOO_LARGE (retryable)', () => {
     const body = JSON.stringify({
       error: {
         type: 'invalid_request_error',
@@ -85,15 +85,15 @@ describe('classifyProviderError', () => {
       },
     });
     const err = classifyProviderError(400, body, 'anthropic');
-    expect(err.code).toBe('CONTEXT_TOO_LONG');
+    expect(err.code).toBe('CONTEXT_TOO_LARGE');
   });
 
-  it('should classify OpenAI context_length_exceeded', () => {
+  it('should classify OpenAI context_length_exceeded as CONTEXT_TOO_LARGE (retryable)', () => {
     const body = JSON.stringify({
       error: { code: 'context_length_exceeded', message: 'Token limit exceeded' },
     });
     const err = classifyProviderError(400, body, 'openai');
-    expect(err.code).toBe('CONTEXT_TOO_LONG');
+    expect(err.code).toBe('CONTEXT_TOO_LARGE');
   });
 
   it('should classify OpenAI content_policy_violation', () => {
@@ -410,7 +410,7 @@ describe('Provider error classification scenarios', () => {
       expect(err.retryable).toBe(true);
     });
 
-    it('invalid_request_error + context length -> CONTEXT_TOO_LONG', () => {
+    it('invalid_request_error + context length -> CONTEXT_TOO_LARGE (retryable)', () => {
       const body = JSON.stringify({
         error: {
           type: 'invalid_request_error',
@@ -418,8 +418,8 @@ describe('Provider error classification scenarios', () => {
         },
       });
       const err = classifyProviderError(400, body, 'anthropic');
-      expect(err.code).toBe('CONTEXT_TOO_LONG');
-      expect(err.retryable).toBe(false);
+      expect(err.code).toBe('CONTEXT_TOO_LARGE');
+      expect(err.retryable).toBe(true);
     });
 
     it('authentication_error -> AUTH_ERROR', () => {
@@ -437,7 +437,7 @@ describe('Provider error classification scenarios', () => {
       expect(err.code).toBe('AUTH_ERROR');
     });
 
-    it('context_length_exceeded -> CONTEXT_TOO_LONG', () => {
+    it('context_length_exceeded -> CONTEXT_TOO_LARGE (retryable)', () => {
       const body = JSON.stringify({
         error: {
           code: 'context_length_exceeded',
@@ -445,7 +445,7 @@ describe('Provider error classification scenarios', () => {
         },
       });
       const err = classifyProviderError(400, body, 'openai');
-      expect(err.code).toBe('CONTEXT_TOO_LONG');
+      expect(err.code).toBe('CONTEXT_TOO_LARGE');
     });
 
     it('content_policy_violation -> CONTENT_FILTERED', () => {
@@ -753,7 +753,7 @@ describe('Edge cases', () => {
       },
     });
     const err = classifyProviderError(400, body, 'anthropic');
-    expect(err.code).toBe('CONTEXT_TOO_LONG');
+    expect(err.code).toBe('CONTEXT_TOO_LARGE');
   });
 
   it('AIProviderError extends Error properly', () => {

@@ -370,6 +370,43 @@
     return { cleared: true };
   };
 
+  /** injectHTML(selector, html) -- inject HTML into an element for live preview */
+  actions.injectHTML = function (payload) {
+    var selector = payload && payload.selector;
+    var html = payload && payload.html;
+    if (!selector) return { error: 'selector is required' };
+    if (!html) return { error: 'html is required' };
+    try {
+      var el = document.querySelector(selector);
+      if (!el) {
+        return { injected: false, error: 'Element not found: ' + selector };
+      }
+      // Store original innerHTML only if not already stored
+      if (!el.hasAttribute('data-synapse-original')) {
+        el.setAttribute('data-synapse-original', el.innerHTML);
+      }
+      el.innerHTML = html;
+      return { injected: true, selector: selector };
+    } catch (e) {
+      return { injected: false, error: 'Error injecting HTML: ' + e.message };
+    }
+  };
+
+  /** clearHTML() -- restore original HTML for all injected elements */
+  actions.clearHTML = function () {
+    var elements = document.querySelectorAll('[data-synapse-original]');
+    var count = elements.length;
+    for (var i = 0; i < elements.length; i++) {
+      var el = elements[i];
+      var original = el.getAttribute('data-synapse-original');
+      if (original !== null) {
+        el.innerHTML = original;
+        el.removeAttribute('data-synapse-original');
+      }
+    }
+    return { cleared: true, count: count };
+  };
+
   /** detectConflicts(selector) -- check if a CSS selector conflicts with app stylesheets */
   actions.detectConflicts = function (payload) {
     var selector = payload && payload.selector;

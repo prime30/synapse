@@ -5,7 +5,7 @@ export declare class APIClient {
     private authManager;
     constructor(config: SynapseConfig, authManager: AuthManager);
     private getHeaders;
-    private request;
+    request<T>(method: string, path: string, body?: unknown): Promise<T>;
     createProject(name: string, description?: string): Promise<{
         data: {
             id: string;
@@ -41,11 +41,7 @@ export declare class APIClient {
     updateFileContent(fileId: string, content: string): Promise<{
         data: unknown;
     }>;
-    executeAgents(projectId: string, userRequest: string): Promise<{
-        data: {
-            executionId: string;
-        };
-    }>;
+    executeAgents(projectId: string, userRequest: string): Promise<Record<string, unknown>>;
     getExecutionStatus(executionId: string): Promise<{
         data: {
             status: string;

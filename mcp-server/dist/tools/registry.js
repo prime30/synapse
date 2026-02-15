@@ -1,3 +1,4 @@
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger.js';
 export class ToolRegistry {
     tools = new Map();
@@ -23,10 +24,10 @@ export class ToolRegistry {
  * Sets up a single tools/list and tools/call handler that dispatches.
  */
 export function registerAllTools(server, registry) {
-    server.setRequestHandler({ method: 'tools/list' }, async () => ({
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools: registry.getDefinitions(),
     }));
-    server.setRequestHandler({ method: 'tools/call' }, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { name } = request.params;
         const handler = registry.getHandler(name);
         if (!handler) {

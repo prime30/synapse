@@ -1,0 +1,229 @@
+[t4splitlz]
+{%- if request.page_type  == 'product' -%}
+    
+    <style>
+    	#t4s-pr-popup__contact h3 {
+		    margin-bottom: 20px;
+		    font-size: 22px;
+			font-weight: 400;
+		}
+		#t4s-pr-popup__contact form>p {
+			margin-bottom: 18px;
+		}
+		#t4s-pr-popup__contact form>p>input {
+		    width: 100%;
+		    height: 40px;
+            line-height: 18px;
+		}
+		#t4s-pr-popup__contact form>p>textarea {
+		    width: 100%;
+		    overflow: auto;
+		    padding: 10px 15px;
+		    min-height: 190px;
+          line-height: 18px;
+		}
+		#t4s-pr-popup__contact {
+		    padding: 0;
+		}
+		#t4s-pr-popup__contact form {
+		    padding: 25px 24px 32px;
+		}
+		.t4s-product-Ask {
+		    padding: 24px 26px 21px;
+		    display: flex;
+		    flex-wrap: nowrap;
+		    align-items: center;
+			border-bottom: 1px solid rgba(var(--border-color-rgb),.85);
+		}
+		.t4s-product-Ask__img {
+		    width: 106px;
+		    height: 131px;
+		    min-width: 106px;
+		    overflow: hidden;
+		    display: block;
+		    position: relative;
+		    margin-right: 20px;
+		}
+		.t4s-product-Ask__img img {
+		    position: absolute;
+		    left: 0;
+		    right: 0;
+		    width: 100%;
+		    height: 100%;
+		    object-fit: cover;
+		    object-position: center;
+		}
+		.t4s-product-Ask__svg{
+			color: var(--secondary-color);
+			display: flex;
+			justify-content: center;
+			margin-bottom: 12px;
+		}
+		.t4s-product-Ask__svg svg{
+			width: 31px;
+			height: 31px;
+		}
+		.t4s-product-Ask__title {
+			font-size: 14px;
+		    color: var(--secondary-color);
+		    font-weight: 400;
+		}
+		.t4s-product-Ask__price {
+		    color: var(--secondary-price-color);
+		}
+		.t4s-product-Ask__price ins{
+		    color: var(--primary-price-color);
+		}
+		#t4s-pr-popup__contact input.button {
+			background-color: var(--t4s-dark-color);
+			color: var(--t4s-light-color);
+			border-radius: var(--btn-radius);
+			min-width: 177px;
+			min-height: 47px;
+			font-size: 12px;
+			font-weight: 500;
+			text-transform: uppercase;
+		}
+		#t4s-pr-popup__contact input.button:hover {
+		   background-color: var(--accent-color-darken);
+		}
+
+		.t4s-product-Ask__form .t4s-col-item {margin-bottom: 13px;}
+		.t4s-product-Ask__form input:not([type=submit]):not([type=checkbox]), 
+		.t4s-product-Ask__form input[type=text],
+		.t4s-product-Ask__form input[type=email],
+		.t4s-product-Ask__form textarea {
+			width: 100%;
+			height: 49px;
+			line-height: 28px;
+			transition: border-color .5s;
+			box-shadow: none;
+			border-radius: 0;
+			-webkit-appearance: none;
+			-moz-appearance: none;
+			appearance: none;
+			border: 1px solid rgba(var(--border-color-rgb),.95);
+			font-size: 13px;
+			outline: 0;
+			padding: 18px 15px;
+			color: var(--text-color);
+			border-radius: 0;
+			max-width:100%;
+			font-weight: 400;
+			border-radius: var(--other-radius);
+		}
+		.t4s-product-Ask__form .t4s-field-label{
+			position: absolute;
+			left: 16px;
+			top: 0;
+			font-size: 13px;
+			font-weight: 400;
+			display: flex;
+			align-items: center;
+			height: 100%;
+			transform: scale(1);
+			transform-origin: left top;
+			transition: transform .2s ease-in-out;
+			pointer-events: none;
+		}
+		.t4s-product-Ask__form .t4s-form-group input:-webkit-autofill ~ label,
+		.t4s-product-Ask__form .t4s-form-group input:not(:placeholder-shown)~label,
+		.t4s-product-Ask__form .t4s-form-group input:focus ~ label{
+			transform: translateY(-10px) scale(.8);
+		} 
+		.t4s-product-Ask__form .t4s-form-group input::placeholder {
+			opacity: 0
+		}
+		.t4s-product-Ask__form textarea {
+			min-height: 222px;
+			overflow: hidden;
+		}
+		.t4s-product-Ask__form .required{color: var(--text-color);font-size: 13px;}
+		@media (max-width:767px){
+			.t4s-product-Ask__form textarea {min-height: 180px;}
+		}
+		.t4s-product-Ask__form input:not([type=submit]):not([type=checkbox]):focus, 
+		.t4s-product-Ask__form textarea:focus {
+			border-color: var(--secondary-color);
+		}
+				
+    </style>	
+	{%- assign formId = 'ContactFormAsk' | append: product.id -%}
+	{%- assign image = product.featured_image | default: settings.placeholder_img -%}
+	{% assign phone = bk_stts.phone %}
+
+   <div class="t4s-product-Ask">
+	  	 {%- if image != blank -%}
+	  	 <div class="t4s-product-Ask__img t4s-bg-11" style="background: url({{ image | image_url: width: 1 }})">
+		 	<img class="lazyloadt4s t4s-lz--fadeIn" data-src="{{ image | image_url: width: 1 }}" data-widths="[80,120,160,200]" data-optimumx="1.2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+	  	 </div>
+	  	 {%- endif -%}
+	  	 <div class="t4s-product-Ask__infos t4s-text-start">
+		  	 <div class="t4s-product-Ask__title">{{ product.title }}</div>
+		  	 <div class="t4s-product-Ask__price">{%- if product.compare_at_price > product.price -%} <del>{{ product.compare_at_price | money }}</del> <ins>{{ product.price | money }}</ins>{%- else -%}{{ product.price | money }}{%- endif -%}</div>
+	  	 </div>
+   </div>
+
+	{%- form 'contact', id: formId -%}
+
+	  	{%- render 'form-status', form: form, form_id: formId -%}
+		<div class="t4s-product-Ask__svg">
+			<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svg="http://svg.com/svg" version="1.1" x="0" y="0" xml:space="preserve" viewBox="0 0 512 512">
+				<path d="M256,358.4c-5.652,0-10.24,4.588-10.24,10.24s4.588,10.24,10.24,10.24s10.24-4.588,10.24-10.24S261.652,358.4,256,358.4z" fill="currentColor"/>
+				<circle cx="256" cy="368.64" r="20.48" fill="currentColor"/>
+				<path d="M256,0C114.831,0,0,114.831,0,256s114.831,256,256,256s256-114.831,256-256S397.169,0,256,0z M256,491.52C126.136,491.52,20.48,385.864,20.48,256S126.136,20.48,256,20.48S491.52,126.136,491.52,256S385.864,491.52,256,491.52z" fill="currentColor"/>
+				<path d="M326.513,181.637c-5.059-28.856-28.754-52.552-57.61-57.631c-21.279-3.727-42.742,1.966-58.982,15.626c-16.261,13.681-25.6,33.69-25.6,54.927c0,5.652,4.588,10.24,10.24,10.24s10.24-4.588,10.24-10.24c0-15.176,6.677-29.471,18.309-39.219c11.796-9.892,26.829-13.865,42.271-11.141c20.521,3.604,37.376,20.48,41.001,41.001c3.891,22.2-6.185,43.5-25.702,54.231c-21.873,12.063-34.918,32.891-34.918,57.528v20.48c0,5.652,4.588,10.24,10.24,10.24s10.24-4.588,10.199-10.24v-22.282c0-15.278,9.114-29.409,24.33-37.806C317.419,242.565,331.878,212.132,326.513,181.637z" fill="currentColor"/>
+			</svg>
+		</div>
+	  	<h3 class="t4s-text-center">{{ 'products.product.ask_question' | t }}</h3>
+	  	<div class="t4s-product-Ask__form t4s-row t4s-gx-8">
+			<div class="t4s-col-item t4s-col-md-6 t4s-col-12">
+				<div class="t4s-form-group t4s-pr">
+					<input type="text" id="{{ formId }}-name" name="contact[name]" required="required" value="{% if form[name] %}{{ form[name] }}{% elsif customer %}{{ customer.name }}{% endif %}" placeholder="{{ 'templates.contact.form.name' | t }}">
+					<label class="t4s-field-label" for="{{ formId }}-name">{{ 'templates.contact.form.name' | t }} <span class="required" aria-hidden="true">*</span></label>
+				</div>
+			</div>
+			<div class="t4s-col-item t4s-col-md-6 t4s-col-12">
+				<div class="t4s-form-group t4s-pr">
+					<input type="email" id="{{ formId }}-email" name="contact[email]" autocorrect="off" autocapitalize="off" placeholder="{{ 'templates.contact.form.email' | t }}" value="{% if form.email %}{{ form.email }}{% elsif customer %}{{ customer.email }}{% endif %}"
+						aria-required="true" required="required"{%- if form.errors contains 'email' %} class="input--error" aria-invalid="true" aria-describedby="{{ formId }}-email-error"{%- endif -%}>
+					<label class="t4s-field-label" for="{{ formId }}-email">{{ 'templates.contact.form.email' | t }} <span class="required" aria-hidden="true">*</span></label>
+					{%- if form.errors contains 'email' -%}
+						<span id="{{ formId }}-email-error" class="input-error-message"><i class="facl facl-attention cr mr__5"></i>{{ form.errors.translated_fields['email'] | capitalize }} {{ form.errors.messages['email'] }}.</span>
+					{%- endif -%}
+				</div>
+			</div>
+			<div class="t4s-col-item t4s-col-md-12 t4s-col-12" id="t4s-ContactFormAsk__phone">
+				<div class="t4s-form-group t4s-pr">
+					<input type="tel" id="{{ formId }}-phone" name="contact[phone]" placeholder="{{ 'templates.contact.form.phone' | t }}" pattern="[0-9\-]*" value="{% if form[phone] %}{{ form[phone] }}{% elsif customer %}{{ customer.phone }}{% endif %}">
+					<label class="t4s-field-label" for="{{ formId }}-phone">{{ 'templates.contact.form.phone' | t }}
+				</div>
+			</div>
+			<p class="t4s-d-none">
+				<label for="{{ formId }}-product">Product</label> 
+				<textarea rows="20" id="{{ formId }}-product" name="contact[product]" required="required">{{ product.title }} - {{ request.origin }}{{ product.url }}</textarea>
+			</p>
+			<div class="t4s-col-item t4s-col-md-12 t4s-col-12">
+				<textarea rows="9" id="{{ formId }}-message" name="contact[body]" required="required" placeholder="{{ 'templates.contact.form.message' | t }}">{% if form.body %}{{ form.body }}{% endif %}</textarea>
+			</div>
+		</div>
+		<div class="t4s-product-Ask__form-submit t4s-text-center">
+	  		<input type="submit" class="button" value="{{ 'templates.contact.form.submit' | t }}">
+		</div>
+
+	{%- endform -%}
+
+{%- else -%}
+   
+   {{- page.content -}}
+
+{%- endif -%}
+
+[t4splitlz]
+
+{% schema %}
+{
+  "name": "Ajax Popup",
+  "settings": []
+}
+{% endschema %}

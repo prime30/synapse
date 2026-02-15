@@ -11,24 +11,26 @@
 // ── AI Action types ─────────────────────────────────────────────────────────
 
 export type AIAction =
-  | 'analyze'        // PM analysis of user request
-  | 'generate'       // Specialist code generation
-  | 'review'         // Review agent quality check
-  | 'summary'        // Conversational summary of results
-  | 'fix'            // Quick fix / error correction
-  | 'explain'        // Explain code / concept
-  | 'refactor'       // Code refactoring
-  | 'document'       // Generate documentation
-  | 'plan'           // Multi-step plan generation
-  | 'chat';          // General conversational response
+  | 'analyze'           // PM analysis of user request
+  | 'generate'          // Specialist code generation
+  | 'review'            // Review agent quality check
+  | 'summary'           // Conversational summary of results
+  | 'fix'               // Quick fix / error correction
+  | 'explain'           // Explain code / concept
+  | 'refactor'          // Code refactoring
+  | 'document'          // Generate documentation
+  | 'plan'              // Multi-step plan generation
+  | 'chat'              // General conversational response
+  | 'classify'          // Request complexity classification (Haiku)
+  | 'classify_trivial'; // Trivial-tier PM execution (Haiku)
 
 // ── Model identifiers ───────────────────────────────────────────────────────
 
 export const MODELS = {
   // Anthropic
-  CLAUDE_OPUS: 'claude-opus-4-20250514',
-  CLAUDE_SONNET: 'claude-sonnet-4-20250514',
-  CLAUDE_HAIKU: 'claude-haiku-3-20250515',
+  CLAUDE_OPUS: 'claude-opus-4-6',
+  CLAUDE_SONNET: 'claude-sonnet-4-5-20250929',
+  CLAUDE_HAIKU: 'claude-haiku-4-5-20251001',
 
   // OpenAI
   GPT_4O: 'gpt-4o',
@@ -48,16 +50,18 @@ export type ModelId = (typeof MODELS)[keyof typeof MODELS];
  * These can be overridden by user preferences.
  */
 export const MODEL_MAP: Record<AIAction, ModelId> = {
-  analyze:   MODELS.CLAUDE_OPUS,      // PM needs deep reasoning
-  generate:  MODELS.CLAUDE_SONNET,    // Specialists use Sonnet for speed/quality
-  review:    MODELS.GPT_4O,           // Review uses GPT-4o
-  summary:   MODELS.CLAUDE_HAIKU,     // Summaries use Haiku (fast + cheap)
-  fix:       MODELS.CLAUDE_SONNET,    // Quick fixes use Sonnet
-  explain:   MODELS.CLAUDE_SONNET,    // Explanations use Sonnet
-  refactor:  MODELS.CLAUDE_SONNET,    // Refactoring uses Sonnet
-  document:  MODELS.CLAUDE_SONNET,    // Documentation uses Sonnet
-  plan:      MODELS.CLAUDE_OPUS,      // Plans need deep reasoning
-  chat:      MODELS.CLAUDE_SONNET,    // General chat uses Sonnet
+  analyze:          MODELS.CLAUDE_OPUS,      // PM needs deep reasoning
+  generate:         MODELS.CLAUDE_SONNET,    // Specialists use Sonnet for speed/quality
+  review:           MODELS.GPT_4O,           // Review uses GPT-4o
+  summary:          MODELS.CLAUDE_HAIKU,     // Summaries use Haiku (fast + cheap)
+  fix:              MODELS.CLAUDE_SONNET,    // Quick fixes use Sonnet
+  explain:          MODELS.CLAUDE_SONNET,    // Explanations use Sonnet
+  refactor:         MODELS.CLAUDE_SONNET,    // Refactoring uses Sonnet
+  document:         MODELS.CLAUDE_SONNET,    // Documentation uses Sonnet
+  plan:             MODELS.CLAUDE_OPUS,      // Plans need deep reasoning
+  chat:             MODELS.CLAUDE_SONNET,    // General chat uses Sonnet
+  classify:         MODELS.CLAUDE_HAIKU,     // Request classification (fast + cheap)
+  classify_trivial: MODELS.CLAUDE_HAIKU,     // Trivial-tier PM execution (Haiku)
 };
 
 // ── Agent defaults ──────────────────────────────────────────────────────────
@@ -73,6 +77,27 @@ export const AGENT_DEFAULTS: Record<AgentRole, ModelId> = {
   review:          MODELS.GPT_4O,
   summary:         MODELS.CLAUDE_HAIKU,
 };
+
+// ── Effort mapping (Phase 4: Adaptive Thinking) ─────────────────────────────
+
+/** Effort level for each action when adaptive thinking is enabled. */
+export const ACTION_EFFORT: Record<AIAction, 'low' | 'medium' | 'high' | 'max'> = {
+  analyze:          'high',
+  plan:             'max',
+  generate:         'high',
+  review:           'high',
+  fix:              'medium',
+  explain:          'medium',
+  refactor:         'high',
+  document:         'medium',
+  summary:          'low',
+  chat:             'medium',
+  classify:         'low',
+  classify_trivial: 'low',
+};
+
+/** Actions that benefit from adaptive thinking (deep reasoning). */
+export const THINKING_ACTIONS = new Set<AIAction>(['analyze', 'plan']);
 
 // ── System default ──────────────────────────────────────────────────────────
 
@@ -100,6 +125,8 @@ export interface ResolveModelOptions {
   userOverride?: string;
   /** The agent role making the request (third priority). */
   agentRole?: AgentRole;
+  /** Routing tier for adaptive model escalation (EPIC V5). */
+  tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
 }
 
 /**
@@ -115,7 +142,21 @@ export interface ResolveModelOptions {
  * MUST use specific models regardless of user preference.
  */
 export function resolveModel(options: ResolveModelOptions = {}): string {
-  const { action, userOverride, agentRole } = options;
+  const { action, userOverride, agentRole, tier } = options;
+
+  // 0. ARCHITECTURAL tier escalation (EPIC V5): PM uses Opus for all work,
+  //    specialists use Sonnet (which is already the default). This overrides
+  //    action-level mappings for ARCHITECTURAL tasks to ensure deep reasoning.
+  if (tier === 'ARCHITECTURAL') {
+    // PM and analysis actions get Opus for the extended context window
+    if (agentRole === 'project_manager' || action === 'analyze' || action === 'plan') {
+      return MODELS.CLAUDE_OPUS;
+    }
+    // Specialists keep Sonnet (already the default for generate/fix)
+    if (action === 'generate' || action === 'fix' || action === 'refactor') {
+      return MODELS.CLAUDE_SONNET;
+    }
+  }
 
   // 1. Action override — certain actions are locked to specific models
   if (action && MODEL_MAP[action]) {

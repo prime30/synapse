@@ -1,4 +1,5 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger.js';
 
 /**
@@ -58,14 +59,14 @@ export class ToolRegistry {
  */
 export function registerAllTools(server: Server, registry: ToolRegistry): void {
   server.setRequestHandler(
-    { method: 'tools/list' } as never,
+    ListToolsRequestSchema,
     async () => ({
       tools: registry.getDefinitions(),
     })
   );
 
   server.setRequestHandler(
-    { method: 'tools/call' } as never,
+    CallToolRequestSchema,
     async (request: { params: { name: string; arguments?: Record<string, unknown> } }) => {
       const { name } = request.params;
       const handler = registry.getHandler(name);

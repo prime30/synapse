@@ -195,6 +195,16 @@ export default function AssetBrowserPanel({
     []
   );
 
+  // ── Split into image and code assets ────────────────────────────────────────
+  const imageAssets = useMemo(
+    () => filtered.filter((a) => isImage(a.key)),
+    [filtered]
+  );
+  const codeAssets = useMemo(
+    () => filtered.filter((a) => !isImage(a.key)),
+    [filtered]
+  );
+
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -230,7 +240,7 @@ export default function AssetBrowserPanel({
             placeholder="Filter assets…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border ide-border ide-surface-input py-1.5 pl-8 pr-3 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+            className="ide-input w-full py-1.5 pl-8 pr-3 text-sm"
           />
         </div>
 
@@ -238,7 +248,7 @@ export default function AssetBrowserPanel({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-purple-500 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md bg-accent hover:bg-accent-hover px-3 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -267,7 +277,7 @@ export default function AssetBrowserPanel({
           {!search.trim() && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="mt-2 text-sm text-purple-400 hover:text-purple-300"
+              className="mt-2 text-sm text-accent hover:text-accent"
             >
               Upload your first asset
             </button>
@@ -275,94 +285,123 @@ export default function AssetBrowserPanel({
         </div>
       )}
 
-      {/* ── Asset grid ───────────────────────────────────────────────────── */}
+      {/* ── Content (split view: images grid + code list) ────────────────── */}
       {filtered.length > 0 && (
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {filtered.map((asset) => {
-              const name = filename(asset.key);
-              const thumb = thumbnailUrl(storeDomain, asset.key);
-              const isConfirming = deleteConfirm === asset.key;
+        <div className="flex-1 overflow-y-auto">
+          {/* ── Image assets: thumbnail grid ──────────────────────────── */}
+          {imageAssets.length > 0 && (
+            <div className="p-3">
+              {codeAssets.length > 0 && (
+                <p className="text-[10px] font-medium uppercase tracking-wider ide-text-quiet mb-2">
+                  Images ({imageAssets.length})
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {imageAssets.map((asset) => {
+                  const name = filename(asset.key);
+                  const thumb = thumbnailUrl(storeDomain, asset.key);
+                  const isConfirming = deleteConfirm === asset.key;
 
-              return (
-                <div
-                  key={asset.key}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, asset)}
-                  className="group relative flex flex-col overflow-hidden rounded-lg border ide-border ide-surface-input transition-colors ide-hover"
-                >
-                  {/* Drag handle */}
-                  <div className="absolute left-1 top-1 cursor-grab opacity-0 transition-opacity group-hover:opacity-100">
-                    <GripVertical className="h-4 w-4 ide-text-muted" />
-                  </div>
-
-                  {/* Preview area */}
-                  <div className="flex h-24 items-center justify-center ide-surface-inset p-2">
-                    {thumb ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={thumb}
-                        alt={name}
-                        className="max-h-full max-w-full object-contain"
-                        loading="lazy"
-                        onError={(e) => {
-                          // Fallback to icon if CDN image fails
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (
-                            e.target as HTMLImageElement
-                          ).parentElement?.classList.add('fallback-icon');
-                        }}
-                      />
-                    ) : (
-                      <AssetIcon assetKey={asset.key} />
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex flex-1 flex-col gap-0.5 px-2 py-1.5">
-                    <span
-                      className="truncate text-xs font-medium ide-text"
-                      title={name}
+                  return (
+                    <div
+                      key={asset.key}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, asset)}
+                      className="group relative flex flex-col overflow-hidden rounded-lg border ide-border ide-surface-input transition-colors ide-hover"
                     >
-                      {name}
-                    </span>
-                    <span className="text-[10px] ide-text-muted">
-                      {formatSize(asset.size)} · {asset.content_type.split('/').pop()}
-                    </span>
-                  </div>
-
-                  {/* Delete button */}
-                  <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    {isConfirming ? (
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleDelete(asset.key)}
-                          disabled={isDeleting}
-                          className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                        >
-                          {isDeleting ? '…' : 'Yes'}
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm(null)}
-                          className="rounded ide-surface-input px-1.5 py-0.5 text-[10px] font-medium ide-text-muted ide-hover"
-                        >
-                          No
-                        </button>
+                      <div className="absolute left-1 top-1 cursor-grab opacity-0 transition-opacity group-hover:opacity-100">
+                        <GripVertical className="h-4 w-4 ide-text-muted" />
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteConfirm(asset.key)}
-                        className="rounded p-0.5 ide-text-muted hover:bg-red-900/40 hover:text-red-400"
-                        title="Delete asset"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <div className="flex h-24 items-center justify-center ide-surface-inset p-2">
+                        {thumb ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={thumb}
+                            alt={name}
+                            className="max-h-full max-w-full object-contain"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement?.classList.add('fallback-icon');
+                            }}
+                          />
+                        ) : (
+                          <AssetIcon assetKey={asset.key} />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.5 px-2 py-1.5">
+                        <span className="truncate text-xs font-medium ide-text" title={name}>{name}</span>
+                        <span className="text-[10px] ide-text-muted">{formatSize(asset.size)}</span>
+                      </div>
+                      <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        {isConfirming ? (
+                          <div className="flex gap-1">
+                            <button onClick={() => handleDelete(asset.key)} disabled={isDeleting} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-red-500 disabled:opacity-50">
+                              {isDeleting ? '…' : 'Yes'}
+                            </button>
+                            <button onClick={() => setDeleteConfirm(null)} className="rounded ide-surface-input px-1.5 py-0.5 text-[10px] font-medium ide-text-muted ide-hover">No</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeleteConfirm(asset.key)} className="rounded p-0.5 ide-text-muted hover:bg-red-900/40 hover:text-red-400" title="Delete asset">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Code / font assets: compact list ─────────────────────── */}
+          {codeAssets.length > 0 && (
+            <div className="px-3 pb-3">
+              {imageAssets.length > 0 && (
+                <p className="text-[10px] font-medium uppercase tracking-wider ide-text-quiet mb-2 mt-1">
+                  Code &amp; Fonts ({codeAssets.length})
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {codeAssets.map((asset) => {
+                  const name = filename(asset.key);
+                  const isConfirming = deleteConfirm === asset.key;
+
+                  return (
+                    <div
+                      key={asset.key}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, asset)}
+                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md ide-hover transition-colors cursor-grab"
+                    >
+                      <AssetIcon assetKey={asset.key} />
+                      <span className="truncate flex-1 text-xs ide-text" title={name}>{name}</span>
+                      <span className="text-[10px] ide-text-muted shrink-0">{formatSize(asset.size)}</span>
+                      <span className="text-[10px] ide-text-quiet shrink-0 w-12 text-right">{asset.content_type.split('/').pop()}</span>
+                      <div className="shrink-0 w-8 flex justify-end">
+                        {isConfirming ? (
+                          <div className="flex gap-0.5">
+                            <button onClick={() => handleDelete(asset.key)} disabled={isDeleting} className="rounded bg-red-600 px-1 py-0.5 text-[9px] font-medium text-white hover:bg-red-500 disabled:opacity-50">
+                              {isDeleting ? '…' : 'Yes'}
+                            </button>
+                            <button onClick={() => setDeleteConfirm(null)} className="rounded ide-surface-input px-1 py-0.5 text-[9px] font-medium ide-text-muted ide-hover">No</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(asset.key)}
+                            className="rounded p-0.5 ide-text-muted hover:bg-red-900/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete asset"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

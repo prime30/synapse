@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
         // Optional: filter by store connection
         const connectionId = request.nextUrl.searchParams.get('connectionId');
 
-        const selectCols = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id, status';
-        const selectColsNoStatus = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id';
+        const selectCols = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id, status, thumbnail_url';
+        const selectColsNoStatus = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name, dev_theme_id, thumbnail_url';
         const selectColsFallback = 'id, name, description, created_at, updated_at, organization_id, shopify_store_url, shopify_connection_id, shopify_theme_id, shopify_theme_name';
 
         let projectsQuery = admin

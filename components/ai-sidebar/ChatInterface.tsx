@@ -1,33 +1,103 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { CodeBlock } from './CodeBlock';
-import { DiffPreview } from '@/components/features/suggestions/DiffPreview';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 import type { Suggestion } from '@/lib/ai/prompt-suggestions';
-import type { AgentMode, IntentMode } from '@/hooks/useAgentSettings';
+import type { AgentMode, IntentMode, MaxAgents } from '@/hooks/useAgentSettings';
 import type { OutputMode } from '@/lib/ai/signal-detector';
 import { ThinkingBlock, type ThinkingStep } from './ThinkingBlock';
+import { ProgressRail } from './ProgressRail';
+import { deriveRailSteps } from '@/lib/agents/phase-mapping';
+import type { ExecutionMode } from '@/lib/agents/phase-mapping';
 import { PlanApprovalModal, parsePlanSteps, type PlanStep } from './PlanApprovalModal';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Plus, Pencil, RotateCcw } from 'lucide-react';
+import { PlanCard } from './PlanCard';
+import { ReviewBlock } from './ReviewBlock';
+import { ClarificationCard } from './ClarificationCard';
+import { PreviewNavToast } from './PreviewNavToast';
+import { FileCreateCard } from './FileCreateCard';
+import { FileOperationToast } from './FileOperationToast';
+import { ShopifyOperationCard } from './ShopifyOperationCard';
+import { ScreenshotCard } from './ScreenshotCard';
+import { CitationsBlock } from './CitationsBlock';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Plus, Pencil, RotateCcw, BookOpen, GitBranch } from 'lucide-react';
+import { PromptTemplateLibrary } from './PromptTemplateLibrary';
+import { ShareButton } from './ShareButton';
+import { ConflictResolver } from './ConflictResolver';
+import { AnimatePresence, motion } from 'framer-motion';
+import { safeTransition } from '@/lib/accessibility';
 import { usePromptProgress } from '@/hooks/usePromptProgress';
 import { useContextMeter } from '@/hooks/useContextMeter';
 import { ContextMeter } from './ContextMeter';
-import { SessionHistory, type ChatSession } from './SessionHistory';
-import { detectFilePaths } from '@/lib/ai/file-path-detector';
-import { FileText } from 'lucide-react';
+import type { ChatSession } from './SessionHistory';
 
-/** Try to extract a file name/path from the first line of a code block (e.g. "// sections/header.liquid"). */
-function detectFileNameFromCode(code: string): string | undefined {
-  const firstLine = code.split('\n')[0]?.trim();
-  if (!firstLine) return undefined;
-  // Match comment patterns: // path, /* path */, # path, {%- comment -%} path, <!-- path -->
-  const commentRe = /^(?:\/\/|\/\*|#|{%-?\s*comment\s*-?%}|<!--)\s*((?:sections|templates|snippets|assets|config|layout|locales|blocks)\/[\w./-]+)/;
-  const m = firstLine.match(commentRe);
-  return m?.[1] ?? undefined;
+/** Sanitize user message content for the sticky prompt banner. */
+function sanitizeForStickyPrompt(content: string): string {
+  return content
+    .replace(/```[\s\S]*?```/g, '[code]')
+    .replace(/!\[.*?\]\(.*?\)/g, '[image]')
+    .trim();
 }
+
+/**
+ * Regex to detect CSS selector-like references in user messages.
+ * Matches patterns like `[header#shopify-section-header > div.wrapper]:`
+ * that were historically baked into the user message.
+ */
+const SELECTOR_REF_PATTERN = /^\[([^\]]{5,})\]:\s*/;
+
+/**
+ * Regex to detect IDE context metadata blocks that may exist in older stored messages.
+ * Strips `[IDE Context] ...` through to the first double-newline boundary.
+ */
+const IDE_CONTEXT_PATTERN = /\[IDE Context\][^\n]*(?:\n(?!\n)[^\n]*)*/g;
+
+/**
+ * Strips metadata prefixes from legacy stored messages and renders
+ * element-selector references as compact token pills.
+ */
+function UserMessageContent({ content }: { content: string }) {
+  // Strip any residual IDE context metadata (for backward compat with stored messages)
+  let cleaned = content.replace(IDE_CONTEXT_PATTERN, '').trim();
+
+  // Check for a leading selector reference
+  const selectorMatch = cleaned.match(SELECTOR_REF_PATTERN);
+  let selectorChip: React.ReactNode = null;
+  if (selectorMatch) {
+    const selector = selectorMatch[1];
+    // Build a short human-readable label from the selector
+    const label = selector.length > 40 ? selector.slice(0, 37) + '...' : selector;
+    selectorChip = (
+      <span
+        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono text-sky-500 dark:text-sky-400 self-start truncate max-w-full"
+        title={selector}
+      >
+        {label}
+      </span>
+    );
+    cleaned = cleaned.slice(selectorMatch[0].length);
+  }
+
+  // Strip [Selected code in editor] and [Full file context] blocks (legacy stored messages)
+  cleaned = cleaned
+    .replace(/\[Selected code in editor\]:[\s\S]*?```\n*/g, '')
+    .replace(/\[Full file context[^\]]*\]:[\s\S]*?```\n*/g, '')
+    .trim();
+
+  if (!cleaned && !selectorChip) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {selectorChip}
+      {cleaned && <span>{cleaned}</span>}
+    </div>
+  );
+}
+
+// PlanStep is now unified in PlanApprovalModal (supports both `text` and `description`)
+export type { PlanStep } from './PlanApprovalModal';
 
 export interface ChatMessage {
   id: string;
@@ -38,6 +108,38 @@ export interface ChatMessage {
   thinkingSteps?: ThinkingStep[];
   /** Whether the thinking phase for this message is complete. */
   thinkingComplete?: boolean;
+  /** Context stats from the agent pipeline for accurate ContextMeter display. */
+  contextStats?: { loadedFiles: number; loadedTokens: number; totalFiles: number };
+  /** Whether budget enforcement truncated content during this request. */
+  budgetTruncated?: boolean;
+  /** Phase 8: Parallel worker progress data. */
+  workers?: Array<{ workerId: string; label: string; status: 'running' | 'complete' }>;
+
+  // ── Tool card metadata (Phase 3) ────────────────────────────────────
+  /** Proposed implementation plan from propose_plan tool. */
+  planData?: { title: string; description: string; steps: PlanStep[]; filePath?: string };
+  /** Proposed code edits from propose_code_edit tool. */
+  codeEdits?: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' }>;
+  /** Clarification question from ask_clarification tool or SSE clarification event. */
+  clarification?: { question: string; options: Array<{ id: string; label: string; recommended?: boolean }>; allowMultiple?: boolean };
+  /** Preview navigation from navigate_preview tool. */
+  previewNav?: { path: string; description?: string };
+  /** New file creation from create_file tool. */
+  fileCreates?: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' }>;
+  /** Currently active tool call (loading state). */
+  activeToolCall?: { name: string; id: string };
+  /** Citation references from the citations API. */
+  citations?: Array<{ citedText: string; documentTitle: string; startIndex?: number; endIndex?: number }>;
+
+  // ── Agent Power Tools card metadata (Phase 7) ──────────────────────
+  /** File mutation operations (write, delete, rename) from agent tools. */
+  fileOps?: Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }>;
+  /** Shopify operation results from agent tools. */
+  shopifyOps?: Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }>;
+  /** Screenshot capture results from agent tools. */
+  screenshots?: Array<{ url: string; storeDomain?: string; themeId?: string; path?: string; error?: string }>;
+  /** Screenshot comparison result from agent tools. */
+  screenshotComparison?: { beforeUrl: string; afterUrl: string; diffPercentage?: number; threshold?: number; passed?: boolean };
 }
 
 interface ChatInterfaceProps {
@@ -108,6 +210,10 @@ interface ChatInterfaceProps {
   intentMode?: IntentMode;
   /** Called when the user switches intent mode */
   onIntentModeChange?: (mode: IntentMode) => void;
+  /** Max sub-agents per specialist (1-4) */
+  maxAgents?: MaxAgents;
+  /** Called when the user changes the max agent count */
+  onMaxAgentsChange?: (count: MaxAgents) => void;
   /** Called when user edits a message — resends from that point (index, new content) */
   onEditMessage?: (index: number, content: string) => void;
   /** Called when user wants to regenerate the last assistant response */
@@ -128,6 +234,28 @@ interface ChatInterfaceProps {
   totalFiles?: number;
   /** Whether budget enforcement truncated content (for context meter warning) */
   budgetTruncated?: boolean;
+
+  // ── Tool card handlers (Phase 3) ──────────────────────────────────
+  /** Called when user clicks "View Plan" — opens the plan file in an editor tab. */
+  onOpenPlanFile?: (filePath: string) => void;
+  /** Called when user clicks "Build" on a plan card with selected step numbers. */
+  onBuildPlan?: (checkedSteps: Set<number>) => void;
+  /** Called when navigate_preview auto-navigates — sets preview path. */
+  onNavigatePreview?: (path: string) => void;
+  /** Called when user confirms a new file creation from create_file tool. */
+  onConfirmFileCreate?: (fileName: string, content: string) => void;
+  /** Called when an edit status changes (applied/rejected) — for persisting status. */
+  onEditStatusChange?: (messageId: string, editIndex: number, status: 'applied' | 'rejected') => void;
+  /** Phase 3b: Called when attached files change (drag-and-drop from file tree). */
+  onAttachedFilesChange?: (files: Array<{ id: string; name: string; path: string }>) => void;
+  /** Phase 4b: Whether verbose/inner monologue is active */
+  verbose?: boolean;
+  /** Phase 4b: Toggle verbose mode */
+  onToggleVerbose?: () => void;
+  /** Phase 5a: Fork conversation at a message index */
+  onForkAtMessage?: (messageIndex: number) => void;
+  /** Phase 6a: Called when user pins/unpins a message as a preference */
+  onPinAsPreference?: (content: string) => void;
 }
 
 function HistorySummaryBlock({ count, summary }: { count: number; summary?: string }) {
@@ -163,247 +291,13 @@ function HistorySummaryBlock({ count, summary }: { count: number; summary?: stri
   );
 }
 
-// ── Content renderer with CodeBlock support ────────────────────────────────────
-
-interface ContentSegment {
-  type: 'text' | 'code' | 'diff';
-  content: string;
-  language?: string;
-  fileName?: string;
-  /** For diff segments: the original code (lines starting with -) */
-  originalCode?: string;
-  /** For diff segments: the suggested code (lines starting with +) */
-  suggestedCode?: string;
-}
-
-/** Detect if a code block contains diff-formatted content. */
-function isDiffContent(code: string, language?: string): boolean {
-  if (language === 'diff') return true;
-  const lines = code.split('\n');
-  const diffLines = lines.filter(l => l.startsWith('+') || l.startsWith('-'));
-  // Consider it a diff if >30% of non-empty lines are diff markers
-  const nonEmpty = lines.filter(l => l.trim().length > 0);
-  return nonEmpty.length > 2 && diffLines.length / nonEmpty.length > 0.3;
-}
-
-/** Parse diff content into original and suggested code. */
-function parseDiffContent(code: string): { original: string; suggested: string } {
-  const lines = code.split('\n');
-  const originalLines: string[] = [];
-  const suggestedLines: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
-      // Skip diff headers
-      continue;
-    }
-    if (line.startsWith('-')) {
-      originalLines.push(line.slice(1));
-    } else if (line.startsWith('+')) {
-      suggestedLines.push(line.slice(1));
-    } else {
-      // Context line (no prefix or space prefix)
-      const clean = line.startsWith(' ') ? line.slice(1) : line;
-      originalLines.push(clean);
-      suggestedLines.push(clean);
-    }
-  }
-
-  return {
-    original: originalLines.join('\n'),
-    suggested: suggestedLines.join('\n'),
-  };
-}
-
-function parseContentSegments(text: string): ContentSegment[] {
-  const segments: ContentSegment[] = [];
-  // Support ```lang or ```lang:filepath (e.g. ```liquid:sections/header.liquid)
-  const codeBlockRe = /```(\w*(?::[^\n]*)?)?\n([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = codeBlockRe.exec(text)) !== null) {
-    // Text before code block
-    if (match.index > lastIndex) {
-      segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-    }
-    // Parse language and optional file name from the fence info string
-    const infoString = match[1] || '';
-    let language: string | undefined;
-    let fileName: string | undefined;
-
-    if (infoString.includes(':')) {
-      const [langPart, ...rest] = infoString.split(':');
-      language = langPart || undefined;
-      fileName = rest.join(':').trim() || undefined;
-    } else {
-      language = infoString || undefined;
-    }
-
-    const code = match[2].replace(/\n$/, ''); // trim trailing newline
-
-    // EPIC 8: Detect diff-formatted code blocks and render as split-diff
-    if (isDiffContent(code, language)) {
-      const { original, suggested } = parseDiffContent(code);
-      segments.push({
-        type: 'diff',
-        content: code,
-        language,
-        fileName,
-        originalCode: original,
-        suggestedCode: suggested,
-      });
-    } else {
-      segments.push({ type: 'code', content: code, language, fileName });
-    }
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining text
-  if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.slice(lastIndex) });
-  }
-
-  return segments;
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let remaining = text;
-  let key = 0;
-
-  while (remaining.length > 0) {
-    const boldIdx = remaining.indexOf('**');
-    const codeIdx = remaining.indexOf('`');
-
-    if (boldIdx === -1 && codeIdx === -1) {
-      parts.push(remaining);
-      break;
-    }
-
-    const isBoldFirst =
-      boldIdx !== -1 && (codeIdx === -1 || boldIdx < codeIdx);
-
-    if (isBoldFirst) {
-      if (boldIdx > 0) parts.push(remaining.slice(0, boldIdx));
-      const closeIdx = remaining.indexOf('**', boldIdx + 2);
-      if (closeIdx === -1) { parts.push(remaining.slice(boldIdx)); break; }
-      parts.push(<strong key={`b-${key++}`} className="font-semibold ide-text">{remaining.slice(boldIdx + 2, closeIdx)}</strong>);
-      remaining = remaining.slice(closeIdx + 2);
-    } else {
-      if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
-      const closeIdx = remaining.indexOf('`', codeIdx + 1);
-      if (closeIdx === -1) { parts.push(remaining.slice(codeIdx)); break; }
-      parts.push(<code key={`c-${key++}`} className="rounded bg-stone-100 dark:bg-white/10 px-1 py-0.5 text-[0.8em] font-mono text-sky-600 dark:text-sky-300">{remaining.slice(codeIdx + 1, closeIdx)}</code>);
-      remaining = remaining.slice(closeIdx + 1);
-    }
-  }
-
-  return parts.length === 1 ? parts[0] : <>{parts}</>;
-}
-
-/**
- * Render a line of text, replacing detected file paths with clickable chips.
- * Falls back to plain renderInline when onOpenFile is not provided.
- */
-function renderInlineWithFiles(
-  text: string,
-  onOpenFile?: (path: string) => void,
-): React.ReactNode {
-  if (!onOpenFile) return renderInline(text);
-
-  const filePaths = detectFilePaths(text);
-  if (filePaths.length === 0) return renderInline(text);
-
-  const parts: React.ReactNode[] = [];
-  let cursor = 0;
-
-  for (const fp of filePaths) {
-    // Text before this file path
-    if (fp.start > cursor) {
-      parts.push(renderInline(text.slice(cursor, fp.start)));
-    }
-
-    // File chip
-    const fileName = fp.path.split('/').pop() ?? fp.path;
-    parts.push(
-      <button
-        key={`fp-${fp.start}`}
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenFile(fp.path);
-        }}
-        className="inline-flex items-center gap-1 rounded-md bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/20 px-1.5 py-0.5 text-[11px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors cursor-pointer mx-0.5 align-middle"
-        title={`Open ${fp.path}`}
-      >
-        <FileText className="h-3 w-3" />
-        {fileName}
-      </button>,
-    );
-
-    cursor = fp.end;
-  }
-
-  // Remaining text after last file path
-  if (cursor < text.length) {
-    parts.push(renderInline(text.slice(cursor)));
-  }
-
-  return <>{parts}</>;
-}
-
-function renderTextContent(text: string, onOpenFile?: (path: string) => void): React.ReactNode {
-  if (!text.trim()) return null;
-
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let listItems: React.ReactNode[] = [];
-  let key = 0;
-
-  const flushList = () => {
-    if (listItems.length > 0) {
-      elements.push(
-        <ul key={`ul-${key++}`} className="list-disc list-inside space-y-0.5 my-1">
-          {listItems}
-        </ul>
-      );
-      listItems = [];
-    }
-  };
-
-  for (const line of lines) {
-    const listMatch = line.match(/^[\s]*[-*]\s+(.+)$/);
-    if (listMatch) {
-      listItems.push(
-        <li key={`li-${key++}`}>{renderInlineWithFiles(listMatch[1], onOpenFile)}</li>
-      );
-      continue;
-    }
-
-    flushList();
-
-    if (line.trim() === '') {
-      elements.push(<br key={`br-${key++}`} />);
-    } else {
-      elements.push(
-        <p key={`p-${key++}`} className="my-0.5">
-          {renderInlineWithFiles(line, onOpenFile)}
-        </p>
-      );
-    }
-  }
-
-  flushList();
-  return <>{elements}</>;
-}
+// Content rendering is handled by MarkdownRenderer component.
 
 // ── Model options ──────────────────────────────────────────────────────────────
 
 const MODEL_OPTIONS = [
-  { value: 'claude-sonnet-4-20250514', label: 'Sonnet 4', description: 'Fast, balanced' },
-  { value: 'claude-opus-4-20250514', label: 'Opus 4', description: 'Most capable' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5', description: 'Fast, balanced' },
+  { value: 'claude-opus-4-6', label: 'Opus 4.6', description: 'Most capable' },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Google AI' },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast, efficient' },
 ];
@@ -513,14 +407,23 @@ export function ChatInterface({
   showRetryChip = false,
   outputMode,
   onImageUpload,
-  sessions = [],
-  activeSessionId,
+  // Sessions are managed by SessionSidebar in AgentPromptPanel; these props remain
+  // for backward compatibility but are no longer used in ChatInterface directly.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sessions: _sessions = [],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  activeSessionId: _activeSessionId,
   onNewChat,
-  onSwitchSession,
-  onDeleteSession,
-  onRenameSession,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onSwitchSession: _onSwitchSession,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onDeleteSession: _onDeleteSession,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onRenameSession: _onRenameSession,
   intentMode = 'code',
   onIntentModeChange,
+  maxAgents = 1,
+  onMaxAgentsChange,
   onEditMessage,
   onRegenerateMessage,
   onOpenFile,
@@ -531,6 +434,18 @@ export function ChatInterface({
   summarizedCount,
   totalFiles,
   budgetTruncated,
+  onOpenPlanFile,
+  onBuildPlan,
+  onNavigatePreview,
+  onConfirmFileCreate,
+  onEditStatusChange,
+  onAttachedFilesChange,
+  verbose,
+  onToggleVerbose,
+  onForkAtMessage,
+  projectId,
+  activeSessionId,
+  onPinAsPreference,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -543,12 +458,31 @@ export function ChatInterface({
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
   // EPIC 5: track the plan key the user has dismissed so modal won't re-show
   const [planDismissedKey, setPlanDismissedKey] = useState('');
+  // Scroll-to-bottom button state
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+
+  // Sticky last-prompt banner
+  const [stickyPromptDismissedId, setStickyPromptDismissedId] = useState<string | null>(null);
+  const lastUserMessage = useMemo(() => [...messages].reverse().find(m => m.role === 'user'), [messages]);
+  const showStickyPrompt = !!(
+    lastUserMessage
+    && messages.length >= 2
+    && messages[messages.length - 1]?.role === 'assistant'
+    && stickyPromptDismissedId !== lastUserMessage.id
+  );
 
   // EPIC 8: Image attachment state
   const [attachedImage, setAttachedImage] = useState<{ file: File; preview: string } | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phase 3b: Attached files (dragged from file tree)
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; path: string }>>([]);
+
+  // Phase 3c: Template library
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  useEffect(() => { onAttachedFilesChange?.(attachedFiles); }, [attachedFiles, onAttachedFilesChange]);
 
   // Prompt progress / countdown
   const promptProgress = usePromptProgress(!!isLoading, currentAction, intentMode);
@@ -557,12 +491,38 @@ export function ChatInterface({
   const contextMeter = useContextMeter(messages, currentModel, fileCount, editorSelection, summarizedCount, totalFiles, budgetTruncated);
   const currentModelOption = MODEL_OPTIONS.find((o) => o.value === currentModel);
 
+  // Auto-scroll to bottom (only when user hasn't scrolled up)
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: 'smooth',
-    });
-  }, [messages, responseSuggestions]);
+    if (!userScrolledUp) {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [messages, responseSuggestions, userScrolledUp]);
+
+  // Track user scroll position for scroll-to-bottom button
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const threshold = 100; // px from bottom
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      setUserScrolledUp(!isAtBottom);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Reset scroll state when streaming completes
+  useEffect(() => {
+    if (!isLoading) setUserScrolledUp(false);
+  }, [isLoading]);
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    setUserScrolledUp(false);
+  }, []);
 
   // Close model picker when clicking outside
   useEffect(() => {
@@ -591,7 +551,7 @@ export function ChatInterface({
   }, [outputMode, lastMessage]);
 
   const planKey = planSteps.length > 0
-    ? planSteps.map(s => s.description).join('|')
+    ? planSteps.map(s => s.description ?? s.text ?? '').join('|')
     : '';
   // Only auto-open the plan modal when the user explicitly chose Plan intent mode.
   // Otherwise, show an inline "Review Plan" button so it's not intrusive.
@@ -613,12 +573,23 @@ export function ChatInterface({
   // ── Pin toggle ──────────────────────────────────────────────────────────────
 
   const togglePin = (id: string) => {
+    const wasAlreadyPinned = pinnedMessageIds.has(id);
     setPinnedMessageIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    // Phase 6a: Save to memory when pinning (not unpinning)
+    if (!wasAlreadyPinned && onPinAsPreference) {
+      const msg = messages.find(m => m.id === id);
+      if (msg) {
+        // Extract a concise rule from the message content
+        const content = msg.content.replace(/```[\s\S]*?```/g, '').trim();
+        const rule = content.length > 200 ? content.slice(0, 200) + '...' : content;
+        onPinAsPreference(rule);
+      }
+    }
   };
 
   // ── Copy as reusable prompt ─────────────────────────────────────────────────
@@ -696,8 +667,8 @@ export function ChatInterface({
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (onImageUpload) setIsDraggingOver(true);
-  }, [onImageUpload]);
+    setIsDraggingOver(true);
+  }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -707,6 +678,21 @@ export function ChatInterface({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDraggingOver(false);
+
+    // Phase 3b: Handle file drops from file tree
+    const synapseFile = e.dataTransfer.getData('application/synapse-file');
+    if (synapseFile) {
+      try {
+        const fileData = JSON.parse(synapseFile) as { id: string; name: string; path: string };
+        setAttachedFiles((prev) => {
+          if (prev.some((f) => f.id === fileData.id)) return prev;
+          return [...prev, fileData];
+        });
+        return;
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Existing: Handle image drops
     if (!onImageUpload) return;
     const files = e.dataTransfer.files;
     for (let i = 0; i < files.length; i++) {
@@ -716,6 +702,10 @@ export function ChatInterface({
       }
     }
   }, [onImageUpload, handleImageAttach]);
+
+  const handleRemoveAttachedFile = useCallback((fileId: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
+  }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -730,22 +720,19 @@ export function ChatInterface({
     if ((!raw && !attachedImage) || isLoading) return;
 
     let messageText = raw || '';
-    const prefix = selectedElement ? `[${selectedElement.selector}]: ` : '';
 
     // If image is attached, upload first and include analysis
     if (attachedImage && onImageUpload) {
       setIsUploadingImage(true);
       try {
         const analysis = await onImageUpload(attachedImage.file);
-        messageText = prefix + (raw ? `${raw}\n\n[Image analysis]: ${analysis}` : `[Image analysis]: ${analysis}`);
+        messageText = raw ? `${raw}\n\n[Image analysis]: ${analysis}` : `[Image analysis]: ${analysis}`;
       } catch {
-        messageText = prefix + (raw || '[Image attached but analysis failed]');
+        messageText = raw || '[Image attached but analysis failed]';
       } finally {
         setIsUploadingImage(false);
         handleRemoveImage();
       }
-    } else {
-      messageText = prefix + messageText;
     }
 
     // If we're editing a previous message, use edit-and-resend instead of appending
@@ -758,6 +745,7 @@ export function ChatInterface({
     }
     if (inputRef.current) inputRef.current.value = '';
     setInputHasText(false);
+    setAttachedFiles([]);
     onDismissElement?.();
   };
 
@@ -765,10 +753,32 @@ export function ChatInterface({
     onSend(prompt);
   };
 
+  // Return focus to input when loading completes so user can respond immediately
+  useEffect(() => {
+    if (!isLoading && inputRef.current) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
   // Determine which suggestions to show
   const showPreSuggestions = !inputHasText && messages.length === 0 && !isLoading && contextSuggestions.length > 0;
   const showPostSuggestions = !isLoading && responseSuggestions.length > 0 && messages.length > 0;
   const showPostAfterAssistant = showPostSuggestions && lastMessage?.role === 'assistant';
+
+  // Compute rail steps from the active streaming message
+  const activeRailSteps = useMemo(() => {
+    if (!isLoading) return [];
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    const steps = lastAssistant?.thinkingSteps;
+    if (!steps || steps.length === 0) return [];
+    // Determine execution mode from intent + agent mode
+    let execMode: ExecutionMode = 'orchestrated';
+    if (intentMode === 'ask') return []; // No rail for ask mode
+    if (intentMode === 'plan') execMode = 'plan';
+    else if (agentMode === 'solo') execMode = 'solo';
+    return deriveRailSteps(steps, execMode);
+  }, [isLoading, messages, intentMode, agentMode]);
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
@@ -777,7 +787,15 @@ export function ChatInterface({
         className="flex-1 overflow-y-auto space-y-3 p-2"
         role="log"
         aria-label="Conversation"
+        aria-busy={isLoading || false}
       >
+        {/* Progress rail (sticky at top during streaming) */}
+        <ProgressRail
+          steps={activeRailSteps}
+          isStreaming={!!isLoading}
+          onStop={onStop}
+        />
+
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
           <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/30 rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
@@ -805,11 +823,7 @@ export function ChatInterface({
             {messages.filter(m => pinnedMessageIds.has(m.id)).map(m => (
               <div
                 key={`pin-${m.id}`}
-                className={`rounded px-2.5 py-1.5 text-xs leading-relaxed flex items-start justify-between gap-1 ${
-                  m.role === 'user'
-                    ? 'bg-sky-50 dark:bg-sky-500/10 ide-text-2'
-                    : 'ide-surface-inset ide-text-3'
-                }`}
+                className="rounded px-2.5 py-1.5 text-xs leading-relaxed flex items-start justify-between gap-1 ide-surface-inset ide-text-2"
               >
                 <span className="line-clamp-2">{m.content.replace(/```[\s\S]*?```/g, '[code]')}</span>
                 <button
@@ -827,10 +841,17 @@ export function ChatInterface({
 
         {/* Empty state with mode explanations + suggestions */}
         {messages.length === 0 && !isLoading && (
-          <div className="py-4 space-y-4">
-            <p className="text-sm ide-text-3 text-center">
-              What would you like to build?
-            </p>
+          <div className="py-6 space-y-4">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-10 h-10 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
+                <svg className="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
+                  <circle cx="12" cy="11" r="3" />
+                </svg>
+              </div>
+              <p className="text-sm ide-text-2 font-medium">Synapse AI</p>
+              <p className="text-xs ide-text-3 text-center">What would you like to build?</p>
+            </div>
             <div className="grid grid-cols-2 gap-1.5 px-2">
               {[
                 { key: 'code', icon: '⌨', label: 'Code', desc: 'Change theme files' },
@@ -872,9 +893,36 @@ export function ChatInterface({
           />
         )}
 
+        {/* Sticky last-prompt banner */}
+        <AnimatePresence>
+          {showStickyPrompt && lastUserMessage && (
+            <motion.div
+              key="sticky-prompt"
+              initial={{ y: -8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -8, opacity: 0 }}
+              transition={safeTransition(0.15)}
+              className="sticky top-0 z-10 ide-surface-pop backdrop-blur-sm border-b ide-border-subtle px-3 py-1.5 flex items-start justify-between gap-2"
+            >
+              <p className="text-xs ide-text-2 line-clamp-2 border-l-2 border-sky-500/30 pl-2 flex-1 min-w-0">
+                {sanitizeForStickyPrompt(lastUserMessage.content)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setStickyPromptDismissedId(lastUserMessage.id)}
+                className="flex-shrink-0 mt-0.5 ide-text-muted hover:ide-text-2 transition-colors"
+                title="Dismiss"
+                aria-label="Dismiss sticky prompt"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Messages */}
         {messages.map((m, idx) => (
-          <div key={m.id} className="group/msg relative">
+          <div key={m.id} className={`group/msg relative transition-colors ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}>
             {/* Hover action buttons */}
             <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10 ide-surface-pop rounded-md px-0.5 py-0.5 border ide-border-subtle">
               {/* Edit & resend (user messages only) */}
@@ -920,7 +968,7 @@ export function ChatInterface({
                   aria-label="Copy full response"
                 >
                   {copiedResponseId === m.id ? (
-                    <span className="text-[10px] text-green-400 font-medium px-0.5">Copied!</span>
+                    <span className="text-[10px] text-accent font-medium px-0.5">Copied!</span>
                   ) : (
                     <ClipboardCopy className="h-3 w-3" />
                   )}
@@ -946,70 +994,190 @@ export function ChatInterface({
                   title="Copy as reusable prompt"
                 >
                   {copiedMessageId === m.id ? (
-                    <span className="text-[10px] text-green-400 font-medium px-0.5">Copied!</span>
+                    <span className="text-[10px] text-accent font-medium px-0.5">Copied!</span>
                   ) : (
                     <ClipboardCopy className="h-3 w-3" />
                   )}
                 </button>
               )}
+              {/* Phase 5a: Fork conversation */}
+              {onForkAtMessage && m.role === 'assistant' && (
+                <button
+                  type="button"
+                  onClick={() => onForkAtMessage(idx)}
+                  className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+                  title="Fork conversation from here"
+                >
+                  <GitBranch className="h-3 w-3" />
+                </button>
+              )}
             </div>
 
             <div
-              className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
+              className={`text-sm leading-relaxed ${
                 m.role === 'user'
-                  ? 'bg-sky-50 dark:bg-sky-500/10 ide-text ml-4'
-                  : 'ide-surface-input ide-text-2 mr-4'
+                  ? 'rounded-md px-3 py-2 ide-surface-inset ide-text'
+                  : 'px-3 py-1 ide-text'
               } ${pinnedMessageIds.has(m.id) ? 'ring-1 ring-amber-500/30' : ''}`}
             >
               {m.role === 'assistant' ? (
                 <>
-                  {/* Thinking block (inline, above response content) */}
+                  {/* Thinking block (inline, above response content) with progress bar */}
                   {m.thinkingSteps && m.thinkingSteps.length > 0 && (
                     <ThinkingBlock
                       steps={m.thinkingSteps}
                       isComplete={m.thinkingComplete ?? false}
                       defaultExpanded={!m.thinkingComplete}
+                      isStreaming={isLoading && idx === messages.length - 1}
+                      progress={isLoading && idx === messages.length - 1 ? promptProgress.progress : undefined}
+                      secondsRemaining={isLoading && idx === messages.length - 1 ? promptProgress.secondsRemaining : undefined}
+                      onOpenFile={onOpenFile}
+                      verbose={verbose}
+                      onToggleVerbose={onToggleVerbose}
+                      workers={m.workers}
                     />
                   )}
-                  {parseContentSegments(m.content).map((seg, i) =>
-                    seg.type === 'diff' && seg.originalCode !== undefined && seg.suggestedCode !== undefined ? (
-                      <div key={`diff-${i}`} className="my-2">
-                        <DiffPreview
-                          originalCode={seg.originalCode}
-                          suggestedCode={seg.suggestedCode}
-                        />
+                  {/* Markdown-rendered content */}
+                  <MarkdownRenderer
+                    content={m.content}
+                    onOpenFile={onOpenFile}
+                    onApplyCode={onApplyCode}
+                    onSaveCode={onSaveCode}
+                    resolveFileId={resolveFileIdProp}
+                  />
+
+                  {/* Tool cards (Phase 3) */}
+                  <div aria-live="polite">
+                    {/* Loading skeleton for active tool call */}
+                    {m.activeToolCall && (
+                      <div
+                        className="my-2 rounded-lg border ide-border ide-surface-inset p-3 animate-pulse"
+                        role="status"
+                        aria-live="polite"
+                        aria-label={`Loading tool: ${m.activeToolCall.name}`}
+                      >
+                        <div className="h-2.5 w-24 rounded ide-surface-input mb-2" />
+                        <div className="h-2 w-40 rounded ide-surface-input" />
                       </div>
-                    ) : seg.type === 'code' ? (() => {
-                      const fn = seg.fileName || detectFileNameFromCode(seg.content);
-                      const fId = fn && resolveFileIdProp ? resolveFileIdProp(fn) : undefined;
+                    )}
+                    {m.planData && (
+                      <PlanCard
+                        planData={m.planData}
+                        onOpenPlanFile={onOpenPlanFile}
+                        onBuildPlan={onBuildPlan}
+                      />
+                    )}
+                    {m.codeEdits && m.codeEdits.length > 0 && (() => {
+                      // Phase 8c: Detect file conflicts (multiple edits to same file)
+                      const fileMap = new Map<string, number[]>();
+                      m.codeEdits!.forEach((edit, i) => {
+                        const existing = fileMap.get(edit.filePath) || [];
+                        existing.push(i);
+                        fileMap.set(edit.filePath, existing);
+                      });
+                      const conflicts = Array.from(fileMap.entries())
+                        .filter(([, indices]) => indices.length > 1)
+                        .map(([filePath, indices]) => ({
+                          filePath,
+                          edits: indices.map(i => ({
+                            agentId: String(i),
+                            agentLabel: 'Edit ' + (i + 1),
+                            newContent: m.codeEdits![i].newContent,
+                            reasoning: m.codeEdits![i].reasoning,
+                          })),
+                        }));
+
                       return (
-                        <CodeBlock
-                          key={`code-${i}`}
-                          code={seg.content}
-                          language={seg.language}
-                          fileName={fn}
-                          fileId={fId ?? undefined}
-                          onApply={onApplyCode}
-                          onSave={onSaveCode}
-                        />
+                        <>
+                          {conflicts.length > 0 && (
+                            <ConflictResolver
+                              conflicts={conflicts}
+                              onResolve={(filePath, selectedAgentId) => {
+                                // Reject all non-selected edits for this file
+                                const indices = fileMap.get(filePath) || [];
+                                for (const i of indices) {
+                                  if (String(i) !== selectedAgentId) {
+                                    onEditStatusChange?.(m.id, i, 'rejected');
+                                  }
+                                }
+                              }}
+                              onResolveAll={() => {
+                                // Auto-resolve: keep first edit, reject rest
+                                for (const [, indices] of fileMap.entries()) {
+                                  if (indices.length > 1) {
+                                    for (let k = 1; k < indices.length; k++) {
+                                      onEditStatusChange?.(m.id, indices[k], 'rejected');
+                                    }
+                                  }
+                                }
+                              }}
+                            />
+                          )}
+                          <ReviewBlock
+                            edits={m.codeEdits!}
+                            onApplyCode={onApplyCode}
+                            resolveFileId={resolveFileIdProp}
+                            onOpenFile={onOpenFile}
+                            onEditStatusChange={(editIdx, status) => onEditStatusChange?.(m.id, editIdx, status)}
+                          />
+                        </>
                       );
-                    })() : (
-                      <React.Fragment key={`text-${i}`}>
-                        {renderTextContent(seg.content, onOpenFile)}
-                      </React.Fragment>
-                    )
+                    })()}
+                    {m.clarification && (
+                      <ClarificationCard
+                        question={m.clarification.question}
+                        options={m.clarification.options}
+                        allowMultiple={m.clarification.allowMultiple}
+                        onSend={onSend}
+                      />
+                    )}
+                    {m.previewNav && (
+                      <PreviewNavToast
+                        path={m.previewNav.path}
+                        description={m.previewNav.description}
+                      />
+                    )}
+                    {m.fileCreates?.map((fc, fcIdx) => (
+                      <FileCreateCard
+                        key={`${m.id}-file-${fcIdx}`}
+                        fileName={fc.fileName}
+                        content={fc.content}
+                        reasoning={fc.reasoning}
+                        status={fc.status}
+                        onConfirm={onConfirmFileCreate}
+                      />
+                    ))}
+                    {/* Agent Power Tools cards (Phase 7) */}
+                    {m.fileOps && m.fileOps.length > 0 && (
+                      <FileOperationToast operations={m.fileOps} />
+                    )}
+                    {m.shopifyOps && m.shopifyOps.length > 0 && (
+                      <ShopifyOperationCard operations={m.shopifyOps} />
+                    )}
+                    {(m.screenshots || m.screenshotComparison) && (
+                      <ScreenshotCard
+                        screenshots={m.screenshots}
+                        comparison={m.screenshotComparison}
+                      />
+                    )}
+                  </div>
+
+                  {/* Citations (Phase 6) */}
+                  {m.citations && m.citations.length > 0 && (
+                    <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
                   )}
+
                   {/* Blinking caret while streaming */}
                   {isLoading && idx === messages.length - 1 && (
                     <span
-                      className="inline-block w-[2px] h-[1.1em] bg-indigo-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
+                      className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
                       style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}
                       aria-hidden="true"
                     />
                   )}
                 </>
               ) : (
-                m.content
+                <UserMessageContent content={m.content} />
               )}
             </div>
 
@@ -1033,40 +1201,17 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Loading state with shimmer label and progress bar */}
-        {isLoading && (
-          <div
-            className="rounded-lg px-3 py-2 ide-surface-input space-y-1.5 border ai-thinking-pulse-border"
-            style={{ animation: 'ai-thinking-pulse 3s ease-in-out infinite' }}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className="text-sm font-medium italic ai-thinking-shimmer"
-                style={{
-                  background: 'linear-gradient(90deg, rgba(148,163,184,0.6) 0%, rgba(199,210,254,0.9) 50%, rgba(148,163,184,0.6) 100%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'ai-shimmer 2s ease-in-out infinite',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                {getThinkingLabel(currentAction, reviewFileCount)}
-                <ThinkingDots />
-              </span>
-              {promptProgress.secondsRemaining != null && (
-                <span className="text-[10px] tabular-nums ide-text-quiet font-mono">
-                  ~{promptProgress.secondsRemaining}s
-                </span>
-              )}
-            </div>
-            {/* Progress track */}
-            <div className="h-1 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-accent/70 transition-all duration-150 ease-out"
-                style={{ width: `${promptProgress.progress}%` }}
-              />
-            </div>
+        {/* Loading indicator — only shown when no thinking steps yet (before first SSE event) */}
+        {isLoading && !(lastMessage?.role === 'assistant' && lastMessage?.thinkingSteps?.length) && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg ide-surface-input border ide-border-subtle animate-pulse">
+            <svg className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-xs ide-text-2 font-medium italic">
+              {getThinkingLabel(currentAction, reviewFileCount)}
+              <ThinkingDots />
+            </span>
           </div>
         )}
 
@@ -1076,7 +1221,7 @@ export function ChatInterface({
             <button
               type="button"
               onClick={() => setManualPlanOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-emerald-400 text-xs font-medium hover:bg-emerald-500/10 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/5 text-accent text-xs font-medium hover:bg-sky-500/10 transition-colors"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
@@ -1102,10 +1247,25 @@ export function ChatInterface({
         )}
       </div>
 
+      {/* Scroll-to-bottom floating button */}
+      {isLoading && userScrolledUp && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="absolute bottom-2 right-3 z-20 rounded-full ide-surface-panel border ide-border shadow-sm p-1.5 ide-text-muted hover:ide-text-2 transition-colors"
+            aria-label="Scroll to bottom"
+            title="Scroll to bottom"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Input area */}
       <div className="flex-shrink-0 border-t ide-border-subtle">
-        {/* Consolidated context row: badges + element chip + image + inline suggestions */}
-        {(fileCount > 0 || editorSelection || selectedElement || attachedImage || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
+        {/* Consolidated context row: badges + element chip + image + attached files + inline suggestions */}
+        {(fileCount > 0 || editorSelection || selectedElement || attachedImage || attachedFiles.length > 0 || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
           <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap border-b ide-border-subtle">
             {fileCount > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full ide-surface-inset px-2 py-0.5 text-[10px] ide-text-3">
@@ -1113,8 +1273,18 @@ export function ChatInterface({
                 {fileCount}
               </span>
             )}
+            {/* Phase 3b: Attached file chips from drag-and-drop */}
+            {attachedFiles.map((af) => (
+              <span key={af.id} className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-400">
+                <Paperclip className="h-2.5 w-2.5" />
+                <span className="truncate max-w-[100px]">{af.name}</span>
+                <button type="button" onClick={() => handleRemoveAttachedFile(af.id)} className="text-sky-400 hover:text-sky-300">
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
             {editorSelection && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400 truncate max-w-[160px]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-accent truncate max-w-[160px]">
                 {editorSelection.slice(0, 30)}{editorSelection.length > 30 ? '...' : ''}
               </span>
             )}
@@ -1165,7 +1335,7 @@ export function ChatInterface({
               rows={2}
               placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
               disabled={isLoading || isUploadingImage}
-              className="w-full rounded-lg border ide-border ide-surface-input px-3 py-2 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 disabled:opacity-50 resize-none"
+              className="w-full rounded-lg border ide-border ide-surface-input px-3 py-2 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:border-sky-500 dark:focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500/20 dark:focus:ring-sky-400/20 disabled:opacity-50 resize-none"
               onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -1196,7 +1366,7 @@ export function ChatInterface({
               <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-sky-500/10 dark:bg-sky-500/10 border-2 border-dashed border-sky-500/40 pointer-events-none">
                 <div className="flex items-center gap-2 text-sm text-sky-600 dark:text-sky-400">
                   <Upload className="h-4 w-4" />
-                  Drop image here
+                  Drop files or images here
                 </div>
               </div>
             )}
@@ -1231,7 +1401,7 @@ export function ChatInterface({
                           type="button"
                           onClick={() => { onModelChange(opt.value); setShowModelPicker(false); }}
                           className={`w-full text-left px-3 py-1.5 text-xs ide-hover transition-colors ${
-                            currentModel === opt.value ? 'text-emerald-400' : 'ide-text-2'
+                            currentModel === opt.value ? 'text-accent' : 'ide-text-2'
                           }`}
                         >
                           <div className="font-medium">{opt.label}</div>
@@ -1241,6 +1411,29 @@ export function ChatInterface({
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Agent count control (1-4 sub-agents) */}
+              {onMaxAgentsChange && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = (maxAgents % 4) + 1;
+                    onMaxAgentsChange(next as MaxAgents);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                    maxAgents > 1
+                      ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 border-sky-500/30'
+                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
+                  }`}
+                  title={`Max sub-agents per specialist: ${maxAgents} (click to cycle 1-4)`}
+                  aria-label={`Sub-agent count: ${maxAgents}`}
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" />
+                  </svg>
+                  <span className="tabular-nums font-medium">{maxAgents}</span>
+                </button>
               )}
 
               {/* Orchestrated / Solo toggle */}
@@ -1280,7 +1473,7 @@ export function ChatInterface({
                         onClick={() => onIntentModeChange(mode)}
                         className={`rounded px-1.5 py-0.5 text-[10px] font-medium border transition-all focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
                           isActive
-                            ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40'
+                            ? 'text-accent bg-sky-500/15 border-sky-500/40'
                             : 'ide-text-3 border-transparent hover:ide-text-2 ide-hover'
                         }`}
                         title={tip}
@@ -1310,20 +1503,33 @@ export function ChatInterface({
                 </button>
               )}
 
+              {/* Phase 3c: Template library button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateLibrary((s) => !s)}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ide-text-3 ide-surface-inset border ide-border hover:border-stone-300 dark:hover:border-white/20 hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                  title="Prompt templates"
+                  aria-label="Open prompt templates"
+                >
+                  <BookOpen className="h-3 w-3" />
+                </button>
+                <PromptTemplateLibrary
+                  open={showTemplateLibrary}
+                  onClose={() => setShowTemplateLibrary(false)}
+                  onSelectTemplate={(prompt) => {
+                    if (inputRef.current) {
+                      inputRef.current.value = prompt;
+                      setInputHasText(true);
+                      inputRef.current.focus();
+                    }
+                    setShowTemplateLibrary(false);
+                  }}
+                />
+              </div>
+
               {/* Context window meter */}
               <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
-
-              {/* Session history */}
-              {onSwitchSession && (
-                <SessionHistory
-                  sessions={sessions}
-                  activeSessionId={activeSessionId ?? null}
-                  onSwitch={onSwitchSession}
-                  onNew={onNewChat ?? (() => {})}
-                  onDelete={onDeleteSession}
-                  onRename={onRenameSession}
-                />
-              )}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -1355,6 +1561,11 @@ export function ChatInterface({
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Phase 5b: Share button */}
+              {projectId && activeSessionId && messages.length > 0 && !isLoading && (
+                <ShareButton projectId={projectId} sessionId={activeSessionId} />
               )}
 
               {/* New chat button */}

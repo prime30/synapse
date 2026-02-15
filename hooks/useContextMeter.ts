@@ -29,6 +29,8 @@ export interface ContextBreakdown {
   includedFiles?: number;
   /** Whether budget enforcement truncated content */
   budgetTruncated?: boolean;
+  /** Per-agent token usage breakdown */
+  perAgentUsage?: Array<{ agentType: string; inputTokens: number; outputTokens: number }>;
 }
 
 export interface ContextMeterState {
@@ -79,6 +81,10 @@ export function useContextMeter(
   totalFiles?: number,
   /** Whether budget enforcement truncated */
   budgetTruncated?: boolean,
+  /** Per-agent token usage breakdown */
+  perAgentUsage?: Array<{ agentType: string; inputTokens: number; outputTokens: number }>,
+  /** Actual loaded file tokens from context_stats SSE event (overrides estimate) */
+  loadedFileTokens?: number,
 ): ContextMeterState {
   return useMemo(() => {
     // 1. Messages
@@ -90,8 +96,8 @@ export function useContextMeter(
     // 2. System prompt overhead (fixed estimate)
     const systemTokens = SYSTEM_PROMPT_OVERHEAD;
 
-    // 3. File context (rough estimate based on file count)
-    const fileTokens = fileCount * AVG_TOKENS_PER_FILE;
+    // 3. File context: use actual loaded tokens if available, otherwise estimate
+    const fileTokens = loadedFileTokens ?? (fileCount * AVG_TOKENS_PER_FILE);
 
     // 4. Editor selection
     const selectionTokens = editorSelection
@@ -120,8 +126,9 @@ export function useContextMeter(
         totalFiles,
         includedFiles: fileCount,
         budgetTruncated,
+        perAgentUsage,
       },
       status: deriveStatus(percentage),
     };
-  }, [messages, currentModel, fileCount, editorSelection, summarizedCount, totalFiles, budgetTruncated]);
+  }, [messages, currentModel, fileCount, editorSelection, summarizedCount, totalFiles, budgetTruncated, perAgentUsage, loadedFileTokens]);
 }

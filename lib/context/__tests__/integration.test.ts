@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ContextCache } from '../cache';
+import { setCacheAdapter, MemoryAdapter } from '@/lib/cache/cache-adapter';
 import { DependencyDetector } from '../detector';
 import { SymbolExtractor } from '../symbol-extractor';
 import { ClaudeContextPackager, CodexContextPackager } from '../packager';
@@ -57,7 +58,8 @@ describe('Context System Integration', () => {
     expect(formatted).toContain('Update the grid layout');
   });
 
-  it('cache stores and retrieves context with dependencies', () => {
+  it('cache stores and retrieves context with dependencies', async () => {
+    setCacheAdapter(new MemoryAdapter());
     const cache = new ContextCache();
     const context: ProjectContext = {
       projectId: 'proj-test',
@@ -67,8 +69,8 @@ describe('Context System Integration', () => {
       totalSizeBytes: 100,
     };
 
-    cache.set('proj-test', context);
-    const cached = cache.get('proj-test');
+    await cache.set('proj-test', context);
+    const cached = await cache.get('proj-test');
     expect(cached).toBeDefined();
     expect(cached!.projectId).toBe('proj-test');
     expect(cached!.files).toHaveLength(1);

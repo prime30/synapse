@@ -50,3 +50,34 @@ export async function getOrgSubscription(userId: string) {
     subscription: subscription ?? null,
   };
 }
+
+/**
+ * Same as getOrgSubscription but only returns if the user is an org owner.
+ * Use for owner-only billing operations (e.g. on-demand settings).
+ */
+export async function getOrgSubscriptionAsOwner(userId: string) {
+  const supabase = createServiceClient();
+
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('role', 'owner')
+    .limit(1)
+    .single();
+
+  if (!member?.organization_id) return null;
+
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('organization_id', member.organization_id)
+    .in('status', ['active', 'trialing', 'past_due'])
+    .limit(1)
+    .single();
+
+  return {
+    organizationId: member.organization_id,
+    subscription: subscription ?? null,
+  };
+}

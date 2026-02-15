@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { ThemeSyncService } from './sync-service';
 import { buildSnapshotForConnection, recordPush } from './push-history';
+import { invalidatePreviewCache } from '@/app/api/projects/[projectId]/preview/route';
 
 const DEBOUNCE_MS = 800;
 
@@ -29,10 +30,10 @@ export function schedulePushForProject(projectId: string): void {
 async function runPushForProject(projectId: string): Promise<void> {
   const supabase = await createClient();
 
-  // Store-first: look up the connection from the project's shopify_connection_id
+  // Store-first: look up the connection and dev_theme_id from the project
   const { data: project, error: projError } = await supabase
     .from('projects')
-    .select('shopify_connection_id')
+    .select('shopify_connection_id, dev_theme_id')
     .eq('id', projectId)
     .maybeSingle();
 
@@ -56,7 +57,9 @@ async function runPushForProject(projectId: string): Promise<void> {
     return;
   }
 
-  const themeId = Number(connection.theme_id);
+  // Per-project dev theme takes precedence; fall back to connection.theme_id
+  const resolvedThemeId = project.dev_theme_id ?? connection.theme_id;
+  const themeId = Number(resolvedThemeId);
   if (!Number.isFinite(themeId)) return;
 
   const snapshot = await buildSnapshotForConnection(
@@ -71,11 +74,16 @@ async function runPushForProject(projectId: string): Promise<void> {
     if (result.errors.length > 0) {
       console.warn('[Shopify push-queue] Push had errors:', projectId, result.errors);
     }
-    if (result.pushed > 0 && snapshot.files.length > 0) {
-      await recordPush(connection.id, connection.theme_id, snapshot, {
-        note: 'Auto-push after save',
-        trigger: 'auto_save',
-      });
+    if (result.pushed > 0) {
+      // Invalidate preview cache so the next iframe request gets fresh HTML
+      invalidatePreviewCache(projectId);
+
+      if (snapshot.files.length > 0) {
+        await recordPush(connection.id, connection.theme_id, snapshot, {
+          note: 'Auto-push after save',
+          trigger: 'auto_save',
+        });
+      }
     }
   } catch (err) {
     console.warn('[Shopify push-queue] Push failed:', projectId, err instanceof Error ? err.message : err);

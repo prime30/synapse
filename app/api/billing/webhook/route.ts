@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { stripe, PLAN_CONFIG, type PlanId } from '@/lib/billing/stripe';
+import { stripe, PLAN_CONFIG, getStripeOveragePriceId, type PlanId } from '@/lib/billing/stripe';
 import { createServiceClient } from '@/lib/supabase/admin';
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,20 @@ export async function POST(request: NextRequest) {
 
 type SupabaseAdmin = ReturnType<typeof createServiceClient>;
 
+/**
+ * Find the Stripe subscription item ID for the overage metered price.
+ * Returns null if not configured or not found on the subscription.
+ */
+function getOverageItemId(subscription: Stripe.Subscription): string | null {
+  const overagePriceId = getStripeOveragePriceId();
+  if (!overagePriceId) return null;
+
+  const item = subscription.items.data.find(
+    (si) => (typeof si.price === 'string' ? si.price : si.price.id) === overagePriceId,
+  );
+  return item?.id ?? null;
+}
+
 async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
   supabase: SupabaseAdmin,
@@ -157,6 +171,8 @@ async function handleCheckoutCompleted(
     ? new Date(latestInvoice.period_end * 1000).toISOString()
     : null;
 
+  const stripeOverageItemId = getOverageItemId(subscription);
+
   const { error } = await supabase
     .from('subscriptions')
     .upsert(
@@ -172,6 +188,7 @@ async function handleCheckoutCompleted(
         included_requests: planConfig.includedRequests,
         current_period_start: periodStart,
         current_period_end: periodEnd,
+        stripe_overage_item_id: stripeOverageItemId,
       },
       { onConflict: 'organization_id' },
     );
@@ -207,6 +224,8 @@ async function handleSubscriptionUpdated(
     ? new Date(latestInvoice.period_end * 1000).toISOString()
     : null;
 
+  const stripeOverageItemId = getOverageItemId(subscription);
+
   const { error } = await supabase
     .from('subscriptions')
     .upsert(
@@ -222,6 +241,7 @@ async function handleSubscriptionUpdated(
         included_requests: planConfig.includedRequests,
         current_period_start: periodStart,
         current_period_end: periodEnd,
+        stripe_overage_item_id: stripeOverageItemId,
       },
       { onConflict: 'organization_id' },
     );

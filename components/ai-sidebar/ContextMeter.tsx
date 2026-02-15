@@ -75,6 +75,53 @@ function BreakdownRow({ label, tokens, maxTokens }: { label: string; tokens: num
 }
 
 // ---------------------------------------------------------------------------
+// Per-agent breakdown (D3)
+// ---------------------------------------------------------------------------
+
+const AGENT_BADGE_COLORS: Record<string, string> = {
+  project_manager: 'bg-purple-500/20 text-purple-400',
+  liquid: 'bg-amber-500/20 text-amber-400',
+  css: 'bg-sky-500/20 text-sky-400',
+  javascript: 'bg-yellow-500/20 text-yellow-400',
+  json: 'bg-emerald-500/20 text-emerald-400',
+  review: 'bg-rose-500/20 text-rose-400',
+};
+
+function AgentBreakdown({ agents }: { agents: Array<{ agentType: string; inputTokens: number; outputTokens: number }> }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="border-t ide-border-subtle pt-2 space-y-1">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-1 text-[11px] ide-text-3 hover:ide-text-2 transition-colors w-full"
+      >
+        <svg className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        Agent Breakdown
+        <span className="ide-text-quiet ml-auto tabular-nums">{agents.length} agent{agents.length !== 1 ? 's' : ''}</span>
+      </button>
+      {expanded && (
+        <div className="space-y-1 pl-3">
+          {agents.map((a, i) => (
+            <div key={i} className="flex items-center justify-between text-[11px]">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${AGENT_BADGE_COLORS[a.agentType] ?? 'ide-surface-inset ide-text-muted'}`}>
+                {a.agentType.replace('_', ' ')}
+              </span>
+              <span className="ide-text-2 tabular-nums">
+                {formatTokens(a.inputTokens)} in / {formatTokens(a.outputTokens)} out
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ContextMeter
 // ---------------------------------------------------------------------------
 
@@ -178,6 +225,11 @@ export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps
               <BreakdownRow label="Selection" tokens={meter.breakdown.selection} maxTokens={meter.maxTokens} />
             )}
           </div>
+
+          {/* Per-agent breakdown */}
+          {meter.breakdown.perAgentUsage && meter.breakdown.perAgentUsage.length > 0 && (
+            <AgentBreakdown agents={meter.breakdown.perAgentUsage} />
+          )}
 
           {/* Budget truncation warning */}
           {meter.breakdown.budgetTruncated && (

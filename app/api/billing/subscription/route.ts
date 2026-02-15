@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
         currentPeriodStart: null,
         currentPeriodEnd: null,
         onDemandEnabled: false,
-        onDemandLimitCents: 0,
+        onDemandLimitCents: null,
+        overageCostCents: 0,
+        overageChargeCents: 0,
+        usageBreakdown: [],
+        priceMonthly: 0,
       });
     }
 
@@ -41,22 +45,69 @@ export async function GET(request: NextRequest) {
     const periodEnd: string | null = sub.current_period_end ?? null;
 
     let usedRequests = 0;
+    let overageCostCents = 0;
+    const usageBreakdown: { model: string; requests: number; tokens: number; cost: number }[] = [];
 
     if (periodStart) {
       const supabase = createServiceClient();
-      const query = supabase
+
+      let countQuery = supabase
         .from('usage_records')
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', result.organizationId)
+        .eq('is_byok', false)
         .gte('created_at', periodStart);
 
       if (periodEnd) {
-        query.lte('created_at', periodEnd);
+        countQuery = countQuery.lte('created_at', periodEnd);
       }
 
-      const { count } = await query;
+      const { count } = await countQuery;
       usedRequests = count ?? 0;
+
+      let recordsQuery = supabase
+        .from('usage_records')
+        .select('model, input_tokens, output_tokens, cost_cents, is_included, created_at')
+        .eq('organization_id', result.organizationId)
+        .eq('is_byok', false)
+        .gte('created_at', periodStart);
+
+      if (periodEnd) {
+        recordsQuery = recordsQuery.lte('created_at', periodEnd);
+      }
+
+      const { data: records } = await recordsQuery;
+
+      if (records) {
+        const byModel = new Map<
+          string,
+          { requests: number; tokens: number; cost: number }
+        >();
+        for (const r of records) {
+          const tokens = (r.input_tokens ?? 0) + (r.output_tokens ?? 0);
+          const cost = (r.cost_cents ?? 0) / 100;
+          if (!r.is_included) overageCostCents += r.cost_cents ?? 0;
+          const key = r.model ?? 'unknown';
+          const prev = byModel.get(key) ?? {
+            requests: 0,
+            tokens: 0,
+            cost: 0,
+          };
+          byModel.set(key, {
+            requests: prev.requests + 1,
+            tokens: prev.tokens + tokens,
+            cost: prev.cost + cost,
+          });
+        }
+        for (const [model, data] of byModel) {
+          usageBreakdown.push({ model, ...data });
+        }
+      }
     }
+
+    const markup =
+      Math.max(1, parseFloat(process.env.OVERAGE_MARKUP_MULTIPLIER ?? '2') || 2);
+    const overageChargeCents = Math.ceil(overageCostCents * markup);
 
     return successResponse({
       plan,
@@ -66,7 +117,11 @@ export async function GET(request: NextRequest) {
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
       onDemandEnabled: sub.on_demand_enabled ?? false,
-      onDemandLimitCents: sub.on_demand_limit_cents ?? 0,
+      onDemandLimitCents: sub.on_demand_limit_cents ?? null,
+      overageCostCents,
+      overageChargeCents,
+      usageBreakdown,
+      priceMonthly: (planConfig.priceMonthly ?? 0) / 100,
     });
   } catch (error) {
     return handleAPIError(error);
