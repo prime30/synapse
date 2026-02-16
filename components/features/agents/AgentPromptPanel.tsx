@@ -769,6 +769,15 @@ export function AgentPromptPanel({
 
               if (sseEvent.type === 'done') {
                 receivedDone = true;
+                // Mark thinking complete and enable input immediately so UX updates without waiting for stream close
+                thinkingComplete = true;
+                const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+                thinkingStepsRef.current = steps;
+                updateMessage(assistantMsgId, streamedContent, {
+                  thinkingSteps: steps.length > 0 ? [...steps] : undefined,
+                  thinkingComplete: true,
+                });
+                setIsLoading(false);
                 continue;
               }
               if (sseEvent.type === 'error') {
@@ -1176,16 +1185,20 @@ export function AgentPromptPanel({
         // Clean up timers (client timeout, stall detection) and flush debounce
         clearTimeout(clientTimeout);
         if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
+        // Stream ended — ensure we show Complete and final content
+        thinkingComplete = true;
+        const stepsToFlush = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+        thinkingStepsRef.current = stepsToFlush;
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
           debounceTimerRef.current = null;
-          // Flush any pending content update
-          if (streamedContent) {
-            updateMessage(assistantMsgId, streamedContent, {
-              thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
-              thinkingComplete: thinkingComplete || undefined,
-            });
-          }
+        }
+        const stepsForMessage = stepsToFlush.length > 0 ? [...stepsToFlush] : undefined;
+        if (streamedContent || stepsForMessage) {
+          updateMessage(assistantMsgId, streamedContent, {
+            thinkingSteps: stepsForMessage,
+            thinkingComplete: true,
+          });
         }
 
         // ── Handle SSE error events ─────────────────────────────────────

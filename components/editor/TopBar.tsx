@@ -387,18 +387,8 @@ export function TopBar({
 
   return (
     <div className="h-10 flex items-center px-3 gap-3 border-b ide-border-subtle ide-surface shrink-0 select-none">
-      {/* Left: Home + Push / Pull + sync status */}
+      {/* Left: Push / Pull + sync status (Project Manager is in Activity Bar) */}
       <div className="flex items-center gap-1.5">
-        {onHomeClick && (
-          <button
-            type="button"
-            onClick={onHomeClick}
-            title="Project Manager"
-            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors mr-1.5"
-          >
-            <HomeGridIcon />
-          </button>
-        )}
         {connected && (
           <>
             <button

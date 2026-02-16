@@ -729,8 +729,31 @@
       }
     };
 
+    // Block single-click link navigation while inspecting.
+    // Double-click still navigates (via the dblclick → window.location fallback below).
+    inspectState.handlers.linkBlocker = function (evt) {
+      if (isInspectElement(evt.target)) return; // allow tooltip link clicks
+      var anchor = evt.target.closest ? evt.target.closest('a[href]') : null;
+      if (anchor) {
+        evt.preventDefault();
+      }
+    };
+
+    // On double-click, navigate to the link href (restore normal behaviour)
+    inspectState.handlers.dblclick = function (evt) {
+      if (isInspectElement(evt.target)) return;
+      // If locked, unlock first so inspector resets cleanly
+      if (inspectState.locked) unlockInspect();
+      var anchor = evt.target.closest ? evt.target.closest('a[href]') : null;
+      if (anchor && anchor.href) {
+        window.location.href = anchor.href;
+      }
+    };
+
     document.addEventListener('mousemove', inspectState.handlers.mousemove, true);
     document.addEventListener('click', inspectState.handlers.click, true);
+    document.addEventListener('click', inspectState.handlers.linkBlocker, true);
+    document.addEventListener('dblclick', inspectState.handlers.dblclick, true);
     document.addEventListener('keydown', inspectState.handlers.keydown, true);
 
     return { enabled: true };
@@ -748,6 +771,12 @@
     }
     if (inspectState.handlers.click) {
       document.removeEventListener('click', inspectState.handlers.click, true);
+    }
+    if (inspectState.handlers.linkBlocker) {
+      document.removeEventListener('click', inspectState.handlers.linkBlocker, true);
+    }
+    if (inspectState.handlers.dblclick) {
+      document.removeEventListener('dblclick', inspectState.handlers.dblclick, true);
     }
     if (inspectState.handlers.keydown) {
       document.removeEventListener('keydown', inspectState.handlers.keydown, true);

@@ -432,7 +432,7 @@ export async function POST(request: NextRequest) {
           const budgetedSummary = enforceRequestBudget(summaryMessages);
 
           // Select summary-phase tools when streaming tool use is enabled
-          const selectedTools = AI_FEATURES.streamingToolUse && intentMode !== 'ask'
+          const selectedTools = AI_FEATURES.streamingToolUse
             ? selectToolsForRequest(intentMode, body.request, !!body.domContext)
             : [];
 

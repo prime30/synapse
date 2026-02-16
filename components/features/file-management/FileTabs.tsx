@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Globe, Link2 } from 'lucide-react';
+import { Eye, Globe, Link2 } from 'lucide-react';
 import { FileTab } from './FileTab';
 import { PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import type { FileGroup } from '@/lib/shopify/theme-grouping';
@@ -31,6 +31,8 @@ interface FileTabsProps {
   previewTabOpen?: boolean;
   /** Callback to close the preview tab */
   onClosePreviewTab?: () => void;
+  /** Callback to reopen the preview tab */
+  onOpenPreviewTab?: () => void;
   /** Whether the active file has unsaved changes */
   isActiveFileDirty?: boolean;
   /** Whether the active file is locked */
@@ -65,6 +67,7 @@ export function FileTabs({
   onReorderTabs,
   previewTabOpen,
   onClosePreviewTab,
+  onOpenPreviewTab,
   isActiveFileDirty = false,
   isActiveFileLocked = false,
   onSaveClick,
@@ -265,6 +268,18 @@ export function FileTabs({
             );
           })}
         </div>
+
+        {/* Reopen preview button (shown when preview tab is closed) */}
+        {!previewTabOpen && onOpenPreviewTab && (
+          <button
+            type="button"
+            onClick={onOpenPreviewTab}
+            className="flex items-center justify-center w-8 h-full ide-text-muted hover:ide-text-2 ide-hover transition-colors shrink-0"
+            title="Open Preview"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />

@@ -15,6 +15,8 @@ interface ActivityBarProps {
   activePanel: ActivityPanel;
   onPanelChange: (panel: ActivityPanel) => void;
   onSettingsClick?: () => void;
+  /** Project Manager / Home — opens project list; shown at top of icon bar */
+  onHomeClick?: () => void;
 }
 
 interface ActivityItem {
@@ -123,6 +125,15 @@ const KeyboardIcon = (
   </svg>
 );
 
+const HomeGridIcon = (
+  <svg {...iconProps}>
+    <rect x="3" y="3" width="8" height="8" rx="1" />
+    <rect x="13" y="3" width="8" height="8" rx="1" />
+    <rect x="3" y="13" width="8" height="8" rx="1" />
+    <rect x="13" y="13" width="8" height="8" rx="1" />
+  </svg>
+);
+
 /* ------------------------------------------------------------------ */
 /*  Activity items                                                     */
 /* ------------------------------------------------------------------ */
@@ -144,6 +155,7 @@ export function ActivityBar({
   activePanel,
   onPanelChange,
   onSettingsClick,
+  onHomeClick,
 }: ActivityBarProps) {
   const { isDark, toggle: toggleTheme } = useTheme();
 
@@ -153,6 +165,21 @@ export function ActivityBar({
 
   return (
     <div className="w-12 ide-surface border-r ide-border-subtle flex flex-col items-center shrink-0 select-none">
+      {/* ── Project Manager / Home (top of icon bar) ────────────────── */}
+      {onHomeClick && (
+        <div className="flex flex-col items-center pt-2 pb-1">
+          <button
+            type="button"
+            onClick={onHomeClick}
+            className="w-10 h-10 flex items-center justify-center rounded-md ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+            title="Project Manager"
+            aria-label="Project Manager"
+          >
+            {HomeGridIcon}
+          </button>
+        </div>
+      )}
+
       {/* ── Main navigation icons ──────────────────────────────────── */}
       <div className="flex flex-col items-center gap-0.5 py-2">
         {MAIN_ITEMS.map((item) => {

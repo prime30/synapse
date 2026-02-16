@@ -1344,7 +1344,6 @@ export default function ProjectPage() {
         }}
         onRefreshReport={devReport.refresh}
         presence={presence}
-        onHomeClick={() => setShowHomeModal(true)}
         collaborativeMode={collaborativeMode}
         onCollaborativeModeChange={setCollaborativeMode}
         collabPeers={collabPeers.map(p => ({
@@ -1376,6 +1375,7 @@ export default function ProjectPage() {
             activePanel={activeActivity}
             onPanelChange={setActiveActivity}
             onSettingsClick={() => setSettingsOpen(true)}
+            onHomeClick={() => setShowHomeModal(true)}
           />
         )}
 
@@ -1672,6 +1672,7 @@ export default function ProjectPage() {
                   onReorderTabs={tabs.reorderTabs}
                   previewTabOpen={tabs.previewTabOpen}
                   onClosePreviewTab={tabs.closePreviewTab}
+                  onOpenPreviewTab={tabs.openPreviewTab}
                   isActiveFileDirty={isActiveFileDirty}
                   isActiveFileLocked={isActiveFileLocked}
                   onSaveClick={handleSaveActiveFile}
@@ -1902,11 +1903,24 @@ export default function ProjectPage() {
                   <h2 className="text-lg font-medium ide-text-2 mb-1">
                     No file selected
                   </h2>
-                  <p className="text-sm ide-text-3">
+                  <p className="text-sm ide-text-3 mb-4">
                     {hasFiles
                       ? 'Select a file from the explorer to start editing'
                       : 'Import a theme or upload files to begin'}
                   </p>
+                  {!tabs.previewTabOpen && (
+                    <button
+                      type="button"
+                      onClick={() => tabs.openPreviewTab()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                      </svg>
+                      Start Preview
+                    </button>
+                  )}
                   {/* Sync indicators when no file is open */}
                   <div className="absolute bottom-3 right-3 flex items-center gap-3">
                     <LocalSyncIndicator projectId={projectId} />
