@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Metrics aggregator via Redis -- EPIC B
  *
  * Counters stored in CacheAdapter with TTL-based bucketing.
@@ -53,7 +53,7 @@ export async function getMetrics(): Promise<MetricsSummary> {
   ];
   const result: Record<string, number> = {};
   for (const key of keys) result[key] = (await cache.get<number>(key)) ?? 0;
-  return result as MetricsSummary;
+  return result as unknown as MetricsSummary;
 }
 
 export async function getAverageLatency(): Promise<number> {

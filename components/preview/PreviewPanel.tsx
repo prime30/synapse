@@ -163,12 +163,14 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   // Visible sections — updated from passive bridge messages alongside URL
   const [liveVisibleSections, setLiveVisibleSections] = useState<VisibleSection[]>([]);
 
-  // Derive relevant Liquid files from the current preview URL + visible sections
+  // Derive relevant Liquid files from the current preview URL + visible sections.
+  // Use path prop as fallback when bridge hasn't reported liveUrlPath yet (e.g. product-form-dynamic shows for product pages).
   const relevantLiquidFiles = useMemo(() => {
-    if (!liveUrlPath) return [];
-    const result = deriveRelevantLiquidFiles(liveUrlPath, liveVisibleSections);
+    const pathForRelevant = liveUrlPath ?? path ?? null;
+    if (!pathForRelevant) return [];
+    const result = deriveRelevantLiquidFiles(pathForRelevant, liveVisibleSections);
     return flattenRelevantFiles(result);
-  }, [liveUrlPath, liveVisibleSections]);
+  }, [liveUrlPath, liveVisibleSections, path]);
 
   // Listen for passive bridge messages to track the actual iframe URL
   useEffect(() => {
@@ -679,8 +681,8 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
                   key={fp}
                   type="button"
                   onClick={() => onRelevantFileClick?.(fp)}
-                  className="inline-flex items-center shrink-0 rounded-md ide-surface-inset px-2 py-0.5 text-[11px] font-mono ide-text-2 hover:ide-text hover:bg-accent/10 transition-colors truncate max-w-[180px]"
-                  title={fp}
+                  className="inline-flex items-center shrink-0 rounded-md ide-surface-inset px-2 py-0.5 text-[11px] font-mono ide-text-2 hover:ide-text hover:bg-accent/10 transition-colors truncate max-w-[180px] cursor-pointer"
+                  title={`Open ${fp}`}
                 >
                   {fp.split('/').pop()}
                 </button>

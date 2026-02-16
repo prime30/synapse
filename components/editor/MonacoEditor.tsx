@@ -496,7 +496,7 @@ export function MonacoEditor({
       /* ═══════════════════════════════════════════════════════════════════
          Feature 8 – Color Swatches Inline (skip for CSS/SCSS/LESS: Monaco provides one)
          ═══════════════════════════════════════════════════════════════════ */
-      const hasBuiltInColorProvider = language === 'css' || language === 'scss' || language === 'less';
+      const hasBuiltInColorProvider = language === 'css';
       if (!hasBuiltInColorProvider) {
         const colorDecs = editorInstance.createDecorationsCollection([]);
         colorDecorationsRef.current = colorDecs;

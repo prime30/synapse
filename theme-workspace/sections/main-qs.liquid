@@ -117,13 +117,16 @@ endif
           
           {%- when 'form' -%}
                 {%- liquid
+                    assign se_stts = section.settings
+                    assign advance_pr_type = meta_theme.advance_pr_type.value
+                    assign advance_label = meta_theme.advance_label.value
                     assign is_fit_ratio_img = false
                     if variant_images.size > 0 and bk_stts.enable_fit_ratio_img and bk_stts.color_mode contains 'variant_image'
                         assign is_fit_ratio_img = true
                         assign first_ratio_img = variant_images[0].aspect_ratio
                     endif
                     assign arr_properties = seBlocks | where: 'type', 'properties'
-                    render 'product-form', type:'main', product: product, bk_stts: bk_stts, pr_sid: pr_sid, isExternal:false, external_title:external_title, external_link:external_link, isProductAvailable:isProductAvailable, isProductDefault:isProductDefault, current_variant:current_variant, remove_soldout: remove_soldout, PR_no_pick:PR_no_pick, isPreoder:isPreoder, is_fit_ratio_img:is_fit_ratio_img, first_ratio_img:first_ratio_img, name_sizeg:name_sizeg, html_sizeg:html_sizeg,pos_sizeg:pos_sizeg, html_price:html_price ,shopify_attributes:block.shopify_attributes, arr_properties: arr_properties, cus_qty: cus_qty
+                    render 'product-form-dynamic', type: 'main', product: product, bk_stts: bk_stts, pr_sid: pr_sid, isExternal: false, external_title: external_title, external_link: external_link, isProductAvailable: isProductAvailable, isProductDefault: isProductDefault, current_variant: current_variant, remove_soldout: remove_soldout, PR_no_pick: PR_no_pick, isPreoder: isPreoder, is_fit_ratio_img: is_fit_ratio_img, first_ratio_img: first_ratio_img, name_sizeg: name_sizeg, html_sizeg: html_sizeg, pos_sizeg: pos_sizeg, advance_pr_type: advance_pr_type, advance_label: advance_label, html_price: html_price, shopify_attributes: block.shopify_attributes, arr_properties: arr_properties, cus_qty: cus_qty, se_stts: se_stts
                 -%}
       {%- when 'price' -%} {% if customer %}
               <div class="t4s-product__price" style="--price-size:{{ bk_stts.size_price_pr }}px;--price-del-size:{{ bk_stts.size_price_pr | times : 0.8 }}px;--price-weight:{{ bk_stts.fw_price_pr }};--primary-price-color:{{ bk_stts.primary_price_color }};--secondary-price-color:{{ bk_stts.secondary_price_color }};--price-sale-color:{{ bk_stts.price_sale }}">

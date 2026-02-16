@@ -1737,8 +1737,8 @@ export default function ProjectPage() {
                         themeFiles={rawFiles.map((f) => ({ id: f.id, path: f.path }))}
                         onFilesRefresh={() => queryClient.invalidateQueries({ queryKey: ['project-files', projectId] })}
                         onRelevantFileClick={(filePath) => {
-                          const file = rawFiles.find((f) => f.path === filePath);
-                          if (file) tabs.openTab(file.id);
+                          const fileId = resolveFileId(filePath, rawFiles);
+                          if (fileId) tabs.openTab(fileId);
                         }}
                         onElementSelected={(el) => {
                           setSelectedElement(el);

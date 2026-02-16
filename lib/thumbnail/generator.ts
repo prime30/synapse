@@ -18,7 +18,7 @@ export async function generateThumbnail(
       executablePath: await chromium.default.executablePath(
         'https://github.com/nichochar/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
       ),
-      headless: chromium.default.headless,
+      headless: true,
     });
 
     try {

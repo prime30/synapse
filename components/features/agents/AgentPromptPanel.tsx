@@ -989,7 +989,7 @@ export function AgentPromptPanel({
               // Handle worker_progress events — track parallel worker status
               if (sseEvent.type === 'worker_progress') {
                 const workerEvent = sseEvent as SSEWorkerProgressEvent;
-                const workers = (workersRef.current ?? []) as Array<{ workerId: string; label: string; status: string }>;
+                const workers = (workersRef.current ?? []) as Array<{ workerId: string; label: string; status: 'running' | 'complete' }>;
                 const existingIdx = workers.findIndex(w => w.workerId === workerEvent.workerId);
                 if (existingIdx >= 0) {
                   workers[existingIdx] = { workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status };

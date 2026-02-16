@@ -1292,8 +1292,8 @@ export function ChatInterface({
                     <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
                   )}
 
-                  {/* Blinking caret while streaming */}
-                  {isLoading && idx === messages.length - 1 && (
+                  {/* Blinking caret only once streaming has started (not during Understanding/planning) */}
+                  {isLoading && idx === messages.length - 1 && (m.content?.trim().length ?? 0) > 0 && (
                     <span
                       className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
                       style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}

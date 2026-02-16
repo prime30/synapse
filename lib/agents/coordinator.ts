@@ -83,11 +83,9 @@ function buildDependencyContext(
   projectId: string,
 ): string {
   try {
-    // Check cache first
-    const cached = contextCache.get(projectId);
-    if (cached) {
-      return formatDependencies(cached.dependencies, cached.files);
-    }
+    // Note: contextCache.get() is async but this function is sync.
+    // We skip the cache read and always recompute. The set() below
+    // is fire-and-forget so future async callers can benefit.
 
     // Convert agent FileContext → context FileContext (adds required fields)
     const contextFiles: ContextFileContext[] = files.map((f) => ({
@@ -1720,6 +1718,12 @@ export class AgentCoordinator {
     let currentTier: RoutingTier = options?.tier ?? 'SIMPLE';
 
     if (autoRoute && !options?.tier) {
+      onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        label: 'Classifying request...',
+        detail: 'Determining complexity to pick the right model',
+      });
       const classification = await classifyRequest(userRequest, files.length, {
         lastMessageSummary: options?.recentMessages?.slice(-1)[0],
       });
@@ -1824,11 +1828,26 @@ export class AgentCoordinator {
         tier: currentTier,
       };
 
-      const raw = await this.pm.executeDirectPrompt(
-        prompt,
-        systemPrompt,
-        agentOptions,
-      );
+      // Heartbeat every 25s so the client doesn't show "Taking longer than expected" (60s stall)
+      const heartbeatMs = 25_000;
+      const heartbeat = setInterval(() => {
+        onProgress?.({
+          type: 'thinking',
+          phase: 'analyzing',
+          label: 'Still generating...',
+          detail: 'Model is working on your request',
+        });
+      }, heartbeatMs);
+      let raw: string;
+      try {
+        raw = await this.pm.executeDirectPrompt(
+          prompt,
+          systemPrompt,
+          agentOptions,
+        );
+      } finally {
+        clearInterval(heartbeat);
+      }
 
       setAgentCompleted(executionId, 'project_manager');
 

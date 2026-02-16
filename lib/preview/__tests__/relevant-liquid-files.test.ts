@@ -96,6 +96,20 @@ describe('deriveRelevantLiquidFiles', () => {
     );
     expect(result.templatePath).toBe('templates/product.liquid');
   });
+
+  it('includes related snippet paths for product template', () => {
+    const result = deriveRelevantLiquidFiles('/products/foo', []);
+    expect(result.snippetPaths).toContain('snippets/product-form.liquid');
+    expect(result.snippetPaths).toContain('snippets/product-form-dynamic.liquid');
+  });
+
+  it('includes related snippet paths when main-product section is visible', () => {
+    const result = deriveRelevantLiquidFiles('/products/bar', [
+      { id: 'shopify-section-template--1__main-product', type: 'main-product' },
+    ]);
+    expect(result.snippetPaths).toContain('snippets/product-form.liquid');
+    expect(result.snippetPaths).toContain('snippets/product-form-dynamic.liquid');
+  });
 });
 
 describe('flattenRelevantFiles', () => {

@@ -63,11 +63,30 @@ function normalizeSectionId(raw: string): string {
   return id;
 }
 
+// -- Related snippets per template/section ---------------------------------
+
+/** Snippets to include when a given section (e.g. main-product) is visible. */
+const SECTION_RELATED_SNIPPETS: Record<string, string[]> = {
+  'main-product': ['snippets/product-form.liquid', 'snippets/product-form-dynamic.liquid', 'snippets/grouped-form.liquid'],
+  'featured-product': ['snippets/product-form.liquid', 'snippets/product-form-dynamic.liquid'],
+  'main-qv': ['snippets/product-form.liquid', 'snippets/product-form-dynamic.liquid'],
+  'main-qs': ['snippets/product-form.liquid', 'snippets/product-form-dynamic.liquid'],
+};
+
+/** Snippets to include when on a given template type (e.g. product). */
+const TEMPLATE_RELATED_SNIPPETS: Record<string, string[]> = {
+  product: ['snippets/product-form.liquid', 'snippets/product-form-dynamic.liquid'],
+  collection: ['snippets/product-card.liquid', 'snippets/card-product.liquid'],
+  cart: ['snippets/cart-drawer.liquid', 'snippets/cart-item.liquid'],
+};
+
 // -- Public API -----------------------------------------------------------
 
 export interface RelevantLiquidFiles {
   templatePath: string | null;
   sectionPaths: string[];
+  /** Related snippet paths (e.g. product-form-dynamic when on product page). */
+  snippetPaths: string[];
 }
 
 export interface VisibleSection {
@@ -123,17 +142,37 @@ export function deriveRelevantLiquidFiles(
 
   const sectionPaths = Array.from(sectionSet).sort();
 
-  return { templatePath, sectionPaths };
+  // Related snippets: from template type and from visible sections
+  const snippetSet = new Set<string>();
+  const templateType = pathnameToTemplateType(pathname);
+  if (templateType && TEMPLATE_RELATED_SNIPPETS[templateType]) {
+    for (const p of TEMPLATE_RELATED_SNIPPETS[templateType]) snippetSet.add(p);
+  }
+  for (const sectionPath of sectionPaths) {
+    const sectionName = sectionPath.replace(/^sections\//, '').replace(/\.liquid$/, '');
+    if (SECTION_RELATED_SNIPPETS[sectionName]) {
+      for (const p of SECTION_RELATED_SNIPPETS[sectionName]) snippetSet.add(p);
+    }
+  }
+  const snippetPaths = Array.from(snippetSet).sort();
+
+  return { templatePath, sectionPaths, snippetPaths };
 }
 
 /**
- * Flatten the result into a single deduplicated list with the template first.
+ * Flatten the result into a single deduplicated list: template first, then sections, then related snippets.
  */
 export function flattenRelevantFiles(result: RelevantLiquidFiles): string[] {
+  const seen = new Set<string>();
   const files: string[] = [];
-  if (result.templatePath) files.push(result.templatePath);
-  for (const sp of result.sectionPaths) {
-    if (sp !== result.templatePath) files.push(sp);
-  }
+  const add = (path: string) => {
+    if (path && !seen.has(path)) {
+      seen.add(path);
+      files.push(path);
+    }
+  };
+  if (result.templatePath) add(result.templatePath);
+  for (const sp of result.sectionPaths) add(sp);
+  for (const sp of result.snippetPaths ?? []) add(sp);
   return files;
 }

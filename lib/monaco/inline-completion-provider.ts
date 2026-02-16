@@ -91,7 +91,7 @@ export function createInlineCompletionProvider(
           if (!res.ok) return null;
           const json = (await res.json()) as { data?: { completion?: string | null } };
           const completion = json?.data?.completion ?? null;
-          if (!completion || token.isCancellationRequested()) return null;
+          if (!completion || token.isCancellationRequested) return null;
           const range: IRange = {
             startLineNumber: position.lineNumber,
             startColumn: position.column,

@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
             fallbackQuery = fallbackQuery.eq('shopify_connection_id', connectionId);
           }
           const fallback = await fallbackQuery;
-          projects = (fallback.data ?? []).map((p) => ({ ...p, dev_theme_id: null, status: null }));
+          projects = (fallback.data ?? []).map((p) => ({ ...p, dev_theme_id: null, status: null, thumbnail_url: null }));
           projError = fallback.error;
         }
 

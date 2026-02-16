@@ -26,6 +26,6 @@ function getInstance(): Resend {
 
 export const resend = new Proxy({} as Resend, {
   get(_target, prop) {
-    return (getInstance() as Record<string | symbol, unknown>)[prop];
+    return (getInstance() as unknown as Record<string | symbol, unknown>)[prop];
   },
 });

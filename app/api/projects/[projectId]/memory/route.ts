@@ -141,8 +141,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = adminClient();
 
-    const { data, error } = await supabase
-      .from('developer_memory')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('developer_memory') as any)
       .insert({
         project_id: projectId,
         user_id: userId,
@@ -229,8 +229,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const supabase = adminClient();
 
-    const { data, error } = await supabase
-      .from('developer_memory')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('developer_memory') as any)
       .update(updates)
       .eq('id', memoryId)
       .eq('project_id', projectId)

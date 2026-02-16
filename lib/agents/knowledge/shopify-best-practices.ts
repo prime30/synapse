@@ -81,14 +81,14 @@ When a user asks about something on a page, trace **downward** through this chai
 - **The template is NOT where rendering logic lives.** Template JSON files only declare section order. The actual HTML/Liquid code is in section files.
 - **\`main-product.liquid\` is a section, not a template.** It lives in \`sections/\`, not \`templates/\`.
 - **Snippets often contain the actual markup.** Product images are frequently in \`snippets/product-thumbnail.liquid\` or \`snippets/product-media.liquid\`, not in the section file itself.
-- **JavaScript behavior is in assets.** Image loading bugs are usually in \`assets/\` JS files (e.g., lazysizes, slick, product-form), not in Liquid files.
+- **JavaScript behavior is in assets.** Image loading bugs are usually in \`assets/\` JS files (e.g., lazysizes, slick, product-form, product-form-dynamic), not in Liquid files.
 
 ### Topic → File Mapping (where to look first)
 
 | User mentions... | Check these files first |
 |---|---|
-| product image / thumbnail / media | snippets/product-thumbnail*.liquid, snippets/product-media*.liquid, sections/main-product*.liquid, assets/lazysizes*.js, assets/product-form*.js |
-| product page / PDP / variant | templates/product*.json, sections/main-product*.liquid, snippets/product-*.liquid, assets/product*.js |
+| product image / thumbnail / media | snippets/product-thumbnail*.liquid, snippets/product-media*.liquid, sections/main-product*.liquid, assets/lazysizes*.js, assets/product-form*.js, assets/product-form-dynamic.js |
+| product page / PDP / variant | templates/product*.json, sections/main-product*.liquid, snippets/product-form.liquid, snippets/product-form-dynamic.liquid, snippets/product-*.liquid, assets/product*.js, assets/product-form-dynamic.js |
 | collection / grid / product list | templates/collection*.json, sections/main-collection*.liquid, snippets/product-card*.liquid, snippets/card-product*.liquid |
 | cart / add to cart / buy button | templates/cart*.json, sections/main-cart*.liquid, snippets/cart-*.liquid, assets/cart*.js |
 | header / navigation / menu | sections/header*.liquid, snippets/header-*.liquid, snippets/menu-*.liquid, assets/header*.js |

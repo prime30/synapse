@@ -417,7 +417,7 @@ assign use_link_vendor = settings.use_link_vendor
                         assign first_ratio_img = variant_images[0].aspect_ratio
                     endif
                     assign arr_properties = seBlocks | where: 'type', 'properties'
-                    render 'product-form', type:'main', product: product, bk_stts: bk_stts, pr_sid: pr_sid, isExternal:false, external_title:external_title, external_link:external_link, isProductAvailable:isProductAvailable, isProductDefault:isProductDefault, current_variant:current_variant, remove_soldout: remove_soldout, PR_no_pick:PR_no_pick, isPreoder:isPreoder, is_fit_ratio_img:is_fit_ratio_img, first_ratio_img:first_ratio_img, name_sizeg:name_sizeg, html_sizeg:html_sizeg,pos_sizeg:pos_sizeg, html_price:html_price ,shopify_attributes:block.shopify_attributes, arr_properties: arr_properties, cus_qty: cus_qty
+                    render 'product-form-dynamic', type: 'main', product: product, bk_stts: bk_stts, pr_sid: pr_sid, isExternal: false, external_title: external_title, external_link: external_link, isProductAvailable: isProductAvailable, isProductDefault: isProductDefault, current_variant: current_variant, remove_soldout: remove_soldout, PR_no_pick: PR_no_pick, isPreoder: isPreoder, is_fit_ratio_img: is_fit_ratio_img, first_ratio_img: first_ratio_img, name_sizeg: name_sizeg, html_sizeg: html_sizeg, pos_sizeg: pos_sizeg, advance_pr_type: advance_pr_type, advance_label: advance_label, html_price: html_price, shopify_attributes: block.shopify_attributes, arr_properties: arr_properties, cus_qty: cus_qty, se_stts: se_stts
                 -%}
             {%- when 'delivery_ask' -%}
                 <div class="t4s-extra-link" {{ block.shopify_attributes }}>

@@ -196,15 +196,18 @@ interface ThemeTopicRule {
 const THEME_TOPIC_MAP: ThemeTopicRule[] = [
   // ── Product ────────────────────────────────────────────────────────
   {
-    keywords: ['product', 'pdp', 'variant', 'add to cart', 'buy button'],
+    keywords: ['product', 'pdp', 'variant', 'add to cart', 'buy button', 'product form', 'restock', 'awaiting restock', 'color swatch'],
     patterns: [
       'templates/product*.json',
       'sections/main-product*.liquid',
       'sections/product-*.liquid',
       'snippets/product-*.liquid',
+      'snippets/product-form.liquid',
+      'snippets/product-form-dynamic.liquid',
       'snippets/price*.liquid',
       'snippets/buy-buttons*.liquid',
       'assets/product*.js',
+      'assets/product-form-dynamic.js',
       'assets/product*.css',
     ],
   },
@@ -215,6 +218,8 @@ const THEME_TOPIC_MAP: ThemeTopicRule[] = [
       'snippets/product-thumbnail*.liquid',
       'snippets/product-media*.liquid',
       'snippets/product-img*.liquid',
+      'snippets/product-form*.liquid',
+      'snippets/product-form-dynamic.liquid',
       'sections/main-product*.liquid',
       'assets/lazysizes*.js',
       'assets/product-form*.js',
@@ -785,7 +790,7 @@ export class ContextEngine {
       const hybridResults = await hybridSearch(
         projectId,
         userMessage,
-        this.files.map(f => ({ fileId: f.fileId, fileName: f.name, content: f.content })),
+        Array.from(this.index.values()).map(f => ({ fileId: f.fileId, fileName: f.fileName, content: this.fileContents.get(f.fileId) ?? '' })),
         10,
       );
 

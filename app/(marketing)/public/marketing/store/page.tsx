@@ -32,17 +32,11 @@ export default function PublicMarketingStorePage() {
           {STORE_PRODUCT_IMAGES.map((product, i) => (
             <div key={i} className="rounded-xl border border-stone-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#141414]">
               <div className="aspect-square bg-stone-100 dark:bg-stone-900/50 relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={product.img}
                   alt={product.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    if (target.src.endsWith('.png'))
-                      target.src = target.src.replace(/\.png$/, '.jpg');
-                    else if (product.fallback)
-                      target.src = product.fallback;
-                  }}
                 />
               </div>
               <div className="p-3">

@@ -37,10 +37,16 @@ export async function reportOverageToStripe(
       return;
     }
 
-    await stripe.subscriptionItems.createUsageRecord(sub.stripe_overage_item_id, {
-      quantity: chargeCents,
-      timestamp: timestamp ?? Math.floor(Date.now() / 1000),
-      action: 'increment',
+    // Stripe v20+ removed the typed createUsageRecord method.
+    // Use the raw API endpoint to remain compatible with legacy usage-based billing.
+    await (stripe as unknown as { request: (opts: Record<string, unknown>) => Promise<unknown> }).request({
+      method: 'POST',
+      path: `/v1/subscription_items/${sub.stripe_overage_item_id}/usage_records`,
+      body: {
+        quantity: chargeCents,
+        timestamp: timestamp ?? Math.floor(Date.now() / 1000),
+        action: 'increment',
+      },
     });
   } catch (err) {
     console.error('[overage-reporter] Failed to report for org', orgId, err);

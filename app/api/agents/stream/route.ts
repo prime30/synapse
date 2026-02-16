@@ -316,12 +316,28 @@ export async function POST(request: NextRequest) {
               : coordinator.execute(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts);
           };
 
-          // Build deduplicated model fallback chain for coordinator
+          // Heartbeat: send a thinking event every 45s so the client never hits the 60s "Taking longer than expected" stall
+          const HEARTBEAT_INTERVAL_MS = 45_000;
+          const heartbeatId = setInterval(() => {
+            try {
+              controller.enqueue(formatSSEThinking({
+                type: 'thinking',
+                phase: 'analyzing',
+                label: 'Still working...',
+              }));
+            } catch { /* stream closed */ }
+          }, HEARTBEAT_INTERVAL_MS);
+
           const coordUserModel = body.model || MODELS.CLAUDE_SONNET;
           const coordFallbackChain = [coordUserModel, MODELS.CLAUDE_SONNET, MODELS.CLAUDE_HAIKU]
             .filter((m, i, arr) => arr.indexOf(m) === i);
 
-          let result = await executeCoordinator(coordinatorOptions);
+          let result;
+          try {
+            result = await executeCoordinator(coordinatorOptions);
+          } finally {
+            clearInterval(heartbeatId);
+          }
 
           // Model fallback: if MODEL_UNAVAILABLE, try next model in chain
           if (!result.success && result.error?.code === 'MODEL_UNAVAILABLE') {
@@ -441,7 +457,7 @@ export async function POST(request: NextRequest) {
           // Summary model fallback: Haiku → Sonnet
           const summaryFallbackChain = [MODELS.CLAUDE_HAIKU, MODELS.CLAUDE_SONNET];
           let actualSummaryModel = summaryFallbackChain[0];
-          let summaryGetUsage: () => Promise<{ inputTokens: number; outputTokens: number }>;
+          let summaryGetUsage: () => Promise<{ inputTokens: number; outputTokens: number }> = async () => ({ inputTokens: 0, outputTokens: 0 });
           let summaryStarted = false;
 
           for (const candidateSummaryModel of summaryFallbackChain) {

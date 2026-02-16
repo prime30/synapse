@@ -4,7 +4,6 @@ import { Globe, ShoppingCart, User, Tag } from 'lucide-react';
 import type { PreviewPageType } from '@/lib/types/preview';
 import type { MockDataConfig } from '@/lib/preview/mock-data-provider';
 import { DeviceSizeSelector } from './DeviceSizeSelector';
-import { PageTypeSelector } from './PageTypeSelector';
 
 // ---------------------------------------------------------------------------
 // Quick-select viewport widths
@@ -85,11 +84,12 @@ export function PreviewControls({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Page type (existing)                                              */}
+      {/* Page type — TODO: wire up PageTypeSelector when PreviewControls   */}
+      {/* is integrated (currently unused).                                 */}
       {/* ----------------------------------------------------------------- */}
       <div>
         <p className="text-xs font-semibold ide-text-2 mb-2">Page type</p>
-        <PageTypeSelector value={pageType} onChange={onPageTypeChange} />
+        <p className="text-xs ide-text-3">{pageType}</p>
       </div>
 
       {/* ----------------------------------------------------------------- */}
