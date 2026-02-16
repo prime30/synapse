@@ -6,7 +6,15 @@ import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 
-const PUBLIC_CATEGORIES = [
+interface DocCategory {
+  icon: string;
+  title: string;
+  description: string;
+  href: string;
+  adminOnly?: boolean;
+}
+
+const PUBLIC_CATEGORIES: DocCategory[] = [
   {
     icon: '🚀',
     title: 'Getting Started',
@@ -33,7 +41,7 @@ const PUBLIC_CATEGORIES = [
   },
 ];
 
-const ADMIN_CATEGORIES = [
+const ADMIN_CATEGORIES: DocCategory[] = [
   {
     icon: '🧠',
     title: 'Architecture',
