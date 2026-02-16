@@ -67,6 +67,16 @@ export function ElementRefChip({
         </span>
       )}
 
+      {/* Liquid section file badge */}
+      {element.liquidSection && (
+        <span
+          className="font-mono text-[11px] ide-text-muted truncate max-w-[180px]"
+          title={element.liquidSection}
+        >
+          {element.liquidSection}
+        </span>
+      )}
+
       {/* App badge */}
       {element.isApp && (
         <span className="rounded bg-amber-900/40 border border-amber-700/30 px-1 text-[10px] text-amber-400">

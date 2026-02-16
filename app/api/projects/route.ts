@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAuth } from '@/lib/middleware/auth';
+import { checkIdempotency, recordIdempotencyResponse } from '@/lib/middleware/idempotency';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 
@@ -206,6 +207,9 @@ async function createFirstProjectFallback(
 export async function POST(request: NextRequest) {
   try {
     await requireAuth(request);
+    const idempotencyCheck = await checkIdempotency(request);
+    if (idempotencyCheck.isDuplicate) return idempotencyCheck.cachedResponse;
+
     const body = await request.json().catch(() => ({}));
     const name =
       typeof body.name === 'string' && body.name.trim()
@@ -224,7 +228,9 @@ export async function POST(request: NextRequest) {
     if (error) {
       if (RPC_NOT_FOUND.test(error.message ?? '')) {
         const result = await createFirstProjectFallback(supabase, name, description);
-        return successResponse(result);
+        const response = successResponse(result);
+        await recordIdempotencyResponse(request, response);
+        return response;
       }
       throw APIError.internal(error.message ?? 'Failed to create project');
     }
@@ -234,10 +240,12 @@ export async function POST(request: NextRequest) {
       throw APIError.internal('No project ID returned');
     }
 
-    return successResponse({
+    const response = successResponse({
       id: result.id,
       name: result.name ?? name,
     });
+    await recordIdempotencyResponse(request, response);
+    return response;
   } catch (error) {
     return handleAPIError(error);
   }

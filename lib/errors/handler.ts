@@ -38,6 +38,10 @@ export class APIError extends Error {
   static internal(message = 'Internal server error', code = 'INTERNAL_ERROR'): APIError {
     return new APIError(message, code, 500);
   }
+
+  static serviceUnavailable(message = 'Service unavailable', code = 'SERVICE_UNAVAILABLE'): APIError {
+    return new APIError(message, code, 503);
+  }
 }
 
 /**

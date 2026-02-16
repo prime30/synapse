@@ -66,9 +66,11 @@ export function useWorkspacePresence(
             }
           }
         }
+        console.log('[useWorkspacePresence] Presence sync: ' + list.length + ' user(s) in channel "' + channelName + '"', list.map(u => u.full_name || u.user_id.slice(0, 8)));
         setPresence(list);
       })
       .subscribe(async (status) => {
+        console.log('[useWorkspacePresence] Channel "' + channelName + '" subscribe status: ' + status);
         if (status !== 'SUBSCRIBED') return;
         const { data: { user } } = await client.auth.getUser();
         if (!user) return;

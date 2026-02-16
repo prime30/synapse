@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
@@ -69,32 +69,25 @@ export async function POST(request: NextRequest) {
     const imageBuffer = Buffer.from(await imageField.arrayBuffer());
     const base64Image = imageBuffer.toString('base64');
 
-    // Build Gemini request
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: VISION_MODEL,
-      systemInstruction: SYSTEM_PROMPT,
-    });
+    // Build Gemini request using unified @google/genai SDK
+    const ai = new GoogleGenAI({ apiKey });
 
-    const imagePart = {
-      inlineData: {
-        data: base64Image,
-        mimeType: imageField.type,
-      },
-    };
-
-    const parts: Array<{ text: string } | typeof imagePart> = [];
+    const parts: Array<Record<string, unknown>> = [];
 
     if (textPrompt) {
       parts.push({ text: textPrompt });
     } else {
       parts.push({ text: 'Analyze this image.' });
     }
-    parts.push(imagePart);
+    parts.push({ inlineData: { data: base64Image, mimeType: imageField.type } });
 
-    const result = await model.generateContent(parts);
-    const response = result.response;
-    const analysis = response.text();
+    const result = await ai.models.generateContent({
+      model: VISION_MODEL,
+      contents: [{ role: 'user', parts }],
+      config: { systemInstruction: SYSTEM_PROMPT },
+    });
+
+    const analysis = result.text ?? '';
 
     return successResponse({
       analysis,

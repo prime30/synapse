@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+// #region agent log
+const DEBUG_LOG = (msg: string, data: Record<string, unknown>, hypothesisId: string) => {
+  fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useTemplateLayout.ts', message: msg, data, hypothesisId, timestamp: Date.now() }) }).catch(() => {});
+};
+// #endregion
 
 // ---------------------------------------------------------------------------
 // Types
@@ -152,11 +157,17 @@ export function useTemplateLayout(projectId: string) {
   const templatesQuery = useQuery({
     queryKey: ['template-files', projectId],
     queryFn: async (): Promise<ProjectFile[]> => {
+      // #region agent log
+      DEBUG_LOG('templatesQuery.queryFn started', { projectId }, 'H1');
+      // #endregion
       const res = await fetch(`/api/projects/${projectId}/files`);
+      // #region agent log
+      DEBUG_LOG('templatesQuery fetch response', { ok: res.ok, status: res.status }, 'H1');
+      // #endregion
       if (!res.ok) throw new Error('Failed to fetch template files');
       const json = await res.json();
       const files: ProjectFile[] = json.data ?? json.files ?? json ?? [];
-      return files
+      const filtered = files
         .filter(
           (f) =>
             f.path.startsWith('templates/') && f.path.endsWith('.json'),
@@ -166,6 +177,10 @@ export function useTemplateLayout(projectId: string) {
           name: f.name ?? f.path.split('/').pop() ?? f.path,
           path: f.path,
         }));
+      // #region agent log
+      DEBUG_LOG('templatesQuery resolved', { rawKeys: Object.keys(json), filesLen: files.length, filteredLen: filtered.length, firstPath: filtered[0]?.path }, 'H2');
+      // #endregion
+      return filtered;
     },
     enabled: !!projectId,
   });
@@ -191,7 +206,13 @@ export function useTemplateLayout(projectId: string) {
   const layoutQuery = useQuery({
     queryKey: ['template-layout', projectId, activeFileId],
     queryFn: async (): Promise<TemplateLayout> => {
+      // #region agent log
+      DEBUG_LOG('layoutQuery.queryFn started', { activeFileId }, 'H4');
+      // #endregion
       const res = await fetch(`/api/files/${activeFileId}`);
+      // #region agent log
+      DEBUG_LOG('layoutQuery fetch response', { ok: res.ok, status: res.status }, 'H4');
+      // #endregion
       if (!res.ok) throw new Error('Failed to fetch template content');
       const json = await res.json();
       const file = json.data ?? json;
@@ -201,6 +222,25 @@ export function useTemplateLayout(projectId: string) {
     },
     enabled: !!projectId && !!activeFileId,
   });
+
+  // #region agent log
+  useEffect(() => {
+    const isLoading = templatesQuery.isPending || (templates.length > 0 && (activeFileId === null || layoutQuery.isPending));
+    DEBUG_LOG('templateLayout state', {
+      projectId,
+      projectIdEmpty: !projectId,
+      templatesQueryStatus: templatesQuery.status,
+      templatesQueryIsPending: templatesQuery.isPending,
+      templatesLength: templates.length,
+      activeTemplate,
+      activeFileId,
+      layoutQueryStatus: layoutQuery.status,
+      layoutQueryIsPending: layoutQuery.isPending,
+      isLoading,
+      error: templatesQuery.error?.message ?? layoutQuery.error?.message ?? null,
+    }, 'H3');
+  }, [projectId, templatesQuery.status, templatesQuery.isPending, templatesQuery.error, templates.length, activeTemplate, activeFileId, layoutQuery.status, layoutQuery.isPending, layoutQuery.error]);
+  // #endregion
 
   // ── Save mutation ───────────────────────────────────────────────────────
   // Uses PUT /api/files/[id] to update the template content.

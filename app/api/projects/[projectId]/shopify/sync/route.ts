@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 import { requireProjectAccess } from '@/lib/middleware/auth';
+import { checkIdempotency, recordIdempotencyResponse } from '@/lib/middleware/idempotency';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
@@ -159,10 +160,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       })
       .eq('id', connection.id);
 
-    return successResponse({
+    const response = successResponse({
       ...result,
       scanResult: scanResult ?? undefined,
     });
+    await recordIdempotencyResponse(request, response);
+    return response;
   } catch (error) {
     return handleAPIError(error);
   }

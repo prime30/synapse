@@ -60,6 +60,7 @@ import {
   type ClarificationRequest,
 } from './clarification';
 import { verifyChanges, type VerificationResult } from './verification';
+import { saveAfterPM, saveAfterSpecialist, saveAfterReview, clearCheckpoint } from './checkpoint';
 import { compareSnapshots, type DOMSnapshot as VerifierDOMSnapshot, type PreviewVerificationResult } from './preview-verifier';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
 
@@ -535,7 +536,24 @@ export class AgentCoordinator {
 
   constructor() {
     this.pm = new ProjectManagerAgent();
-    this.specialists = {
+
+    // EPIC C: Try registry first, fall back to hardcoded specialists
+    let registrySpecialists: Record<string, LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent> | null = null;
+    try {
+      const { getAgentRegistry } = require('./registry');
+      const registry = getAgentRegistry();
+      const allAgents = registry.getEnabled();
+      if (allAgents.length >= 4) {
+        registrySpecialists = {} as Record<string, LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent>;
+        for (const meta of allAgents) {
+          registrySpecialists[meta.type] = meta.factory() as LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent;
+        }
+      }
+    } catch {
+      // Registry not available -- use hardcoded fallback
+    }
+
+    this.specialists = registrySpecialists ?? {
       liquid: new LiquidAgent(),
       javascript: new JavaScriptAgent(),
       css: new CSSAgent(),
@@ -596,8 +614,8 @@ export class AgentCoordinator {
     userPreferences: UserPreference[],
     options?: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
-    // Top-level coordinator timeout (180s) -- ensures we never hang
-    const COORDINATOR_TIMEOUT_MS = 180_000;
+    // Top-level coordinator timeout (120s) -- ensures we never hang
+    const COORDINATOR_TIMEOUT_MS = 120_000;
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new AIProviderError(
         'TIMEOUT',
@@ -899,6 +917,8 @@ export class AgentCoordinator {
         return pmResult;
       }
 
+      await saveAfterPM(executionId, pmResult.delegations, pmResult.changes);
+
       // Collect all affected file names from delegations for specialist context
       const affectedFileNames = (pmResult.delegations ?? []).flatMap(d => d.affectedFiles);
       const affectedFileIds = files
@@ -983,6 +1003,10 @@ export class AgentCoordinator {
           label: `${delegation.agent} agent`,
           detail: delegation.task.slice(0, 120),
           agent: delegation.agent,
+          metadata: {
+            agentType: delegation.agent,
+            affectedFiles: delegation.affectedFiles,
+          },
         });
 
         setAgentActive(executionId, delegation.agent);
@@ -1026,6 +1050,7 @@ export class AgentCoordinator {
           action: 'generate',
         });
         setAgentCompleted(executionId, delegation.agent);
+        await saveAfterSpecialist(executionId, delegation.agent, result);
         console.log(`[Coordinator] ${delegation.agent} specialist: ${specialistFiles.length} files, ~${estimateTokens(JSON.stringify(specialistTask.context.files.map(f => f.content)).slice(0, 200_000))} tokens`);
 
         if (result.changes?.length) {
@@ -1037,7 +1062,11 @@ export class AgentCoordinator {
             phase: 'change_ready',
             label: `${result.agentType} completed`,
             detail: `${result.changes.length} change(s) ready for preview`,
-            metadata: { agentType: result.agentType, changeCount: result.changes.length },
+            metadata: {
+              agentType: result.agentType,
+              changeCount: result.changes.length,
+              affectedFiles: delegation.affectedFiles,
+            },
           });
         }
 
@@ -1058,10 +1087,14 @@ export class AgentCoordinator {
         const waveNames = waveIndices.map(i => delegations[i].agent);
 
         if (waves.length > 1) {
+          const waveAffectedFiles = waveIndices.flatMap(i => delegations[i].affectedFiles);
           onProgress?.({
             type: 'thinking',
             phase: 'executing',
             label: `Wave ${waveIdx + 1}/${waves.length}: ${waveNames.join(' + ')} specialist${waveNames.length > 1 ? 's' : ''} in parallel`,
+            metadata: {
+              affectedFiles: waveAffectedFiles,
+            },
           });
         }
 
@@ -1076,6 +1109,10 @@ export class AgentCoordinator {
               workerId: delegations[idx].agent,
               label: delegations[idx].agent + ' specialist',
               status: 'running',
+              metadata: {
+                agentType: delegations[idx].agent,
+                affectedFiles: delegations[idx].affectedFiles,
+              },
             } as ThinkingEvent);
           }
 
@@ -1090,6 +1127,10 @@ export class AgentCoordinator {
               workerId: delegations[idx].agent,
               label: delegations[idx].agent + ' specialist',
               status: 'complete',
+              metadata: {
+                agentType: delegations[idx].agent,
+                affectedFiles: delegations[idx].affectedFiles,
+              },
             } as ThinkingEvent);
           }
 
@@ -1194,6 +1235,7 @@ export class AgentCoordinator {
 
       if (allChanges.length === 0) {
         updateExecutionStatus(executionId, 'completed');
+        await clearCheckpoint(executionId);
         await persistExecution(executionId);
         return {
           agentType: 'project_manager',
@@ -1452,6 +1494,7 @@ export class AgentCoordinator {
         action: 'review',
       });
       setAgentCompleted(executionId, 'review');
+      await saveAfterReview(executionId);
 
       if (reviewResult.reviewResult) {
         setReviewResult(executionId, reviewResult.reviewResult);
@@ -1617,6 +1660,7 @@ export class AgentCoordinator {
       }
 
       updateExecutionStatus(executionId, 'completed');
+      await clearCheckpoint(executionId);
       await persistExecution(executionId);
 
       return {

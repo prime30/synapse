@@ -1,4 +1,4 @@
-export type AIProvider = 'openai' | 'anthropic' | 'google';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | (string & {});
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';

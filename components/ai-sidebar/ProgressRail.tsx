@@ -35,12 +35,7 @@ function getIndicatorClasses(status: RailPhaseStatus): string {
 function IndicatorIcon({ status }: { status: RailPhaseStatus }) {
   switch (status) {
     case 'active':
-      return (
-        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      );
+      return <span className="h-3.5 w-3.5 rounded-full bg-current opacity-80 inline-block" aria-hidden />;
     case 'completed':
       return (
         <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -124,7 +119,7 @@ export function ProgressRail({ steps, isStreaming, onStop }: ProgressRailProps) 
                   <div className={getIndicatorClasses(step.status)}>
                     <IndicatorIcon status={step.status} />
                   </div>
-                  <span className={getLabelClasses(step.status)}>{step.label}</span>
+                  <span className={`${getLabelClasses(step.status)} ${step.status === 'active' ? 'animate-pulse' : ''}`}>{step.label}</span>
                   {step.status === 'completed' && step.summary && (
                     <span className="text-[10px] text-stone-500 dark:text-gray-500 truncate max-w-[80px]">
                       {step.summary}

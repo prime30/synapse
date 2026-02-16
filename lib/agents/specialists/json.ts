@@ -91,3 +91,15 @@ export class JSONAgent extends Agent {
     }
   }
 }
+
+// EPIC C: Self-register with the agent registry
+import { getAgentRegistry } from '../registry';
+getAgentRegistry().register({
+  name: 'JSON',
+  type: 'json',
+  filePatterns: ['*.json'],
+  capabilities: ['configuration', 'settings'],
+  priority: 4,
+  factory: () => new JSONAgent(),
+  enabled: true,
+});

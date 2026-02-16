@@ -1,5 +1,5 @@
 import type { AgentType, AgentTask, AgentResult, AgentError } from '@/lib/types/agent';
-import type { AIProviderInterface, AIMessage, ToolDefinition, ToolResult as AIToolResult, AIToolCompletionResult, AICompletionOptions, AIToolProviderInterface } from '@/lib/ai/types';
+import type { AIProvider, AIProviderInterface, AIMessage, ToolDefinition, ToolResult as AIToolResult, AIToolCompletionResult, AICompletionOptions, AIToolProviderInterface } from '@/lib/ai/types';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { AIProviderError, isRetryable } from '@/lib/ai/errors';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
@@ -59,8 +59,8 @@ export interface AgentUsage {
  * Maps a ProviderName (from model-router) to the AIProvider type used by get-provider.
  * The new provider system supports 'anthropic' | 'openai' | 'google'.
  */
-function toAIProvider(provider: ProviderName): 'anthropic' | 'openai' | 'google' {
-  return provider; // ProviderName and AIProvider are now the same union
+function toAIProvider(provider: ProviderName): AIProvider {
+  return provider;
 }
 
 /**

@@ -49,6 +49,9 @@ export interface AISidebarContextValue {
   fileLanguage: string | null;
   /** Current selection text */
   selection: string | null;
+  /** Selection line range (for chat pill display) */
+  selectionStartLine?: number | null;
+  selectionEndLine?: number | null;
   /** Last action type for suggestion arc detection */
   lastAction?: string | null;
 }

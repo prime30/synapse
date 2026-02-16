@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Users, FileText } from 'lucide-react';
 import { UserMenu } from '@/components/features/auth/UserMenu';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import type { WorkspacePresence } from '@/hooks/useWorkspacePresence';
@@ -12,6 +13,15 @@ export interface DevReportSummary {
   componentsAffected: number;
   pagesWorked: number;
   totalLinesAdded: number;
+}
+
+export interface CollabPeerSummary {
+  userId: string;
+  name: string;
+  color: string;
+  avatarUrl?: string;
+  cursor?: { lineNumber: number; column: number } | null;
+  filePath?: string | null;
 }
 
 export interface TopBarProps {
@@ -33,6 +43,16 @@ export interface TopBarProps {
   presence?: WorkspacePresence[];
   /** Callback when the home/projects button is clicked */
   onHomeClick?: () => void;
+  collaborativeMode?: boolean;
+  onCollaborativeModeChange?: (enabled: boolean) => void;
+  /** Yjs collaborative peers (from useCollaborativeEditor) merged into the avatar stack */
+  collabPeers?: CollabPeerSummary[];
+  /** Called when user clicks a file in the collaborator dropdown */
+  onNavigateToFile?: (filePath: string) => void;
+  /** The current user's ID — used to fix own-user presence race condition */
+  currentUserId?: string | null;
+  /** Local active file path — used as fallback when presence hasn't synced yet */
+  activeFilePath?: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,6 +164,134 @@ function SyncDot({ status }: { status: 'idle' | 'syncing' | 'error' }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  CollaboratorPopover                                                */
+/* ------------------------------------------------------------------ */
+
+interface CollaboratorPopoverProps {
+  fullName?: string | null;
+  userId: string;
+  avatarUrl?: string | null;
+  color: string;
+  filePath?: string | null;
+  cursor?: { lineNumber: number; column: number } | null;
+  onNavigateToFile?: (filePath: string) => void;
+}
+
+function CollaboratorPopover({
+  fullName,
+  userId,
+  avatarUrl,
+  color,
+  filePath,
+  cursor,
+  onNavigateToFile,
+}: CollaboratorPopoverProps) {
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const displayName = fullName?.trim() || userId.slice(0, 8);
+  const basename = filePath ? filePath.split('/').pop() : null;
+
+  return (
+    <div ref={popoverRef} className="relative">
+      <div
+        role="button"
+        tabIndex={0}
+        className="ring-2 ring-[var(--background)] rounded-full cursor-pointer hover:ring-gray-500 transition-all"
+        onClick={() => setOpen((prev) => !prev)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen((prev) => !prev);
+          }
+        }}
+        title={`${displayName}${filePath ? ` — ${filePath}` : ''}`}
+      >
+        <UserAvatar
+          avatarUrl={avatarUrl}
+          fullName={fullName}
+          userId={userId}
+          fallbackColor={color}
+          size="sm"
+        />
+      </div>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-2 min-w-[200px] bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-3">
+          <div className="flex items-center gap-2.5 mb-2">
+            <UserAvatar
+              avatarUrl={avatarUrl}
+              fullName={fullName}
+              userId={userId}
+              fallbackColor={color}
+              size="md"
+            />
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-white truncate">{displayName}</span>
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                <span
+                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                Online
+              </span>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-700 my-2" />
+
+          {filePath && basename ? (
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-800 rounded-md transition-colors text-left"
+                onClick={() => {
+                  onNavigateToFile?.(filePath);
+                  setOpen(false);
+                }}
+              >
+                <FileText className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                <span className="truncate">{basename}</span>
+              </button>
+              {cursor && (
+                <span className="block px-2 mt-0.5 text-[10px] text-gray-500">
+                  Line {cursor.lineNumber}, Col {cursor.column}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="block px-2 text-[11px] text-gray-500">No file open</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  TopBar                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -163,11 +311,79 @@ export function TopBar({
   onRefreshReport,
   presence = [],
   onHomeClick,
+  collaborativeMode = false,
+  onCollaborativeModeChange,
+  collabPeers = [],
+  onNavigateToFile,
+  currentUserId,
+  activeFilePath: localActiveFilePath,
 }: TopBarProps) {
   const handleReportClick = () => {
     if (!devReport && onRefreshReport) onRefreshReport();
     onOpenReport?.();
   };
+
+  // Build unified collaborator list from workspace presence + Yjs peers.
+  // Each entry gets a unique key so the same user in two tabs appears twice.
+  const unifiedCollaborators = React.useMemo(() => {
+    const list: Array<{
+      key: string;
+      user_id: string;
+      full_name?: string | null;
+      avatar_url?: string | null;
+      color: string;
+      file_path?: string | null;
+      cursor?: { lineNumber: number; column: number } | null;
+      source: 'presence' | 'collab';
+    }> = [];
+
+    const seenUserSources = new Set<string>();
+
+    // Index collab peers by userId for fast cursor lookup
+    const peerByUserId = new Map<string, CollabPeerSummary>();
+    collabPeers.forEach((peer) => {
+      peerByUserId.set(peer.userId, peer);
+    });
+
+    // Add workspace presence entries (one per tab/session, keyed by index)
+    presence.forEach((p, idx) => {
+      const key = `presence-${p.user_id}-${idx}`;
+      seenUserSources.add(`presence-${p.user_id}`);
+      const matchingPeer = peerByUserId.get(p.user_id);
+      // Fix race: presence may broadcast file_path=null while rawFiles is still loading.
+      // For the current user, fall back to the locally-known activeFilePath.
+      const effectiveFilePath =
+        p.file_path ?? (currentUserId && p.user_id === currentUserId ? (localActiveFilePath ?? null) : null);
+      list.push({
+        key,
+        user_id: p.user_id,
+        full_name: p.full_name,
+        avatar_url: p.avatar_url,
+        color: p.color,
+        file_path: effectiveFilePath,
+        cursor: matchingPeer?.cursor ?? null,
+        source: 'presence',
+      });
+    });
+
+    // Add Yjs collab peers that aren't already represented in presence
+    collabPeers.forEach((peer, idx) => {
+      if (!seenUserSources.has(`presence-${peer.userId}`)) {
+        list.push({
+          key: `collab-${peer.userId}-${idx}`,
+          user_id: peer.userId,
+          full_name: peer.name,
+          avatar_url: peer.avatarUrl ?? null,
+          color: peer.color,
+          file_path: peer.filePath ?? null,
+          cursor: peer.cursor ?? null,
+          source: 'collab',
+        });
+      }
+    });
+
+    return list;
+  }, [presence, collabPeers, currentUserId, localActiveFilePath]);
 
   return (
     <div className="h-10 flex items-center px-3 gap-3 border-b ide-border-subtle ide-surface shrink-0 select-none">
@@ -321,8 +537,24 @@ export function TopBar({
         </button>
       </div>
 
-      {/* Right: Command palette + presence avatars + User menu */}
+      {/* Right: Collaboration toggle + Command palette + presence avatars + User menu */}
       <div className="flex items-center gap-2 shrink-0">
+        {onCollaborativeModeChange && (
+          <button
+            type="button"
+            onClick={() => onCollaborativeModeChange(!collaborativeMode)}
+            className={
+              'flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ' +
+              (collaborativeMode
+                ? 'ide-surface-inset ide-text text-sky-400'
+                : 'ide-text-muted hover:ide-text-2 ide-hover')
+            }
+            title={collaborativeMode ? 'Live collaboration' : 'Solo mode'}
+          >
+            <Users className="w-3.5 h-3.5" strokeWidth={2} />
+            {collaborativeMode ? 'Live' : 'Solo'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onCommandPalette}
@@ -335,30 +567,27 @@ export function TopBar({
           </kbd>
         </button>
 
-        {/* Active collaborators avatar stack */}
-        {presence.length > 0 && (
+        {/* Active collaborators avatar stack (unified: workspace presence + Yjs peers) */}
+        {unifiedCollaborators.length > 0 && (
           <div className="flex items-center -space-x-1.5">
-            {presence.slice(0, 4).map((user) => (
-              <div
-                key={user.user_id}
-                className="ring-2 ring-[var(--background)] rounded-full"
-                title={`${user.full_name?.trim() || user.user_id.slice(0, 8)}${user.file_path ? ` — ${user.file_path}` : ''}`}
-              >
-                <UserAvatar
-                  avatarUrl={user.avatar_url}
-                  fullName={user.full_name}
-                  userId={user.user_id}
-                  fallbackColor={user.color}
-                  size="sm"
-                />
-              </div>
+            {unifiedCollaborators.slice(0, 5).map((c) => (
+              <CollaboratorPopover
+                key={c.key}
+                fullName={c.full_name}
+                userId={c.user_id}
+                avatarUrl={c.avatar_url}
+                color={c.color}
+                filePath={c.file_path}
+                cursor={c.cursor}
+                onNavigateToFile={onNavigateToFile}
+              />
             ))}
-            {presence.length > 4 && (
+            {unifiedCollaborators.length > 5 && (
               <span
                 className="h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-medium ide-text-muted ide-surface-inset ring-2 ring-[var(--background)]"
-                title={`${presence.length - 4} more`}
+                title={`${unifiedCollaborators.length - 5} more`}
               >
-                +{presence.length - 4}
+                +{unifiedCollaborators.length - 5}
               </span>
             )}
           </div>

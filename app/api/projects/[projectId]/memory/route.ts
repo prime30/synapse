@@ -19,15 +19,13 @@ interface RouteParams {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function adminClient() {
+function adminClient(): ReturnType<typeof createServiceClient> {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    throw APIError.internal('Service role key not configured');
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url || !serviceKey) {
+    throw APIError.serviceUnavailable('Developer memory not configured');
   }
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceKey
-  );
+  return createServiceClient(url, serviceKey);
 }
 
 const VALID_TYPES = new Set<MemoryType>(['convention', 'decision', 'preference']);
@@ -156,6 +154,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) {
+      const msg = (error.message ?? '').toLowerCase();
+      if (
+        msg.includes('relation') ||
+        msg.includes('does not exist') ||
+        error.code === '42P01' ||
+        msg.includes('column') ||
+        msg.includes('violates')
+      ) {
+        return successResponse(
+          { message: 'Developer memory not available' },
+          503
+        );
+      }
       throw APIError.internal(error.message);
     }
 

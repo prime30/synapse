@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import React, { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { loader as monacoLoader } from '@monaco-editor/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
@@ -20,6 +21,7 @@ import { VersionHistoryPanel } from '@/components/features/versions/VersionHisto
 import { DiagnosticsPanel } from '@/components/diagnostics/DiagnosticsPanel';
 import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
+import { AgentLiveBreakout } from '@/components/features/agents/AgentLiveBreakout';
 import { useFileTabs, PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
@@ -33,7 +35,7 @@ import { useWorkspacePresence } from '@/hooks/useWorkspacePresence';
 import { useRemoteCursors } from '@/hooks/useRemoteCursors';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
 import { RelatedFilesPrompt, type RelatedFileInfo } from '@/components/features/file-management/RelatedFilesPrompt';
-import { getLinkedFileIds, linkMultiple, isDismissed, dismissGroup } from '@/lib/file-linking';
+import { getLinkedFileIds, linkMultiple, unlinkAll, isDismissed, dismissGroup } from '@/lib/file-linking';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { ActivityBar } from '@/components/editor/ActivityBar';
 import { TopBar } from '@/components/editor/TopBar';
@@ -74,6 +76,10 @@ import { resolveFileId } from '@/lib/ai/file-path-detector';
 import { usePreviewVerification } from '@/hooks/usePreviewVerification';
 import { detectConventions, type ThemeFile } from '@/lib/ai/convention-detector';
 import { analyzeDiff } from '@/lib/ai/diff-analyzer';
+import { useGitSync } from '@/hooks/useGitSync';
+import { assignUserColor } from '@/lib/collaboration/user-colors';
+import type { CollaborativePeer } from '@/hooks/useCollaborativeEditor';
+import type { CollaborationUser } from '@/lib/collaboration/yjs-supabase-provider';
 
 // EPIC 15: Lazy-load canvas (zero bundle cost for non-canvas users)
 const CanvasView = React.lazy(() =>
@@ -129,6 +135,22 @@ const MemoryPanel = dynamic(
 );
 const CustomizerMode = dynamic(
   () => import('@/components/features/customizer/CustomizerMode').then(m => ({ default: m.CustomizerMode })),
+  { ssr: false }
+);
+const GitStatusBar = dynamic(
+  () => import('@/components/git/GitStatusBar').then(m => ({ default: m.GitStatusBar })),
+  { ssr: false }
+);
+const CommitDialog = dynamic(
+  () => import('@/components/git/CommitDialog'),
+  { ssr: false }
+);
+const BranchManager = dynamic(
+  () => import('@/components/git/BranchManager').then(m => ({ default: m.BranchManager })),
+  { ssr: false }
+);
+const MergeConflictPanel = dynamic(
+  () => import('@/components/git/MergeConflictPanel').then(m => ({ default: m.default })),
   { ssr: false }
 );
 
@@ -190,6 +212,14 @@ export default function ProjectPage() {
   const [quickActionsPosition, setQuickActionsPosition] = useState({ top: 0, left: 0 });
   const [quickActionsText, setQuickActionsText] = useState('');
 
+  // Git collaboration state
+  const [collaborativeMode, setCollaborativeMode] = useState(false);
+  const [mergeConflicts, setMergeConflicts] = useState<Array<{ path: string; oursContent: string; theirsContent: string }> | null>(null);
+  const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+  const [branchManagerOpen, setBranchManagerOpen] = useState(false);
+  const [collabPeers, setCollabPeers] = useState<CollaborativePeer[]>([]);
+  const [collabStatus, setCollabStatus] = useState<string>('disconnected');
+
   // EPIC 5: Ref to send messages to agent chat (QuickActions, Fix with AI)
   const sendMessageRef = useRef<((content: string) => void) | null>(null);
 
@@ -213,6 +243,10 @@ export default function ProjectPage() {
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
+
+  // Preload Monaco editor bundle on project page mount (before any file is opened).
+  // This eliminates the ~500-800ms cold-start delay when the user first clicks a file.
+  useEffect(() => { monacoLoader.init(); }, []);
   const {
     projects,
     activeProjects,
@@ -229,6 +263,7 @@ export default function ProjectPage() {
   const shopify = useShopifyConnection(projectId);
   const { data: tokenData } = useDesignTokens(projectId);
   const devReport = useDevReport(projectId);
+  const gitSync = useGitSync(projectId);
   const connected = !!activeStore.connection || shopify.connected;
   const connection = activeStore.connection
     ? {
@@ -278,6 +313,13 @@ export default function ProjectPage() {
   // EPIC 11: Template layout for customizer mode (lazy-fetched only when customize is active)
   const templateLayout = useTemplateLayout(viewMode === 'customize' ? projectId : '');
 
+  // #region agent log
+  useEffect(() => {
+    if (viewMode !== 'customize') return;
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'page.tsx customizer branch', message: 'viewMode=customize', data: { projectId, isLoading: templateLayout.isLoading, error: templateLayout.error, templatesLength: templateLayout.templates.length }, hypothesisId: 'H5', timestamp: Date.now() }) }).catch(() => {});
+  }, [viewMode, projectId, templateLayout.isLoading, templateLayout.error, templateLayout.templates.length]);
+  // #endregion
+
   // Section content for customizer — enriched with Liquid file content for schema parsing
   const [enrichedSections, setEnrichedSections] = useState<
     Array<import('@/hooks/useTemplateLayout').TemplateSection & { content?: string }>
@@ -306,6 +348,17 @@ export default function ProjectPage() {
 
   // Passive IDE context reporter — always enabled for logged-in users
   const { user: authUser } = useAuth();
+
+  const collaborationUser: CollaborationUser | undefined = useMemo(() => {
+    if (!authUser) return undefined;
+    return {
+      userId: authUser.id,
+      name: authUser.user_metadata?.full_name || authUser.email || 'Anonymous',
+      color: assignUserColor(authUser.id),
+      avatarUrl: authUser.user_metadata?.avatar_url,
+    };
+  }, [authUser]);
+
   const passiveContextEnabled = !!authUser;
   const activeSubNav = activeActivity === 'files' ? filesNav
     : activeActivity === 'store' ? storeNav
@@ -449,6 +502,12 @@ export default function ProjectPage() {
   // EPIC V3: Preview verification — before/after DOM snapshot comparison
   const { captureBeforeSnapshot, verify: verifyPreview } = usePreviewVerification(previewRef);
 
+  // ── Agent Live Breakout state ──
+  const [breakoutAgent, setBreakoutAgent] = useState<string | null>(null);
+  const [breakoutFile, setBreakoutFile] = useState<string | null>(null);
+  const [breakoutContent, setBreakoutContent] = useState<string | null>(null);
+  const [breakoutDismissed, setBreakoutDismissed] = useState(false);
+
   // Phase 4a: Live preview hot-reload
   const [livePreviewState, livePreviewActions] = useLivePreview();
   const handleLiveChange = useCallback((change: { filePath: string; newContent: string }) => {
@@ -458,6 +517,9 @@ export default function ProjectPage() {
     if (css && previewRef.current) {
       previewRef.current.injectCSS(css);
     }
+    // Feed the live breakout viewer with updated content
+    setBreakoutFile(change.filePath);
+    setBreakoutContent(change.newContent);
   }, [livePreviewActions]);
   const handleLiveSessionEnd = useCallback(() => {
     livePreviewActions.endSession();
@@ -482,18 +544,18 @@ export default function ProjectPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Listen for element-selected messages from the preview bridge
+  // Listen for element-selected and open-file messages from the preview bridge
+  const handleOpenFileRef = useRef<((filePath: string) => void) | null>(null);
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
-      if (
-        msg?.type === 'synapse-bridge-response' &&
-        msg?.action === 'element-selected' &&
-        msg?.data
-      ) {
-        setSelectedElement(msg.data as SelectedElement);
-        // Auto-focus agent chat so the user can type a command
-        agentChatRef.current?.querySelector('textarea')?.focus();
+      if (msg?.type === 'synapse-bridge-response' && msg?.data) {
+        if (msg.action === 'element-selected') {
+          setSelectedElement(msg.data as SelectedElement);
+          agentChatRef.current?.querySelector('textarea')?.focus();
+        } else if (msg.action === 'open-file' && msg.data.filePath) {
+          handleOpenFileRef.current?.(msg.data.filePath);
+        }
       }
     };
     window.addEventListener('message', handler);
@@ -677,6 +739,12 @@ export default function ProjectPage() {
     rawFiles.map((f) => [f.id, { id: f.id, name: f.name }])
   );
 
+  const [linkVersion, setLinkVersion] = useState(0);
+  const linkedToActiveFileIds = useMemo(
+    () => (tabs.activeFileId ? getLinkedFileIds(projectId, tabs.activeFileId) : []),
+    [projectId, tabs.activeFileId, linkVersion]
+  );
+
   const refreshFiles = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['project-files', projectId] });
   }, [projectId, queryClient]);
@@ -721,10 +789,11 @@ export default function ProjectPage() {
   const handleFileClick = (fileId: string) => {
     tabs.openTab(fileId);
 
-    // Smart open: check for related files
+    // Linked/grouped open: open all related files with this one so the group opens together
     const related = relatedFilesMap.get(fileId) ?? [];
     const notYetOpen = related.filter((id) => !tabs.openTabs.includes(id));
     if (notYetOpen.length > 0) {
+      tabs.openMultiple(notYetOpen);
       const clickedFile = rawFiles.find((f) => f.id === fileId);
       const groupKey = clickedFile?.path ?? fileId;
       if (!isDismissed(projectId, groupKey)) {
@@ -756,6 +825,22 @@ export default function ProjectPage() {
   const handleTabClose = (fileId: string) => {
     tabs.closeTab(fileId);
   };
+
+  const handleLinkWithFiles = useCallback(
+    (fileIds: string[]) => {
+      if (fileIds.length < 2) return;
+      linkMultiple(projectId, fileIds);
+      setLinkVersion((v) => v + 1);
+    },
+    [projectId]
+  );
+
+  const handleUnlinkActiveFile = useCallback(() => {
+    if (tabs.activeFileId) {
+      unlinkAll(projectId, tabs.activeFileId);
+      setLinkVersion((v) => v + 1);
+    }
+  }, [projectId, tabs.activeFileId]);
 
   // ── Project switching ─────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -848,6 +933,8 @@ export default function ProjectPage() {
       tabs.openTab(fileId);
     }
   }, [rawFiles, tabs]);
+  // Keep ref in sync for the bridge message listener (defined before this callback)
+  useEffect(() => { handleOpenFileRef.current = handleOpenFile; }, [handleOpenFile]);
 
   // Resolve file path to fileId (for code block Apply)
   const handleResolveFileId = useCallback((filePath: string) => {
@@ -861,6 +948,50 @@ export default function ProjectPage() {
     const cached = queryClient.getQueryData<{ id: string; content: string }>(['file', fileId]);
     return cached?.content ?? null;
   }, [rawFiles, queryClient]);
+
+  // ── Agent auto-open and scroll handlers ──
+
+  /** Update the breakout viewer with agent activity info. */
+  const handleAgentActivity = useCallback((info: {
+    agentType: string | null;
+    agentLabel?: string;
+    filePath: string | null;
+    liveContent: string | null;
+  }) => {
+    if (info.agentType) {
+      setBreakoutAgent(info.agentType);
+      setBreakoutDismissed(false);
+    } else if (info.agentType === null && !info.filePath && !info.liveContent) {
+      setBreakoutAgent(null);
+    }
+    if (info.filePath) setBreakoutFile(info.filePath);
+    if (info.liveContent) setBreakoutContent(info.liveContent);
+  }, []);
+
+  /** Batch open files by path (from agent thinking metadata.affectedFiles). */
+  const handleOpenFiles = useCallback((filePaths: string[]) => {
+    if (!filePaths || filePaths.length === 0) return;
+    const fileIds = filePaths
+      .map((p) => resolveFileId(p, rawFiles))
+      .filter((id): id is string => !!id);
+    if (fileIds.length > 0) {
+      tabs.openMultiple(fileIds);
+    }
+  }, [rawFiles, tabs]);
+
+  /** Scroll main editor to a specific line in a file after a propose_code_edit. */
+  const handleScrollToEdit = useCallback((filePath: string, lineNumber: number) => {
+    const fileId = resolveFileId(filePath, rawFiles);
+    if (!fileId) return;
+    // Open the file tab and set it active
+    tabs.openTab(fileId);
+    // Delay revealLine to allow the editor to mount/switch to the file
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        editorRef.current?.revealLine(lineNumber);
+      }, 150);
+    });
+  }, [rawFiles, tabs]);
 
   // ── Tool card handlers (passed to AgentPromptPanel -> ChatInterface) ──
 
@@ -969,6 +1100,15 @@ export default function ProjectPage() {
     setTokenUsage(usage);
   }, []);
 
+  const handleGitCommit = useCallback(async (message: string, files?: string[]) => {
+    const sha = await gitSync.commit(message, files);
+    if (sha) {
+      setCommitDialogOpen(false);
+      setToast('Committed: ' + sha.slice(0, 7));
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [gitSync]);
+
   // A5: Console clear handler
   const handleConsoleClear = useCallback(() => {
     setConsoleEntries([]);
@@ -976,31 +1116,38 @@ export default function ProjectPage() {
 
   // A5: QuickActions — update selection info from editor selection changes
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const handleEditorSelectionForToolbar = useCallback((selectedText: string | null) => {
-    // Forward to AI sidebar context as before
-    sidebar.updateContext({ selection: selectedText });
-    // Show/hide quick actions toolbar
-    if (selectedText && selectedText.length > 2) {
-      setQuickActionsText(selectedText);
-      setQuickActionsVisible(true);
-      // Position is set by handleSelectionPosition below; keep current if available
-    } else {
-      setQuickActionsVisible(false);
-    }
-  }, [sidebar]);
+  const handleEditorSelectionForToolbar = useCallback(
+    (selection: { text: string; startLine: number; endLine: number } | null) => {
+      const text = selection?.text ?? null;
+      sidebar.updateContext({
+        selection: text,
+        selectionStartLine: selection?.startLine ?? null,
+        selectionEndLine: selection?.endLine ?? null,
+      });
+      if (text && text.length > 2) {
+        setQuickActionsText(text);
+        setQuickActionsVisible(true);
+      } else {
+        setQuickActionsVisible(false);
+      }
+    },
+    [sidebar]
+  );
 
   // Selection position handler — receives coords from Monaco via FileEditor
   const handleSelectionPosition = useCallback((pos: { top: number; left: number; text: string } | null) => {
     if (!pos) return;
-    // Flip logic: if too close to top, show below the selection instead of above
     const top = pos.top < 50 ? pos.top + 20 : pos.top;
     setQuickActionsPosition({ top, left: pos.left });
   }, []);
 
   // EPIC 1c + A5: Combined selection handler
-  const handleEditorSelectionChange = useCallback((selectedText: string | null) => {
-    handleEditorSelectionForToolbar(selectedText);
-  }, [handleEditorSelectionForToolbar]);
+  const handleEditorSelectionChange = useCallback(
+    (selection: { text: string; startLine: number; endLine: number } | null) => {
+      handleEditorSelectionForToolbar(selection);
+    },
+    [handleEditorSelectionForToolbar]
+  );
 
   // A5: QuickActions — send prompt to agent chat
   const handleQuickAction = useCallback((prompt: string) => {
@@ -1198,6 +1345,18 @@ export default function ProjectPage() {
         onRefreshReport={devReport.refresh}
         presence={presence}
         onHomeClick={() => setShowHomeModal(true)}
+        collaborativeMode={collaborativeMode}
+        onCollaborativeModeChange={setCollaborativeMode}
+        collabPeers={collabPeers.map(p => ({
+          userId: p.userId,
+          name: p.name,
+          color: p.color,
+          avatarUrl: p.avatarUrl,
+          cursor: p.cursor,
+        }))}
+        onNavigateToFile={handleOpenFile}
+        currentUserId={authUser?.id ?? null}
+        activeFilePath={activeFilePath ?? null}
       />
 
       {/* Toast notification overlay */}
@@ -1517,6 +1676,9 @@ export default function ProjectPage() {
                   isActiveFileLocked={isActiveFileLocked}
                   onSaveClick={handleSaveActiveFile}
                   onLockToggle={handleLockToggle}
+                  linkedToActiveFileIds={linkedToActiveFileIds}
+                  onLinkWithFiles={handleLinkWithFiles}
+                  onUnlinkActiveFile={handleUnlinkActiveFile}
                 />
               </div>
             </div>
@@ -1635,6 +1797,13 @@ export default function ProjectPage() {
                       onSelectionPosition={handleSelectionPosition}
                       onContentChange={handleContentChange}
                       onFixWithAI={handleFixWithAI}
+                      collaborative={collaborativeMode}
+                      projectId={projectId}
+                      collaborationUser={collaborationUser}
+                      onPeersChange={setCollabPeers}
+                      onConnectionStatusChange={setCollabStatus}
+                      filePath={activeFile?.path ?? null}
+                      enableInlineCompletions
                     />
 
                     {/* A5: QuickActionsToolbar — floating toolbar on text selection */}
@@ -1662,6 +1831,57 @@ export default function ProjectPage() {
                     }}
                     onClear={handleConsoleClear}
                   />
+
+                    {/* Git collaboration status bar */}
+                    <GitStatusBar
+                      currentBranch={gitSync.branches?.current || null}
+                      fileStatuses={gitSync.fileStatuses}
+                      status={gitSync.status}
+                      lastSyncAt={gitSync.lastSyncAt}
+                      error={gitSync.error}
+                      peers={collabPeers.map(p => ({ userId: p.userId, name: p.name, color: p.color }))}
+                      onCommit={() => {
+                        gitSync.refreshStatus();
+                        setCommitDialogOpen(true);
+                      }}
+                      onPush={() => {}}
+                      onPull={async () => {
+                        try {
+                          const result = await gitSync.pull();
+                          if (result.ok) {
+                            gitSync.refreshStatus();
+                            gitSync.refreshBranches();
+                            refreshFiles();
+                            setToast('Pulled from remote');
+                            setTimeout(() => setToast(null), 3000);
+                          } else if (result.conflicts && result.conflicts.length > 0) {
+                            const res = await fetch(`/api/projects/${projectId}/files?include_content=true`);
+                            const json = res.ok ? await res.json() : { data: [] };
+                            const filesWithContent = (json.data ?? []) as Array<{ path: string; content?: string | null }>;
+                            const conflicts: Array<{ path: string; oursContent: string; theirsContent: string }> = [];
+                            for (const p of result.conflicts) {
+                              const file = filesWithContent.find((f) => f.path === p);
+                              const content = file?.content ?? '';
+                              const ours = content.match(/<<<<<<< HEAD\n([\s\S]*?)=======/)?.[1] ?? '';
+                              const theirs = content.match(/=======\n([\s\S]*?)>>>>>>>/)?.[1] ?? '';
+                              conflicts.push({ path: p, oursContent: ours || content, theirsContent: theirs });
+                            }
+                            setMergeConflicts(conflicts.length > 0 ? conflicts : [{ path: result.conflicts[0], oursContent: '', theirsContent: '' }]);
+                          }
+                        } catch (err) {
+                          setToast('Pull failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                          setTimeout(() => setToast(null), 5000);
+                        }
+                      }}
+                      onBranchClick={() => {
+                        gitSync.refreshBranches();
+                        setBranchManagerOpen(true);
+                      }}
+                      onRefresh={() => {
+                        gitSync.refreshStatus();
+                        gitSync.refreshBranches();
+                      }}
+                    />
 
                   {/* EPIC 3: Status bar */}
                   <StatusBar
@@ -1904,6 +2124,9 @@ export default function ProjectPage() {
               onLiveChange={handleLiveChange}
               onLiveSessionStart={livePreviewActions.startSession}
               onLiveSessionEnd={handleLiveSessionEnd}
+              onOpenFiles={handleOpenFiles}
+              onScrollToEdit={handleScrollToEdit}
+              onAgentActivity={handleAgentActivity}
             />
           </div>
         </aside>
@@ -1988,6 +2211,19 @@ export default function ProjectPage() {
         </div>
       )}
 
+      {/* Agent Live Breakout — floating PiP panel showing live edits */}
+      {!breakoutDismissed && breakoutAgent && (
+        <AgentLiveBreakout
+          agentType={breakoutAgent}
+          filePath={breakoutFile}
+          liveContent={breakoutContent}
+          onClose={() => {
+            setBreakoutDismissed(true);
+            setBreakoutAgent(null);
+          }}
+        />
+      )}
+
       {/* Auto-reconcile UndoToast */}
       {undoToast && (
         <UndoToast
@@ -2036,6 +2272,60 @@ export default function ProjectPage() {
             await handlePush();
           }}
         />
+      )}
+
+      {commitDialogOpen && (
+        <CommitDialog
+          open={commitDialogOpen}
+          onClose={() => setCommitDialogOpen(false)}
+          onCommit={handleGitCommit}
+          fileStatuses={gitSync.fileStatuses}
+          isCommitting={gitSync.status === 'committing'}
+        />
+      )}
+
+      {branchManagerOpen && gitSync.branches && (
+        <BranchManager
+          open={branchManagerOpen}
+          onClose={() => setBranchManagerOpen(false)}
+          branches={gitSync.branches.branches}
+          currentBranch={gitSync.branches.current}
+          onCheckout={(branch) => {
+            setBranchManagerOpen(false);
+          }}
+          onCreate={(name) => {
+            gitSync.createBranch(name);
+            setBranchManagerOpen(false);
+          }}
+        />
+      )}
+
+      {mergeConflicts && mergeConflicts.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-6xl h-[85vh] rounded-xl border ide-border overflow-hidden ide-surface">
+            <MergeConflictPanel
+              conflicts={mergeConflicts}
+              onResolve={async (resolutions) => {
+                for (const r of resolutions) {
+                  const file = rawFiles.find((f) => f.path === r.path);
+                  if (file?.id) {
+                    await fetch(`/api/files/${file.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ content: r.content }),
+                    });
+                  }
+                }
+                setMergeConflicts(null);
+                refreshFiles();
+                gitSync.refreshStatus();
+                setToast('Merge conflicts resolved');
+                setTimeout(() => setToast(null), 3000);
+              }}
+              onCancel={() => setMergeConflicts(null)}
+            />
+          </div>
+        </div>
       )}
     </div>
     </EditorSettingsProvider>

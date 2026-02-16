@@ -112,3 +112,15 @@ export class CSSAgent extends Agent {
     }
   }
 }
+
+// EPIC C: Self-register with the agent registry
+import { getAgentRegistry } from '../registry';
+getAgentRegistry().register({
+  name: 'CSS',
+  type: 'css',
+  filePatterns: ['*.css', '*.scss'],
+  capabilities: ['styling', 'performance'],
+  priority: 2,
+  factory: () => new CSSAgent(),
+  enabled: true,
+});

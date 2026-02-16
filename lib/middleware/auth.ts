@@ -121,3 +121,24 @@ export async function requireProjectAccess(
 
   return userId;
 }
+
+/**
+ * Ensures the authenticated user has application-level admin status.
+ * Returns the userId if they are admin, otherwise throws 403.
+ */
+export async function requireAdmin(request: NextRequest): Promise<string> {
+  const userId = await requireAuth(request);
+  const supabase = adminClient(request);
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', userId)
+    .single();
+
+  if (!profile?.is_admin) {
+    throw APIError.forbidden('Admin access required');
+  }
+
+  return userId;
+}

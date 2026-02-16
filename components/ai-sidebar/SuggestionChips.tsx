@@ -184,7 +184,7 @@ export function SuggestionChips({
           setFocusedIndex(-1);
         }
       }}
-      className={`flex flex-wrap gap-1.5 outline-none ${className}`}
+      className={`flex flex-wrap gap-2 outline-none ${className}`}
     >
       <AnimatePresence>
         {allChips.map((s, i) => {
@@ -212,8 +212,8 @@ export function SuggestionChips({
                 ease: [0.22, 1, 0.36, 1],
               }}
               className={`
-                group/chip relative inline-flex items-center gap-1.5 px-2.5 py-1.5
-                rounded-lg border text-xs font-medium
+                group/chip relative inline-flex items-center gap-2 px-3 py-2
+                rounded-lg border text-sm font-medium
                 transition-all duration-200 cursor-pointer
                 hover:scale-[1.02] active:scale-[0.98]
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60
@@ -225,10 +225,10 @@ export function SuggestionChips({
                 }
               `}
             >
-              <span className={`text-[10px] leading-none ${isPost || isRetry ? '' : 'opacity-60 group-hover/chip:opacity-100'}`}>
+              <span className={`text-xs leading-none ${isPost || isRetry ? '' : 'opacity-60 group-hover/chip:opacity-100'}`}>
                 {icon}
               </span>
-              <span className="truncate max-w-[160px]">{s.label}</span>
+              <span className="truncate max-w-[200px]">{s.label}</span>
 
               {/* Tooltip: show reason on hover */}
               {s.reason && <ChipTooltip text={s.reason} />}

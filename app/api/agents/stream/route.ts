@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
+import { checkIdempotency } from '@/lib/middleware/idempotency';
 import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
 import { AgentCoordinator, findFilesFromElementHint } from '@/lib/agents/coordinator';
@@ -21,12 +22,16 @@ import type { HistoryMessage } from '@/lib/agents/summary-prompt';
 import type { AIMessage, AIToolProviderInterface } from '@/lib/ai/types';
 import { formatMemoryForPrompt, filterActiveMemories, rowToMemoryEntry, type MemoryRow } from '@/lib/ai/developer-memory';
 import { ContextEngine } from '@/lib/ai/context-engine';
+import { estimateTokens } from '@/lib/ai/token-counter';
 import type { FileContext, ElementHint } from '@/lib/types/agent';
 import { trimHistory } from '@/lib/ai/history-window';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { buildDiagnosticContext } from '@/lib/agents/diagnostic-context';
 import { selectToolsForRequest } from '@/lib/agents/tools/definitions';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
+import { startTrace } from '@/lib/observability/tracer';
+import { incrementCounter, recordHistogram } from '@/lib/observability/metrics';
+import { createModuleLogger } from '@/lib/observability/logger';
 
 const streamSchema = z.object({
   projectId: z.string().uuid(),
@@ -123,6 +128,7 @@ Guidelines:
 - Reference specific file names using backticks.
 - Use code examples when explaining concepts.
 - If the user asks you to make changes, remind them to switch to Code mode.
+- You receive full contents for: files relevant to the request, the user's open editor tabs, and any pinned files. If you need another file that isn't in the contents below, say: "Open that file in the editor and send your message again so I can see it," or "Switch to Code mode so I can read and edit files directly."
 
 Project files in context:
 ${fileList}${fileContexts.length > 60 ? `\n... and ${fileContexts.length - 60} more files` : ''}`;
@@ -140,9 +146,18 @@ ${fileList}${fileContexts.length > 60 ? `\n... and ${fileContexts.length - 60} m
  *   - done:     Stream completed successfully
  *   - (raw text): Response content chunks
  */
+const streamLog = createModuleLogger('agents/stream');
+
 export async function POST(request: NextRequest) {
+  const tracer = startTrace();
+  const requestStart = Date.now();
+
   try {
     const userId = await requireAuth(request);
+    tracer.setContext(userId, null);
+    const idempotencyCheck = await checkIdempotency(request);
+    if (idempotencyCheck.isDuplicate) return idempotencyCheck.cachedResponse;
+
     const rateLimit = await checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
     if (!rateLimit.allowed) {
       return new Response(JSON.stringify({ error: 'Too many requests' }), {
@@ -261,6 +276,7 @@ export async function POST(request: NextRequest) {
           const action = body.action as AIAction | undefined ?? toAction(intentMode);
 
           const recentMessages = body.history?.slice(-5).map((m: { content: string }) => m.content) ?? [];
+          // Plan/code/debug: coordinator merges openTabs + explicitFiles into context.
           const coordinatorOptions = {
             action,
             model: body.model,
@@ -588,9 +604,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // EPIC B: Track request metrics (fire-and-forget)
+    incrementCounter('agent.requests').catch(() => {});
+    recordHistogram('agent.latency_ms', Date.now() - requestStart).catch(() => {});
+    tracer.endTrace().catch(() => {});
+    streamLog.info({ traceId: tracer.traceId, durationMs: Date.now() - requestStart }, 'Stream started');
+
     return new Response(responseStream, { headers: SSE_HEADERS });
   } catch (error) {
+    // EPIC B: Track errors
+    incrementCounter('agent.errors').catch(() => {});
+    tracer.endTrace().catch(() => {});
     // Unhandled exceptions before the stream starts
+    streamLog.error({ traceId: tracer.traceId, error: error instanceof Error ? error.message : String(error) }, 'Stream failed');
     console.error('[stream] unhandled pre-stream error:', {
       error: error instanceof AIProviderError ? error.code : 'UNKNOWN',
       message: error instanceof Error ? error.message : String(error),
@@ -661,10 +687,35 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
           }
         }
 
+        // Always include open tabs so "open the file" works — user's open files get hydrated
+        for (const id of body.openTabs ?? []) {
+          if (fileContexts.some((f) => f.fileId === id)) selectedIds.add(id);
+        }
+        // Include explicitly requested file paths (e.g. user pinned or mentioned by path)
+        for (const p of body.explicitFiles ?? []) {
+          const norm = p.startsWith('/') ? p.slice(1) : p;
+          const fc = fileContexts.find((f) => f.path === norm || f.path === p || (f.path && f.path.endsWith(norm)));
+          if (fc) selectedIds.add(fc.fileId);
+        }
+
         // Hydrate selected files via loadContent
         const includedFiles = selectedIds.size > 0
           ? loadContent([...selectedIds])
           : loadContent(fileContexts.slice(0, 15).map(f => f.fileId));
+
+        // Emit context_stats with actual bounded context for accurate UI meter
+        const loadedTokens = includedFiles.reduce(
+          (sum, f) => sum + estimateTokens(f.content ?? ''),
+          0,
+        );
+        try {
+          controller.enqueue(`data: ${JSON.stringify({
+            type: 'context_stats',
+            loadedFiles: includedFiles.length,
+            loadedTokens,
+            totalFiles: fileContexts.length,
+          })}\n\n`);
+        } catch { /* stream closed */ }
 
         // Build file content summaries from hydrated files
         const fileSummaries = includedFiles

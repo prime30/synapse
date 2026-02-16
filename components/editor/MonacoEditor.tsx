@@ -4,16 +4,47 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
-import { getLiquidDiagnostics } from '@/lib/monaco/diagnostics-provider';
-import { getLiquidCodeActions } from '@/lib/monaco/code-action-provider';
-import { createLiquidCompletionProvider } from '@/lib/monaco/liquid-completion-provider';
-import { createLiquidDefinitionProvider, type FileResolver } from '@/lib/monaco/liquid-definition-provider';
-import { createTranslationProvider } from '@/lib/monaco/translation-provider';
-import { createLinkedEditingProvider } from '@/lib/monaco/linked-editing-provider';
 import { registerLiquidLanguage } from '@/lib/liquid/monaco-liquid-language';
-import { formatLiquid } from '@/lib/liquid/formatter';
-import { detectUnusedVariables } from '@/lib/liquid/unused-detector';
 import { useEditorSettings } from '@/hooks/useEditorSettings';
+import type { FileResolver } from '@/lib/monaco/liquid-definition-provider';
+
+// Lazy-loaded provider modules (populated asynchronously after editor mounts).
+// Using module-level cache so repeat mounts don't re-import.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _lazyProviders: Record<string, any> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _lazyProviderPromise: Promise<Record<string, any>> | null = null;
+
+function loadProviders() {
+  if (_lazyProviders) return Promise.resolve(_lazyProviders);
+  if (!_lazyProviderPromise) {
+    _lazyProviderPromise = Promise.all([
+      import('@/lib/monaco/diagnostics-provider'),
+      import('@/lib/monaco/code-action-provider'),
+      import('@/lib/monaco/liquid-completion-provider'),
+      import('@/lib/monaco/liquid-definition-provider'),
+      import('@/lib/monaco/translation-provider'),
+      import('@/lib/monaco/linked-editing-provider'),
+      import('@/lib/monaco/inline-completion-provider'),
+      import('@/lib/liquid/formatter'),
+      import('@/lib/liquid/unused-detector'),
+    ]).then(([diag, codeAction, completion, definition, translation, linked, inline, formatter, unused]) => {
+      _lazyProviders = {
+        getLiquidDiagnostics: diag.getLiquidDiagnostics,
+        getLiquidCodeActions: codeAction.getLiquidCodeActions,
+        createLiquidCompletionProvider: completion.createLiquidCompletionProvider,
+        createLiquidDefinitionProvider: definition.createLiquidDefinitionProvider,
+        createTranslationProvider: translation.createTranslationProvider,
+        createLinkedEditingProvider: linked.createLinkedEditingProvider,
+        createInlineCompletionProvider: inline.createInlineCompletionProvider,
+        formatLiquid: formatter.formatLiquid,
+        detectUnusedVariables: unused.detectUnusedVariables,
+      };
+      return _lazyProviders;
+    });
+  }
+  return _lazyProviderPromise;
+}
 
 const MonacoEditorReact = dynamic(
   () => import('@monaco-editor/react').then((mod) => mod.Editor),
@@ -23,7 +54,7 @@ const MonacoEditorReact = dynamic(
 export type EditorLanguage = 'liquid' | 'javascript' | 'css' | 'other';
 
 interface MonacoEditorProps {
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   language: EditorLanguage;
   /** Called when user presses Cmd+S / Ctrl+S (handled inside Monaco) */
@@ -32,8 +63,8 @@ interface MonacoEditorProps {
   readOnly?: boolean;
   height?: string | number;
   className?: string;
-  /** Called when the user's text selection changes in the editor */
-  onSelectionChange?: (selectedText: string | null) => void;
+  /** Called when the user's text selection changes (text + line range for chat pill) */
+  onSelectionChange?: (selection: { text: string; startLine: number; endLine: number } | null) => void;
   /** Called when user pastes an image – parent can handle "Add as asset" */
   onImagePaste?: (file: File) => void;
   /** EPIC 5: Called when user triggers "Fix with AI" on a diagnostic */
@@ -46,6 +77,12 @@ interface MonacoEditorProps {
   getLocaleEntries?: () => Array<{ key: string; value: string }>;
   /** EPIC 7: Called when Ctrl+backtick is pressed to toggle console */
   onToggleConsole?: () => void;
+  /** Called after editor mounts with the editor instance (for Yjs binding) */
+  onEditorMount?: (editor: import('monaco-editor').editor.IStandaloneCodeEditor) => void;
+  /** Enable Cursor-like inline (ghost) completions via /api/ai/complete-inline */
+  enableInlineCompletions?: boolean;
+  /** File path for completion context (e.g. sections/hero.liquid). */
+  filePathForCompletions?: string | null;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -169,6 +206,9 @@ export function MonacoEditor({
   fileResolver,
   getLocaleEntries,
   onToggleConsole,
+  onEditorMount,
+  enableInlineCompletions = false,
+  filePathForCompletions = null,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
   const { isDark } = useTheme();
@@ -188,6 +228,16 @@ export function MonacoEditor({
   const onSelectionPositionRef = useRef(onSelectionPosition);
   useEffect(() => { onSelectionPositionRef.current = onSelectionPosition; }, [onSelectionPosition]);
 
+  const onEditorMountRef = useRef(onEditorMount);
+  useEffect(() => { onEditorMountRef.current = onEditorMount; }, [onEditorMount]);
+
+  const enableInlineCompletionsRef = useRef(enableInlineCompletions);
+  const filePathForCompletionsRef = useRef(filePathForCompletions);
+  useEffect(() => {
+    enableInlineCompletionsRef.current = enableInlineCompletions;
+    filePathForCompletionsRef.current = filePathForCompletions;
+  }, [enableInlineCompletions, filePathForCompletions]);
+
   /* Feature 12 – paste-dialog state */
   const [pasteDialog, setPasteDialog] = useState<{
     file: File;
@@ -199,6 +249,7 @@ export function MonacoEditor({
   const tagDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const colorDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const styleElRef = useRef<HTMLStyleElement | null>(null);
+  const inlineCompletionDisposableRef = useRef<import('monaco-editor').IDisposable | null>(null);
 
   /* ── Main mount handler ────────────────────────────────────────────────── */
   const handleEditorDidMount = useCallback(
@@ -239,7 +290,7 @@ export function MonacoEditor({
         );
       }
 
-      /* Selection change tracking (EPIC 1c: selection injection) */
+      /* Selection change tracking (EPIC 1c: selection injection + line range for chat pill) */
       editorInstance.onDidChangeCursorSelection(() => {
         const model = editorInstance.getModel();
         if (!model || !onSelectionChangeRef.current) return;
@@ -249,7 +300,9 @@ export function MonacoEditor({
           return;
         }
         const text = model.getValueInRange(selection);
-        onSelectionChangeRef.current(text || null);
+        const startLine = selection.startLineNumber;
+        const endLine = selection.endLineNumber;
+        onSelectionChangeRef.current(text ? { text, startLine, endLine } : null);
 
         // EPIC 5: Report position for quick actions toolbar
         if (onSelectionPositionRef.current) {
@@ -272,6 +325,14 @@ export function MonacoEditor({
         }
       });
 
+      /* Notify parent of editor mount (e.g. Yjs collaborative binding) — synchronous */
+      onEditorMountRef.current?.(editorInstance);
+
+      // ── Async: lazy-load language providers after the editor is interactive ──
+      loadProviders().then((providers) => {
+        // Guard: editor may have been disposed during the async gap
+        if (!editorRef.current || editorRef.current !== editorInstance) return;
+
       /* Liquid code-action provider */
       if (language === 'liquid') {
         monaco.languages.registerCodeActionProvider('liquid', {
@@ -281,30 +342,30 @@ export function MonacoEditor({
             _context: languages.CodeActionContext,
             _token: CancellationToken,
           ) => {
-            const fixes = getLiquidCodeActions();
-            const actions: languages.CodeAction[] = fixes
-              .map((fix) => {
-                const start = model.getPositionAt(fix.range.start);
-                const end = model.getPositionAt(fix.range.end);
-                if (!start || !end) return null;
-                return {
-                  title: fix.title,
-                  kind: 'quickfix.liquid' as const,
-                  edit: {
-                    edits: [
-                      {
-                        resource: model.uri,
-                        textEdit: {
-                          range: monaco.Range.fromPositions(start, end),
-                          text: fix.newText,
-                        },
-                        versionId: model.getVersionId(),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fixes = providers.getLiquidCodeActions() as any[];
+            const actions: languages.CodeAction[] = [];
+            for (const fix of fixes) {
+              const start = model.getPositionAt(fix.range.start);
+              const end = model.getPositionAt(fix.range.end);
+              if (!start || !end) continue;
+              actions.push({
+                title: fix.title,
+                kind: 'quickfix.liquid' as const,
+                edit: {
+                  edits: [
+                    {
+                      resource: model.uri,
+                      textEdit: {
+                        range: monaco.Range.fromPositions(start, end),
+                        text: fix.newText,
                       },
-                    ],
-                  },
-                };
-              })
-              .filter((x): x is NonNullable<typeof x> => x != null);
+                      versionId: model.getVersionId(),
+                    },
+                  ],
+                },
+              });
+            }
 
             // EPIC 5: "Fix with AI" code action on Liquid diagnostics
             const markers = monaco.editor.getModelMarkers({ resource: model.uri });
@@ -433,62 +494,67 @@ export function MonacoEditor({
       }
 
       /* ═══════════════════════════════════════════════════════════════════
-         Feature 8 – Color Swatches Inline
+         Feature 8 – Color Swatches Inline (skip for CSS/SCSS/LESS: Monaco provides one)
          ═══════════════════════════════════════════════════════════════════ */
-      const colorDecs = editorInstance.createDecorationsCollection([]);
-      colorDecorationsRef.current = colorDecs;
-      let colorTimer: ReturnType<typeof setTimeout> | null = null;
+      const hasBuiltInColorProvider = language === 'css' || language === 'scss' || language === 'less';
+      if (!hasBuiltInColorProvider) {
+        const colorDecs = editorInstance.createDecorationsCollection([]);
+        colorDecorationsRef.current = colorDecs;
+        let colorTimer: ReturnType<typeof setTimeout> | null = null;
 
-      const scanColors = () => {
-        const model = editorInstance.getModel();
-        if (!model) return;
+        const scanColors = () => {
+          const model = editorInstance.getModel();
+          if (!model) return;
 
-        const text = model.getValue();
-        const lines = text.split('\n');
-        const maxLines = Math.min(lines.length, 1000);
-        const colorRe =
-          /#[0-9a-fA-F]{3,8}\b|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|hsl\(\s*\d+\s*,\s*\d+%?\s*,\s*\d+%?\s*\)/g;
+          const text = model.getValue();
+          const lines = text.split('\n');
+          const maxLines = Math.min(lines.length, 1000);
+          const colorRe =
+            /#[0-9a-fA-F]{3,8}\b|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|hsl\(\s*\d+\s*,\s*\d+%?\s*,\s*\d+%?\s*\)/g;
 
-        const decs: editor.IModelDeltaDecoration[] = [];
-        const cssRules: string[] = [];
-        const seen = new Set<string>();
+          const decs: editor.IModelDeltaDecoration[] = [];
+          const cssRules: string[] = [];
+          const seen = new Set<string>();
 
-        for (let i = 0; i < maxLines; i++) {
-          colorRe.lastIndex = 0;
-          let cm: RegExpExecArray | null;
-          while ((cm = colorRe.exec(lines[i])) !== null) {
-            const color = cm[0];
-            const h = hashColor(color);
-            const cls = `color-swatch-${h}`;
-            if (!seen.has(h)) {
-              seen.add(h);
-              cssRules.push(
-                `.${cls}::before{content:'';display:inline-block;width:12px;height:12px;` +
-                `background-color:${color};border:1px solid rgba(255,255,255,.3);` +
-                `border-radius:2px;margin-right:4px;vertical-align:middle}`,
-              );
+          for (let i = 0; i < maxLines; i++) {
+            colorRe.lastIndex = 0;
+            let cm: RegExpExecArray | null;
+            while ((cm = colorRe.exec(lines[i])) !== null) {
+              const color = cm[0];
+              const h = hashColor(color);
+              const cls = `color-swatch-${h}`;
+              if (!seen.has(h)) {
+                seen.add(h);
+                cssRules.push(
+                  `.${cls}::before{content:'';display:inline-block;width:12px;height:12px;` +
+                  `background-color:${color};border:1px solid rgba(255,255,255,.3);` +
+                  `border-radius:2px;margin-right:4px;vertical-align:middle}`,
+                );
+              }
+              decs.push({
+                range: new monaco.Range(i + 1, cm.index + 1, i + 1, cm.index + color.length + 1),
+                options: { isWholeLine: false, beforeContentClassName: cls },
+              });
             }
-            decs.push({
-              range: new monaco.Range(i + 1, cm.index + 1, i + 1, cm.index + color.length + 1),
-              options: { isWholeLine: false, beforeContentClassName: cls },
-            });
           }
-        }
 
-        /* Merge: keep liquid-tag-highlight base rule + append swatch rules */
-        if (styleElRef.current) {
-          styleElRef.current.textContent =
-            '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}\n' +
-            cssRules.join('\n');
-        }
-        colorDecs.set(decs);
-      };
+          /* Merge: keep liquid-tag-highlight base rule + append swatch rules */
+          if (styleElRef.current) {
+            styleElRef.current.textContent =
+              '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}\n' +
+              cssRules.join('\n');
+          }
+          colorDecs.set(decs);
+        };
 
-      scanColors(); // initial pass
-      editorInstance.onDidChangeModelContent(() => {
-        if (colorTimer) clearTimeout(colorTimer);
-        colorTimer = setTimeout(scanColors, 300);
-      });
+        scanColors(); // initial pass
+        editorInstance.onDidChangeModelContent(() => {
+          if (colorTimer) clearTimeout(colorTimer);
+          colorTimer = setTimeout(scanColors, 300);
+        });
+      } else {
+        colorDecorationsRef.current = null;
+      }
 
       /* ═══════════════════════════════════════════════════════════════════
          Feature 9 – Schema Setting Preview on Hover
@@ -652,14 +718,14 @@ export function MonacoEditor({
         /* 1. Object-aware + schema-setting completions */
         monaco.languages.registerCompletionItemProvider(
           'liquid',
-          createLiquidCompletionProvider(monaco),
+          providers.createLiquidCompletionProvider(monaco),
         );
 
         /* 2. Go-to-definition (render, section, include, asset_url) */
         if (fileResolver) {
           monaco.languages.registerDefinitionProvider(
             'liquid',
-            createLiquidDefinitionProvider(monaco, fileResolver),
+            providers.createLiquidDefinitionProvider(monaco, fileResolver),
           );
         }
 
@@ -667,7 +733,7 @@ export function MonacoEditor({
         if (getLocaleEntries) {
           monaco.languages.registerCompletionItemProvider(
             'liquid',
-            createTranslationProvider(monaco, getLocaleEntries),
+            providers.createTranslationProvider(monaco, getLocaleEntries),
           );
         }
 
@@ -727,7 +793,7 @@ export function MonacoEditor({
             const model = ed.getModel();
             if (!model) return;
             const source = model.getValue();
-            const formatted = formatLiquid(source, { tabSize: settings.tabSize });
+            const formatted = providers.formatLiquid(source, { tabSize: settings.tabSize });
             if (formatted !== source) {
               ed.pushUndoStop();
               model.pushEditOperations(
@@ -749,11 +815,35 @@ export function MonacoEditor({
       /* 9. HTML tag auto-rename (linked editing) – works for liquid and html */
       monaco.languages.registerLinkedEditingRangeProvider(
         'liquid',
-        createLinkedEditingProvider(monaco),
+        providers.createLinkedEditingProvider(monaco),
       );
+
+      /* Inline (ghost) completions – Cursor Tab–like, see cursor-like-features-plan.md */
+      if (language === 'liquid' || language === 'javascript' || language === 'css') {
+        inlineCompletionDisposableRef.current?.dispose();
+        inlineCompletionDisposableRef.current = monaco.languages.registerInlineCompletionsProvider(
+          { language: MONACO_LANGUAGE_MAP[language] },
+          providers.createInlineCompletionProvider(monaco, {
+            getFilePath: () => filePathForCompletionsRef.current ?? null,
+            language,
+            debounceDelayMs: 400,
+            enabled: () => enableInlineCompletionsRef.current ?? false,
+          }),
+        );
+      }
+
+      }); // end loadProviders().then(...)
     },
     [language, fileResolver, getLocaleEntries, settings.tabSize, onToggleConsole],
   );
+
+  /* Clean up inline completion provider on unmount */
+  useEffect(() => {
+    return () => {
+      inlineCompletionDisposableRef.current?.dispose();
+      inlineCompletionDisposableRef.current = null;
+    };
+  }, []);
 
   /* ── Cleanup injected <style> on unmount ────────────────────────────── */
   useEffect(() => {
@@ -764,6 +854,7 @@ export function MonacoEditor({
   }, []);
 
   /* ── Liquid diagnostics (+ EPIC 6: deprecated warnings, unused vars) ── */
+  /* Deferred via requestIdleCallback so the editor is interactive before diagnostics run. */
   useEffect(() => {
     if (language !== 'liquid') return;
     const monaco = monacoRef.current;
@@ -771,76 +862,86 @@ export function MonacoEditor({
     if (!monaco || !model) return;
     let cancelled = false;
 
-    getLiquidDiagnostics(value).then((diagnostics) => {
+    const scheduleIdle = typeof requestIdleCallback === 'function' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 80);
+    const cancelIdle = typeof cancelIdleCallback === 'function' ? cancelIdleCallback : clearTimeout;
+
+    const idleHandle = scheduleIdle(() => {
       if (cancelled) return;
-      const markers = diagnostics.map((d) => ({
-        severity:
-          d.severity === 'error'
-            ? monaco.MarkerSeverity.Error
-            : d.severity === 'warning'
-              ? monaco.MarkerSeverity.Warning
-              : monaco.MarkerSeverity.Info,
-        message: d.message,
-        startLineNumber: d.line,
-        startColumn: d.column,
-        endLineNumber: d.line,
-        endColumn: Math.max(d.column, 1),
-      }));
+      loadProviders().then((providers) => {
+        if (cancelled) return;
+        return (providers.getLiquidDiagnostics(value ?? '') as Promise<Array<{ severity: string; message: string; line: number; column: number }>>).then((diagnostics) => {
+          if (cancelled) return;
+          const markers = diagnostics.map((d: { severity: string; message: string; line: number; column: number }) => ({
+            severity:
+              d.severity === 'error'
+                ? monaco.MarkerSeverity.Error
+                : d.severity === 'warning'
+                  ? monaco.MarkerSeverity.Warning
+                  : monaco.MarkerSeverity.Info,
+            message: d.message,
+            startLineNumber: d.line,
+            startColumn: d.column,
+            endLineNumber: d.line,
+            endColumn: Math.max(d.column, 1),
+          }));
 
-      /* EPIC 6 Feature 7: Deprecated tag warnings */
-      const lines = value.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        /* Deprecated tags */
-        for (const [tag, message] of Object.entries(DEPRECATED_TAGS)) {
-          const tagRe = new RegExp(`\\{%-?\\s*${tag}\\b`, 'g');
-          let m: RegExpExecArray | null;
-          while ((m = tagRe.exec(line)) !== null) {
+          /* EPIC 6 Feature 7: Deprecated tag warnings */
+          const lines = (value ?? '').split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            /* Deprecated tags */
+            for (const [tag, message] of Object.entries(DEPRECATED_TAGS)) {
+              const tagRe = new RegExp(`\\{%-?\\s*${tag}\\b`, 'g');
+              let m: RegExpExecArray | null;
+              while ((m = tagRe.exec(line)) !== null) {
+                markers.push({
+                  severity: monaco.MarkerSeverity.Warning,
+                  message,
+                  startLineNumber: i + 1,
+                  startColumn: m.index + 1,
+                  endLineNumber: i + 1,
+                  endColumn: m.index + m[0].length + 1,
+                });
+              }
+            }
+            /* Deprecated filters */
+            for (const [filter, message] of Object.entries(DEPRECATED_FILTERS)) {
+              const filterRe = new RegExp(`\\|\\s*${filter}\\b`, 'g');
+              let m: RegExpExecArray | null;
+              while ((m = filterRe.exec(line)) !== null) {
+                markers.push({
+                  severity: monaco.MarkerSeverity.Warning,
+                  message,
+                  startLineNumber: i + 1,
+                  startColumn: m.index + 1,
+                  endLineNumber: i + 1,
+                  endColumn: m.index + m[0].length + 1,
+                });
+              }
+            }
+          }
+
+          /* EPIC 6 Feature 6: Unused variable detection (yellow warnings) */
+          const unusedVars = providers.detectUnusedVariables(value ?? '') as Array<{ name: string; line: number; column: number }>;
+          for (const uv of unusedVars) {
             markers.push({
               severity: monaco.MarkerSeverity.Warning,
-              message,
-              startLineNumber: i + 1,
-              startColumn: m.index + 1,
-              endLineNumber: i + 1,
-              endColumn: m.index + m[0].length + 1,
+              message: `Unused variable: "${uv.name}" is assigned but never used`,
+              startLineNumber: uv.line,
+              startColumn: uv.column,
+              endLineNumber: uv.line,
+              endColumn: uv.column + uv.name.length + 10,
             });
           }
-        }
-        /* Deprecated filters */
-        for (const [filter, message] of Object.entries(DEPRECATED_FILTERS)) {
-          const filterRe = new RegExp(`\\|\\s*${filter}\\b`, 'g');
-          let m: RegExpExecArray | null;
-          while ((m = filterRe.exec(line)) !== null) {
-            markers.push({
-              severity: monaco.MarkerSeverity.Warning,
-              message,
-              startLineNumber: i + 1,
-              startColumn: m.index + 1,
-              endLineNumber: i + 1,
-              endColumn: m.index + m[0].length + 1,
-            });
-          }
-        }
-      }
 
-      /* EPIC 6 Feature 6: Unused variable detection (yellow warnings) */
-      const unusedVars = detectUnusedVariables(value);
-      for (const uv of unusedVars) {
-        markers.push({
-          severity: monaco.MarkerSeverity.Warning,
-          message: `Unused variable: "${uv.name}" is assigned but never used`,
-          startLineNumber: uv.line,
-          startColumn: uv.column,
-          endLineNumber: uv.line,
-          endColumn: uv.column + uv.name.length + 10, // approximate width of {% assign VAR
+          monaco.editor.setModelMarkers(model, 'liquid', markers);
         });
-      }
-
-      monaco.editor.setModelMarkers(model, 'liquid', markers);
+      });
     });
 
     return () => {
       cancelled = true;
+      cancelIdle(idleHandle as number);
       const m = monacoRef.current;
       const mod = editorRef.current?.getModel();
       if (m && mod) m.editor.setModelMarkers(mod, 'liquid', []);
@@ -902,6 +1003,7 @@ export function MonacoEditor({
           padding: { top: 16 },
           readOnly,
           wordSeparators: CUSTOM_WORD_SEPARATORS, // Feature 11
+          inlineSuggest: { enabled: enableInlineCompletions },
         }}
         className={className}
       />

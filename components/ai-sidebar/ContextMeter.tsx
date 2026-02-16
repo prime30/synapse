@@ -30,23 +30,23 @@ const STATUS_BAR_COLORS: Record<ContextStatus, string> = {
 // ---------------------------------------------------------------------------
 
 function MiniRing({ percentage, status }: { percentage: number; status: ContextStatus }) {
-  const radius = 6;
+  const radius = 7;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (Math.min(percentage, 100) / 100) * circumference;
 
   return (
-    <svg width={16} height={16} viewBox="0 0 16 16" className="shrink-0">
+    <svg width={18} height={18} viewBox="0 0 18 18" className="shrink-0">
       <circle
-        cx={8}
-        cy={8}
+        cx={9}
+        cy={9}
         r={radius}
         fill="none"
         strokeWidth={2.5}
         className="stroke-stone-200 dark:stroke-white/10"
       />
       <circle
-        cx={8}
-        cy={8}
+        cx={9}
+        cy={9}
         r={radius}
         fill="none"
         strokeWidth={2.5}
@@ -54,7 +54,7 @@ function MiniRing({ percentage, status }: { percentage: number; status: ContextS
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         className={`${STATUS_COLORS[status].ring} transition-all duration-300`}
-        transform="rotate(-90 8 8)"
+        transform="rotate(-90 9 9)"
       />
     </svg>
   );
@@ -162,7 +162,7 @@ export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${colors.bg} ${colors.text} hover:brightness-125`}
+        className={`inline-flex items-center justify-center gap-1.5 h-9 min-h-9 min-w-[2.5rem] rounded-lg px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none bg-transparent ${colors.text} hover:brightness-125`}
         title="Context window usage"
         aria-label={`Context window ${Math.round(meter.percentage)}% used`}
       >

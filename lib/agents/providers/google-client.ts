@@ -4,13 +4,13 @@
  */
 
 import type { AIProviderClient } from './index';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 /**
  * @deprecated Use `createGoogleProvider()` from `lib/ai/providers/google.ts` instead.
  */
 export function createGoogleClient(
-  model = 'gemini-2.0-flash'
+  model = 'gemini-3-flash-preview'
 ): AIProviderClient {
   return {
     async generateResponse(
@@ -20,15 +20,14 @@ export function createGoogleClient(
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set');
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const genModel = genAI.getGenerativeModel({
+      const ai = new GoogleGenAI({ apiKey });
+      const result = await ai.models.generateContent({
         model,
-        systemInstruction: systemPrompt,
+        contents: prompt,
+        config: { systemInstruction: systemPrompt },
       });
 
-      const result = await genModel.generateContent(prompt);
-      const response = result.response;
-      return response.text();
+      return result.text ?? '';
     },
   };
 }
@@ -39,24 +38,25 @@ export function createGoogleClient(
 export async function streamGoogleResponse(
   prompt: string,
   systemPrompt: string,
-  model = 'gemini-2.0-flash'
+  model = 'gemini-3-flash-preview'
 ): Promise<ReadableStream<string>> {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set');
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const genModel = genAI.getGenerativeModel({
+  const ai = new GoogleGenAI({ apiKey });
+  const result = await ai.models.generateContentStream({
     model,
-    systemInstruction: systemPrompt,
+    contents: prompt,
+    config: { systemInstruction: systemPrompt },
   });
 
-  const result = await genModel.generateContentStream(prompt);
+  const streamIterable = result as AsyncIterable<{ text?: string }>;
 
   return new ReadableStream<string>({
     async start(controller) {
       try {
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
+        for await (const chunk of streamIterable) {
+          const text = chunk.text;
           if (text) {
             controller.enqueue(text);
           }

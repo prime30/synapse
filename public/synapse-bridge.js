@@ -134,6 +134,33 @@
     return false;
   }
 
+  /**
+   * Resolve the nearest Shopify section ancestor and return the Liquid file path.
+   * e.g. "sections/main-product.liquid". Returns null if outside any section.
+   */
+  function getSectionLiquidPath(el) {
+    var sectionEl =
+      el.closest('[data-section-type]') ||
+      el.closest('[data-section-id]') ||
+      el.closest('[id^="shopify-section-"]') ||
+      el.closest('[data-shopify]');
+    if (!sectionEl) return null;
+
+    var sectionType = sectionEl.getAttribute('data-section-type') ||
+                      sectionEl.getAttribute('data-shopify') || '';
+
+    if (!sectionType) {
+      var rawId = sectionEl.getAttribute('data-section-id') || sectionEl.id || '';
+      rawId = rawId.replace(/^shopify-section-/, '');
+      var tplMatch = rawId.match(/^template--\d+__(.+)$/);
+      if (tplMatch) rawId = tplMatch[1];
+      sectionType = rawId;
+    }
+
+    if (!sectionType || /[\/\\]/.test(sectionType)) return null;
+    return 'sections/' + sectionType + '.liquid';
+  }
+
   /** Detect the source of an element (theme or app name guess) */
   function detectSource(el) {
     // Check data attributes for app identifiers
@@ -453,6 +480,8 @@
 
   var inspectState = {
     active: false,
+    locked: false,
+    lockedTarget: null,
     overlay: null,
     tooltip: null,
     lastTarget: null,
@@ -472,7 +501,7 @@
     var tt = document.createElement('div');
     tt.id = 'synapse-inspect-tooltip';
     tt.setAttribute('data-synapse-inspect', '1');
-    tt.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;background:#1e293b;color:#e2e8f0;font:11px/1.4 ui-monospace,monospace;padding:3px 8px;border-radius:4px;white-space:nowrap;display:none;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+    tt.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;background:#0f172a;color:#e2e8f0;font:11px/1.4 ui-monospace,monospace;padding:3px 8px;border-radius:4px;white-space:nowrap;display:none;border:1px solid rgba(255,255,255,0.08);box-shadow:0 4px 12px rgba(0,0,0,0.4);max-width:400px;';
     document.body.appendChild(tt);
     return tt;
   }
@@ -482,7 +511,108 @@
     return el.hasAttribute && el.hasAttribute('data-synapse-inspect');
   }
 
+  /** Position the tooltip relative to an element rect, with viewport clamping. */
+  function positionTooltip(tt, rect) {
+    if (!tt) return;
+    var ttRect = tt.getBoundingClientRect();
+    var ttW = ttRect.width || 120;
+    var ttH = ttRect.height || 22;
+    var vw = window.innerWidth;
+    var ttTop = rect.top - ttH - 6;
+    if (ttTop < 4) ttTop = rect.bottom + 4;
+    var ttLeft = Math.max(4, Math.min(rect.left, vw - ttW - 4));
+    tt.style.top = ttTop + 'px';
+    tt.style.left = ttLeft + 'px';
+    tt.style.display = 'block';
+  }
+
+  /**
+   * Build tooltip DOM content.
+   * When interactive is true, the Liquid path is a clickable link.
+   */
+  function buildTooltipContent(tt, label, dims, liquidPath, interactive) {
+    tt.innerHTML = '';
+    var line1 = document.createElement('div');
+    line1.textContent = label + '  (' + dims + ')';
+    tt.appendChild(line1);
+    if (liquidPath) {
+      var line2 = document.createElement('div');
+      if (interactive) {
+        var link = document.createElement('span');
+        link.textContent = liquidPath;
+        link.setAttribute('data-synapse-inspect', '1');
+        link.style.cssText = 'color:#38bdf8;text-decoration:underline;cursor:pointer;';
+        link.addEventListener('mouseenter', function () { link.style.color = '#7dd3fc'; });
+        link.addEventListener('mouseleave', function () { link.style.color = '#38bdf8'; });
+        link.addEventListener('click', function (evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          evt.stopImmediatePropagation();
+          if (window.parent !== window) {
+            window.parent.postMessage({
+              type: RESPONSE_TYPE,
+              id: '__open_file__',
+              action: 'open-file',
+              data: { filePath: liquidPath },
+            }, '*');
+          }
+          unlockInspect();
+        });
+        line2.appendChild(link);
+      } else {
+        line2.textContent = liquidPath;
+        line2.style.color = '#94a3b8';
+      }
+      tt.appendChild(line2);
+    }
+  }
+
+  /** Unlock the inspector: restore hover mode, clean up scroll/resize listeners. */
+  function unlockInspect() {
+    inspectState.locked = false;
+    inspectState.lockedTarget = null;
+    if (inspectState.overlay) inspectState.overlay.style.borderColor = '#3b82f6';
+    if (inspectState.tooltip) {
+      inspectState.tooltip.style.pointerEvents = 'none';
+      inspectState.tooltip.innerHTML = '';
+    }
+    if (inspectState.handlers.lockScroll) {
+      window.removeEventListener('scroll', inspectState.handlers.lockScroll, true);
+      inspectState.handlers.lockScroll = null;
+    }
+    if (inspectState.handlers.lockResize) {
+      window.removeEventListener('resize', inspectState.handlers.lockResize);
+      inspectState.handlers.lockResize = null;
+    }
+  }
+
+  /** Update overlay and tooltip position for a locked element (e.g. on scroll/resize). */
+  function updateLockedPosition() {
+    if (!inspectState.locked || !inspectState.lockedTarget) return;
+    if (!inspectState.lockedTarget.isConnected) {
+      unlockInspect();
+      return;
+    }
+    var rect = inspectState.lockedTarget.getBoundingClientRect();
+    var ov = inspectState.overlay;
+    if (ov) {
+      ov.style.top = rect.top + 'px';
+      ov.style.left = rect.left + 'px';
+      ov.style.width = rect.width + 'px';
+      ov.style.height = rect.height + 'px';
+    }
+    positionTooltip(inspectState.tooltip, rect);
+  }
+
   function onInspectMouseMove(e) {
+    // When locked, skip hover updates (overlay stays pinned)
+    if (inspectState.locked) {
+      if (inspectState.lockedTarget && !inspectState.lockedTarget.isConnected) {
+        unlockInspect();
+      }
+      return;
+    }
+
     var el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || isInspectElement(el) || el === document.body || el === document.documentElement) {
       if (inspectState.overlay) inspectState.overlay.style.display = 'none';
@@ -514,28 +644,67 @@
         if (cls.length) label += '.' + cls.join('.');
       }
       var dims = Math.round(rect.width) + ' x ' + Math.round(rect.height);
-      tt.textContent = label + '  (' + dims + ')';
-      var ttTop = rect.top - 28;
-      if (ttTop < 4) ttTop = rect.bottom + 4;
-      tt.style.top = ttTop + 'px';
-      tt.style.left = Math.max(4, rect.left) + 'px';
-      tt.style.display = 'block';
+      var liquidPath = getSectionLiquidPath(el);
+      buildTooltipContent(tt, label, dims, liquidPath, false);
+      positionTooltip(tt, rect);
     }
   }
 
   function onInspectClick(e) {
+    // If the click is on the tooltip or its children (e.g. liquid link), let it through
+    if (isInspectElement(e.target)) return;
+
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    // If already locked, unlock and resume hover
+    if (inspectState.locked) {
+      unlockInspect();
+      return;
+    }
+
     var el = inspectState.lastTarget;
     if (!el || isInspectElement(el)) return;
 
+    // Lock onto the clicked element
+    inspectState.locked = true;
+    inspectState.lockedTarget = el;
+
+    // Visual indicator: amber border
+    if (inspectState.overlay) inspectState.overlay.style.borderColor = '#f59e0b';
+
+    // Rebuild tooltip as interactive (clickable Liquid path)
+    var tt = inspectState.tooltip;
+    if (tt) {
+      var tag = el.tagName.toLowerCase();
+      var label = tag;
+      if (el.id) {
+        label += '#' + el.id;
+      } else {
+        var cls = Array.from(el.classList || []).filter(function (c) { return !/^shopify-|^js-/.test(c); }).slice(0, 2);
+        if (cls.length) label += '.' + cls.join('.');
+      }
+      var rect = el.getBoundingClientRect();
+      var dims = Math.round(rect.width) + ' x ' + Math.round(rect.height);
+      var liquidPath = getSectionLiquidPath(el);
+      tt.style.pointerEvents = 'auto';
+      buildTooltipContent(tt, label, dims, liquidPath, true);
+      positionTooltip(tt, rect);
+    }
+
+    // Register scroll/resize listeners to track the locked element
+    inspectState.handlers.lockScroll = updateLockedPosition;
+    inspectState.handlers.lockResize = updateLockedPosition;
+    window.addEventListener('scroll', inspectState.handlers.lockScroll, { capture: true, passive: true });
+    window.addEventListener('resize', inspectState.handlers.lockResize);
+
+    // Send element-selected to parent as before
     var summary = summarizeElement(el);
     summary.isApp = isAppElement(el);
     if (summary.isApp) summary.source = detectSource(el);
-
-    // Send to parent
+    var liqPath = getSectionLiquidPath(el);
+    if (liqPath) summary.liquidSection = liqPath;
     if (window.parent !== window) {
       window.parent.postMessage({
         type: RESPONSE_TYPE,
@@ -554,9 +723,15 @@
 
     inspectState.handlers.mousemove = onInspectMouseMove;
     inspectState.handlers.click = onInspectClick;
+    inspectState.handlers.keydown = function (evt) {
+      if (evt.key === 'Escape' && inspectState.locked) {
+        unlockInspect();
+      }
+    };
 
     document.addEventListener('mousemove', inspectState.handlers.mousemove, true);
     document.addEventListener('click', inspectState.handlers.click, true);
+    document.addEventListener('keydown', inspectState.handlers.keydown, true);
 
     return { enabled: true };
   };
@@ -565,11 +740,17 @@
     if (!inspectState.active) return { already: true };
     inspectState.active = false;
 
+    // Unlock first to clean up scroll/resize listeners
+    if (inspectState.locked) unlockInspect();
+
     if (inspectState.handlers.mousemove) {
       document.removeEventListener('mousemove', inspectState.handlers.mousemove, true);
     }
     if (inspectState.handlers.click) {
       document.removeEventListener('click', inspectState.handlers.click, true);
+    }
+    if (inspectState.handlers.keydown) {
+      document.removeEventListener('keydown', inspectState.handlers.keydown, true);
     }
     inspectState.handlers = {};
 

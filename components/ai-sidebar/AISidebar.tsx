@@ -64,12 +64,12 @@ export function AISidebar({
         />
         <div className="flex flex-col flex-1 min-h-0 pl-1">
           {/* Header */}
-          <div className="flex items-center justify-between border-b ide-border-subtle px-2 py-1.5 flex-shrink-0">
-            <span className="text-xs font-medium ide-text-2">AI Assistant</span>
+          <div className="flex items-center justify-between border-b ide-border-subtle px-3 py-2 flex-shrink-0">
+            <span className="text-sm font-medium ide-text-2">AI Assistant</span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-1 ide-text-3 ide-hover hover:ide-text-2"
+              className="rounded p-1.5 ide-text-3 ide-hover hover:ide-text-2"
               aria-label="Close sidebar"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

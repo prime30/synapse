@@ -36,7 +36,11 @@ export const MODELS = {
   GPT_4O: 'gpt-4o',
   GPT_4O_MINI: 'gpt-4o-mini',
 
-  // Google
+  // Google -- Gemini 3
+  GEMINI_3_FLASH: 'gemini-3-flash-preview',
+  GEMINI_3_PRO_IMAGE: 'gemini-3-pro-image-preview',
+
+  // Google -- Gemini 2 (legacy)
   GEMINI_PRO: 'gemini-2.0-flash',
   GEMINI_FLASH: 'gemini-2.0-flash-lite',
 } as const;
@@ -105,13 +109,27 @@ export const SYSTEM_DEFAULT_MODEL: ModelId = MODELS.CLAUDE_SONNET;
 
 // ── Provider detection ──────────────────────────────────────────────────────
 
-export type ProviderName = 'anthropic' | 'openai' | 'google';
+export type ProviderName = 'anthropic' | 'openai' | 'google' | (string & {});
+
+// EPIC E: Custom provider model prefix registry
+// e.g. registerCustomModelPrefix('deepseek', 'deepseek') maps deepseek-* models to 'deepseek' provider
+const customModelPrefixes = new Map<string, string>();
+
+export function registerCustomModelPrefix(prefix: string, providerName: string): void {
+  customModelPrefixes.set(prefix, providerName);
+}
 
 /** Detect which provider a model ID belongs to. */
 export function getProviderForModel(model: string): ProviderName {
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'openai';
   if (model.startsWith('gemini-')) return 'google';
+
+  // EPIC E: Check custom model prefixes
+  for (const [prefix, provider] of customModelPrefixes) {
+    if (model.startsWith(prefix)) return provider;
+  }
+
   // Default to anthropic for unknown models
   return 'anthropic';
 }

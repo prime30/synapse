@@ -15,6 +15,7 @@ import {
   Loader2,
   Archive,
   ArchiveRestore,
+  BookOpen,
 } from 'lucide-react';
 import type { ChatSession } from './SessionHistory';
 
@@ -63,6 +64,8 @@ interface SessionSidebarProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Open prompt template library (moved from input bar into sidebar). */
+  onOpenTemplates?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +91,7 @@ export function SessionSidebar({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  onOpenTemplates,
 }: SessionSidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -98,8 +102,15 @@ export function SessionSidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleNewClick = useCallback(() => {
+    if (isCreatingNew || !onNew) return;
+    setIsCreatingNew(true);
+    Promise.resolve(onNew()).finally(() => setIsCreatingNew(false));
+  }, [onNew, isCreatingNew]);
 
   useEffect(() => {
     try {
@@ -336,16 +347,27 @@ export function SessionSidebar({
       className="flex flex-col border-r ide-border-subtle ide-surface-panel shrink-0 h-full overflow-hidden transition-[width] duration-200"
       style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
     >
-      <div className="flex items-center justify-between shrink-0 border-b ide-border-subtle px-2 py-1.5">
+      <div className="flex items-center justify-between shrink-0 border-b ide-border-subtle px-2 py-1.5 gap-1">
         {!collapsed && (
-          <span className="text-[11px] font-semibold ide-text-2 truncate">
+          <span className="text-[11px] font-semibold ide-text-2 truncate min-w-0">
             Agents
           </span>
+        )}
+        {onOpenTemplates && (
+          <button
+            type="button"
+            onClick={onOpenTemplates}
+            className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
+            title="Prompt templates"
+            aria-label="Open prompt templates"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+          </button>
         )}
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
-          className="p-1 rounded ide-text-muted hover:ide-text ide-hover transition-colors ml-auto"
+          className="p-1 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0 ml-auto"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
@@ -371,11 +393,12 @@ export function SessionSidebar({
           </div>
           <button
             type="button"
-            onClick={onNew}
+            onClick={handleNewClick}
+            disabled={isCreatingNew}
             aria-label="New agent"
-            className="w-full flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-70 disabled:pointer-events-none"
           >
-            <Plus className="h-3.5 w-3.5" />
+            {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             New Agent
           </button>
         </div>
@@ -385,12 +408,13 @@ export function SessionSidebar({
         <div className="flex items-center justify-center py-2 shrink-0">
           <button
             type="button"
-            onClick={onNew}
-            className="p-1.5 rounded bg-accent hover:bg-accent-hover text-white transition-colors"
+            onClick={handleNewClick}
+            disabled={isCreatingNew}
+            className="p-1.5 rounded bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-70 disabled:pointer-events-none"
             title="New agent"
             aria-label="New agent"
           >
-            <Plus className="h-3.5 w-3.5" />
+            {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           </button>
         </div>
       )}

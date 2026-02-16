@@ -33,6 +33,7 @@ import {
 import { detectSignals, inferOutputMode, type OutputMode } from '@/lib/ai/signal-detector';
 import { trimHistory } from '@/lib/ai/history-window';
 import { detectFilePaths } from '@/lib/ai/file-path-detector';
+import { getFirstChangedLineRange } from '@/lib/ai/diff-utils';
 import { ConversationArc } from '@/lib/ai/conversation-arc';
 import type { AIErrorCode } from '@/lib/ai/errors';
 import { useFileTabs } from '@/hooks/useFileTabs';
@@ -109,6 +110,7 @@ interface SSEWorkerProgressEvent {
   workerId: string;
   label: string;
   status: 'running' | 'complete';
+  metadata?: Record<string, unknown>;
 }
 
 type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent;
@@ -331,6 +333,19 @@ interface AgentPromptPanelProps {
   onLiveSessionStart?: () => void;
   /** Signal end of a live preview session */
   onLiveSessionEnd?: () => void;
+
+  // ── Agent Live Breakout: auto-open + auto-scroll ──────────────────
+  /** Batch open files by path when agents identify affected files. */
+  onOpenFiles?: (filePaths: string[]) => void;
+  /** Scroll the main editor to a specific line in a file (after propose_code_edit). */
+  onScrollToEdit?: (filePath: string, lineNumber: number) => void;
+  /** Report active agent info for the breakout viewer. agentType=null means idle. */
+  onAgentActivity?: (info: {
+    agentType: string | null;
+    agentLabel?: string;
+    filePath: string | null;
+    liveContent: string | null;
+  }) => void;
 }
 
 export function AgentPromptPanel({
@@ -363,6 +378,9 @@ export function AgentPromptPanel({
   onLiveChange,
   onLiveSessionStart,
   onLiveSessionEnd,
+  onOpenFiles,
+  onScrollToEdit,
+  onAgentActivity,
 }: AgentPromptPanelProps) {
   const {
     messages,
@@ -409,6 +427,7 @@ export function AgentPromptPanel({
   const [currentAction, setCurrentAction] = useState<string | undefined>();
   const [lastTrimmedCount, setLastTrimmedCount] = useState(0);
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
 
@@ -546,9 +565,15 @@ export function AgentPromptPanel({
         enrichedContent = `${passiveCtx}\n\n${enrichedContent}`;
       }
 
-      // EPIC 1c: Selection injection — auto-include selected editor text as context
+      // EPIC 1c: Selection injection — auto-include selected editor text (with line range for chat pill)
       if (context.selection) {
-        enrichedContent = `[Selected code in editor]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${enrichedContent}`;
+        const start = context.selectionStartLine;
+        const end = context.selectionEndLine;
+        const lineTag =
+          typeof start === 'number' && typeof end === 'number'
+            ? ` — lines ${start}-${end}`
+            : '';
+        enrichedContent = `[Selected code in editor${lineTag}]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${enrichedContent}`;
       }
 
       // Phase 3b: Inject explicit file context for dragged files
@@ -603,8 +628,20 @@ export function AgentPromptPanel({
         ? `[Context from earlier conversation]:\n${historySummary}\n\n${enrichedContent}`
         : enrichedContent;
 
-      // Display only the raw user input in the chat bubble (no metadata)
-      appendMessage('user', actualContent);
+      // Display user message with selected-code as a line-number pill (collapsed by default), not raw code
+      const displayContent =
+        context.selection && context.selection.trim().length > 0
+          ? (() => {
+              const start = context.selectionStartLine;
+              const end = context.selectionEndLine;
+              const lineTag =
+                typeof start === 'number' && typeof end === 'number'
+                  ? ` — lines ${start}-${end}`
+                  : '';
+              return `[Selected code in editor${lineTag}]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${actualContent}`;
+            })()
+          : actualContent;
+      appendMessage('user', displayContent);
       setIsLoading(true);
 
       const assistantMsgId = crypto.randomUUID();
@@ -789,6 +826,24 @@ export function AgentPromptPanel({
                   ];
                   // Phase 4a: Push live change to preview
                   onLiveChange?.({ filePath: editFilePath, newContent: editNewContent });
+
+                  // Agent Live Breakout: auto-scroll to first changed line
+                  if (onScrollToEdit && originalFileContent && editFilePath) {
+                    const range = getFirstChangedLineRange(originalFileContent, editNewContent);
+                    if (range) {
+                      onScrollToEdit(editFilePath, range.startLine);
+                    }
+                  }
+
+                  // Agent Live Breakout: push live content update to the breakout viewer
+                  if (onAgentActivity && editFilePath) {
+                    onAgentActivity({
+                      agentType: null,
+                      filePath: editFilePath,
+                      liveContent: editNewContent,
+                    });
+                  }
+
                   updateMessage(assistantMsgId, streamedContent, {
                     ...clearActive,
                     codeEdits: [...accumulatedCodeEdits],
@@ -933,6 +988,18 @@ export function AgentPromptPanel({
                   workers.push({ workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status });
                 }
                 workersRef.current = workers;
+
+                // Agent Live Breakout: auto-open files from worker_progress metadata
+                const wpMeta = workerEvent.metadata;
+                if (
+                  workerEvent.status === 'running' &&
+                  wpMeta?.affectedFiles &&
+                  Array.isArray(wpMeta.affectedFiles) &&
+                  (wpMeta.affectedFiles as string[]).length > 0
+                ) {
+                  onOpenFiles?.(wpMeta.affectedFiles as string[]);
+                }
+
                 // Phase 8: Pass workers to ThinkingBlock via message metadata
                 updateMessage(assistantMsgId, streamedContent, {
                   thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
@@ -1006,6 +1073,31 @@ export function AgentPromptPanel({
                   updateMessage(assistantMsgId, streamedContent, {
                     budgetTruncated: true,
                   });
+                }
+
+                // Agent Live Breakout: auto-open files when agents identify them
+                if (
+                  sseEvent.phase === 'executing' &&
+                  metadata?.affectedFiles &&
+                  Array.isArray(metadata.affectedFiles) &&
+                  (metadata.affectedFiles as string[]).length > 0
+                ) {
+                  onOpenFiles?.(metadata.affectedFiles as string[]);
+                }
+
+                // Agent Live Breakout: report active agent for breakout viewer
+                if (sseEvent.phase === 'executing' && metadata?.agentType) {
+                  const firstFile = Array.isArray(metadata.affectedFiles) && (metadata.affectedFiles as string[]).length > 0
+                    ? (metadata.affectedFiles as string[])[0]
+                    : null;
+                  onAgentActivity?.({
+                    agentType: metadata.agentType as string,
+                    agentLabel: sseEvent.label ?? undefined,
+                    filePath: firstFile,
+                    liveContent: null,
+                  });
+                } else if (sseEvent.phase === 'complete') {
+                  onAgentActivity?.({ agentType: null, filePath: null, liveContent: null });
                 }
 
                 // Update message with thinking steps
@@ -1248,7 +1340,7 @@ export function AgentPromptPanel({
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -1443,6 +1535,7 @@ export function AgentPromptPanel({
         hasMore={hasMore}
         isLoadingMore={isLoadingMore}
         onLoadMore={loadMore}
+        onOpenTemplates={() => setTemplateLibraryOpen(true)}
       />
 
       {/* Chat area */}
@@ -1570,6 +1663,8 @@ export function AgentPromptPanel({
           onForkAtMessage={(messageIndex) => forkSession(messageIndex)}
           projectId={projectId}
           onPinAsPreference={(rule) => pinnedPrefs.addPin(rule)}
+          templateLibraryOpen={templateLibraryOpen}
+          onTemplateLibraryClose={() => setTemplateLibraryOpen(false)}
         />
       )}
       </div>

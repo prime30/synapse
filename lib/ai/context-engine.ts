@@ -779,20 +779,24 @@ export class ContextEngine {
       budget,
     );
 
-    // Try semantic search in parallel
+    // EPIC A: Use hybrid search (vector + keyword fusion via RRF)
     try {
-      const { semanticFileSearch } = await import('./embeddings');
-      const semanticResults = await semanticFileSearch(projectId, userMessage, 5);
+      const { hybridSearch } = await import('./hybrid-search');
+      const hybridResults = await hybridSearch(
+        projectId,
+        userMessage,
+        this.files.map(f => ({ fileId: f.fileId, fileName: f.name, content: f.content })),
+        10,
+      );
 
-      if (semanticResults.length > 0) {
-        // Merge semantic results with fuzzy results
+      if (hybridResults.length > 0) {
+        // Merge hybrid results with fuzzy results
         const existingIds = new Set(fuzzyResult.files.map(f => f.fileId));
-        const additionalIds = semanticResults
-          .filter(r => !existingIds.has(r.fileId) && r.similarity > 0.3)
+        const additionalIds = hybridResults
+          .filter(r => !existingIds.has(r.fileId) && r.score > 0)
           .map(r => r.fileId);
 
         if (additionalIds.length > 0) {
-          // Re-build context with semantic IDs added
           const allPriorityIds = [
             ...fuzzyResult.files.map(f => f.fileId),
             ...additionalIds,
@@ -801,7 +805,7 @@ export class ContextEngine {
         }
       }
     } catch {
-      // Semantic search unavailable -- use fuzzy results only
+      // Hybrid search unavailable -- use fuzzy results only
     }
 
     return fuzzyResult;

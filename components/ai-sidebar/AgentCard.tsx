@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Loader2, Check, FileText } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 export interface AgentCardProps {
   workerId: string;
@@ -58,14 +58,14 @@ export function AgentCard({
     >
       <div className="flex-shrink-0">
         {isRunning ? (
-          <Loader2 className="h-3.5 w-3.5 text-sky-500 animate-spin" />
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-sky-500/50 bg-sky-500/20 inline-block" aria-hidden />
         ) : (
           <Check className="h-3.5 w-3.5 text-emerald-500" />
         )}
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <span className="text-xs font-bold truncate">{label}</span>
+        <span className={`text-xs font-bold truncate ${isRunning ? 'animate-pulse' : ''}`}>{label}</span>
         {fileList != null && (
           <span className="text-[10px] text-muted-foreground truncate">
             {fileList}

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { AIProviderError, classifyNetworkError, formatSSEError } from '../errors';
 import type {
   AIProviderInterface,
@@ -32,10 +32,26 @@ function classifyGoogleError(error: unknown): AIProviderError {
 }
 
 /**
- * Google Gemini provider implementing the unified AIProviderInterface.
+ * Map Synapse effort levels to Gemini thinking levels.
+ */
+function mapThinkingLevel(effort?: string): 'minimal' | 'low' | 'medium' | 'high' | undefined {
+  if (!effort) return undefined;
+  switch (effort) {
+    case 'low': return 'low';
+    case 'medium': return 'medium';
+    case 'high': return 'high';
+    case 'max': return 'high';
+    default: return undefined;
+  }
+}
+
+/**
+ * Google Gemini provider using the unified @google/genai SDK.
  *
- * Uses `@google/generative-ai` SDK (AI Studio, API key only).
- * Future: Upgrade to `@google-cloud/vertexai` for enterprise rate limits.
+ * Supports:
+ *  - Gemini 3 Flash with thinking levels
+ *  - Gemini 2.0 Flash (legacy)
+ *  - Streaming with token usage tracking
  */
 export function createGoogleProvider(customApiKey?: string): AIProviderInterface {
   return {
@@ -50,41 +66,49 @@ export function createGoogleProvider(customApiKey?: string): AIProviderInterface
         throw new AIProviderError('AUTH_ERROR', 'GOOGLE_AI_API_KEY is not set', 'google');
       }
 
-      const model = options?.model ?? 'gemini-2.0-flash';
+      const model = options?.model ?? 'gemini-3-flash-preview';
       const systemMessage = messages.find((m) => m.role === 'system');
       const chatMessages = messages.filter((m) => m.role !== 'system');
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const genModel = genAI.getGenerativeModel({
-        model,
-        ...(systemMessage ? { systemInstruction: systemMessage.content } : {}),
-        generationConfig: {
-          maxOutputTokens: options?.maxTokens ?? 1024,
-          temperature: options?.temperature ?? 0.7,
-        },
-      });
+      const ai = new GoogleGenAI({ apiKey });
+
+      // Build config
+      const thinkingLevel = mapThinkingLevel(options?.effort);
+      const config: Record<string, unknown> = {
+        maxOutputTokens: options?.maxTokens ?? 1024,
+        temperature: options?.temperature ?? 0.7,
+      };
+      if (systemMessage) {
+        config.systemInstruction = systemMessage.content;
+      }
+      if (thinkingLevel) {
+        config.thinkingConfig = { thinkingLevel };
+      }
 
       const prompt = chatMessages.map((m) => m.content).join('\n\n');
+
       let result;
       try {
-        result = await genModel.generateContent(prompt);
+        result = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config,
+        });
       } catch (error) {
         throw classifyGoogleError(error);
       }
 
-      const response = result.response;
-      const content = response.text();
+      const content = result.text ?? '';
       if (!content) {
         throw new AIProviderError('EMPTY_RESPONSE', 'Google returned no content', 'google');
       }
 
-      const usageMetadata = response.usageMetadata;
       return {
         content,
         provider: 'google',
         model,
-        inputTokens: usageMetadata?.promptTokenCount,
-        outputTokens: usageMetadata?.candidatesTokenCount,
+        inputTokens: result.usageMetadata?.promptTokenCount,
+        outputTokens: result.usageMetadata?.candidatesTokenCount,
       };
     },
 
@@ -97,27 +121,25 @@ export function createGoogleProvider(customApiKey?: string): AIProviderInterface
         throw new AIProviderError('AUTH_ERROR', 'GOOGLE_AI_API_KEY is not set', 'google');
       }
 
-      const model = options?.model ?? 'gemini-2.0-flash';
+      const model = options?.model ?? 'gemini-3-flash-preview';
       const systemMessage = messages.find((m) => m.role === 'system');
       const chatMessages = messages.filter((m) => m.role !== 'system');
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const genModel = genAI.getGenerativeModel({
-        model,
-        ...(systemMessage ? { systemInstruction: systemMessage.content } : {}),
-        generationConfig: {
-          maxOutputTokens: options?.maxTokens ?? 1024,
-          temperature: options?.temperature ?? 0.7,
-        },
-      });
+      const ai = new GoogleGenAI({ apiKey });
+
+      const thinkingLevel = mapThinkingLevel(options?.effort);
+      const config: Record<string, unknown> = {
+        maxOutputTokens: options?.maxTokens ?? 4096,
+        temperature: options?.temperature ?? 0.7,
+      };
+      if (systemMessage) {
+        config.systemInstruction = systemMessage.content;
+      }
+      if (thinkingLevel) {
+        config.thinkingConfig = { thinkingLevel };
+      }
 
       const prompt = chatMessages.map((m) => m.content).join('\n\n');
-      let result;
-      try {
-        result = await genModel.generateContentStream(prompt);
-      } catch (error) {
-        throw classifyGoogleError(error);
-      }
 
       let inputTokens = 0;
       let outputTokens = 0;
@@ -126,11 +148,23 @@ export function createGoogleProvider(customApiKey?: string): AIProviderInterface
         (resolve) => { usageResolve = resolve; }
       );
 
+      let streamResponse: AsyncIterable<{ text?: string; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }>;
+      try {
+        const result = await ai.models.generateContentStream({
+          model,
+          contents: prompt,
+          config,
+        });
+        streamResponse = result as AsyncIterable<{ text?: string; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }>;
+      } catch (error) {
+        throw classifyGoogleError(error);
+      }
+
       const stream = new ReadableStream<string>({
         async start(controller) {
           try {
-            for await (const chunk of result.stream) {
-              const text = chunk.text();
+            for await (const chunk of streamResponse) {
+              const text = chunk.text;
               if (text) {
                 controller.enqueue(text);
               }

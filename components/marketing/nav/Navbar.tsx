@@ -12,6 +12,7 @@ import { useAuthModal } from '@/components/marketing/AuthModalContext';
 import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 import { useTheme } from '@/hooks/useTheme';
 import { createClient } from '@/lib/supabase/client';
+import { NavbarUserMenu } from './NavbarUserMenu';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
@@ -111,27 +112,50 @@ export function Navbar() {
               ))}
             </nav>
 
-            {/* Right side — Log in, CTA, theme toggle, hamburger */}
+            {/* Right side — Auth controls, CTA, theme toggle, hamburger */}
             <div className="flex items-center gap-3 md:gap-4">
-              <MagneticElement strength={4} radius={80} className="hidden md:inline-flex">
-                <button
-                  type="button"
-                  onClick={() => void handlePrimaryAuthAction()}
-                  className="text-sm text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
-                >
-                  {isAuthenticated ? 'Log out' : 'Log in'}
-                </button>
-              </MagneticElement>
+              {isAuthenticated ? (
+                <>
+                  <MagneticElement strength={5} radius={100} className="hidden md:inline-flex">
+                    <button
+                      type="button"
+                      onClick={handleCtaAction}
+                      className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
+                    >
+                      Open Editor
+                    </button>
+                  </MagneticElement>
+                  <div className="hidden md:flex">
+                    <NavbarUserMenu
+                      onSignOut={() => {
+                        setIsAuthenticated(false);
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <MagneticElement strength={4} radius={80} className="hidden md:inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => openAuthModal('login')}
+                      className="text-sm text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
+                    >
+                      Log in
+                    </button>
+                  </MagneticElement>
 
-              <MagneticElement strength={5} radius={100} className="hidden md:inline-flex">
-                <button
-                  type="button"
-                  onClick={handleCtaAction}
-                  className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
-                >
-                  {isAuthenticated ? 'Open Editor' : 'Start Free'}
-                </button>
-              </MagneticElement>
+                  <MagneticElement strength={5} radius={100} className="hidden md:inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => openAuthModal('signup')}
+                      className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
+                    >
+                      Start Free
+                    </button>
+                  </MagneticElement>
+                </>
+              )}
 
               <ThemeToggle
                 isDark={isDark}
@@ -191,40 +215,103 @@ export function Navbar() {
                 </Link>
               </motion.div>
             ))}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.4, duration: 0.3 }}
-            >
-              <button
-                type="button"
-                className="text-lg text-white/70 hover:text-white transition-colors"
-                onClick={() => {
-                  setMobileOpen(false);
-                  void handlePrimaryAuthAction();
-                }}
-              >
-                {isAuthenticated ? 'Log out' : 'Log in'}
-              </button>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.5, duration: 0.3 }}
-            >
-              <button
-                type="button"
-                className="inline-flex items-center justify-center px-6 py-2.5 sm:px-8 sm:py-3 rounded-full bg-accent text-white font-semibold text-base sm:text-lg hover:bg-accent-hover transition-colors"
-                onClick={() => {
-                  setMobileOpen(false);
-                  handleCtaAction();
-                }}
-              >
-                {isAuthenticated ? 'Open Editor' : 'Start Free'}
-              </button>
-            </motion.div>
+            {isAuthenticated ? (
+              <>
+                {/* Account links for mobile */}
+                {[
+                  { label: 'Overview', href: '/account' },
+                  { label: 'Settings', href: '/account/settings' },
+                  { label: 'Billing & Invoices', href: '/account/billing' },
+                ].map((item, idx) => (
+                  <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    transition={{ delay: 0.4 + idx * 0.08, duration: 0.3 }}
+                  >
+                    <Link
+                      href={item.href}
+                      className="text-lg text-white/50 hover:text-white transition-colors"
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  </motion.div>
+                ))}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ delay: 0.65, duration: 0.3 }}
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center px-6 py-2.5 sm:px-8 sm:py-3 rounded-full bg-accent text-white font-semibold text-base sm:text-lg hover:bg-accent-hover transition-colors"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      handleCtaAction();
+                    }}
+                  >
+                    Open Editor
+                  </button>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ delay: 0.75, duration: 0.3 }}
+                >
+                  <button
+                    type="button"
+                    className="text-lg text-white/40 hover:text-white transition-colors"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      void handlePrimaryAuthAction();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </motion.div>
+              </>
+            ) : (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ delay: 0.4, duration: 0.3 }}
+                >
+                  <button
+                    type="button"
+                    className="text-lg text-white/70 hover:text-white transition-colors"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      openAuthModal('login');
+                    }}
+                  >
+                    Log in
+                  </button>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ delay: 0.5, duration: 0.3 }}
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center px-6 py-2.5 sm:px-8 sm:py-3 rounded-full bg-accent text-white font-semibold text-base sm:text-lg hover:bg-accent-hover transition-colors"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      openAuthModal('signup');
+                    }}
+                  >
+                    Start Free
+                  </button>
+                </motion.div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -8,6 +8,21 @@ import { safeTransition } from '@/lib/accessibility';
 import { AgentCard } from './AgentCard';
 import { OrchestrationTimeline, type TimelineEntry } from './OrchestrationTimeline';
 
+// ── Strip IDE context and preview from displayed text ───────────────────
+
+const IDE_CONTEXT_PATTERN = /\[IDE Context\][^\n]*(?:\n(?!\n)[^\n]*)*/g;
+const PREVIEW_LINE_PATTERN = /\n?Preview:\s*https?:\/\/[^\n]+/gi;
+
+function stripIDEAndPreview(s: string | undefined): string {
+  if (!s?.trim()) return s ?? '';
+  return s
+    .replace(IDE_CONTEXT_PATTERN, '')
+    .replace(PREVIEW_LINE_PATTERN, '')
+    .trim()
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 // ── Types ─────────────────────────────────────────────────────────────
 
 export interface ThinkingStep {
@@ -114,13 +129,10 @@ function PhaseIcon({ phase, done }: { phase: ThinkingStep['phase']; done?: boole
     );
   }
 
-  // Spinner for active step
+  // No circle loader: active step uses text shimmer in parent
   if (phase !== 'complete') {
     return (
-      <svg className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
+      <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-sky-500/50 dark:border-sky-400/50 bg-sky-500/10 dark:bg-sky-400/10 inline-block" aria-hidden />
     );
   }
 
@@ -390,12 +402,7 @@ function PhaseCheckbox({ checked, active }: { checked: boolean; active: boolean 
   }
   if (active) {
     return (
-      <div className="w-4 h-4 rounded border-2 border-sky-500 dark:border-sky-400 flex items-center justify-center shrink-0">
-        <svg className="h-2.5 w-2.5 text-sky-500 dark:text-sky-400 animate-spin" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      </div>
+      <div className="w-4 h-4 rounded border-2 border-sky-500 dark:border-sky-400 flex items-center justify-center shrink-0 bg-sky-500/10 dark:bg-sky-400/10" aria-hidden />
     );
   }
   return (
@@ -483,17 +490,14 @@ export function ThinkingBlock({
         className="flex w-full items-center gap-1.5 rounded-lg ide-surface-inset border ide-border-subtle px-3 py-1.5 text-left transition-colors ide-hover"
       >
         {!isComplete && (
-          <svg className="h-3 w-3 text-sky-500 dark:text-sky-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+          <span className="h-3 w-3 shrink-0 rounded-full border-2 border-sky-500/50 dark:border-sky-400/50 bg-sky-500/10 dark:bg-sky-400/10 inline-block" aria-hidden />
         )}
         {isComplete && (
           <svg className="h-3 w-3 text-accent shrink-0" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
           </svg>
         )}
-        <span className="text-xs ide-text-2 font-medium flex-1 min-w-0">
+        <span className={`text-xs ide-text-2 font-medium flex-1 min-w-0 ${!isComplete ? 'animate-pulse' : ''}`}>
           {isComplete
             ? `Thinking (${steps.length} steps)`
             : `Thinking... (${completedCount}/${steps.length})`}
@@ -566,11 +570,11 @@ export function ThinkingBlock({
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ide-hover rounded-lg"
                     >
                       <PhaseCheckbox checked={group.allDone} active={group.hasActive} />
-                      <span className={`text-xs font-medium flex-1 ${group.allDone ? 'ide-text-muted line-through' : group.hasActive ? 'ide-text' : 'ide-text-3'}`}>
-                        {group.label}
+                      <span className={`text-xs font-medium flex-1 ${group.allDone ? 'ide-text-muted line-through' : group.hasActive ? 'ide-text animate-pulse' : 'ide-text-3'}`}>
+                        {stripIDEAndPreview(group.label)}
                       </span>
                       {group.allDone && group.summary && (
-                        <span className="text-[10px] ide-text-3 truncate max-w-[140px]">{group.summary}</span>
+                        <span className="text-[10px] ide-text-3 truncate max-w-[140px]">{stripIDEAndPreview(group.summary)}</span>
                       )}
                       {/* Elapsed time for completed groups */}
                       {group.allDone && group.steps[0]?.startedAt && (
@@ -604,8 +608,8 @@ export function ThinkingBlock({
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1 flex-wrap">
                                     <PhaseLabel phase={step.phase} />
-                                    <span className={`text-xs font-medium ${step.done ? 'ide-text-muted' : 'ide-text'}`}>
-                                      {step.label}
+                                    <span className={`text-xs font-medium ${step.done ? 'ide-text-muted' : 'ide-text animate-pulse'}`}>
+                                      {stripIDEAndPreview(step.label)}
                                     </span>
                                     {step.agent && (
                                       <span className={`ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${getAgentBadgeClasses(step.agent)}`}>
@@ -634,14 +638,14 @@ export function ThinkingBlock({
                                     )}
                                   </div>
                                   {step.detail && step.phase !== 'clarification' && (
-                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed">{step.detail}</p>
+                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed">{stripIDEAndPreview(step.detail)}</p>
                                   )}
                                   {/* Phase 4b: Analysis only in verbose mode */}
                                   {verbose && step.analysis && (
-                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed italic border-l-2 border-purple-500/30 pl-2">{step.analysis}</p>
+                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed italic border-l-2 border-purple-500/30 pl-2">{stripIDEAndPreview(step.analysis)}</p>
                                   )}
                                   {step.summary && (
-                                    <p className="text-[11px] ide-text-2 mt-0.5 leading-relaxed">{step.summary}</p>
+                                    <p className="text-[11px] ide-text-2 mt-0.5 leading-relaxed">{stripIDEAndPreview(step.summary)}</p>
                                   )}
                                   {/* Deep-link metadata rendering — full in verbose, minimal in summary */}
                                   <StepMetadata step={step} onOpenFile={onOpenFile} />

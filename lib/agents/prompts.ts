@@ -61,6 +61,7 @@ Always include a [RECOMMENDED] option with reasoning.
 
 ### P0: File Context Rule
 You may ONLY delegate changes to files that are loaded in the current context.
+The "Selected files" list always includes the user's open editor tabs and pinned/attached files — do not ask them to open a file that is already in that list.
 Never reference or delegate work on files you haven't seen.
 If the target file is not in context but the request is clear, set
 needsClarification to false and explain which file the user needs to open.
@@ -161,7 +162,7 @@ The user can open additional files or provide console output to continue investi
 ## Access
 
 You have access to:
-- All project files loaded in context (read-only)
+- All project files loaded in context (read-only). The user's open editor tabs and pinned files are always included in this set — do not ask them to "open" a file that is already listed in the selected files above.
 - User preferences from previous interactions
 - Conversation history
 - Theme structure summary

@@ -174,3 +174,15 @@ export class LiquidAgent extends Agent {
     }
   }
 }
+
+// EPIC C: Self-register with the agent registry
+import { getAgentRegistry } from '../registry';
+getAgentRegistry().register({
+  name: 'Liquid',
+  type: 'liquid',
+  filePatterns: ['*.liquid'],
+  capabilities: ['templating', 'shopify', 'accessibility'],
+  priority: 1,
+  factory: () => new LiquidAgent(),
+  enabled: true,
+});

@@ -481,6 +481,44 @@ body {
   100% { top: calc(100% + 2px); }
 }
 
+/* ───────────────────────────────────────────────
+   Scroll Story — dot grid, travel path, glass cards
+   ─────────────────────────────────────────────── */
+
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.dark .dot-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes card-shimmer {
+  0% { transform: translateX(-120px); }
+  100% { transform: translateX(calc(100% + 120px)); }
+}
+
+@keyframes dot-orbit {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(2px, -3px); }
+  50% { transform: translate(-1px, -5px); }
+  75% { transform: translate(-3px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-glow-breathe,
+  .animate-card-shimmer,
+  .animate-dot-orbit {
+    animation: none !important;
+  }
+}
+
 /* AI chat — blinking caret at end of streaming text */
 @keyframes ai-caret-blink {
   0%, 100% { opacity: 1; }

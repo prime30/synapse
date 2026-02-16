@@ -14,6 +14,11 @@ import { buildTemplateEntries, getTemplateVariants } from '@/lib/preview/templat
 import type { TemplateEntry } from '@/lib/preview/template-classifier';
 import { PreviewAnnotator } from './PreviewAnnotator';
 import type { AnnotationData } from './PreviewAnnotator';
+import {
+  deriveRelevantLiquidFiles,
+  flattenRelevantFiles,
+  type VisibleSection,
+} from '@/lib/preview/relevant-liquid-files';
 
 /** Element data returned by the bridge's element-selected action */
 export interface SelectedElement {
@@ -27,6 +32,8 @@ export interface SelectedElement {
   rect: { top: number; left: number; width: number; height: number };
   isApp?: boolean;
   source?: string;
+  /** Liquid section file path resolved from the nearest section ancestor, e.g. "sections/main-product.liquid" */
+  liquidSection?: string;
 }
 
 /** Handle exposed via forwardRef for parent components (e.g. page.tsx) */
@@ -141,11 +148,24 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const [deviceWidth, setDeviceWidth] = useState<number>(DESKTOP_BREAKPOINT);
   const [selectedResource, setSelectedResource] = useState<PreviewResource | null>(null);
   const [createModalType, setCreateModalType] = useState<string | null>(null);
+  const [showRelevantFiles, setShowRelevantFiles] = useState(false);
   const frameRef = useRef<PreviewFrameHandle>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
+  // Refs for values needed inside the bridge-ready handler (closed over in a [] deps effect)
+  const inspectingRef = useRef(false);
+  const sendBridgeMessageRef = useRef<(action: string, payload?: Record<string, unknown>) => void>(() => {});
 
   // Live URL path — updated by the bridge's passive context messages
   const [liveUrlPath, setLiveUrlPath] = useState<string | null>(null);
+  // Visible sections — updated from passive bridge messages alongside URL
+  const [liveVisibleSections, setLiveVisibleSections] = useState<VisibleSection[]>([]);
+
+  // Derive relevant Liquid files from the current preview URL + visible sections
+  const relevantLiquidFiles = useMemo(() => {
+    if (!liveUrlPath) return [];
+    const result = deriveRelevantLiquidFiles(liveUrlPath, liveVisibleSections);
+    return flattenRelevantFiles(result);
+  }, [liveUrlPath, liveVisibleSections]);
 
   // Listen for passive bridge messages to track the actual iframe URL
   useEffect(() => {
@@ -167,9 +187,14 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
       } catch {
         // Malformed URL — ignore
       }
+      // Capture visible sections for relevant-files derivation
+      const sections = msg.data?.visibleSections;
+      if (Array.isArray(sections)) {
+        setLiveVisibleSections(sections as VisibleSection[]);
+      }
     }
 
-    // Also capture the ready message for initial URL
+    // Also capture the ready message for initial URL + re-enable inspect after page nav
     function handleReady(event: MessageEvent) {
       const msg = event.data;
       if (msg?.type === 'synapse-bridge-response' && msg?.action === 'ready') {
@@ -180,6 +205,10 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
             const proxyPath = parsed.searchParams.get('path');
             if (proxyPath) setLiveUrlPath(proxyPath);
           } catch { /* ignore */ }
+        }
+        // Re-enable inspect mode if it was active before page navigation
+        if (inspectingRef.current) {
+          sendBridgeMessageRef.current('enableInspect');
         }
       }
     }
@@ -407,6 +436,10 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     },
   }), [getDOMContext, getRawSnapshot, sendBridgeMessage]);
 
+  // Keep refs in sync so the bridge-ready handler can re-enable inspect after page nav
+  useEffect(() => { sendBridgeMessageRef.current = sendBridgeMessage; }, [sendBridgeMessage]);
+  useEffect(() => { inspectingRef.current = inspecting; }, [inspecting]);
+
   const toggleInspect = useCallback(() => {
     const next = !inspecting;
     setInspecting(next);
@@ -446,12 +479,12 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
 
   return (
     <section
-      className={`flex flex-col ${fill ? 'h-full flex-1 min-h-0' : 'gap-2'} ${isFullscreen ? 'fixed inset-0 z-50 ide-surface p-4' : ''}`}
+      className={`flex flex-col ${fill ? 'h-full flex-1 min-h-0' : 'gap-2'}`}
     >
       {/* ── Preview toolbar row ──────────────────────────────────── */}
       <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1.5 border-b ide-border-subtle' : ''}`}>
-        {/* Left: device switcher */}
-        <div className="flex items-center gap-2">
+        {/* Left: device switcher + inspect + annotate */}
+        <div className="flex items-center gap-1">
           <div className="flex items-center gap-0.5 rounded-md ide-surface-inset p-0.5">
             {DEVICES.map((device) => {
               const isActive = deviceWidth === device.width;
@@ -473,10 +506,66 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               );
             })}
           </div>
+
+          <div className="w-px h-4 ide-border-subtle mx-0.5" />
+
+          {/* Inspect toggle */}
+          <button
+            type="button"
+            onClick={toggleInspect}
+            className={`rounded p-1.5 transition-colors ${
+              inspecting
+                ? 'bg-sky-500 dark:bg-sky-600 text-white'
+                : 'ide-text-muted hover:ide-text-2 ide-hover'
+            }`}
+            title={inspecting ? 'Exit Inspect mode' : 'Inspect element'}
+            aria-label={inspecting ? 'Exit Inspect mode' : 'Inspect element'}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="22" y1="12" x2="18" y2="12" />
+              <line x1="6" y1="12" x2="2" y2="12" />
+              <line x1="12" y1="6" x2="12" y2="2" />
+              <line x1="12" y1="22" x2="12" y2="18" />
+            </svg>
+          </button>
+
+          {/* Annotate toggle */}
+          {onAnnotation && (
+            <button
+              type="button"
+              onClick={() => {
+                setAnnotating((prev) => !prev);
+                if (inspecting) { setInspecting(false); sendBridgeMessage('disableInspect'); }
+              }}
+              className={`rounded p-1.5 transition-colors ${
+                annotating
+                  ? 'bg-amber-500 dark:bg-amber-600 text-white'
+                  : 'ide-text-muted hover:ide-text-2 ide-hover'
+              }`}
+              title={annotating ? 'Exit Annotate mode' : 'Annotate area for AI'}
+              aria-label={annotating ? 'Exit Annotate mode' : 'Annotate area for AI'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M9 3v18" />
+              </svg>
+            </button>
+          )}
         </div>
 
-        {/* Center: page type dropdown */}
-        <div className="flex-1 flex justify-center">
+        {/* Center: page type dropdown + refresh icon */}
+        <div className="flex-1 flex items-center justify-center gap-1">
           <PageTypeSelector
             templates={templateEntries}
             selectedTemplate={selectedTemplate}
@@ -486,11 +575,6 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
             onCreateTemplate={(type) => setCreateModalType(type)}
             projectId={projectId}
           />
-        </div>
-
-        {/* Right: action buttons */}
-        <div className="flex items-center gap-1.5">
-          {/* Refresh */}
           <button
             type="button"
             onClick={() => {
@@ -500,30 +584,30 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               setTimeout(() => setIsRefreshing(false), 1200);
             }}
             disabled={isRefreshing}
-            className="rounded ide-surface-input px-2.5 py-1 text-xs ide-text-2 hover:ide-text ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded p-1.5 ide-text-muted hover:ide-text-2 ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh preview"
             aria-label="Refresh preview"
           >
-            <span className="flex items-center gap-1">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={isRefreshing ? 'animate-spin' : ''}
-              >
-                <polyline points="23 4 23 10 17 10" />
-                <polyline points="1 20 1 14 7 14" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-              Refresh
-            </span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={isRefreshing ? 'animate-spin' : ''}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
           </button>
+        </div>
 
+        {/* Right: status badges + pop out */}
+        <div className="flex items-center gap-1.5">
           {/* Dev theme sync status badge */}
           {showSyncBadge && (
             <span className="flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400">
@@ -546,106 +630,28 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
             </span>
           )}
 
-          {/* Inspect toggle */}
-          <button
-            type="button"
-            onClick={toggleInspect}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-              inspecting
-                ? 'bg-sky-500 dark:bg-sky-600 text-white'
-                : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'
-            }`}
-            title={inspecting ? 'Exit Inspect mode' : 'Inspect element'}
-          >
-            <span className="flex items-center gap-1">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="22" y1="12" x2="18" y2="12" />
-                <line x1="6" y1="12" x2="2" y2="12" />
-                <line x1="12" y1="6" x2="12" y2="2" />
-                <line x1="12" y1="22" x2="12" y2="18" />
-              </svg>
-              {inspecting ? 'Inspecting' : 'Inspect'}
-            </span>
-          </button>
-
-          {/* Annotate button (Phase 3a) */}
-          {onAnnotation && (
-            <button
-              type="button"
-              onClick={() => {
-                setAnnotating((prev) => !prev);
-                if (inspecting) { setInspecting(false); sendBridgeMessage('disableInspect'); }
-              }}
-              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                annotating
-                  ? 'bg-amber-500 dark:bg-amber-600 text-white'
-                  : 'ide-surface-input ide-text-2 hover:ide-text ide-hover'
-              }`}
-              title={annotating ? 'Exit Annotate mode' : 'Annotate area for AI'}
-            >
-              <span className="flex items-center gap-1">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <path d="M3 9h18" />
-                  <path d="M9 3v18" />
-                </svg>
-                {annotating ? 'Annotating' : 'Annotate'}
-              </span>
-            </button>
-          )}
-
           {/* Pop out / Bring back */}
           <button
             type="button"
             onClick={isDetached ? handleReattach : handleDetach}
-            className="rounded ide-surface-input px-2.5 py-1 text-xs ide-text-2 hover:ide-text ide-hover transition-colors"
+            className="rounded p-1.5 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
             title={isDetached ? 'Bring preview back into IDE' : 'Open preview in new window'}
+            aria-label={isDetached ? 'Bring preview back into IDE' : 'Open preview in new window'}
           >
-            <span className="flex items-center gap-1">
-              {isDetached ? (
-                /* Arrow pointing inward (bring back) */
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 4 4 4 4 9" />
-                  <line x1="4" y1="4" x2="11" y2="11" />
-                  <polyline points="15 20 20 20 20 15" />
-                  <line x1="20" y1="20" x2="13" y2="13" />
-                </svg>
-              ) : (
-                /* External link / pop out icon */
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              )}
-              {isDetached ? 'Bring back' : 'Pop out'}
-            </span>
-          </button>
-
-          {/* Fullscreen */}
-          <button
-            type="button"
-            onClick={() => {
-              if (isDetached && detachedWindow && !detachedWindow.closed) {
-                // Focus the detached window (browser may block this in some cases)
-                detachedWindow.focus();
-              } else {
-                setIsFullscreen((prev) => !prev);
-              }
-            }}
-            className="rounded ide-surface-input px-3 py-1 text-xs ide-text-2 hover:ide-text ide-hover"
-          >
-            {isDetached ? 'Focus window' : isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            {isDetached ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 4 4 4 4 9" />
+                <line x1="4" y1="4" x2="11" y2="11" />
+                <polyline points="15 20 20 20 20 15" />
+                <line x1="20" y1="20" x2="13" y2="13" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            )}
           </button>
         </div>
       </div>
@@ -663,6 +669,46 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               {liveUrlPath || effectivePath || '/'}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* ── Relevant Liquid files row ─────────────────────────────── */}
+      {!isDetached && relevantLiquidFiles && relevantLiquidFiles.length > 0 && (
+        <div className={`shrink-0 ${fill ? 'px-2 border-b ide-border-subtle' : 'px-1'}`}>
+          <button
+            type="button"
+            onClick={() => setShowRelevantFiles((v) => !v)}
+            className="flex items-center gap-1.5 w-full py-1 text-[11px] ide-text-muted hover:ide-text-2 transition-colors"
+          >
+            <svg
+              width="8"
+              height="8"
+              viewBox="0 0 8 8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`shrink-0 transition-transform ${showRelevantFiles ? 'rotate-90' : ''}`}
+            >
+              <path d="M2 1l4 3-4 3" />
+            </svg>
+            <span>Relevant to this view</span>
+            <span className="ide-text-3">({relevantLiquidFiles.length})</span>
+          </button>
+          {showRelevantFiles && (
+            <div className="pb-1.5 pl-4 flex flex-wrap gap-x-3 gap-y-0.5">
+              {relevantLiquidFiles.map((fp) => (
+                <span
+                  key={fp}
+                  className="font-mono text-[11px] ide-text-2 truncate max-w-[200px]"
+                  title={fp}
+                >
+                  {fp}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

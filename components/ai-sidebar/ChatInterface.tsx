@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
@@ -22,7 +23,7 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Plus, Pencil, RotateCcw, BookOpen, GitBranch } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, User, Users, Send } from 'lucide-react';
 import { PromptTemplateLibrary } from './PromptTemplateLibrary';
 import { ShareButton } from './ShareButton';
 import { ConflictResolver } from './ConflictResolver';
@@ -54,9 +55,52 @@ const SELECTOR_REF_PATTERN = /^\[([^\]]{5,})\]:\s*/;
  */
 const IDE_CONTEXT_PATTERN = /\[IDE Context\][^\n]*(?:\n(?!\n)[^\n]*)*/g;
 
+/** Match [Selected code in editor — lines N-M]: or [Selected code in editor]: followed by fenced code block */
+const SELECTED_CODE_BLOCK_RE =
+  /\[Selected code in editor(?: — lines (\d+)-(\d+))?\]:\s*\n```(?:\w+)?\n([\s\S]*?)```/g;
+
+function SelectedCodePill({
+  startLine,
+  endLine,
+  code,
+  defaultExpanded = false,
+}: {
+  startLine?: number;
+  endLine?: number;
+  code: string;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const label =
+    typeof startLine === 'number' && typeof endLine === 'number'
+      ? startLine === endLine
+        ? `L${startLine}`
+        : `L${startLine}–${endLine}`
+      : `${code.split(/\n/).length} lines`;
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono text-sky-500 dark:text-sky-400 hover:ide-hover self-start max-w-full"
+        title={expanded ? 'Collapse' : 'Expand code'}
+      >
+        <span className="truncate">{label}</span>
+        <span className="ml-1 opacity-70">{expanded ? '▼' : '▶'}</span>
+      </button>
+      {expanded && (
+        <pre className="mt-1 p-2 rounded border ide-border ide-surface-inset text-[11px] overflow-x-auto max-h-48 overflow-y-auto whitespace-pre">
+          <code>{code}</code>
+        </pre>
+      )}
+    </span>
+  );
+}
+
 /**
  * Strips metadata prefixes from legacy stored messages and renders
- * element-selector references as compact token pills.
+ * element-selector references and selected-code blocks as compact token pills.
+ * Selected code is shown as a line-number pill (collapsed by default), expandable to show code.
  */
 function UserMessageContent({ content }: { content: string }) {
   // Strip any residual IDE context metadata (for backward compat with stored messages)
@@ -67,7 +111,6 @@ function UserMessageContent({ content }: { content: string }) {
   let selectorChip: React.ReactNode = null;
   if (selectorMatch) {
     const selector = selectorMatch[1];
-    // Build a short human-readable label from the selector
     const label = selector.length > 40 ? selector.slice(0, 37) + '...' : selector;
     selectorChip = (
       <span
@@ -80,18 +123,47 @@ function UserMessageContent({ content }: { content: string }) {
     cleaned = cleaned.slice(selectorMatch[0].length);
   }
 
-  // Strip [Selected code in editor] and [Full file context] blocks (legacy stored messages)
-  cleaned = cleaned
-    .replace(/\[Selected code in editor\]:[\s\S]*?```\n*/g, '')
-    .replace(/\[Full file context[^\]]*\]:[\s\S]*?```\n*/g, '')
-    .trim();
+  // Strip [Full file context] blocks (no pill)
+  cleaned = cleaned.replace(/\[Full file context[^\]]*\]:[\s\S]*?```\n*/g, '').trim();
 
-  if (!cleaned && !selectorChip) return null;
+  // Parse [Selected code in editor ...]: ```...``` into pills (collapsed by default)
+  const parts: Array<{ type: 'text'; text: string } | { type: 'code'; startLine?: number; endLine?: number; code: string }> = [];
+  SELECTED_CODE_BLOCK_RE.lastIndex = 0;
+  let lastEnd = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SELECTED_CODE_BLOCK_RE.exec(cleaned)) !== null) {
+    if (match.index > lastEnd) {
+      parts.push({ type: 'text', text: cleaned.slice(lastEnd, match.index) });
+    }
+    const startLine = match[1] ? parseInt(match[1], 10) : undefined;
+    const endLine = match[2] ? parseInt(match[2], 10) : undefined;
+    parts.push({ type: 'code', startLine, endLine, code: match[3] ?? '' });
+    lastEnd = SELECTED_CODE_BLOCK_RE.lastIndex;
+  }
+  if (lastEnd < cleaned.length) {
+    parts.push({ type: 'text', text: cleaned.slice(lastEnd) });
+  }
+
+  if (parts.length === 0 && !selectorChip) return null;
 
   return (
     <div className="flex flex-col gap-2">
       {selectorChip}
-      {cleaned && <span>{cleaned}</span>}
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {parts.map((part, i) =>
+          part.type === 'text' ? (
+            <span key={i}>{part.text}</span>
+          ) : (
+            <SelectedCodePill
+              key={i}
+              startLine={part.startLine}
+              endLine={part.endLine}
+              code={part.code}
+              defaultExpanded={false}
+            />
+          )
+        )}
+      </span>
     </div>
   );
 }
@@ -256,6 +328,10 @@ interface ChatInterfaceProps {
   onForkAtMessage?: (messageIndex: number) => void;
   /** Phase 6a: Called when user pins/unpins a message as a preference */
   onPinAsPreference?: (content: string) => void;
+  /** When set, prompt template library open state is controlled by parent (e.g. sidebar header). */
+  templateLibraryOpen?: boolean;
+  /** Called when template library should close (e.g. after selection). */
+  onTemplateLibraryClose?: () => void;
 }
 
 function HistorySummaryBlock({ count, summary }: { count: number; summary?: string }) {
@@ -446,6 +522,8 @@ export function ChatInterface({
   projectId,
   activeSessionId,
   onPinAsPreference,
+  templateLibraryOpen = false,
+  onTemplateLibraryClose,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -480,15 +558,60 @@ export function ChatInterface({
   // Phase 3b: Attached files (dragged from file tree)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; path: string }>>([]);
 
-  // Phase 3c: Template library
-  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [showIntentDropdown, setShowIntentDropdown] = useState(false);
+  const [intentDropdownRect, setIntentDropdownRect] = useState<{ bottom: number; left: number } | null>(null);
+  const intentDropdownAnchorRef = useRef<HTMLDivElement>(null);
+  const intentDropdownOpenTimeRef = useRef<number>(0);
+  const [modelPickerRect, setModelPickerRect] = useState<{ bottom: number; left: number } | null>(null);
+  const modelPickerAnchorRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    if (!showIntentDropdown || !intentDropdownAnchorRef.current) {
+      if (!showIntentDropdown) setIntentDropdownRect(null);
+      return;
+    }
+    const el = intentDropdownAnchorRef.current;
+    const rect = el.getBoundingClientRect();
+    // Position above the button so dropdown opens upward and isn't clipped by overflow
+    setIntentDropdownRect({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
+    return () => setIntentDropdownRect(null);
+  }, [showIntentDropdown]);
+
+  useEffect(() => {
+    if (!showModelPicker || !modelPickerAnchorRef.current) return;
+    const el = modelPickerAnchorRef.current;
+    const rect = el.getBoundingClientRect();
+    setModelPickerRect({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
+    return () => setModelPickerRect(null);
+  }, [showModelPicker]);
+
   useEffect(() => { onAttachedFilesChange?.(attachedFiles); }, [attachedFiles, onAttachedFilesChange]);
 
   // Prompt progress / countdown
   const promptProgress = usePromptProgress(!!isLoading, currentAction, intentMode);
 
-  // Context window meter
-  const contextMeter = useContextMeter(messages, currentModel, fileCount, editorSelection, summarizedCount, totalFiles, budgetTruncated);
+  // Use actual context stats from the latest assistant message when present (bounded context from backend)
+  const lastContextStats = useMemo(() => {
+    const last = [...messages].reverse().find((m) => m.role === 'assistant' && m.contextStats);
+    return (last as { contextStats?: { loadedFiles: number; loadedTokens: number; totalFiles: number } } | undefined)?.contextStats;
+  }, [messages]);
+
+  const effectiveFileCount = lastContextStats?.loadedFiles ?? 0;
+  const effectiveTotalFiles = lastContextStats?.totalFiles ?? totalFiles ?? 0;
+  const loadedFileTokens = lastContextStats?.loadedTokens;
+
+  // Context window meter: use bounded context (effectiveFileCount, loadedFileTokens) when we have stats
+  const contextMeter = useContextMeter(
+    messages,
+    currentModel,
+    effectiveFileCount,
+    editorSelection,
+    summarizedCount,
+    effectiveTotalFiles,
+    budgetTruncated,
+    undefined,
+    loadedFileTokens,
+  );
   const currentModelOption = MODEL_OPTIONS.find((o) => o.value === currentModel);
 
   // Auto-scroll to bottom (only when user hasn't scrolled up)
@@ -841,18 +964,18 @@ export function ChatInterface({
 
         {/* Empty state with mode explanations + suggestions */}
         {messages.length === 0 && !isLoading && (
-          <div className="py-6 space-y-4">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-10 h-10 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
-                <svg className="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="py-8 flex flex-col items-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl ide-surface-inset border ide-border flex items-center justify-center">
+                <svg className="w-7 h-7 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
                   <circle cx="12" cy="11" r="3" />
                 </svg>
               </div>
-              <p className="text-sm ide-text-2 font-medium">Synapse AI</p>
-              <p className="text-xs ide-text-3 text-center">What would you like to build?</p>
+              <p className="text-base ide-text-2 font-semibold">Synapse AI</p>
+              <p className="text-sm ide-text-3 text-center">What would you like to build?</p>
             </div>
-            <div className="grid grid-cols-2 gap-1.5 px-2">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-[320px] mt-5">
               {[
                 { key: 'code', icon: '⌨', label: 'Code', desc: 'Change theme files' },
                 { key: 'ask', icon: '?', label: 'Ask', desc: 'Questions about your project' },
@@ -863,7 +986,7 @@ export function ChatInterface({
                   key={item.key}
                   type="button"
                   onClick={() => onIntentModeChange?.(item.key as IntentMode)}
-                  className={`rounded-md px-2 py-1.5 text-left text-[11px] transition-colors border ${
+                  className={`rounded-lg px-3 py-2.5 text-center text-sm transition-colors border ${
                     intentMode === item.key
                       ? 'border-sky-400/40 bg-sky-500/10 ide-text'
                       : 'ide-border-subtle ide-surface hover:ide-hover ide-text-muted'
@@ -871,16 +994,18 @@ export function ChatInterface({
                   aria-label={`Switch to ${item.label} mode: ${item.desc}`}
                 >
                   <span className="font-medium">{item.icon} {item.label}</span>
-                  <span className="block ide-text-muted text-[10px]">{item.desc}</span>
+                  <span className="block ide-text-muted text-xs mt-0.5">{item.desc}</span>
                 </button>
               ))}
             </div>
             {showPreSuggestions && (
-              <SuggestionChips
-                suggestions={contextSuggestions}
-                onSelect={handleSuggestionSelect}
-                variant="pre"
-              />
+              <div className="flex justify-center mt-5 w-full">
+                <SuggestionChips
+                  suggestions={contextSuggestions}
+                  onSelect={handleSuggestionSelect}
+                  variant="pre"
+                />
+              </div>
             )}
           </div>
         )}
@@ -1201,14 +1326,10 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Loading indicator — only shown when no thinking steps yet (before first SSE event) */}
+        {/* Loading indicator — only shown when no thinking steps yet (before first SSE event); shimmer on text, no circle loader */}
         {isLoading && !(lastMessage?.role === 'assistant' && lastMessage?.thinkingSteps?.length) && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg ide-surface-input border ide-border-subtle animate-pulse">
-            <svg className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span className="text-xs ide-text-2 font-medium italic">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg ide-surface-input border ide-border-subtle">
+            <span className="text-xs ide-text-2 font-medium italic animate-pulse">
               {getThinkingLabel(currentAction, reviewFileCount)}
               <ThinkingDots />
             </span>
@@ -1264,15 +1385,9 @@ export function ChatInterface({
 
       {/* Input area */}
       <div className="flex-shrink-0 border-t ide-border-subtle">
-        {/* Consolidated context row: badges + element chip + image + attached files + inline suggestions */}
-        {(fileCount > 0 || editorSelection || selectedElement || attachedImage || attachedFiles.length > 0 || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
+        {/* Consolidated context row: element chip + image + attached files + inline suggestions (file count pill removed) */}
+        {(editorSelection || selectedElement || attachedImage || attachedFiles.length > 0 || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
           <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap border-b ide-border-subtle">
-            {fileCount > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full ide-surface-inset px-2 py-0.5 text-[10px] ide-text-3">
-                <Paperclip className="h-2.5 w-2.5" />
-                {fileCount}
-              </span>
-            )}
             {/* Phase 3b: Attached file chips from drag-and-drop */}
             {attachedFiles.map((af) => (
               <span key={af.id} className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-400">
@@ -1328,88 +1443,167 @@ export function ChatInterface({
             onChange={handleFileSelect}
           />
 
-          <div className={`relative ${isDraggingOver ? 'ring-2 ring-sky-500/50 dark:ring-sky-400/50 rounded-lg' : ''}`}>
-            <textarea
-              ref={inputRef}
-              name="message"
-              rows={2}
-              placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
-              disabled={isLoading || isUploadingImage}
-              className="w-full rounded-lg border ide-border ide-surface-input px-3 py-2 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:border-sky-500 dark:focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500/20 dark:focus:ring-sky-400/20 disabled:opacity-50 resize-none"
-              onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-                // Escape: stop streaming
-                if (e.key === 'Escape' && isLoading && onStop) {
-                  e.preventDefault();
-                  onStop();
-                }
-                // Up arrow on empty input: recall last user message
-                const target = e.target as HTMLTextAreaElement;
-                if (e.key === 'ArrowUp' && !target.value?.trim()) {
-                  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-                  if (lastUserMsg) {
+          {/* Input bento: one bordered box containing textarea + footer row */}
+          <div className={`rounded-lg border ide-border ide-surface-input overflow-hidden ${isDraggingOver ? 'ring-2 ring-sky-500/50 dark:ring-sky-400/50' : ''}`}>
+            <div className="relative">
+              <textarea
+                ref={inputRef}
+                name="message"
+                rows={3}
+                placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
+                disabled={isLoading || isUploadingImage}
+                className="w-full border-0 bg-transparent px-3 pt-3 pb-1.5 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:outline-none focus:ring-0 disabled:opacity-50 resize-none"
+                onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    target.value = lastUserMsg.content;
-                    setInputHasText(true);
+                    handleSubmit(e);
                   }
-                }
-              }}
-              onPaste={handlePaste}
-            />
+                  if (e.key === 'Escape' && isLoading && onStop) {
+                    e.preventDefault();
+                    onStop();
+                  }
+                  const target = e.target as HTMLTextAreaElement;
+                  if (e.key === 'ArrowUp' && !target.value?.trim()) {
+                    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+                    if (lastUserMsg) {
+                      e.preventDefault();
+                      target.value = lastUserMsg.content;
+                      setInputHasText(true);
+                    }
+                  }
+                }}
+                onPaste={handlePaste}
+              />
 
-            {/* Drag-drop overlay */}
-            {isDraggingOver && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-sky-500/10 dark:bg-sky-500/10 border-2 border-dashed border-sky-500/40 pointer-events-none">
-                <div className="flex items-center gap-2 text-sm text-sky-600 dark:text-sky-400">
-                  <Upload className="h-4 w-4" />
-                  Drop files or images here
+              {/* Drag-drop overlay */}
+              {isDraggingOver && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-sky-500/10 dark:bg-sky-500/10 border-2 border-dashed border-sky-500/40 pointer-events-none">
+                  <div className="flex items-center gap-2 text-sm text-sky-600 dark:text-sky-400">
+                    <Upload className="h-4 w-4" />
+                    Drop files or images here
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Keyboard hint */}
-          <div className="flex items-center justify-end px-1 mt-0.5">
-            <span className="text-[10px] ide-text-muted select-none">
-              Enter to send · Shift+Enter for new line
-            </span>
-          </div>
+            {/* Footer row: controls + context % + send — all items h-9, single/team leftmost */}
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2 border-t ide-border-subtle h-9">
+              <div className="flex items-center gap-2 min-w-0 h-9">
+              {/* Solo / Team switcher — leftmost */}
+              {onModeChange && (
+                <button
+                  type="button"
+                  onClick={() => onModeChange(agentMode === 'orchestrated' ? 'solo' : 'orchestrated')}
+                  className={`inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                    agentMode === 'solo'
+                      ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
+                  }`}
+                  title={agentMode === 'orchestrated' ? 'Solo mode (single-pass)' : 'Team mode (multi-agent)'}
+                  aria-label={agentMode === 'orchestrated' ? 'Switch to solo mode' : 'Switch to team mode'}
+                >
+                  {agentMode === 'solo' ? <User className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                </button>
+              )}
 
-          {/* Action bar */}
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-1.5">
-              {/* Model picker */}
-              {onModelChange && (
-                <div className="relative">
+              {/* Intent mode dropdown — Ask / Plan / Code / Debug (always visible) */}
+              {onIntentModeChange && (
+                <div className="relative h-9 flex items-center shrink-0 min-w-[5rem]" ref={intentDropdownAnchorRef}>
                   <button
                     type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      intentDropdownOpenTimeRef.current = Date.now();
+                      setShowIntentDropdown((p) => !p);
+                    }}
+                    className="inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ide-surface-input ide-border-subtle hover:ide-hover ide-text-2 whitespace-nowrap"
+                    aria-expanded={showIntentDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Intent mode"
+                  >
+                    <span className="capitalize">{intentMode}</span>
+                    <ChevronDown className={`h-3 w-3 transition-transform ${showIntentDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showIntentDropdown && typeof document !== 'undefined' && intentDropdownRect &&
+                    createPortal(
+                      <>
+                        <div
+                          className="fixed inset-0 z-[9998]"
+                          aria-hidden
+                          onClick={() => {
+                            if (Date.now() - intentDropdownOpenTimeRef.current > 150) setShowIntentDropdown(false);
+                          }}
+                        />
+                        <ul
+                          role="listbox"
+                          className="fixed z-[9999] min-w-[140px] rounded-lg border ide-border ide-surface-pop shadow-lg py-1"
+                          style={{ bottom: intentDropdownRect.bottom, left: intentDropdownRect.left }}
+                          aria-label="Intent mode"
+                        >
+                          {([
+                            { mode: 'ask' as IntentMode, label: 'Ask', tip: 'Ask questions about your code' },
+                            { mode: 'plan' as IntentMode, label: 'Plan', tip: 'Get a plan before making changes' },
+                            { mode: 'code' as IntentMode, label: 'Code', tip: 'Generate code changes' },
+                            { mode: 'debug' as IntentMode, label: 'Debug', tip: 'Diagnose and fix issues' },
+                          ] as const).map(({ mode, label, tip }) => (
+                            <li key={mode} role="option" aria-selected={intentMode === mode}>
+                              <button
+                                type="button"
+                                onClick={() => { onIntentModeChange(mode); setShowIntentDropdown(false); }}
+                                className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                                  intentMode === mode ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400' : 'ide-text-2 hover:ide-surface-inset'
+                                }`}
+                                title={tip}
+                              >
+                                {label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </>,
+                      document.body
+                    )}
+                </div>
+              )}
+
+              {/* Model picker — ghost (no fill/border), portaled */}
+              {onModelChange && (
+                <div className="relative h-9 flex items-center">
+                  <button
+                    ref={modelPickerAnchorRef}
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); setShowModelPicker(p => !p); }}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ide-text-3 ide-surface-inset border ide-border hover:border-stone-300 dark:hover:border-white/20 hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    className="inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs ide-text-muted hover:ide-text-2 bg-transparent border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                   >
                     <span className="truncate max-w-[100px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
                     <ChevronDown className="h-3 w-3" />
                   </button>
-                  {showModelPicker && (
-                    <div className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border ide-border ide-surface-pop shadow-xl z-50 py-1">
-                      {MODEL_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => { onModelChange(opt.value); setShowModelPicker(false); }}
-                          className={`w-full text-left px-3 py-1.5 text-xs ide-hover transition-colors ${
-                            currentModel === opt.value ? 'text-accent' : 'ide-text-2'
-                          }`}
+                  {showModelPicker && typeof document !== 'undefined' && modelPickerRect &&
+                    createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[99]" aria-hidden onClick={() => setShowModelPicker(false)} />
+                        <div
+                          className="fixed z-[100] w-56 rounded-lg border ide-border ide-surface-pop shadow-xl py-1"
+                          style={{ bottom: modelPickerRect.bottom, left: modelPickerRect.left }}
                         >
-                          <div className="font-medium">{opt.label}</div>
-                          <div className="text-[10px] ide-text-muted">{opt.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                          {MODEL_OPTIONS.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => { onModelChange(opt.value); setShowModelPicker(false); }}
+                              className={`w-full text-left px-3 py-2 text-sm ide-hover transition-colors ${
+                                currentModel === opt.value ? 'text-accent' : 'ide-text-2'
+                              }`}
+                            >
+                              <div className="font-medium">{opt.label}</div>
+                              <div className="text-xs ide-text-muted">{opt.description}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </>,
+                      document.body
+                    )}
                 </div>
               )}
 
@@ -1421,7 +1615,7 @@ export function ChatInterface({
                     const next = (maxAgents % 4) + 1;
                     onMaxAgentsChange(next as MaxAgents);
                   }}
-                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                  className={`inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
                     maxAgents > 1
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 border-sky-500/30'
                       : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
@@ -1436,189 +1630,98 @@ export function ChatInterface({
                 </button>
               )}
 
-              {/* Orchestrated / Solo toggle */}
-              {onModeChange && (
-                <button
-                  type="button"
-                  onClick={() => onModeChange(agentMode === 'orchestrated' ? 'solo' : 'orchestrated')}
-                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
-                    agentMode === 'solo'
-                      ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
-                  }`}
-                  title={agentMode === 'orchestrated' ? 'Multi-agent mode: PM delegates to specialists' : 'Solo mode: single-pass generation'}
-                  aria-label={agentMode === 'orchestrated' ? 'Switch to solo mode' : 'Switch to team mode'}
-                >
-                  {agentMode === 'solo' ? 'Solo' : 'Team'}
-                </button>
-              )}
-
-              {/* Intent mode pills — unified emerald accent */}
-              {onIntentModeChange && (
-                <div className="flex items-center gap-0.5 rounded ide-surface-input border ide-border-subtle p-0.5" role="tablist" aria-label="Agent intent mode">
-                  {([
-                    { mode: 'ask' as IntentMode, label: 'Ask', tip: 'Ask questions about your code' },
-                    { mode: 'plan' as IntentMode, label: 'Plan', tip: 'Get a plan before making changes' },
-                    { mode: 'code' as IntentMode, label: 'Code', tip: 'Generate code changes — full agent pipeline' },
-                    { mode: 'debug' as IntentMode, label: 'Debug', tip: 'Diagnose and fix issues' },
-                  ] as const).map(({ mode, label, tip }) => {
-                    const isActive = intentMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        aria-label={tip}
-                        onClick={() => onIntentModeChange(mode)}
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium border transition-all focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
-                          isActive
-                            ? 'text-accent bg-sky-500/15 border-sky-500/40'
-                            : 'ide-text-3 border-transparent hover:ide-text-2 ide-hover'
-                        }`}
-                        title={tip}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* EPIC 8: Image attachment button */}
+              {/* File/image upload — icon only */}
               {onImageUpload && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingImage}
-                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border transition-colors ${
+                  className={`inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border transition-colors ${
                     attachedImage
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30'
                       : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
                   }`}
-                  title="Attach image for AI analysis"
+                  title={isUploadingImage ? 'Uploading…' : attachedImage ? '1 image attached' : 'Attach image or file'}
+                  aria-label={attachedImage ? 'Image attached' : 'Attach image'}
                 >
-                  <ImageIcon className="h-3 w-3" />
-                  {isUploadingImage ? 'Uploading...' : attachedImage ? '1 image' : ''}
+                  {isUploadingImage ? (
+                    <Upload className="h-3 w-3 animate-pulse" />
+                  ) : (
+                    <ImageIcon className="h-3 w-3" />
+                  )}
                 </button>
               )}
 
-              {/* Phase 3c: Template library button */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateLibrary((s) => !s)}
-                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ide-text-3 ide-surface-inset border ide-border hover:border-stone-300 dark:hover:border-white/20 hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-                  title="Prompt templates"
-                  aria-label="Open prompt templates"
-                >
-                  <BookOpen className="h-3 w-3" />
-                </button>
-                <PromptTemplateLibrary
-                  open={showTemplateLibrary}
-                  onClose={() => setShowTemplateLibrary(false)}
-                  onSelectTemplate={(prompt) => {
-                    if (inputRef.current) {
-                      inputRef.current.value = prompt;
-                      setInputHasText(true);
-                      inputRef.current.focus();
-                    }
-                    setShowTemplateLibrary(false);
-                  }}
-                />
               </div>
 
-              {/* Context window meter */}
-              <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {/* Stop button (visible during streaming) */}
-              {isLoading && onStop && (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-                  aria-label="Stop generation"
-                >
-                  <Square className="h-3 w-3 fill-current" />
-                  Stop
-                </button>
-              )}
-
-              {/* Stopped state with Resend/Edit actions */}
-              {!isLoading && isStopped && (
-                <div className="inline-flex items-center gap-1.5">
-                  <span className="rounded bg-stone-200 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium ide-text-muted">Stopped</span>
-                  {onRegenerateMessage && (
-                    <button
-                      type="button"
-                      onClick={onRegenerateMessage}
-                      className="rounded px-1.5 py-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors"
-                      aria-label="Resend last message"
-                    >
-                      Resend
-                    </button>
-                  )}
+              {/* Context % + Send / Stop (right side, same h-9 as left controls) */}
+              <div className="flex items-center gap-2 shrink-0 h-9 items-center">
+                <div className="h-9 flex items-center justify-center">
+                  <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
                 </div>
-              )}
-
-              {/* Phase 5b: Share button */}
-              {projectId && activeSessionId && messages.length > 0 && !isLoading && (
-                <ShareButton projectId={projectId} sessionId={activeSessionId} />
-              )}
-
-              {/* New chat button */}
-              {onNewChat && !isLoading && (
-                <button
-                  type="button"
-                  onClick={onNewChat}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-muted ide-hover hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-                  title="New chat"
-                  aria-label="New chat"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              )}
-
-              {/* Clear chat button */}
-              {onClearChat && !isLoading && messages.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearChat}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-muted ide-hover hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-                  title="Clear chat"
-                  aria-label="Clear chat"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              )}
-
-              {/* Review button */}
-              {onReview && !isLoading && messages.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onReview}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs ide-text-3 ide-hover hover:ide-text transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-                  aria-label="Review changes"
-                >
-                  <Search className="h-3 w-3" />
-                  Review
-                </button>
-              )}
-
-              {/* Send button */}
-              <button
-                type="submit"
-                disabled={isLoading || isUploadingImage}
-                className="rounded-lg bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-              >
-                {isUploadingImage ? 'Uploading…' : isLoading ? 'Running…' : 'Send'}
-              </button>
+                {isLoading && onStop ? (
+                  <button
+                    type="button"
+                    onClick={onStop}
+                    className="inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg text-red-400 bg-red-500/15 hover:bg-red-500/25 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:outline-none"
+                    title="Stop"
+                    aria-label="Stop generation"
+                  >
+                    <Square className="h-4 w-4 fill-current" aria-hidden />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isUploadingImage}
+                    className="inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    title={isUploadingImage ? 'Uploading…' : 'Send'}
+                    aria-label={isUploadingImage ? 'Uploading' : 'Send'}
+                  >
+                    <Send className={`h-4 w-4 ${isUploadingImage ? 'animate-pulse' : ''}`} aria-hidden />
+                  </button>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Secondary actions row below bento */}
+          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
+            {!isLoading && isStopped && onRegenerateMessage && (
+              <button type="button" onClick={onRegenerateMessage} className="rounded px-1.5 py-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:bg-sky-500/10">
+                Resend
+              </button>
+            )}
+            {projectId && activeSessionId && messages.length > 0 && !isLoading && (
+              <ShareButton projectId={projectId} sessionId={activeSessionId} />
+            )}
+            {onClearChat && !isLoading && messages.length > 0 && (
+              <button type="button" onClick={handleClearChat} className="p-1 rounded ide-text-muted hover:ide-text-2" title="Clear chat" aria-label="Clear chat">
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+            {onReview && !isLoading && messages.length > 0 && (
+              <button type="button" onClick={onReview} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ide-text-3 hover:ide-text" aria-label="Review changes">
+                <Search className="h-3 w-3" />
+                Review
+              </button>
+            )}
           </div>
         </form>
       </div>
+
+      {/* Prompt template library — opened from sidebar header when templateLibraryOpen/onTemplateLibraryClose are provided */}
+      <PromptTemplateLibrary
+        open={templateLibraryOpen}
+        onClose={onTemplateLibraryClose ?? (() => {})}
+        onSelectTemplate={(prompt) => {
+          if (inputRef.current) {
+            inputRef.current.value = prompt;
+            setInputHasText(true);
+            inputRef.current.focus();
+          }
+          onTemplateLibraryClose?.();
+        }}
+      />
 
       {/* EPIC 5: Plan approval modal */}
       <PlanApprovalModal

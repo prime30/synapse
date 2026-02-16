@@ -95,7 +95,7 @@ export class ProjectManagerAgent extends Agent {
     const fileList = [
       `Files in context (${selectedFiles.length}):`,
       ...selectedFiles.map(f => `- ${f.fileName} (${f.fileType})`),
-      stubCount > 0 ? `\n${stubCount} other files available but not loaded.` : '',
+      stubCount > 0 ? `\n${stubCount} other files available but not loaded. Open tabs and pinned files are always in the list above — do not ask the user to open a file that is already listed.` : '',
     ].filter(Boolean).join('\n');
 
     return [
@@ -125,7 +125,7 @@ export class ProjectManagerAgent extends Agent {
       ...selectedFiles.map(f => `- ${f.fileName} (${f.fileType}, ${f.content.length} chars)`),
       '',
       stubCount > 0
-        ? `${stubCount} other theme files available (not loaded). Ask to see specific files if needed.`
+        ? `${stubCount} other theme files available (not loaded). Open tabs and pinned files are always in the selected set above — do not ask the user to open a file that is already listed there.`
         : '',
     ].filter(Boolean).join('\n');
 
@@ -196,7 +196,7 @@ export class ProjectManagerAgent extends Agent {
       ...selectedFiles.map(f => `- ${f.fileName} (${f.fileType}, ${f.content.length} chars)`),
       '',
       stubCount > 0
-        ? `${stubCount} other theme files available (not loaded). Ask to see specific files if needed.`
+        ? `${stubCount} other theme files available (not loaded). Open tabs and pinned files are always in the selected set above — do not ask the user to open a file that is already listed there.`
         : '',
     ].filter(Boolean).join('\n');
 

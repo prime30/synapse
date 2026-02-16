@@ -166,12 +166,25 @@ export function generateFileGroups(files: FileInfo[]): FileGroup[] {
       }
     }
 
-    // Always look for CSS/JS with same base name as the root (doesn't need content)
+    // Always look for CSS/JS with same base name as the root (doesn't need content).
+    // Try both underscore and hyphen variants (e.g. mini_cart.liquid ↔ mini-cart.css).
     const rootBase = root.name.replace(/\.liquid$/, '');
+    const rootBaseAlt = rootBase.replace(/_/g, '-');
     for (const ext of ['.css', '.scss', '.js', '.ts']) {
       const assetPath = `assets/${rootBase}${ext}`;
-      const found = pathIndex.get(assetPath);
+      const found = pathIndex.get(assetPath) ?? pathIndex.get(`assets/${rootBaseAlt}${ext}`);
       if (found) groupFileIds.add(found.id);
+    }
+
+    // Group other files whose normalized base matches or extends this root (e.g. mini_cart_upsell, mini-cart).
+    // Normalize: strip extension and treat - and _ as equivalent so mini-cart and mini_cart match.
+    const rootBaseNormalized = rootBase.replace(/-/g, '_');
+    for (const f of files) {
+      if (groupFileIds.has(f.id)) continue;
+      const base = f.name.replace(/\.[^.]+$/, '').replace(/-/g, '_');
+      if (base === rootBaseNormalized || base.startsWith(rootBaseNormalized + '_')) {
+        groupFileIds.add(f.id);
+      }
     }
 
     // Only create a group if it has more than just the root

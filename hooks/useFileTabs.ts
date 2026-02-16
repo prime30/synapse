@@ -24,32 +24,43 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
   const groupsKey = `${GROUPS_KEY_PREFIX}${projectId}`;
   const lockedKey = `${LOCKED_KEY_PREFIX}${projectId}`;
 
-  const [openTabs, setOpenTabs] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Initial state must match server and client to avoid hydration mismatch.
+  // Restore from localStorage only after mount (useEffect below).
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
 
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [unsavedFileIds, setUnsavedFileIds] = useState<Set<string>>(new Set());
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
 
-  // ── Workset / group state ───────────────────────────────────────────────
-  const [tabGroups, setTabGroups] = useState<FileGroup[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const stored = localStorage.getItem(groupsKey);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  // ── Workset / group state (same: no localStorage in initial state) ───────
+  const [tabGroups, setTabGroups] = useState<FileGroup[]>([]);
 
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // Restore open tabs and groups from localStorage after mount (client-only).
+  // Keeps initial server/client render identical to fix hydration mismatch.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOpenTabs(parsed);
+          setActiveFileId(parsed[0]);
+        }
+      }
+      const groupsStored = localStorage.getItem(groupsKey);
+      if (groupsStored) {
+        const parsed = JSON.parse(groupsStored) as FileGroup[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTabGroups(parsed);
+          setActiveGroupId(parsed[0].id);
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storageKey, groupsKey]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -151,19 +162,22 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
     });
   }, []);
 
-  // ── Locked files state (persisted) ────────────────────────────────────────
-  const [lockedFileIds, setLockedFileIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const stored = localStorage.getItem(lockedKey);
-      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  // ── Locked files state (persisted); restore from localStorage after mount ───
+  const [lockedFileIds, setLockedFileIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem(lockedKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        if (Array.isArray(parsed)) setLockedFileIds(new Set(parsed));
+      }
+    } catch {
+      // Ignore
+    }
+  }, [lockedKey]);
+
+  useEffect(() => {
     try {
       localStorage.setItem(lockedKey, JSON.stringify([...lockedFileIds]));
     } catch {

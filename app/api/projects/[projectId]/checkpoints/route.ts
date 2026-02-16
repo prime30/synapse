@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createCheckpoint, listCheckpoints, restoreCheckpoint, deleteCheckpoint } from '@/lib/checkpoints/checkpoint-service';
+import { checkIdempotency, recordIdempotencyResponse } from '@/lib/middleware/idempotency';
 
 export async function GET(
   _req: NextRequest,
@@ -15,6 +16,10 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
+
+  const idempotencyCheck = await checkIdempotency(req);
+  if (idempotencyCheck.isDuplicate) return idempotencyCheck.cachedResponse;
+
   const body = await req.json();
   const { label, fileIds } = body;
 
@@ -23,7 +28,9 @@ export async function POST(
   }
 
   const checkpoint = await createCheckpoint(projectId, label ?? 'Auto checkpoint', fileIds);
-  return NextResponse.json({ checkpoint });
+  const response = NextResponse.json({ checkpoint });
+  await recordIdempotencyResponse(req, response);
+  return response;
 }
 
 export async function PUT(req: NextRequest) {

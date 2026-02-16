@@ -116,3 +116,15 @@ export class JavaScriptAgent extends Agent {
     }
   }
 }
+
+// EPIC C: Self-register with the agent registry
+import { getAgentRegistry } from '../registry';
+getAgentRegistry().register({
+  name: 'JavaScript',
+  type: 'javascript',
+  filePatterns: ['*.js', '*.ts', '*.jsx', '*.tsx'],
+  capabilities: ['scripting', 'performance'],
+  priority: 3,
+  factory: () => new JavaScriptAgent(),
+  enabled: true,
+});

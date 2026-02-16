@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import type { FileVersion } from '@/lib/types/version';
 
 interface UndoRedoPayload {
@@ -110,7 +111,7 @@ export function useVersionHistory(fileId: string | null) {
   const { data, isLoading, refetch } = useQuery({
     queryKey,
     queryFn: () => fetchVersions(fileId!),
-    enabled: !!fileId,
+    enabled: !!fileId && fileId !== PREVIEW_TAB_ID,
   });
 
   const invalidate = () => {

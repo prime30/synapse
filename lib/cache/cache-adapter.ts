@@ -155,9 +155,9 @@ export class UpstashRedisAdapter implements CacheAdapter {
   async invalidatePattern(pattern: string): Promise<void> {
     try {
       const redis = getRedisClient();
-      let cursor = 0;
+      let cursor: number = 0;
       do {
-        const result = await redis.scan(cursor, { match: pattern, count: 100 });
+        const result = await redis.scan(cursor, { match: pattern, count: 100 }) as unknown as [number, string[]];
         cursor = result[0];
         const keys = result[1];
         if (keys.length > 0) {

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
+import { checkIdempotency, recordIdempotencyResponse } from '@/lib/middleware/idempotency';
 import { validateBody } from '@/lib/middleware/validation';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
@@ -24,6 +25,9 @@ const checkoutSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
+    const idempotencyCheck = await checkIdempotency(request);
+    if (idempotencyCheck.isDuplicate) return idempotencyCheck.cachedResponse;
+
     const body = await validateBody(checkoutSchema)(request);
 
     const plan = body.plan as PlanId;
@@ -61,8 +65,8 @@ export async function POST(request: NextRequest) {
     const origin =
       process.env.NEXT_PUBLIC_APP_URL?.trim() ||
       request.nextUrl.origin;
-    const successUrl = `${origin}/account/billing?checkout=success`;
-    const cancelUrl = `${origin}/account/billing?checkout=cancelled`;
+    const successUrl = origin + '/account/billing?checkout=success';
+    const cancelUrl = origin + '/account/billing?checkout=cancelled';
 
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -84,7 +88,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return successResponse({ url: session.url });
+    const response = successResponse({ url: session.url });
+    await recordIdempotencyResponse(request, response);
+    return response;
   } catch (error) {
     return handleAPIError(error);
   }

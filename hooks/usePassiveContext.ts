@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
+import {
+  deriveRelevantLiquidFiles,
+  flattenRelevantFiles,
+} from '@/lib/preview/relevant-liquid-files';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +37,8 @@ interface PassiveContextOptions {
 interface UsePassiveContextReturn {
   /** Returns a concise LLM-friendly context string, or '' if disabled / nothing to report. */
   getContextString: () => string;
+  /** Returns the Liquid file paths relevant to the current preview (template + sections). */
+  getRelevantLiquidFiles: () => string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +94,14 @@ export function usePassiveContext(options: PassiveContextOptions): UsePassiveCon
     return () => window.removeEventListener('message', handleMessage);
   }, [options.enabled]);
 
+  // Derive relevant Liquid files from the latest preview state (no re-renders)
+  const getRelevantLiquidFiles = useCallback((): string[] => {
+    const pv = previewRef.current;
+    if (!pv) return [];
+    const result = deriveRelevantLiquidFiles(pv.url, pv.visibleSections);
+    return flattenRelevantFiles(result);
+  }, []);
+
   // Assemble the formatted context string on demand (no re-renders)
   const getContextString = useCallback((): string => {
     if (!optsRef.current.enabled) return '';
@@ -105,6 +119,11 @@ export function usePassiveContext(options: PassiveContextOptions): UsePassiveCon
         if (sectionNames.length > 0) {
           lines.push(`Visible sections: ${sectionNames.join(', ')}`);
         }
+      }
+      // Relevant Liquid files for the AI
+      const relevantFiles = getRelevantLiquidFiles();
+      if (relevantFiles.length > 0) {
+        lines.push(`Relevant Liquid files: ${relevantFiles.join(', ')}`);
       }
       lines.push(`Scroll: ${pv.scrollPercent}% down the page`);
     } else {
@@ -138,7 +157,7 @@ export function usePassiveContext(options: PassiveContextOptions): UsePassiveCon
 
     // Only return if we have more than just the header
     return lines.length > 1 ? lines.join('\n') : '';
-  }, []);
+  }, [getRelevantLiquidFiles]);
 
-  return { getContextString };
+  return { getContextString, getRelevantLiquidFiles };
 }

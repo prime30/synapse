@@ -14,7 +14,19 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type SettingsTab = 'editor' | 'appearance' | 'preview' | 'storage' | 'keys';
+interface CustomProvider {
+  id: string;
+  name: string;
+  display_name: string;
+  base_url: string;
+  default_model: string;
+  is_enabled: boolean;
+  health_status: 'healthy' | 'degraded' | 'down' | 'unknown';
+  last_health_check: string | null;
+  created_at: string;
+}
+
+type SettingsTab = 'editor' | 'appearance' | 'preview' | 'storage' | 'keys' | 'providers';
 
 /* ------------------------------------------------------------------ */
 /*  Preset card data                                                   */
@@ -126,6 +138,17 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    id: 'providers',
+    label: 'Providers',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+    ),
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +231,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [keybindings, setKeybindings] = useState<KeyBinding[]>(loadKeybindings);
   const [recordingId, setRecordingId] = useState<string | null>(null);
 
+  // EPIC E: Providers state
+  const [providers, setProviders] = useState<CustomProvider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [showAddProvider, setShowAddProvider] = useState(false);
+  const [newProvider, setNewProvider] = useState({ name: '', displayName: '', baseURL: '', apiKey: '', defaultModel: '' });
+  const [providerSaving, setProviderSaving] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [healthCheckingId, setHealthCheckingId] = useState<string | null>(null);
+
   const handleKeyCapture = useCallback(
     (e: KeyboardEvent) => {
       if (!recordingId) return;
@@ -231,6 +263,86 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     window.addEventListener('keydown', handleKeyCapture, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyCapture, { capture: true });
   }, [recordingId, handleKeyCapture]);
+
+  // EPIC E: Fetch providers when Providers tab is active
+  useEffect(() => {
+    if (activeTab !== 'providers' || !isOpen) return;
+    let cancelled = false;
+    setProvidersLoading(true);
+    fetch('/api/providers')
+      .then((r) => r.json())
+      .then((json) => {
+        if (!cancelled) setProviders(json.data ?? []);
+      })
+      .catch(() => { /* ignore */ })
+      .finally(() => { if (!cancelled) setProvidersLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, isOpen]);
+
+  const handleAddProvider = async () => {
+    setProviderSaving(true);
+    setProviderError(null);
+    try {
+      const res = await fetch('/api/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newProvider.name,
+          displayName: newProvider.displayName || newProvider.name,
+          baseURL: newProvider.baseURL,
+          apiKey: newProvider.apiKey,
+          defaultModel: newProvider.defaultModel,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to add provider');
+      setProviders((prev) => [...prev, json.data]);
+      setNewProvider({ name: '', displayName: '', baseURL: '', apiKey: '', defaultModel: '' });
+      setShowAddProvider(false);
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'Failed to add provider');
+    } finally {
+      setProviderSaving(false);
+    }
+  };
+
+  const handleDeleteProvider = async (id: string) => {
+    try {
+      await fetch('/api/providers?id=' + id, { method: 'DELETE' });
+      setProviders((prev) => prev.filter((p) => p.id !== id));
+    } catch { /* ignore */ }
+  };
+
+  const handleToggleProvider = async (id: string, enabled: boolean) => {
+    try {
+      await fetch('/api/providers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isEnabled: enabled }),
+      });
+      setProviders((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, is_enabled: enabled } : p))
+      );
+    } catch { /* ignore */ }
+  };
+
+  const handleHealthCheck = async (id: string) => {
+    setHealthCheckingId(id);
+    try {
+      const res = await fetch('/api/providers/' + id + '/health', { method: 'POST' });
+      const json = await res.json();
+      if (json.data) {
+        setProviders((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, health_status: json.data.status, last_health_check: new Date().toISOString() }
+              : p
+          )
+        );
+      }
+    } catch { /* ignore */ }
+    setHealthCheckingId(null);
+  };
 
   if (!isOpen) return null;
 
@@ -590,6 +702,201 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </svg>
                   Reset All
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'providers' && (
+            <div className="space-y-4">
+              {/* Built-in providers header */}
+              <div>
+                <p className="text-xs font-medium tracking-widest uppercase ide-text-muted mb-3">
+                  Built-in Providers
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { name: 'Anthropic', model: 'Claude Sonnet 4.5', status: process.env.NEXT_PUBLIC_HAS_ANTHROPIC === 'true' ? 'configured' : 'needs key' },
+                    { name: 'OpenAI', model: 'GPT-4o', status: process.env.NEXT_PUBLIC_HAS_OPENAI === 'true' ? 'configured' : 'needs key' },
+                    { name: 'Google', model: 'Gemini 2.0 Flash', status: process.env.NEXT_PUBLIC_HAS_GOOGLE === 'true' ? 'configured' : 'needs key' },
+                  ].map((p) => (
+                    <div key={p.name} className="flex items-center justify-between py-2 px-3 rounded-lg ide-surface-inset">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-2 h-2 rounded-full ${p.status === 'configured' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        <div>
+                          <p className="text-sm font-medium ide-text-2">{p.name}</p>
+                          <p className="text-xs ide-text-muted">{p.model}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        p.status === 'configured'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      }`}>
+                        {p.status === 'configured' ? 'Active' : 'Not configured'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom providers section */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium tracking-widest uppercase ide-text-muted">
+                    Custom Providers
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddProvider(!showAddProvider)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-sky-500 hover:text-sky-400 transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Add Provider
+                  </button>
+                </div>
+
+                {/* Add provider form */}
+                {showAddProvider && (
+                  <div className="rounded-lg border ide-border p-4 mb-3 space-y-3">
+                    <p className="text-sm font-medium ide-text-2">
+                      Add OpenAI-Compatible Provider
+                    </p>
+                    <p className="text-xs ide-text-muted">
+                      Works with DeepSeek, Groq, Mistral, Fireworks, Together AI, Ollama, and more.
+                    </p>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Provider name (e.g. deepseek)"
+                        value={newProvider.name}
+                        onChange={(e) => setNewProvider((p) => ({ ...p, name: e.target.value }))}
+                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Display name (optional)"
+                        value={newProvider.displayName}
+                        onChange={(e) => setNewProvider((p) => ({ ...p, displayName: e.target.value }))}
+                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="url"
+                        placeholder="Base URL (e.g. https://api.deepseek.com/v1)"
+                        value={newProvider.baseURL}
+                        onChange={(e) => setNewProvider((p) => ({ ...p, baseURL: e.target.value }))}
+                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="password"
+                        placeholder="API Key"
+                        value={newProvider.apiKey}
+                        onChange={(e) => setNewProvider((p) => ({ ...p, apiKey: e.target.value }))}
+                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Default model (e.g. deepseek-chat)"
+                        value={newProvider.defaultModel}
+                        onChange={(e) => setNewProvider((p) => ({ ...p, defaultModel: e.target.value }))}
+                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                    {providerError && (
+                      <p className="text-xs text-red-500">{providerError}</p>
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddProvider(false); setProviderError(null); }}
+                        className="px-3 py-1.5 text-xs font-medium ide-text-3 hover:ide-text-2 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddProvider}
+                        disabled={providerSaving || !newProvider.name || !newProvider.baseURL || !newProvider.apiKey || !newProvider.defaultModel}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {providerSaving ? 'Adding...' : 'Add Provider'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Provider list */}
+                {providersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-xs ide-text-muted">Loading providers...</p>
+                  </div>
+                ) : providers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="ide-text-quiet mb-2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                      <path d="M2 17l10 5 10-5" />
+                      <path d="M2 12l10 5 10-5" />
+                    </svg>
+                    <p className="text-sm ide-text-muted">No custom providers configured</p>
+                    <p className="text-xs ide-text-quiet mt-1">Add a provider to use models from DeepSeek, Groq, and more</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {providers.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between py-2 px-3 rounded-lg ide-surface-inset">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${
+                            p.health_status === 'healthy' ? 'bg-emerald-500' :
+                            p.health_status === 'degraded' ? 'bg-amber-500' :
+                            p.health_status === 'down' ? 'bg-red-500' :
+                            'bg-stone-400'
+                          }`} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium ide-text-2 truncate">{p.display_name}</p>
+                            <p className="text-xs ide-text-muted truncate">{p.default_model} &middot; {p.base_url}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => handleHealthCheck(p.id)}
+                            disabled={healthCheckingId === p.id}
+                            className="p-1.5 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors disabled:opacity-50"
+                            title="Run health check"
+                          >
+                            {healthCheckingId === p.id ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                              </svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                              </svg>
+                            )}
+                          </button>
+                          <Toggle
+                            checked={p.is_enabled}
+                            onChange={(v) => handleToggleProvider(p.id, v)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProvider(p.id)}
+                            className="p-1.5 rounded text-red-400 hover:text-red-300 ide-hover transition-colors"
+                            title="Delete provider"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

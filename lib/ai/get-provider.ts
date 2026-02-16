@@ -2,8 +2,21 @@ import type { AIProvider, AIProviderInterface } from "./types";
 import { createOpenAIProvider } from "./providers/openai";
 import { createAnthropicProvider } from "./providers/anthropic";
 import { createGoogleProvider } from "./providers/google";
+import { createOpenAICompatProvider, type OpenAICompatConfig } from "./providers/openai-compat";
 
-const providers: Partial<Record<AIProvider, AIProviderInterface>> = {};
+const providers: Record<string, AIProviderInterface> = {};
+
+// EPIC E: Custom provider configs (in-memory cache, populated from env or DB)
+const customProviderConfigs = new Map<string, OpenAICompatConfig>();
+
+/**
+ * Register a custom OpenAI-compatible provider at runtime.
+ */
+export function registerCustomProvider(config: OpenAICompatConfig): void {
+  customProviderConfigs.set(config.name, config);
+  // Clear cached instance so it picks up new config
+  delete providers[config.name];
+}
 
 export function getAIProvider(provider: AIProvider = "openai"): AIProviderInterface {
   if (!providers[provider]) {
@@ -13,8 +26,11 @@ export function getAIProvider(provider: AIProvider = "openai"): AIProviderInterf
       providers.anthropic = createAnthropicProvider();
     } else if (provider === "google") {
       providers.google = createGoogleProvider();
+    } else if (customProviderConfigs.has(provider)) {
+      // EPIC E: Custom OpenAI-compatible provider
+      providers[provider] = createOpenAICompatProvider(customProviderConfigs.get(provider)!);
     } else {
-      throw new Error(`Unknown AI provider: ${provider}`);
+      throw new Error(`Unknown AI provider: ${provider}. Register custom providers with registerCustomProvider().`);
     }
   }
   return providers[provider]!;

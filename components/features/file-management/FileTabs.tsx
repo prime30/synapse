@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Globe } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Globe, Link2 } from 'lucide-react';
 import { FileTab } from './FileTab';
 import { PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import type { FileGroup } from '@/lib/shopify/theme-grouping';
@@ -39,6 +39,12 @@ interface FileTabsProps {
   onSaveClick?: () => void;
   /** Called when user toggles the lock */
   onLockToggle?: () => void;
+  /** File IDs already linked to the active file (for "Unlink from group") */
+  linkedToActiveFileIds?: string[];
+  /** Link the selected open tabs together (pass full set of file IDs, min 2) */
+  onLinkWithFiles?: (fileIds: string[]) => void;
+  /** Unlink the active file from its group */
+  onUnlinkActiveFile?: () => void;
 }
 
 export function FileTabs({
@@ -63,8 +69,62 @@ export function FileTabs({
   isActiveFileLocked = false,
   onSaveClick,
   onLockToggle,
+  linkedToActiveFileIds = [],
+  onLinkWithFiles,
+  onUnlinkActiveFile,
 }: FileTabsProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
+  const [linkSelectedIds, setLinkSelectedIds] = useState<Set<string>>(new Set());
+  const linkMenuRef = useRef<HTMLDivElement>(null);
+  const linkButtonRef = useRef<HTMLButtonElement>(null);
+
+  const hasLinkSupport = Boolean(
+    activeFileId && activeFileId !== PREVIEW_TAB_ID && (onLinkWithFiles || onUnlinkActiveFile)
+  );
+  const hasLinkedFiles = linkedToActiveFileIds.length > 0;
+  /** Open file tabs (no Preview) for the link pill list */
+  const openFileTabsForPills = useMemo(
+    () => openTabs.filter((id) => id !== PREVIEW_TAB_ID),
+    [openTabs]
+  );
+  const canLinkSelected = linkSelectedIds.size >= 2;
+
+  useEffect(() => {
+    if (!linkMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (
+        linkMenuRef.current?.contains(e.target as Node) ||
+        linkButtonRef.current?.contains(e.target as Node)
+      )
+        return;
+      setLinkMenuOpen(false);
+    };
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [linkMenuOpen]);
+
+  const handleLinkConfirm = useCallback(() => {
+    if (linkSelectedIds.size >= 2 && onLinkWithFiles) {
+      onLinkWithFiles(Array.from(linkSelectedIds));
+      setLinkSelectedIds(new Set());
+      setLinkMenuOpen(false);
+    }
+  }, [linkSelectedIds, onLinkWithFiles]);
+
+  const handleUnlink = useCallback(() => {
+    onUnlinkActiveFile?.();
+    setLinkMenuOpen(false);
+  }, [onUnlinkActiveFile]);
+
+  const toggleLinkSelect = useCallback((fileId: string) => {
+    setLinkSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }, []);
 
   const handleDragStart = useCallback((index: number) => {
     setDragIndex(index);
@@ -209,7 +269,7 @@ export function FileTabs({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Save + Lock controls (only for real files, not preview) */}
+        {/* Save + Lock + Link controls (only for real files, not preview) */}
         {activeFileId && activeFileId !== PREVIEW_TAB_ID && (
           <div className="flex items-center gap-1 pr-2 shrink-0">
             <button
@@ -225,6 +285,79 @@ export function FileTabs({
             >
               Save
             </button>
+            {hasLinkSupport && (
+              <div className="relative">
+                <button
+                  ref={linkButtonRef}
+                  type="button"
+                  onClick={() => setLinkMenuOpen((o) => !o)}
+                  className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                    hasLinkedFiles
+                      ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/20'
+                      : 'ide-text-muted hover:ide-text-2 ide-hover'
+                  }`}
+                  title={hasLinkedFiles ? 'File is linked — manage links' : 'Link with other files'}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                </button>
+                {linkMenuOpen && (
+                  <div
+                    ref={linkMenuRef}
+                    className="absolute right-0 top-full mt-1 py-2 px-2 min-w-[200px] max-w-[320px] rounded-md border ide-border ide-surface-panel shadow-lg z-50"
+                  >
+                    <div className="px-1.5 pb-1.5 text-[11px] font-medium ide-text-muted uppercase tracking-wide">
+                      Link open tabs
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {openFileTabsForPills.map((fileId) => {
+                        const meta = fileMetaMap.get(fileId);
+                        const name = meta?.name ?? fileId;
+                        const selected = linkSelectedIds.has(fileId);
+                        return (
+                          <button
+                            key={fileId}
+                            type="button"
+                            onClick={() => toggleLinkSelect(fileId)}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                              selected
+                                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/40'
+                                : 'ide-surface-inset ide-border ide-text-2 hover:ide-hover'
+                            }`}
+                            title={name}
+                          >
+                            <span className="truncate max-w-[120px] block">{name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {openFileTabsForPills.length === 0 && (
+                      <p className="px-1.5 py-1 text-xs ide-text-muted">No open file tabs.</p>
+                    )}
+                    {onLinkWithFiles && openFileTabsForPills.length > 0 && (
+                      <div className="border-t ide-border mt-2 pt-2 px-1.5 flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleLinkConfirm}
+                          disabled={!canLinkSelected}
+                          className="px-2.5 py-1 text-xs font-medium rounded ide-surface-inset ide-text hover:ide-text-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Link selected
+                        </button>
+                        {hasLinkedFiles && onUnlinkActiveFile && (
+                          <button
+                            type="button"
+                            onClick={handleUnlink}
+                            className="px-2.5 py-1 text-xs ide-text-muted hover:ide-text"
+                          >
+                            Unlink from group
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={onLockToggle}

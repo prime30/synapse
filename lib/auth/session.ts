@@ -33,3 +33,24 @@ export async function requireUser(): Promise<AuthUser> {
   }
   return user;
 }
+
+/**
+ * Checks if the current session user is an application-level admin.
+ * Returns true if admin, false otherwise (including when not logged in).
+ */
+export async function isAdmin(): Promise<boolean> {
+  const user = await getUserFromSession();
+  return user?.profile?.is_admin === true;
+}
+
+/**
+ * Returns the current session user if they are an admin.
+ * Throws AUTH_REQUIRED if not logged in, FORBIDDEN if not admin.
+ */
+export async function requireAdmin(): Promise<AuthUser> {
+  const user = await requireUser();
+  if (!user.profile?.is_admin) {
+    throw new Error('FORBIDDEN');
+  }
+  return user;
+}

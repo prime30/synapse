@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 
-const CATEGORIES = [
+const PUBLIC_CATEGORIES = [
   {
     icon: '🚀',
     title: 'Getting Started',
@@ -32,6 +33,16 @@ const CATEGORIES = [
   },
 ];
 
+const ADMIN_CATEGORIES = [
+  {
+    icon: '🧠',
+    title: 'Architecture',
+    description: 'Deep dive into the multi-agent AI system',
+    href: '/architecture',
+    adminOnly: true,
+  },
+];
+
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
@@ -40,6 +51,11 @@ const fadeUp = {
 };
 
 export default function DocsPage() {
+  const { isAdmin } = useIsAdmin();
+  const CATEGORIES = isAdmin
+    ? [...PUBLIC_CATEGORIES, ...ADMIN_CATEGORIES]
+    : PUBLIC_CATEGORIES;
+
   return (
     <div className="relative film-grain bg-stone-50 dark:bg-[#0a0a0a] min-h-screen">
       <Navbar />
@@ -59,7 +75,7 @@ export default function DocsPage() {
           </p>
         </motion.div>
 
-        {/* Category Cards — 2x2 Grid */}
+        {/* Category Cards */}
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {CATEGORIES.map((cat, i) => (
@@ -78,9 +94,16 @@ export default function DocsPage() {
                     <span className="text-3xl mb-4 block" aria-hidden="true">
                       {cat.icon}
                     </span>
-                    <h3 className="text-xl font-medium text-stone-900 dark:text-white mb-2">
-                      {cat.title}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-xl font-medium text-stone-900 dark:text-white">
+                        {cat.title}
+                      </h3>
+                      {'adminOnly' in cat && cat.adminOnly && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase text-amber-700 dark:text-amber-400">
+                          Admin
+                        </span>
+                      )}
+                    </div>
                     <p className="text-stone-500 dark:text-white/50 text-sm leading-relaxed">
                       {cat.description}
                     </p>
