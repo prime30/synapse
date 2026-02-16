@@ -1684,28 +1684,14 @@ export function ChatInterface({
             </div>
           </div>
 
-          {/* Secondary actions row below bento */}
-          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
-            {!isLoading && isStopped && onRegenerateMessage && (
+          {/* Resend button (only after a stopped response) */}
+          {!isLoading && isStopped && onRegenerateMessage && (
+            <div className="flex justify-end mt-1">
               <button type="button" onClick={onRegenerateMessage} className="rounded px-1.5 py-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:bg-sky-500/10">
                 Resend
               </button>
-            )}
-            {projectId && activeSessionId && messages.length > 0 && !isLoading && (
-              <ShareButton projectId={projectId} sessionId={activeSessionId} />
-            )}
-            {onClearChat && !isLoading && messages.length > 0 && (
-              <button type="button" onClick={handleClearChat} className="p-1 rounded ide-text-muted hover:ide-text-2" title="Clear chat" aria-label="Clear chat">
-                <Trash2 className="h-3 w-3" />
-              </button>
-            )}
-            {onReview && !isLoading && messages.length > 0 && (
-              <button type="button" onClick={onReview} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ide-text-3 hover:ide-text" aria-label="Review changes">
-                <Search className="h-3 w-3" />
-                Review
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </form>
       </div>
 

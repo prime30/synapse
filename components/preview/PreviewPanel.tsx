@@ -75,6 +75,8 @@ interface PreviewPanelProps {
   liveChangeCount?: number;
   /** When true, the preview fills its parent container height instead of using fixed height */
   fill?: boolean;
+  /** Callback when a relevant liquid file pill is clicked (path e.g. "sections/header.liquid") */
+  onRelevantFileClick?: (filePath: string) => void;
   /** Theme files for template-driven dropdown */
   themeFiles?: { id: string; path: string }[];
   /** Callback to refresh files after template creation */
@@ -136,6 +138,7 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
       fill = false,
       themeFiles,
       onFilesRefresh,
+      onRelevantFileClick,
     },
     ref
   ) {
@@ -148,7 +151,7 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const [deviceWidth, setDeviceWidth] = useState<number>(DESKTOP_BREAKPOINT);
   const [selectedResource, setSelectedResource] = useState<PreviewResource | null>(null);
   const [createModalType, setCreateModalType] = useState<string | null>(null);
-  const [showRelevantFiles, setShowRelevantFiles] = useState(false);
+  // showRelevantFiles state removed — pills are always visible now
   const frameRef = useRef<PreviewFrameHandle>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
   // Refs for values needed inside the bridge-ready handler (closed over in a [] deps effect)
@@ -656,10 +659,10 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
         </div>
       </div>
 
-      {/* ── URL path bar ─────────────────────────────────────────── */}
+      {/* ── URL path + relevant files bar ────────────────────────── */}
       {!isDetached && (
         <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1 border-b ide-border-subtle' : 'px-1 py-1'}`}>
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 rounded-md ide-surface-inset px-2.5 py-1">
+          <div className="flex items-center gap-1.5 shrink-0 min-w-0 max-w-[40%] rounded-md ide-surface-inset px-2.5 py-1">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 ide-text-muted">
               <circle cx="12" cy="12" r="10" />
               <line x1="2" y1="12" x2="22" y2="12" />
@@ -669,43 +672,18 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               {liveUrlPath || effectivePath || '/'}
             </span>
           </div>
-        </div>
-      )}
-
-      {/* ── Relevant Liquid files row ─────────────────────────────── */}
-      {!isDetached && relevantLiquidFiles && relevantLiquidFiles.length > 0 && (
-        <div className={`shrink-0 ${fill ? 'px-2 border-b ide-border-subtle' : 'px-1'}`}>
-          <button
-            type="button"
-            onClick={() => setShowRelevantFiles((v) => !v)}
-            className="flex items-center gap-1.5 w-full py-1 text-[11px] ide-text-muted hover:ide-text-2 transition-colors"
-          >
-            <svg
-              width="8"
-              height="8"
-              viewBox="0 0 8 8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`shrink-0 transition-transform ${showRelevantFiles ? 'rotate-90' : ''}`}
-            >
-              <path d="M2 1l4 3-4 3" />
-            </svg>
-            <span>Relevant to this view</span>
-            <span className="ide-text-3">({relevantLiquidFiles.length})</span>
-          </button>
-          {showRelevantFiles && (
-            <div className="pb-1.5 pl-4 flex flex-wrap gap-x-3 gap-y-0.5">
+          {relevantLiquidFiles && relevantLiquidFiles.length > 0 && (
+            <div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
               {relevantLiquidFiles.map((fp) => (
-                <span
+                <button
                   key={fp}
-                  className="font-mono text-[11px] ide-text-2 truncate max-w-[200px]"
+                  type="button"
+                  onClick={() => onRelevantFileClick?.(fp)}
+                  className="inline-flex items-center shrink-0 rounded-md ide-surface-inset px-2 py-0.5 text-[11px] font-mono ide-text-2 hover:ide-text hover:bg-accent/10 transition-colors truncate max-w-[180px]"
                   title={fp}
                 >
-                  {fp}
-                </span>
+                  {fp.split('/').pop()}
+                </button>
               ))}
             </div>
           )}

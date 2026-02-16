@@ -1736,6 +1736,10 @@ export default function ProjectPage() {
                         fill
                         themeFiles={rawFiles.map((f) => ({ id: f.id, path: f.path }))}
                         onFilesRefresh={() => queryClient.invalidateQueries({ queryKey: ['project-files', projectId] })}
+                        onRelevantFileClick={(filePath) => {
+                          const file = rawFiles.find((f) => f.path === filePath);
+                          if (file) tabs.openTab(file.id);
+                        }}
                         onElementSelected={(el) => {
                           setSelectedElement(el);
                           agentChatRef.current?.querySelector('textarea')?.focus();
