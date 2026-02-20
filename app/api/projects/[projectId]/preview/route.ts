@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAuth } from '@/lib/middleware/auth';
 import { handleAPIError } from '@/lib/errors/handler';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
+import { registerPreviewCacheInvalidator } from '@/lib/preview/preview-cache';
 
 /* ------------------------------------------------------------------ */
 /*  In-memory response cache                                           */
@@ -70,13 +71,15 @@ function setCachedResponse(key: string, entry: CacheEntry) {
 }
 
 /** Invalidate all cached preview responses for a project (e.g. after a push). */
-export function invalidatePreviewCache(projectId: string) {
+function invalidatePreviewCache(projectId: string) {
   for (const key of previewCache.keys()) {
     if (key.startsWith(`${projectId}::`)) {
       previewCache.delete(key);
     }
   }
 }
+
+registerPreviewCacheInvalidator(invalidatePreviewCache);
 
 /* ------------------------------------------------------------------ */
 /*  Shared helpers                                                     */

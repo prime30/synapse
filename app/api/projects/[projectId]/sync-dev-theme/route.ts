@@ -5,7 +5,7 @@ import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
-import { invalidatePreviewCache } from '../preview/route';
+import { invalidatePreviewCache } from '@/lib/preview/preview-cache';
 import {
   buildSnapshotForConnection,
   recordPush,

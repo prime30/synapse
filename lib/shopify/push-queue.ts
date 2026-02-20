@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { ThemeSyncService } from './sync-service';
 import { buildSnapshotForConnection, recordPush } from './push-history';
-import { invalidatePreviewCache } from '@/app/api/projects/[projectId]/preview/route';
+import { invalidatePreviewCache } from '@/lib/preview/preview-cache';
 
 const DEBOUNCE_MS = 800;
 

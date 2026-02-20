@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 import path from 'path';
-import type { Configuration } from 'webpack';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -8,7 +7,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   outputFileTracingRoot: __dirname,
   serverExternalPackages: ['@sparticuz/chromium-min', 'puppeteer-core', 'node-cron'],
-  webpack: (config: Configuration, { isServer, dev }) => {
+  webpack: (config: any, { isServer, dev }: { isServer: boolean; dev: boolean }) => {
     // Persistent filesystem cache — prevents 15-25s recompile on every cold route hit.
     if (dev) {
       config.cache = {
