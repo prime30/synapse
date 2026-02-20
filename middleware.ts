@@ -13,16 +13,14 @@ import { isPublicPath, getRedirectUrl } from '@/lib/auth/route-guard';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Shopify preview pixel requests sometimes embed our preview API path inside
-  // a /web-pixels... prefix. Rewrite those to the canonical API route so they
-  // don't 404/retry in tight loops.
+  // Shopify web-pixel scripts from the preview iframe hit our server instead of
+  // Shopify's CDN. They 404 and prevent the store page from fully initializing.
+  // Return an empty JS module so the page's script loader doesn't hang.
   if (pathname.startsWith('/web-pixels')) {
-    const embeddedApiIndex = pathname.indexOf('/api/projects/');
-    if (embeddedApiIndex >= 0) {
-      const embeddedApiPath = pathname.slice(embeddedApiIndex);
-      const url = new URL(`${embeddedApiPath}${request.nextUrl.search}`, request.url);
-      return NextResponse.rewrite(url);
-    }
+    return new NextResponse('/* noop */', {
+      status: 200,
+      headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
+    });
   }
 
   // Skip static assets, internal Next.js routes, and all API routes
@@ -31,9 +29,6 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/api/') ||
-    // Shopify preview pixel requests should never be auth-redirected.
-    // They are script/worker resource fetches and may be prefixed paths.
-    pathname.startsWith('/web-pixels') ||
     pathname.startsWith('/.well-known/shopify/')
   ) {
     return NextResponse.next();
@@ -88,6 +83,8 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+export const runtime = 'nodejs';
+
 export const config = {
   matcher: [
     /*
@@ -95,7 +92,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico, sitemap.xml, robots.txt, ai.txt (metadata / crawler files)
+     * - api/ routes (handle their own auth)
+     * - web-pixels (Shopify preview scripts)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt|manifest.webmanifest).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt|manifest.webmanifest|api/|web-pixels|.well-known/).*)',
   ],
 };

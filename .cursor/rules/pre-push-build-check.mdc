@@ -1,0 +1,28 @@
+---
+description: "HARD RULE: Always run a production build check before pushing to git."
+alwaysApply: true
+---
+
+# Pre-Push Build Check (HARD RULE)
+
+## When This Applies
+
+This applies EVERY TIME you are about to run `git push` — whether the user asks you to "push", "commit and push", "deploy", or any variation. There are NO exceptions.
+
+## Procedure
+
+Before running `git push`, you MUST:
+
+1. Run `npx next build --webpack` in the workspace root directory
+2. Wait for it to complete (may take 1-2 minutes)
+3. Check for ANY errors in the output (TypeScript errors, module resolution, etc.)
+4. If errors are found: fix ALL of them, then re-run the build to confirm clean
+5. Only push after the build exits with code 0 and no "Failed to compile" or "Type error" messages
+
+## Why
+
+Vercel runs `next build --webpack` during deployment. If the local build fails, the Vercel deploy will also fail. Catching errors locally saves a deploy cycle (2-3 minutes) and avoids broken deployments.
+
+## Enforcement
+
+If you push without running the build check and the deploy fails, acknowledge the failure, run the build locally, fix all errors, and push again. Do not skip this step.
