@@ -161,7 +161,7 @@ export function DesktopAppMockup() {
                 <motion.span
                   className="w-[2px] h-[14px] bg-accent"
                   animate={{ opacity: [1, 0, 1] }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'steps(2)' }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 />
               </div>
             </div>
