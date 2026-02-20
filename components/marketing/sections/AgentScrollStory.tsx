@@ -251,6 +251,7 @@ function BackgroundEffects({
   reducedMotion: boolean;
 }) {
   const dotOpacity = useTransform(scrollYProgress, [0, 0.08], [0, 1]);
+  const meshOpacity = useTransform(scrollYProgress, [0, 0.08], [0, 0.4]);
 
   /* Gradient mesh layer positions — scroll-driven drift */
   const layer1Y = useTransform(scrollYProgress, [0, 1], [0, 120]);
@@ -285,7 +286,7 @@ function BackgroundEffects({
       <motion.div
         className="absolute inset-0"
         style={{
-          opacity: reducedMotion ? 0.3 : Math.min(dotOpacity as number, 0.4),
+          opacity: reducedMotion ? 0.3 : meshOpacity,
           maskImage: dotMask,
           WebkitMaskImage: dotMask,
           maskSize: '32px 32px, 100% 100%',
