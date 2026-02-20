@@ -17,26 +17,8 @@ span.sold_badge {
   font-size: 12px;
   text-transform: capitalize;
 }
-.t4s-collection-page .t4s_box_pr_grid span.sale_badge {
-  position: absolute;
-  top: 80px;
-  color: #fff;
-  background: #fa0000;
-  padding: 2px 12px;
-  border-radius: 50px;
-  left: 15px;
-}
-.t4s-collection-page .t4s_box_pr_grid .t4s-product-badge .t4s-badge-sale {
-  display: none;
-}
-.t4s-collection-page .t4s_box_pr_grid span.sale_badge.repositions {
-  top: 45px;
-}
 .t4s-product-badge.empty_element + span.sold_badge {
   top: -5px;
-}
-.t4s-product-badge.empty_element + span.sale_badge {
-  top: 0;
 }
 
 .t4s-product {
@@ -302,6 +284,24 @@ span.sold_badge {
   flex-direction: column;
   align-items: flex-start;
   pointer-events: none;
+}
+.t4s-product .t4s-product-badge > [data-badge-sale] {
+  display: none;
+}
+.t4s-sale-pct {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+.t4s-widget__pr .t4s-sale-pct {
+  top: 4px;
+  left: 4px;
+  font-size: 10px;
+  line-height: 18px;
+  min-width: 36px;
+  padding: 0 4px;
 }
 
 div#badge-flex {

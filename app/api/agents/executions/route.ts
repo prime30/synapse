@@ -2,12 +2,12 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
-import { createClient } from '@/lib/supabase/server';
+import { createReadClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    const supabase = await createClient();
+    const supabase = await createReadClient();
 
     const projectId = request.nextUrl.searchParams.get('projectId');
     const limit = parseInt(request.nextUrl.searchParams.get('limit') ?? '20', 10);

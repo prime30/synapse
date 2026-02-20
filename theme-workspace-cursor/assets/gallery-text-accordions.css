@@ -1,0 +1,104 @@
+.t4s-gallery-txt-accordions-wrap {
+  height: var(--height-dk);
+  overflow: hidden;
+}
+.t4s-gallery-txt-accordions.is--selected .t4s-bl-item{
+    animation: var(--animation);
+    animation-duration: var(--time-animation);
+    animation-delay: var(--delay-animation);
+    animation-fill-mode: forwards;
+}
+.t4s-gallery-txt-accordions .t4s-bl-item {
+  line-height: 1.4;
+  overflow: hidden;
+}
+.t4s-gallery-txt-accordions-inner, .t4s-gallery-txt-img, .t4s-gallery-txt-accordions {
+  height: 100%;
+}
+.flickityt4s-slider .t4s-gallery-txt-accordions {
+    opacity: 0.3;
+}
+.flickityt4s-slider .t4s-gallery-txt-accordions.is-selected {
+    opacity: 1;
+}
+.t4s-gallery-txt-img img {
+  object-fit: cover;
+  height: 100%;
+  width: auto;
+}
+.gallery-with-text-label {
+  position: absolute;
+  right: 25px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin: 0;
+  top: 30px;
+  transform: rotate(180deg);
+  writing-mode: vertical-rl;
+  font-weight: 500;
+  line-height: 1;
+  z-index: 2;
+  color: var(--cl-label);
+}
+.t4s-gallery-txt-img::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-color: var(--bg-overlay);
+}
+a.t4s-link-overlay {
+    background: transparent;
+    position: absolute;
+    top: -999em;
+    left: -999em;
+    right: -999em;
+    bottom: -999em;
+    z-index: 1;
+}
+@media(min-width: 768px){
+  .t4s-gallery-txt-accordions.is--hover{
+    flex: 3.3;
+  }
+  .t4s-gallery-txt-accordions .gallery-text-content{ 
+    opacity: 0; 
+  }
+  .t4s-gallery-txt-accordions.is--hover .gallery-text-content{ 
+     opacity: 1; 
+     transition: 1s opacity ease 0s;
+  }
+  .t4s-gallery-txt-accordions {
+    height: 100%;
+    width: 100%;
+    white-space: normal;
+    transition: flex .5s cubic-bezier(.29,0,.2,1);
+  }
+  .t4s-gallery-txt-accordions.is--hover .t4s-bl-item{
+      animation: var(--animation);
+      animation-duration: var(--time-animation);
+      animation-delay: var(--delay-animation);
+      animation-fill-mode: forwards;
+  }
+}
+@media (min-width: 768px) and (max-width: 1199px) {
+  .t4s-gallery-txt-accordions-wrap {
+    height: var(--height-tb);
+  } 
+}
+@media(max-width: 767px) {
+  .t4s-gallery-txt-accordions-wrap {
+    height: var(--height-mb);
+    flex-wrap: nowrap;
+  }
+  .t4s-gallery-txt-accordions-wrap .flickityt4s-viewport{
+    height: var(--height-mb) !important;
+  }
+  .gallery-with-text-label {
+    right: 15px;
+    font-size: 11px;
+    top: 15px;
+  }
+}

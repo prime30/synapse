@@ -1,5 +1,5 @@
-﻿---
-description: "HARD RULE: Three-pass refinement protocol. MUST be followed before ANY plan is presented to the user."
+---
+description: "HARD RULE: Four-pass refinement protocol. MUST be followed before ANY plan is presented to the user."
 alwaysApply: true
 ---
 
@@ -11,13 +11,27 @@ This applies EVERY TIME you are about to call CreatePlan or present a plan to th
 
 ## Procedure (MUST follow in order)
 
-You MUST complete ALL THREE passes before calling CreatePlan. Do NOT call CreatePlan after only a first draft. If you catch yourself about to present a plan without having run the three passes, STOP and run them.
+You MUST complete ALL FOUR passes before calling CreatePlan. Do NOT call CreatePlan after only a first draft. If you catch yourself about to present a plan without having run the four passes, STOP and run them.
 
 ### Step 1: Draft the plan internally (do NOT present it yet)
 
 Write the plan in your thinking/reasoning. This is the raw first draft.
 
-### Step 2: Run Pass 1 -- Gap Analysis
+### Step 2: Run Pass 1 -- Challenge Architecture
+
+Launch an explore subagent to challenge the fundamental approach BEFORE refining details. This pass exists because optimizing the wrong architecture wastes effort. The subagent must answer:
+
+- **Reference system comparison**: How does Cursor (or the equivalent best-in-class reference) handle this? Do they even have this problem? If not, why not? What is architecturally different?
+- **Root cause vs. symptom**: Are we adding complexity to work around a design decision we should change instead? Is this plan a band-aid over a deeper issue?
+- **Assumption audit**: List every implicit assumption the plan makes. For each one, ask: is this actually true? Could it be wrong? What breaks if it is?
+- **Capability gates**: Does the plan introduce any capability gates, separate code paths, or mode-specific logic that could cause context loss, state fragmentation, or pipeline splits? If yes, can we unify into a single pipeline with preference-level hints instead?
+- **Complexity smell test**: If this plan requires more than one "recovery" or "acceleration" mechanism to handle edge cases between subsystems, the architecture may be wrong. Flag it.
+
+If this pass identifies a fundamental architectural flaw, STOP and redesign the approach before proceeding to Pass 2. Do not refine details on a broken foundation.
+
+Fold all findings into the draft before proceeding.
+
+### Step 3: Run Pass 2 -- Gap Analysis
 
 Launch an explore subagent to audit the draft for:
 - Missing steps, unhandled edge cases, implicit assumptions
@@ -27,17 +41,17 @@ Launch an explore subagent to audit the draft for:
 
 Fold all findings into the draft before proceeding.
 
-### Step 3: Run Pass 2 -- Refinement and Enhancement
+### Step 4: Run Pass 3 -- Refinement and Enhancement
 
-Launch an explore subagent (can run in parallel with Pass 3) to:
-- Re-evaluate after Pass 1 corrections for remaining gaps
+Launch an explore subagent (can run in parallel with Pass 4) to:
+- Re-evaluate after Pass 2 corrections for remaining gaps
 - Confirm every task is fully defined to accomplish the goal
 - Propose additional improvements that elevate the solution
 - Answer: What functionalities and improvements would make this even better?
 
 Fold all findings into the draft before proceeding.
 
-### Step 4: Run Pass 3 -- UI Surface and Design System Compliance
+### Step 5: Run Pass 4 -- UI Surface and Design System Compliance
 
 Launch an explore subagent to:
 - Verify every new/changed feature is surfaced in the UI where applicable
@@ -53,9 +67,9 @@ Launch an explore subagent to:
 
 Fold all findings into the draft.
 
-### Step 5: Present the final plan
+### Step 6: Present the final plan
 
-NOW call CreatePlan with the fully refined plan. The plan you present must be the output of all three passes, not the first draft.
+NOW call CreatePlan with the fully refined plan. The plan you present must be the output of all four passes, not the first draft.
 
 ## Enforcement
 

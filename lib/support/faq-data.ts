@@ -107,9 +107,9 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         id: 'ai-modes',
-        question: 'What is the difference between Orchestrated and Solo mode?',
+        question: 'What is the difference between subagent count and specialist mode?',
         answer:
-          'Orchestrated mode uses multiple specialist agents (Liquid, CSS, JS) coordinated by a Project Manager, with a Review agent validating all changes. It\'s best for complex, multi-file tasks. Solo mode uses a single agent for everything — faster for simple requests like "change this color" or "add a heading".',
+          'Subagent count (1x–4x) controls how many agents work on your request: 1x uses a single agent for everything — faster for simple requests like "change this color" or "add a heading". 2x–4x uses multiple general-purpose subagents for parallel work on complex tasks. Specialist mode is an opt-in toggle: when ON, domain agents (Liquid, CSS, JS, JSON) are used instead of general subagents — best for multi-file theme work that spans different file types.',
       },
       {
         id: 'ai-ambient',

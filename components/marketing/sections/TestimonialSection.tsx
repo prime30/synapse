@@ -40,7 +40,7 @@ export function TestimonialSection() {
         </blockquote>
 
         <div className="mt-10">
-          <div className="w-12 h-12 rounded-full bg-sky-500/20 mx-auto flex items-center justify-center text-sky-400 font-medium">
+          <div className="w-12 h-12 rounded-full bg-accent/20 mx-auto flex items-center justify-center text-accent font-medium">
             A
           </div>
           <p className="text-base font-medium text-white mt-4">Alex Chen</p>
@@ -52,3 +52,4 @@ export function TestimonialSection() {
     </motion.section>
   );
 }
+

@@ -89,12 +89,12 @@ export function ValuePropGrid() {
       </div>
 
       {/* ── Section header — two-column: copy + mini agent hub ────── */}
-      <div className="relative z-[2] max-w-6xl mx-auto px-8 md:px-10">
+      <div className="relative z-[2] max-w-6xl mx-auto px-4 sm:px-6 md:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-12 items-center">
           {/* Left: copy */}
           <div>
             <span className="section-badge">CAPABILITIES</span>
-            <h2 className="text-left max-w-xl text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
+            <h2 className="text-left max-w-xl text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
               {['Five', 'agents.'].map((word, i) => (
                 <span key={i} className="inline-block overflow-hidden">
                   <motion.span
@@ -159,7 +159,7 @@ export function ValuePropGrid() {
             return (
               <motion.div
                 key={item.title}
-                className={`group/card relative overflow-hidden p-8 md:p-10 ${
+                className={`group/card relative overflow-hidden p-4 sm:p-6 md:p-8 ${
                   !isLastCol ? 'border-r border-stone-200 dark:border-white/10' : ''
                 } ${!isLastRow ? 'border-b border-stone-200 dark:border-white/10' : ''}`}
                 initial={{ opacity: 0, y: 16 }}

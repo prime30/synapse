@@ -1,0 +1,735 @@
+<!-- sections/bundle-products.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'bundle-products.css' | asset_url | stylesheet_tag }}
+{%- liquid
+  assign image_fix = image_nt | image_tag
+  assign sid = section.id
+  assign se_stts = section.settings
+  assign se_blocks = section.blocks
+  assign stt_layout = se_stts.layout
+  assign stt_image_bg = se_stts.image_bg
+  if se_stts.layout == 't4s-cus-width'
+    assign html_layout = '<div class="t4s-container" style="--width: 010693px">__</div>' | split: '__'
+  elsif stt_layout == 't4s-se-container' 
+    assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+  elsif stt_layout == 't4s-container-wrap'
+    assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+  else
+    assign html_layout = '__' | split: '__'
+  endif
+
+  assign html_pin = ''
+  assign html_prs = ''
+  assign has_product = false
+  assign image_ratio = se_stts.image_ratio
+    if image_ratio == "ratioadapt"
+      assign imgatt = ''
+     else 
+      assign imgatt = 'data-'
+    endif
+  assign total_price = 0
+  assign total_compare_price= 0
+  assign index = 0
+  assign min = 1
+  assign form_id = 'form_id' | append: section.id -%}
+
+
+<div class="t4s-section-inner t4s_se_{{ sid }} {{ stt_layout }}{% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} t4s-has-imgbg lazyloadt4s{% endif %}" {%- if stt_image_bg != blank and stt_layout != 't4s-se-container' -%} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{%- endif -%} {% render 'section_style', se_stts: se_stts %}>
+  {{- html_layout[0] | replace: '010693', se_stts.custom_width -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner {% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s {% endif %} "  {%- if stt_image_bg != blank -%} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {%- endif -%} > {%- endif -%}
+
+  {%- if se_blocks.size > 0 -%}
+
+  	{%- for block in se_blocks -%}
+        
+      {%- liquid 
+  		assign bk_stts = block.settings
+  		assign bk_id = block.id
+  		assign product = bk_stts.product -%}
+        
+        {%- capture html_prs_item -%}
+
+        	{%- if product != blank -%}
+        		{%- liquid
+  		      unless product.available
+  		      continue 
+  		      endunless  
+        		unless has_product
+        			assign has_product = true
+        			assign first_product = product
+        		endunless
+  		      assign available_v_1 = product.first_available_variant
+  		      assign available_v_1_id = available_v_1.id
+  	         assign cu_pr = available_v_1.price
+  	         assign cp_pr = available_v_1.compare_at_price | default: cu_pr
+  	         assign total_price = total_price | plus:cu_pr
+  	         assign total_compare_price = total_compare_price | plus: cp_pr
+  	         assign image = available_v_1.featured_image | default: product.featured_image
+  	         assign img_url = image | image_url: width: 1
+  		      assign featured_image = product.featured_image
+  		      unless product.available
+  		      	assign _disabled = 'disabled'
+  		      else
+  		      	assign _disabled = ''
+  		      endunless -%}  
+              <div data-groups-pr-item class="t4s-bundle-pr-item" id="bundle{{bk_id}}" data-index="{% increment indexData %}" {{_disabled}}>
+    		        <div class="t4s-bundle-pr__img t4s-pr" data-groups-img="{% increment indexData2 %}">
+    		            <a href="{{product.url}}" class="t4s-d-inline-block t4s-bundle-pr__img-wrap t4s_ratio" {{ imgatt }}style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
+    		              <img class="lazyloadt4s t4s-lz--fadeIn" data-orginal="{{ img_url }}" data-src="{{img_url }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg',w:image.width,h:image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+    		              <span class="lazyloadt4s-loader is-bg-img" style="background: url({{ img_url }})"></span>
+    		            </a>
+    		        </div>
+    					  <div class="t4s-bundle-pr__info">
+    		            <a class="t4s-bundle-pr__title t4s-bundle-pr__link t4s-d-block" href="{{product.url}}">{{product.title | escape }}</a>
+    		            {%- if product.variants.size < 2 -%}
+    		               <input {{_disabled}} data-groups-pr-sl name="items[][id]" data-cpprice="{{cp_pr}}" data-price="{{cu_pr}}" value="{{ available_v_1.id }}" type="hidden">
+    		            {%- else -%}
+    		               <select {{_disabled}} data-groups-pr-sl name="items[][id]" autocomplete="off" data-cpprice="{{cp_pr}}" data-price="{{cu_pr}}">
+    		                {%- for variant in product.variants -%}
+    		                   {%- if variant.available -%}
+    		                   <option data-img="{{variant.image | default:featured_image | image_url: width: 1}}" data-cpprice="{{variant.compare_at_price |default:variant.price}}" data-price="{{variant.price}}" data-max="{% if variant.inventory_management == blank or variant.inventory_policy == 'continue' %}9999{% else %}{{ variant.inventory_quantity |default:9999 }}{% endif %}" value="{{ variant.id }}"{% if variant.id == available_v_1_id %} selected="selected"{% endif %}>{{ variant.title | escape }}</option>
+    		                   {%- else -%}
+    		                   <option disabled="disabled" value="{{ variant.id }}">{{ variant.title | escape }} - {{ 'products.product.sold_out' | t | escape }}</option>
+    		                   {%- endif -%}
+    		                {%- endfor -%}
+    		               </select>
+    		            {%- endif -%}
+    		            <div class="t4s-bundle-pr__price" data-groups-item-price>{% if available_v_1.compare_at_price > available_v_1.price %}<del>{{available_v_1.compare_at_price | money}}</del> <ins>{{available_v_1.price | money}}</ins>{% else %}{{available_v_1.price | money}}{% endif %}</div>
+    		            <input {{_disabled}} data-groups-qty-value type="hidden" class="t4s-quantity-input" step="1" min="{{min}}" max="{% if available_v_1.inventory_management == blank or available_v_1.inventory_policy == 'continue' %}9999{% else %}{{available_v_1.inventory_quantity | default: 9999}}{% endif %}" name="items[][quantity]" value="1">
+    					  </div>
+  				    </div>
+
+  			 {%- else -%}
+
+        		{%- liquid
+  		      if index > 6
+  		      	assign index = 0
+  		      endif
+  		      assign index = index| plus:1 -%}
+              
+            <div class="t4s-bundle-pr-item" id="bundle{{bk_id}}">
+    					<div class="t4s-bundle-pr__img">
+    						<div class="t4s-bundle-pr__img t4s-pr">
+    							<a href="/admin/products" class="t4s-d-inline-block t4s-bundle-pr__img-wrap t4s_ratio">
+    								{{ 'product-' | append: index | placeholder_svg_tag: 't4s-placeholder-svg' }}
+    							</a>
+    						</div>
+    					</div>
+    					<div class="t4s-bundle-pr__info">
+    						<a class="t4s-bundle-pr__title t4s-bundle-pr__link t4s-d-block" href="/admin/products">{{ 'onboarding.product_title' | t }}</a>
+    						<div class="t4s-bundle-pr__price" data-groups-item-price>$59.00</div>
+    					</div>
+    				</div>
+  			  {%- endif -%}
+        {%- endcapture -%}
+        {%- assign html_prs = html_prs | append: html_prs_item -%}
+        {%- capture html_pin_item -%}
+        <div class="t4s-bundle-pr-pin t4s-bundle_{{ bk_stts.pos_size }}" data-bundle-pin data-trigger="#bundle{{bk_id}}" style="--ps-top: {{bk_stts.pos_t}}%; --ps-left: {{bk_stts.pos_l}}%; --bg-color: {{bk_stts.bg_cl}}; --icon-color: {{bk_stts.icon_cl}}">
+          {%- if bk_stts.type == "1" -%}
+            <svg version="1.1" x="0px" y="0px" width="18px" height="18px" viewBox="0 0 18 18" style="enable-background:new 0 0 18 18;" xml:space="preserve">
+              <path d="M14,8h-4V4c0-0.55-0.45-1-1-1S8,3.45,8,4v4H4C3.45,8,3,8.45,3,9s0.45,1,1,1h4v4c0,0.55,0.45,1,1,1s1-0.45,1-1v-4h4 c0.55,0,1-0.45,1-1S14.55,8,14,8z"></path>
+            </svg>
+          {%- endif -%}
+        </div>
+        {%- endcapture -%}
+        {%- assign html_pin = html_pin | append: html_pin_item -%}
+
+  	{%- endfor -%}
+
+  {%- endif -%}
+  <div data-product-bundles class="t4s-bundle-prs-wrapper">
+  	<div class="t4s-row{% if se_stts.image_placement == 'second' %} t4s-flex-md-row-reverse{% endif %}">
+  		<div class="t4s-col-12 t4s-col-md-6 t4s-col-lg-6 t4s-offset-lg-1 t4s-col-item">
+  	      <div data-bundle-image class="t4s-bundle-prs-img t4s-pr t4s-oh t4s_position_8 t4s_ratioadapt t4s_cover ">
+
+           {%- assign image = se_stts.image -%}
+  	      {%- if image != blank -%}
+  	        <div class="t4s-bundle-prs-img-wrap t4s_ratio" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1.7777 }};{% if image.presentation.focal_point != '50.0% 50.0%' %} object-position: {{image.presentation.focal_point}}{% endif %}">
+  	          <img {% if image.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image.presentation.focal_point}}"{% endif %} class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff t4s-img-as-bg pin__image" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+  	          <span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>  
+  	        </div>
+  	      {%- else -%}
+  	        {{ 'collection-1' | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1' }}  
+  	      {%- endif -%}
+  	       {{- html_pin -}}
+  	      </div>
+  		</div>
+  		<div class="t4s-col-12 t4s-col-md-6 t4s-col-lg-5 t4s-col-item">
+  	      <div class="t4s-bundle-prs-with-head">
+  	      	<div class="t4s-bundle-prs-head">
+  	      		<p class="t4s-bundle-prs-subheading">{{se_stts.subheading}}</p>
+  	      		<h3 class="t4s-bundle-prs-heading">{{se_stts.heading}}</h3>
+  	      	</div>
+  	      	<div class="t4s-bundle-prs-innner">
+  				  {%- if has_product -%}
+  						{%- form 'product', first_product, id: form_id, class: 't4s-bundle-prs', novalidate: 'novalidate', data-groups-pr-form: '', data-bundles-pr-form: '' , data-type: 'add-to-cart-form' -%}
+  						   
+  						   	<div class="t4s-bundle-prs-list t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}">{{- html_prs -}}</div>
+  			            	<button data-animation-atc='{ "ani": "{{ se_stts.ani }}","time": {{ se_stts.time }}000 }' type="submit" name="add" data-atc-form class="t4s-product-form__submit t4s-btn t4s-btn-base t4s-btn-style-{{ se_stts.button_style }} t4s-btn-size-{{ se_stts.btns_size }} t4s-btn-color-{{ se_stts.button_color }} t4s-w-100 t4s-justify-content-center {% if se_stts.button_style == 'default' or se_stts.button_style == 'outline' %} t4s-btn-effect-{{ se_stts.button_effect }}{% endif %} t4s-btn-loading__svg" style="--pr-btn-round: {{ se_stts.pr_btn_round }}px;">
+  								{%- if se_stts.show_total_price %}<span class="t4s-bundle-atc_price" data-groups-total-price>{{total_price | money }}</span><span class="t4s-bundle-atc_line"></span>{% endif -%}
+  								<span class="t4s-bundle-atc_text">{{ se_stts.atc | escape }}</span>
+  								<span class="t4s-loading__spinner" hidden>
+  									<svg width="16" height="16" hidden class="t4s-svg-spinner" focusable="false" role="presentation" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg"><circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle></svg>
+  								</span>
+  							</button>
+  							{%- if se_stts.ani != 'none' -%}<link href="{{ 'ani-atc.min.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">{%- endif -%}
+
+  						{%- endform -%}
+  					{%- else -%}
+  					    <div class="t4s-bundle-prs-list t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}">{{- html_prs -}}</div>
+  					{%- endif -%}
+  				</div>
+  			</div>
+  		</div>
+  	</div>
+  </div>
+
+  {{- html_layout[1] -}}
+</div>
+
+{%- schema -%}
+{
+  "name": "Bundle products",
+  "tag": "section",
+  "class": "t4s-section t4s-section-all t4s_tp_bundles t4s-bundle-products",
+  "settings": [
+      {
+        "type": "header",
+        "content": "1. General options"
+      },
+      {
+          "type": "text","id": "subheading","default": "SHOP THIS LOOK",
+          "label": "Subheading"
+      },
+      {
+          "type": "text","id": "heading","default": "BUNDLE & SAVE",
+          "label": "Heading"
+      },
+	   {
+	     "type": "image_picker","id": "image",
+	     "label": "Image"
+	   },
+	   {
+	       "type": "select",
+	       "id": "image_placement",
+	       "label": "Desktop image placement",
+	       "info": "Image first is the default mobile layout.",
+	       "default": "first",
+	       "options": [
+	           {
+	               "value": "first",
+	               "label": "Image first"
+	           },
+	           {
+	               "value": "second",
+	               "label": "Image second"
+	           }
+	       ]
+	   }, 
+      {
+          "type": "header",
+          "content": "+ Product options"
+      },
+      {
+        "type": "select",
+        "id": "image_ratio",
+        "label": "Image ratio",
+        "default": "rationt",
+        "info": "Aspect ratio custom will settings in general panel",
+        "options": [
+          {
+            "group": "Natural",
+            "value": "ratioadapt",
+            "label": "Adapt to image"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio2_1",
+            "label": "2:1"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio16_9",
+            "label": "16:9"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio8_5",
+            "label": "8:5"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio3_2",
+            "label": "3:2"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio4_3",
+            "label": "4:3"
+          },
+          {
+            "group": "Landscape",
+            "value": "rationt",
+            "label": "Ratio ASOS"
+          },
+          {
+            "group": "Squared",
+            "value": "ratio1_1",
+            "label": "1:1"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio2_3",
+            "label": "2:3"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio1_2",
+            "label": "1:2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus1",
+            "label": "Ratio custom 1"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus2",
+            "label": "Ratio custom 2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratio_us3",
+            "label": "Ratio custom 3"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus4",
+            "label": "Ratio custom 4"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_size",
+        "label": "Image size",
+        "default": "cover",
+        "info": "This settings apply only if the image ratio is not set to 'Adapt to image'",
+        "options": [
+          {
+            "value": "cover",
+            "label": "Full"
+          },
+          {
+            "value": "contain",
+            "label": "Auto"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_position",
+        "info": "The first value is the horizontal position and the second value is the vertical. This settings apply only if the image ratio is not set to 'Adapt to image'",
+        "options": [
+          {
+            "value": "default",
+            "label": "Default"
+          },
+          {
+            "value": "1",
+            "label": "Left top"
+          },
+          {
+            "value": "2",
+            "label": "Left center"
+          },
+          {
+            "value": "3",
+            "label": "Left bottom"
+          },
+          {
+            "value": "4",
+            "label": "Right top"
+          },
+          {
+            "value": "5",
+            "label": "Right center"
+          },
+          {
+            "value": "6",
+            "label": "Right bottom"
+          },
+          {
+            "value": "7",
+            "label": "Center top"
+          },
+          {
+            "value": "8",
+            "label": "Center center"
+          },
+          {
+            "value": "9",
+            "label": "Center bottom"
+          }
+        ],
+        "label": "Image position",
+        "default": "8"
+      },
+      {
+          "type": "header",
+          "content": "+ Call to action button"
+      },
+      {
+          "type": "text","id": "atc","default": "ADD ALL TO CART",
+          "label": "Button label"
+      },
+      {
+          "type": "checkbox",
+          "id": "show_total_price",
+          "label": "Show total price",
+          "default": true
+      },
+      {
+          "type": "range",
+          "id": "pr_btn_round",
+          "min": 0,
+          "max": 40,
+          "step": 1,
+          "label": "Button round corners",
+          "unit": "px",
+          "default": 0
+      },
+      {
+          "type": "select",
+          "id": "ani",
+          "options": [
+          {
+              "value": "none",
+              "label": "None"
+          },
+          {
+              "value": "t4s-ani-bounce",
+              "label": "Bounce"
+          },
+          {
+              "value": "t4s-ani-tada",
+              "label": "Tada"
+          },
+          {
+              "value": "t4s-ani-swing",
+              "label": "Swing"
+          },
+          {
+              "value": "t4s-ani-flash",
+              "label": "Flash"
+          },
+          {
+              "value": "t4s-ani-fadeIn",
+              "label": "FadeIn"
+          },
+          {
+              "value": "t4s-ani-heartBeat",
+              "label": "HeartBeat"
+          },
+          {
+              "value": "t4s-ani-shake",
+              "label": "Shake"
+          }
+          ],
+          "label": "Button animation"
+      },
+      {
+          "type": "range",
+          "id": "time",
+          "min": 2,
+          "max": 40,
+          "step": 1,
+          "label": "Loop time (seconds)",
+          "info": "Loop time button animation",
+          "unit": "s",
+          "default": 6
+      },
+	   {
+	        "type": "select",
+	        "id": "button_style",
+	        "label": "Button style",
+	        "options": [
+	            {
+	                "label": "Default",
+	                "value": "default"
+	            },
+	            {
+	                "label": "Outline",
+	                "value": "outline"
+	            }
+	        ]
+	   },
+	   	{
+	        "type": "select",
+	        "id": "btns_size",
+	        "label": "Button size",
+	        "default": "default",
+	        "options": [
+	            {
+	                "label": "Default",
+	                "value": "default"
+	            },
+	            {
+	                "label": "Custom size #1",
+	                "value": "1"
+	            },
+	            {
+	                "label": "Custom size #2",
+	                "value": "2"
+	            },
+	            {
+	                "label": "Custom size #3",
+	                "value": "3"
+	            }
+	        ]
+      	},
+	   {
+	        "type": "select",
+	        "id": "button_color",
+	        "label": "Button color",
+	        "default": "dark",
+	        "options": [
+	            {
+	                "value": "light",
+	                "label": "Light"
+	            },
+	            {
+	                "value": "dark",
+	                "label": "Dark"
+	            },
+	            {
+	                "value": "primary",
+	                "label": "Primary"
+	            },
+	            {
+	                "value": "custom1",
+	                "label": "Custom color 1"
+	            },
+	            {
+	                "value": "custom2",
+	                "label": "Custom color 2"
+	            }
+	        ]
+	   },
+	   {
+	        "type": "select",
+	        "id": "button_effect",
+	        "label": "Hover button effect",
+	        "default": "fade",
+	        "info": "Only working button style default, outline",
+	        "options": [
+	            {
+	                "label": "Default",
+	                "value": "default"
+	            },
+	            {
+	                "label": "Fade",
+	                "value": "fade"
+	            },
+	            {
+	                "label": "Rectangle out",
+	                "value": "rectangle-out"
+	            },
+	            {
+	                "label": "Sweep to right",
+	                "value": "sweep-to-right"
+	            },
+	            {
+	                "label": "Sweep to left",
+	                "value": "sweep-to-left"
+	            },
+	            {
+	                "label": "Sweep to bottom",
+	                "value": "sweep-to-bottom"
+	            },
+	            {
+	                "label": "Sweep to top",
+	                "value": "sweep-to-top"
+	            },
+	            {
+	                "label": "Shutter out horizontal",
+	                "value": "shutter-out-horizontal"
+	            },
+	            {
+	                "label": "Outline",
+	                "value": "outline"
+	            },
+	            {
+	                "label": "Shadow",
+	                "value": "shadow"
+	            }
+	        ]
+	   },
+     {
+        "type": "header",
+        "content": "2. Design options"
+      },
+      {
+        "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+        "options": [
+            { "value": "t4s-se-container", "label": "Container"},
+            { "value": "t4s-container-wrap", "label": "Wrapped container"},
+            { "value": "t4s-container-fluid", "label": "Full width"}
+        ]
+      },
+      {
+        "type": "color",
+        "id": "cl_bg",
+        "label": "Background"
+      },
+      {
+        "type": "color_background",
+        "id": "cl_bg_gradient",
+        "label": "Background gradient"
+      },
+      {
+        "type": "image_picker",
+        "id": "image_bg",
+        "label": "Background image"
+      },
+      {
+          "type": "text",
+          "id": "mg",
+          "label": "Margin",
+          "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd",
+          "label": "Padding",
+          "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+          "placeholder": "50px,,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design tablet options"
+      },
+      {
+          "type": "text",
+          "id": "mg_tb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_tb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design mobile options"
+      },
+      {
+          "type": "text",
+          "id": "mg_mb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_mb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      }
+  ],
+  "blocks": [
+    {
+      "type": "product",
+      "name": "Product",
+      "limit": 8,
+      "settings": [
+          {
+             "type": "product","id": "product",
+             "label": "Choose product","info": "Will not show product sold out"
+          },
+          {
+            "type": "header","content": "+ Pin options"
+          },
+          {
+            "type": "range","id": "pos_t","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Top","default": 50
+          },
+          {
+            "type": "range","id": "pos_l","min": 0,"max": 100,"step": 1,"unit": "%","label": "Position Left","default": 50
+          },
+          {
+             "type": "select",
+             "id": "type",
+             "label": "Icon shape",
+             "options": [
+                { "value": "1", "label": "icon plus"},
+                { "value": "2", "label": "icon default"}
+             ]
+          },
+          {
+           "type": "select","id": "pos_size","label": "Pin size","default": "medium",
+           "options": [
+              { "value": "small", "label": "Small"},
+              { "value": "medium", "label": "Medium"},
+              { "value": "large", "label": "Large"}
+           ]
+          },
+          {
+           "type": "color","id": "bg_cl","label": "Background color","default": "#65affa"
+          },
+          {
+            "type": "color","id": "icon_cl","label": "Icon color","default": "#fff" 
+          }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Bundle products",
+      "category": "group3",
+      "blocks": [
+        {
+          "type": "product",
+          "settings": {
+            "product": "",
+            "pos_t": 50,
+            "pos_l": 50,
+            "type": "1",
+            "pos_size": "medium",
+            "bg_cl": "#000000",
+            "icon_cl": "#fff"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "",
+            "pos_t": 12,
+            "pos_l": 24,
+            "type": "1",
+            "pos_size": "medium",
+            "bg_cl": "#000000",
+            "icon_cl": "#fff"
+          }
+        },
+       {
+          "type": "product",
+          "settings": {
+            "product": "",
+            "pos_t": 50,
+            "pos_l": 92,
+            "type": "1",
+            "pos_size": "medium",
+            "bg_cl": "#000000",
+            "icon_cl": "#fff"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,40 @@
+{%- comment -%}
+  Product Price Block
+  Renders the product price with sale/compare display, login gate,
+  and optional tax/shipping policy info.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings (price styling, sale type, etc.)
+  - block: {Object} Block Liquid object (for shopify_attributes)
+  - current_variant: {Object} Currently selected variant
+  - PR_no_pick: {Boolean} No variant picked yet
+{%- endcomment -%}
+
+{% if customer %}
+  <div
+    class="t4s-product__price"
+    style="--price-size:{{ bk_stts.size_price_pr }}px;--price-del-size:{{ bk_stts.size_price_pr | times: 0.8 }}px;--price-weight:{{ bk_stts.fw_price_pr }};--primary-price-color:{{ bk_stts.primary_price_color }};--secondary-price-color:{{ bk_stts.secondary_price_color }};--price-sale-color:{{ bk_stts.price_sale }}"
+  >
+    {%- render 'product-price-single',
+      discount_black_friday: bk_stts.discount_black_friday,
+      variant: current_variant,
+      product: product,
+      PR_no_pick: PR_no_pick,
+      type_sale: bk_stts.type_sale,
+      price_varies_style: bk_stts.price
+    -%}
+  </div>
+{% else %}
+  <div>
+    <p style="font-weight: normal;display: block;white-space: normal;font-size: 13px;color: rgb(0, 0, 0);">
+      <strong><a class="wp-login-link" onclick="rememberPage(event)" style="color: #000000" href="/account/login">Login</a></strong> to see price
+    </p>
+  </div>
+{% endif %}
+{%- if bk_stts.tax_ship and cart.taxes_included or shop.shipping_policy.body != blank -%}
+  <div class="t4s-product__policies t4s-rte" data-product-policies>
+    {%- if cart.taxes_included -%}{{ 'products.product.include_taxes' | t }}{%- endif -%}
+    {%- if shop.shipping_policy.body != blank -%}{{ 'products.product.shipping_policy_html' | t: link: shop.shipping_policy.url }}{%- endif -%}
+  </div>
+{%- endif -%}

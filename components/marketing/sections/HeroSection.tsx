@@ -131,7 +131,7 @@ function HeroCodeEasterEgg({ cx, cy }: { cx: number; cy: number }) {
     >
       {/* Code columns — positioned in the lower portion, with a top-fade mask on the wrapper */}
       <div
-        className="absolute bottom-0 left-0 right-0 flex gap-24 px-8 overflow-hidden"
+        className="absolute bottom-0 left-0 right-0 flex gap-8 md:gap-24 px-4 md:px-8 overflow-hidden"
         style={{
           top: '300px',
           maskImage: topFade,
@@ -276,7 +276,7 @@ export default function HeroSection() {
         </div>
       </div>
 
-      <div className="relative max-w-6xl mx-auto px-8 md:px-10 z-10">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-8 md:px-10 z-10">
         <div className="max-w-4xl mx-auto text-center pt-28 md:pt-36">
           {/* Credibility Badge */}
           <motion.span
@@ -291,7 +291,7 @@ export default function HeroSection() {
 
           {/* Headline — single line, never wraps, scales down on small screens */}
           <motion.h1
-            className="relative whitespace-nowrap font-medium leading-[1.05] tracking-[-0.03em] text-[clamp(1.75rem,5.5vw,4.5rem)] h-[1.05em] overflow-hidden"
+            className="relative whitespace-normal sm:whitespace-nowrap font-medium leading-[1.05] tracking-[-0.03em] text-[clamp(1.75rem,5.5vw,4.5rem)] sm:h-[1.05em] overflow-hidden"
           >
             {['Ship', 'Shopify'].map((word, i) => (
               <span key={word} className="inline-block overflow-hidden">
@@ -310,6 +310,8 @@ export default function HeroSection() {
                 {'\u00A0'}
               </span>
             ))}
+            {/* Force accent word to line 2 on mobile */}
+            <br className="sm:hidden" />
             {/* Rotating accent word — width follows current word naturally */}
             <span
               className="inline-block overflow-hidden align-baseline relative"
@@ -318,7 +320,7 @@ export default function HeroSection() {
               <AnimatePresence mode="popLayout">
                 <motion.span
                   key={ROTATING_WORDS[wordIndex]}
-                  className="inline-block whitespace-nowrap"
+                  className="inline-block whitespace-normal sm:whitespace-nowrap"
                   initial={{ opacity: 0, y: '110%' }}
                   animate={ready ? show : hide}
                   exit={{ opacity: 0, y: '-110%' }}

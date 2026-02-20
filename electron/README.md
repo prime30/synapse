@@ -1,43 +1,80 @@
-# Synapse Desktop (Option A — thin wrapper)
+# Synapse Desktop
 
-This folder contains an Electron wrapper that opens a window to the Synapse web app. No local Next.js server; the app loads your deployed URL (or localhost for development).
+Electron wrapper for the Synapse web application.
 
-## Run locally
+## Architecture
 
-1. Install dependencies (once):
+```
+electron/
+  main.js           - Main process: window management, tray, auto-updates
+  preload.js        - Secure bridge between renderer and main process
+  package.json      - Electron dependencies and electron-builder config
+  entitlements.mac.plist - macOS code signing entitlements
 
-   ```bash
-   cd electron && npm install
-   ```
+build/
+  icon.svg          - Source SVG for app icon
+  icons/            - Generated PNG icons (all sizes)
 
-2. Start the desktop app:
+scripts/
+  generate-icons.ts - Generates platform icons from SVG
+```
 
-   ```bash
-   npm run start
-   ```
+## Development
 
-   By default the window loads `https://synapse.so`. To point at your local dev server instead:
+From the project root:
 
-   ```bash
-   # Windows (PowerShell)
-   $env:APP_URL="http://localhost:3000"; npm run start
+```bash
+# Start Next.js dev server + Electron window
+npm run dev:electron
+```
 
-   # macOS / Linux
-   APP_URL=http://localhost:3000 npm run start
-   ```
+This runs the web app at localhost:3000 and opens Electron pointed at it.
 
-   Ensure the Next.js app is running (`npm run dev` in the repo root) when using a local URL.
+## Building Installers
 
-## Build installers
+```bash
+# Generate icons first (required)
+npm run icons
 
-From the `electron` directory:
+# Build for current platform
+npm run build:desktop
 
-- **macOS:** `npm run build:mac`
-- **Windows:** `npm run build:win`
-- **Linux:** `npm run build:linux`
+# Build for specific platform
+npm run build:desktop:win
+npm run build:desktop:mac
+npm run build:desktop:linux
+```
 
-Output is in `electron/dist/`. For a custom app icon, add `icon.png` in this folder (e.g. 256×256 or 512×512) and include it in the `build.files` in `package.json` if needed.
+Output goes to `electron/dist/`.
 
-## Config
+## How It Works
 
-- **APP_URL** or **NEXT_PUBLIC_APP_URL** — URL to load in the window. Default: `https://synapse.so`.
+**Development:** Electron loads `http://localhost:3000` (Next.js dev server).
+
+**Production:** The Next.js standalone server is bundled as an extra resource.
+Electron's main process spawns it as a child process, waits for it to start,
+then loads `http://127.0.0.1:3000` in the BrowserWindow.
+
+## Auto-Updates
+
+Configured via `electron-updater` with GitHub Releases as the provider.
+Set the `publish` config in `package.json` to your actual GitHub repo.
+
+To publish an update:
+1. Bump version in `electron/package.json`
+2. Build: `npm run build:desktop`
+3. Upload artifacts to GitHub Release
+4. The app will auto-detect and download updates
+
+## Code Signing
+
+### Windows
+Set `CSC_LINK` and `CSC_KEY_PASSWORD` environment variables with your
+code signing certificate.
+
+### macOS
+Set `CSC_LINK`, `CSC_KEY_PASSWORD`, and configure notarization in the
+build config. Requires an Apple Developer account.
+
+### Linux
+AppImage and .deb packages don't require code signing.

@@ -8,6 +8,7 @@ describe('Database Types', () => {
       email: 'test@test.com',
       full_name: 'Test User',
       avatar_url: null,
+      is_admin: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

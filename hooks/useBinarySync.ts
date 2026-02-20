@@ -38,8 +38,9 @@ export function useBinarySync(projectId: string | null) {
         // ── Phase 1: Binary asset sync ──────────────────────────────
         const checkRes = await fetch(`/api/projects/${projectId}/sync-binary`);
         if (!checkRes.ok || cancelledRef.current) {
-          // No binary check available — skip to dev theme push
-          await pushDevTheme(projectId);
+          // Avoid amplifying transient API/server restarts with extra push attempts.
+          // We'll retry naturally on next mount or explicit user action.
+          setPercent(null);
           return;
         }
         const checkData = await checkRes.json();

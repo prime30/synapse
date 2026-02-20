@@ -435,6 +435,34 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// ── PM exploration tools (used during the pre-decision exploration phase) ──────
+// A lightweight subset of AGENT_TOOLS that the PM uses to explore the codebase
+// before producing its JSON decision. Read-only + diagnostics only.
+
+export const CHECK_LINT_TOOL: ToolDefinition = {
+  name: 'check_lint',
+  description: 'Run syntax and lint checks on a file. Returns errors and warnings with line numbers. Use to validate code before or after changes.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      fileName: { type: 'string', description: 'File name or path to check' },
+      content: { type: 'string', description: 'Optional: code content to check (if omitted, reads from project files)' },
+    },
+    required: ['fileName'],
+    additionalProperties: false,
+  },
+};
+
+/** Tools available to the PM during the exploration phase (read-only + diagnostics). */
+export const PM_EXPLORATION_TOOLS: ToolDefinition[] = [
+  AGENT_TOOLS.find(t => t.name === 'read_file')!,
+  AGENT_TOOLS.find(t => t.name === 'search_files')!,
+  AGENT_TOOLS.find(t => t.name === 'grep_content')!,
+  AGENT_TOOLS.find(t => t.name === 'list_files')!,
+  AGENT_TOOLS.find(t => t.name === 'get_dependency_graph')!,
+  CHECK_LINT_TOOL,
+];
+
 // ── Summary-phase tools (user-facing, used during the summary/response phase) ──
 
 export const PROPOSE_PLAN_TOOL: ToolDefinition = {
@@ -526,6 +554,22 @@ export const NAVIGATE_PREVIEW_TOOL: ToolDefinition = {
   },
 };
 
+export const SEARCH_REPLACE_TOOL: ToolDefinition = {
+  name: 'search_replace',
+  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      filePath: { type: 'string', description: 'Relative file path (e.g., sections/header.liquid)' },
+      old_text: { type: 'string', description: 'Exact text to find (include 2-3 surrounding context lines for uniqueness)' },
+      new_text: { type: 'string', description: 'Replacement text (must differ from old_text)' },
+      reasoning: { type: 'string', description: 'Brief explanation of the change' },
+    },
+    required: ['filePath', 'old_text', 'new_text'],
+    additionalProperties: false,
+  },
+};
+
 export const CREATE_FILE_TOOL: ToolDefinition = {
   name: 'create_file',
   description: 'Create a new file in the project. The user will see the file content and can confirm or cancel.',
@@ -545,32 +589,29 @@ export const CREATE_FILE_TOOL: ToolDefinition = {
 export const SUMMARY_TOOLS: ToolDefinition[] = [
   PROPOSE_PLAN_TOOL,
   PROPOSE_CODE_EDIT_TOOL,
+  SEARCH_REPLACE_TOOL,
   ASK_CLARIFICATION_TOOL,
   NAVIGATE_PREVIEW_TOOL,
   CREATE_FILE_TOOL,
 ];
 
 /**
- * Select which summary-phase tools to include based on intent mode and request content.
- * Only includes tools relevant to the current context to reduce token overhead.
+ * Select which summary-phase tools to include based on context.
+ * All tools are always available — intent mode is a preference, not a capability gate.
+ * The agent decides which tools to use based on the conversation.
  */
 export function selectToolsForRequest(
-  intentMode: string,
-  request: string,
+  _intentMode: string,
+  _request: string,
   hasPreview: boolean,
 ): ToolDefinition[] {
-  const tools: ToolDefinition[] = [ASK_CLARIFICATION_TOOL]; // Always available
-
-  if (intentMode === 'plan') {
-    tools.push(PROPOSE_PLAN_TOOL);
-  }
-
-  if (
-    intentMode === 'code' ||
-    /\b(edit|change|modify|update|fix|add|remove|create|build|implement|refactor)\b/i.test(request)
-  ) {
-    tools.push(PROPOSE_CODE_EDIT_TOOL, CREATE_FILE_TOOL);
-  }
+  const tools: ToolDefinition[] = [
+    ASK_CLARIFICATION_TOOL,
+    PROPOSE_PLAN_TOOL,
+    PROPOSE_CODE_EDIT_TOOL,
+    SEARCH_REPLACE_TOOL,
+    CREATE_FILE_TOOL,
+  ];
 
   if (hasPreview) {
     tools.push(NAVIGATE_PREVIEW_TOOL);

@@ -1,0 +1,188 @@
+{%- liquid
+  assign se_stts = section.settings
+  assign bg_color = se_stts.bg_color
+  assign text_color = se_stts.text_color
+  assign text_content = se_stts.text
+  assign link_url = se_stts.link_url
+  assign dismissible = se_stts.dismissible
+  assign font_size = se_stts.font_size
+  assign bar_padding = se_stts.bar_padding
+-%}
+
+{%- if text_content != blank -%}
+  {%- style -%}
+    #t4s-promo-ann-{{ section.id }} {
+      background-color: {{ bg_color }};
+      color: {{ text_color }};
+      font-size: {{ font_size }}px;
+      padding: {{ bar_padding }}px 20px;
+      text-align: center;
+      position: relative;
+      z-index: 10;
+    }
+    #t4s-promo-ann-{{ section.id }} a {
+      color: {{ text_color }};
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    #t4s-promo-ann-{{ section.id }} a:hover {
+      opacity: 0.8;
+    }
+    #t4s-promo-ann-{{ section.id }} .t4s-promo-ann__inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #t4s-promo-ann-{{ section.id }} .t4s-promo-ann__close {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: {{ text_color }};
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      transition: opacity 0.2s;
+    }
+    #t4s-promo-ann-{{ section.id }} .t4s-promo-ann__close:hover {
+      opacity: 0.6;
+    }
+    #t4s-promo-ann-{{ section.id }} .t4s-promo-ann__close svg {
+      width: 14px;
+      height: 14px;
+    }
+    #t4s-promo-ann-{{ section.id }}.t4s-hidden {
+      display: none;
+    }
+    @media (max-width: 749px) {
+      #t4s-promo-ann-{{ section.id }} {
+        font-size: {{ font_size | minus: 1 }}px;
+        padding: {{ bar_padding | minus: 2 }}px 14px;
+      }
+    }
+  {%- endstyle -%}
+
+  <div
+    id="t4s-promo-ann-{{ section.id }}"
+    role="region"
+    aria-label="{{ 'sections.announcement.label' | t | default: 'Announcement' }}"
+  >
+    <div class="t4s-container">
+      <div class="t4s-promo-ann__inner">
+        {%- if link_url != blank -%}
+          <a href="{{ link_url }}">{{ text_content }}</a>
+        {%- else -%}
+          <span>{{ text_content }}</span>
+        {%- endif -%}
+
+        {%- if dismissible -%}
+          <button
+            class="t4s-promo-ann__close"
+            aria-label="{{ 'sections.announcement.close' | t | default: 'Dismiss announcement' }}"
+            data-dismiss-promo-ann="{{ section.id }}"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M2 2l12 12M14 2L2 14"></path>
+            </svg>
+          </button>
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+
+  {%- if dismissible -%}
+    <script>
+      (function() {
+        var id = {{ section.id | json }};
+        var key = 't4s_promo_ann_dismissed_' + id;
+        var el = document.getElementById('t4s-promo-ann-' + id);
+        if (!el) return;
+
+        if (localStorage.getItem(key) === 'true') {
+          el.classList.add('t4s-hidden');
+          el.setAttribute('aria-hidden', 'true');
+          return;
+        }
+
+        var btn = el.querySelector('[data-dismiss-promo-ann]');
+        if (btn) {
+          btn.addEventListener('click', function() {
+            el.classList.add('t4s-hidden');
+            el.setAttribute('aria-hidden', 'true');
+            localStorage.setItem(key, 'true');
+          });
+        }
+      })();
+    </script>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Promo announcement bar",
+  "tag": "section",
+  "class": "t4s-section t4s-section-promo-announcement-bar",
+  "settings": [
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Background color",
+      "default": "#1a1a1a"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "text",
+      "id": "text",
+      "label": "Announcement text",
+      "default": "Limited time offer — shop now and save!"
+    },
+    {
+      "type": "url",
+      "id": "link_url",
+      "label": "Link URL",
+      "info": "Optional. Wraps the announcement text in a clickable link."
+    },
+    {
+      "type": "range",
+      "id": "font_size",
+      "label": "Font size",
+      "default": 14,
+      "min": 10,
+      "max": 22,
+      "step": 1,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "bar_padding",
+      "label": "Vertical padding",
+      "default": 10,
+      "min": 4,
+      "max": 24,
+      "step": 2,
+      "unit": "px"
+    },
+    {
+      "type": "checkbox",
+      "id": "dismissible",
+      "label": "Allow visitors to dismiss",
+      "info": "Adds a close button. Dismissed state is saved in the browser.",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Promo announcement bar",
+      "category": "group8"
+    }
+  ]
+}
+{% endschema %}

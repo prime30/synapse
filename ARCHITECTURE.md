@@ -18,13 +18,13 @@ flowchart TD
     ModeRouter -->|ask| DirectLLM[Direct LLM Stream]
     ModeRouter -->|"code / plan / debug"| Coordinator[AgentCoordinator]
 
-    Coordinator --> Classification[Tier Classification]
-    Classification -->|"TRIVIAL / SIMPLE"| Solo[executeSolo]
-    Classification -->|"COMPLEX / ARCHITECTURAL"| Orchestrated[execute]
+    Coordinator --> SubagentCheck{Subagent Count?}
+    SubagentCheck -->|1x| Solo[executeSolo]
+    SubagentCheck -->|2x-4x| Multi[execute]
 
     Solo --> PM_Solo[PM Direct Generation]
-    Orchestrated --> PM_Analysis[PM Analysis + Delegation]
-    PM_Analysis --> Specialists[Specialist Agents in Waves]
+    Multi --> PM_Analysis[PM Analysis + Delegation]
+    PM_Analysis --> Specialists[Subagents: General or Domain per Specialist Mode]
     Specialists --> SelfVerify[Self-Verification Loop]
     SelfVerify --> Diagnostics[Post-Edit Diagnostics]
     Diagnostics --> ReviewAgent[Review Agent]
@@ -63,7 +63,7 @@ An extended `AIToolProviderInterface` adds `completeWithTools()` and `streamWith
 
 | Provider | SDK | Models | Default |
 |----------|-----|--------|---------|
-| **Anthropic** | `@anthropic-ai/sdk` | `claude-opus-4-6`, `claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001` | Sonnet 4.5 |
+| **Anthropic** | `@anthropic-ai/sdk` | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` | Sonnet 4.6 |
 | **OpenAI** | `openai` | `gpt-4o`, `gpt-4o-mini` | gpt-4o-mini |
 | **Google** | `@google/generative-ai` | `gemini-2.0-flash`, `gemini-2.0-flash-lite` | gemini-2.0-flash |
 
@@ -78,7 +78,7 @@ Implementation files:
 
 ```typescript
 const provider = getAIProvider('anthropic');
-const result = await provider.stream(messages, { model: 'claude-sonnet-4-5-20250929' });
+const result = await provider.stream(messages, { model: 'claude-sonnet-4-6' });
 ```
 
 ---
@@ -177,11 +177,11 @@ The theme-aware topic map translates natural language ("hero", "cart", "header")
 
 ```mermaid
 flowchart LR
-    Request[User Request] --> Classify{Classify Tier}
-    Classify -->|"TRIVIAL / SIMPLE"| SoloPath[Solo Path]
-    Classify -->|"COMPLEX / ARCHITECTURAL"| OrchPath[Orchestrated Path]
+    Request[User Request] --> SubagentCount{Subagent Count?}
+    SubagentCount -->|1x| SoloPath[Single Agent Path]
+    SubagentCount -->|2x-4x| MultiPath[Multi-Subagent Path]
 
-    subgraph solo [Solo Mode]
+    subgraph solo [1x Single Agent]
         SoloPath --> PMDirect[PM Direct Generation]
         PMDirect --> Escalate{Success?}
         Escalate -->|No| TierUp[Escalate Tier + Retry]
@@ -189,11 +189,11 @@ flowchart LR
         TierUp --> PMDirect
     end
 
-    subgraph orch [Orchestrated Mode]
-        OrchPath --> PMAnalysis[PM Analysis]
+    subgraph multi [2x-4x Multi-Subagent]
+        MultiPath --> PMAnalysis[PM Analysis]
         PMAnalysis --> ScopeGate{Needs Clarification?}
         ScopeGate -->|Yes| Clarify[Return Clarification]
-        ScopeGate -->|No| WaveExec[Specialist Waves]
+        ScopeGate -->|No| WaveExec[Subagent Waves]
         WaveExec --> Verify[Self-Verification]
         Verify --> Diag[Post-Edit Diagnostics]
         Diag --> Review[Review Agent]
@@ -204,30 +204,34 @@ flowchart LR
     end
 ```
 
-### Orchestrated Mode (`execute()`)
+Subagent count (1x–4x) is the primary control. Specialist mode is an opt-in toggle: when ON, domain agents (Liquid/CSS/JS/JSON) are used instead of general-purpose subagents.
 
-1. **Tier classification**: Auto-classifies request complexity (TRIVIAL/SIMPLE/COMPLEX/ARCHITECTURAL)
-2. **Parallel context building**: Dependency, design, DOM, and file group context loaded via `Promise.all`
-3. **PM analysis**: Project Manager analyzes request, creates delegation plan
-4. **Scope assessment gate**: Returns clarification if request is too broad (>5 files, ambiguous)
-5. **Specialist execution**: Runs specialists in dependency-ordered waves
+### Multi-Subagent Mode (`execute()`)
+
+1. **Subagent count**: User sets 2x–4x; determines parallel agent capacity
+2. **Specialist mode**: When ON, uses domain agents (Liquid, CSS, JS, JSON); when OFF, uses general-purpose subagents
+3. **Parallel context building**: Dependency, design, DOM, and file group context loaded via `Promise.all`
+4. **PM analysis**: Project Manager analyzes request, creates delegation plan
+5. **Scope assessment gate**: Returns clarification if request is too broad (>5 files, ambiguous)
+6. **Subagent execution**: Runs subagents in dependency-ordered waves
    - Builds file-conflict graph to prevent concurrent edits to the same file
    - Uses graph coloring for wave assignment
    - Concurrency limit: 4 parallel agents
-6. **Inter-agent refinement**: Specialists see each other's proposals
-7. **File context rule**: Rejects changes to files not loaded in context
-8. **Self-verification loop**: Validates syntax, types, schema, and references
-9. **Post-edit diagnostics**: Runs `run_diagnostics` on changed files
-10. **Review agent**: Mandatory review of all changes
-11. **Review-triggered refinement**: Fixes critical issues found by review
-12. **Preview verification** (optional): DOM snapshot comparison for COMPLEX/ARCHITECTURAL tiers
+7. **Inter-agent refinement**: Subagents see each other's proposals
+8. **File context rule**: Rejects changes to files not loaded in context
+9. **Self-verification loop**: Validates syntax, types, schema, and references
+10. **Post-edit diagnostics**: Runs `run_diagnostics` on changed files
+11. **Review agent**: Mandatory review of all changes
+12. **Review-triggered refinement**: Fixes critical issues found by review
+13. **Preview verification** (optional): DOM snapshot comparison for complex tiers
 
-### Solo Mode (`executeSolo()`)
+### Single Agent Mode (`executeSolo()`)
 
-1. PM generates changes directly via `executeDirectPrompt()`
-2. On failure or empty results, escalates tier and retries
-3. No specialists, no review agent
-4. Faster for simple single-file edits
+1. **1x subagent count**: Single agent handles everything
+2. PM generates changes directly via `executeDirectPrompt()`
+3. On failure or empty results, escalates tier and retries
+4. No subagents, no review agent
+5. Faster for simple single-file edits
 
 ---
 
@@ -240,7 +244,7 @@ All agents extend the abstract `Agent` class in [`lib/agents/base.ts`](lib/agent
 ```
 Agent (abstract)
   ├── execute()              Main entry with retry/fallback
-  ├── executeDirectPrompt()  Direct prompt execution (solo mode)
+  ├── executeDirectPrompt()  Direct prompt execution (single-agent mode)
   ├── executeWithTools()     Tool-calling loop (up to 10 iterations)
   ├── executeSingle()        Single AI call with budget enforcement
   ├── enforceRequestBudget() Truncates context to fit token limits
@@ -264,7 +268,7 @@ All specialists prefer patch output (search/replace pairs) over full-file replac
 
 | Agent | Role | Location |
 |-------|------|----------|
-| `ProjectManagerAgent` | Analyzes requests, delegates to specialists, generates code in solo mode | [`lib/agents/project-manager.ts`](lib/agents/project-manager.ts) |
+| `ProjectManagerAgent` | Analyzes requests, delegates to specialists, generates code in single-agent mode (1x) | [`lib/agents/project-manager.ts`](lib/agents/project-manager.ts) |
 | `ReviewAgent` | Quality assurance -- programmatic checks + AI review (does not modify code) | [`lib/agents/review.ts`](lib/agents/review.ts) |
 
 ### Worker Pool
@@ -341,8 +345,8 @@ Mutation tools (`write_file`, `delete_file`, `rename_file`, `inject_css`, `injec
 
 | Prompt | Used By | Purpose |
 |--------|---------|---------|
-| `PROJECT_MANAGER_PROMPT` | PM in orchestrated mode | Full analysis, delegation, and pattern detection |
-| `SOLO_PM_PROMPT` | PM in solo mode | Single-pass code generation with self-review |
+| `PROJECT_MANAGER_PROMPT` | PM in multi-subagent mode (2x–4x) | Full analysis, delegation, and pattern detection |
+| `SOLO_PM_PROMPT` | PM in single-agent mode (1x) | Single-pass code generation with self-review |
 | `PM_PROMPT_LIGHTWEIGHT` | PM for TRIVIAL tier | Minimal context, fast classification |
 | `LIQUID_AGENT_PROMPT` | LiquidAgent | Liquid file modifications with motion-first patterns |
 | `JAVASCRIPT_AGENT_PROMPT` | JavaScriptAgent | JS/TS modifications with animation recipes |
@@ -464,7 +468,7 @@ These are enforced by the coordinator and embedded in agent prompts:
 
 2. **Scope Assessment Gate** -- PM returns `needsClarification` for broad or ambiguous requests touching many files. Up to 2 clarification rounds before forcing execution.
 
-3. **Verification First-Class** -- Review agent is mandatory in orchestrated mode. Self-verification loop validates syntax, types, and references before review.
+3. **Verification First-Class** -- Review agent is mandatory in multi-subagent mode (2x–4x). Self-verification loop validates syntax, types, and references before review.
 
 4. **Testing Always First** -- "Verify this works" suggestion chip auto-injected after code changes.
 
@@ -503,9 +507,9 @@ API Route:
       |
       v
     AgentCoordinator
-      - Classifies tier
-      - Solo: PM generates directly
-      - Orchestrated: PM delegates -> specialists -> verify -> review
+      - Subagent count (1x vs 2x–4x)
+      - 1x: PM generates directly
+      - 2x–4x: PM delegates -> subagents (general or domain per specialist mode) -> verify -> review
       |
       v
     Summary model (Haiku) with tool use

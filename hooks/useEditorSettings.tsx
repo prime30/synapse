@@ -23,6 +23,8 @@ export interface EditorSettings {
   minimap: boolean;
   lineNumbers: boolean;
   bracketMatching: boolean;
+  // Inline completions (ghost text)
+  inlineCompletions: boolean;
   // Auto-save
   autoSave: boolean;
   autoSaveDelay: number; // ms
@@ -42,6 +44,7 @@ const PRESETS: Record<Exclude<Preset, 'custom'>, Omit<EditorSettings, 'preset'>>
     minimap: false,
     lineNumbers: false,
     bracketMatching: true,
+    inlineCompletions: true,
     autoSave: true,
     autoSaveDelay: 1000,
   },
@@ -52,6 +55,7 @@ const PRESETS: Record<Exclude<Preset, 'custom'>, Omit<EditorSettings, 'preset'>>
     minimap: false,
     lineNumbers: true,
     bracketMatching: true,
+    inlineCompletions: true,
     autoSave: true,
     autoSaveDelay: 2000,
   },
@@ -62,6 +66,7 @@ const PRESETS: Record<Exclude<Preset, 'custom'>, Omit<EditorSettings, 'preset'>>
     minimap: true,
     lineNumbers: true,
     bracketMatching: true,
+    inlineCompletions: true,
     autoSave: true,
     autoSaveDelay: 2000,
   },

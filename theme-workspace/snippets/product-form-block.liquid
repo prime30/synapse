@@ -1,0 +1,126 @@
+{%- comment -%}
+  Product Form Block
+  Orchestrates the product form: grouped product support, variant
+  selectors, custom properties, and add-to-cart button.
+  Contains the {% form 'product' %} tag and delegates to:
+    - product-variants-block.liquid
+    - product-add-to-cart-block.liquid
+    - frm_properties (for customizable products)
+    - grouped-form (for grouped products)
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings
+  - block: {Object} Block Liquid object (for shopify_attributes)
+  - pr_sid: {String} Product + section ID
+  - variant_images: {Array} Images attached to variants
+  - seBlocks: {Array} All section blocks
+  - isProductDefault: {Boolean} Has only default variant
+  - isProductAvailable: {Boolean} Product is available
+  - current_variant: {Object} Currently selected variant
+  - remove_soldout: {Boolean} Remove sold-out variants
+  - PR_no_pick: {Boolean} No variant picked yet
+  - isExternal: {Boolean} Product has external link
+  - external_title: {String} External link title
+  - external_link: {String} External link URL
+  - isPreoder: {Boolean} Product is pre-order
+  - cus_qty: {Number} Custom minimum quantity
+  - name_sizeg: {String} Size guide option name
+  - html_sizeg: {String} Size guide HTML
+  - pos_sizeg: {String} Size guide position
+  - se_stts: {Object} Section settings
+  - shsd_product_variants: {Array} Variants collection
+  - shsd_product_options_with_values: {Array} Options with values
+  - html_price: {String} Pre-rendered price varies HTML
+{%- endcomment -%}
+
+{%- liquid
+  assign product_list = bk_stts.product_list
+  assign advance_pr_type = bk_stts.advance_pr_list
+  assign advance_label = bk_stts.advance_label
+  assign is_fit_ratio_img = false
+  if variant_images.size > 0 and bk_stts.enable_fit_ratio_img and bk_stts.color_mode contains 'variant_image'
+    assign is_fit_ratio_img = true
+    assign first_ratio_img = variant_images[0].aspect_ratio
+  endif
+  assign arr_properties = seBlocks | where: 'type', 'properties'
+-%}
+
+{%- if product_list != blank -%}
+  {%- render 'grouped-form', product: product, bk_stts: bk_stts, pr_sid: pr_sid, product_list: product_list, shopify_attributes: block.shopify_attributes, cus_qty: cus_qty -%}
+{%- else -%}
+  {%- assign PR_buy_pr = false -%}
+  {%- if bk_stts.show_dynamic_checkout and isExternal == false and isProductAvailable -%}
+    {%- assign PR_buy_pr = true -%}
+  {%- endif -%}
+
+  <div
+    class="t4s-product-form__variants is-no-pick__{{ PR_no_pick }}{% if PR_buy_pr %} is-payment-btn-true t4s-payment-button t4s-btn-color-{{ bk_stts.button_color_payment }}{% endif %} is-remove-soldout-{{ remove_soldout }} is-btn-full-width__{{ bk_stts.btn_atc_full }} is-btn-atc-txt-{{ bk_stts.btn_txt }} is-btn-ck-txt-{{ bk_stts.btn_txt2 }} is--fist-ratio-{{ is_fit_ratio_img }}"
+    style="{% if is_fit_ratio_img %} --fit-ratio-img: {{ first_ratio_img }}; {% endif %} --wishlist-color: {{bk_stts.wishlist_color}};--wishlist-hover-color: {{bk_stts.wishlist_color_hover}};--wishlist-active-color: {{bk_stts.wishlist_color_active}};--compare-color: {{bk_stts.compare_color}};--compare-hover-color: {{bk_stts.compare_color_hover}};--compare-active-color: {{bk_stts.compare_color_active}};"
+    {{ block.shopify_attributes }}
+  >
+    <div data-callBackVariant id="t4s-callBackVariant-product-form-{{ pr_sid }}">
+      {%- form 'product',
+        product,
+        id: 'product-form-' | append: pr_sid,
+        data-productid: product.id,
+        class: 't4s-form__product has--form__swatch',
+        novalidate: 'novalidate',
+        data-type: 'add-to-cart-form',
+        data-disable-swatch: isProductDefault
+      -%}
+
+        {%- comment -%} --- VARIANTS BLOCK --- {%- endcomment -%}
+        {%- render 'product-variants-block',
+          product: product,
+          bk_stts: bk_stts,
+          pr_sid: pr_sid,
+          isProductDefault: isProductDefault,
+          isProductAvailable: isProductAvailable,
+          current_variant: current_variant,
+          remove_soldout: remove_soldout,
+          PR_no_pick: PR_no_pick,
+          is_fit_ratio_img: is_fit_ratio_img,
+          first_ratio_img: first_ratio_img,
+          name_sizeg: name_sizeg,
+          html_sizeg: html_sizeg,
+          pos_sizeg: pos_sizeg,
+          advance_pr_type: advance_pr_type,
+          advance_label: advance_label,
+          se_stts: se_stts,
+          shsd_product_variants: shsd_product_variants,
+          shsd_product_options_with_values: shsd_product_options_with_values
+        -%}
+
+        {%- liquid
+          if arr_properties.size > 0 and isProductAvailable
+            render 'frm_properties', arr_properties: arr_properties, product: product
+          endif
+        -%}
+
+        {{- html_price -}}
+
+        {%- comment -%} --- ADD TO CART BLOCK --- {%- endcomment -%}
+        {%- capture payment_btn -%}{%- if PR_buy_pr -%}{{ form | payment_button }}{%- endif -%}{%- endcapture -%}
+        {%- render 'product-add-to-cart-block',
+          product: product,
+          bk_stts: bk_stts,
+          current_variant: current_variant,
+          isProductAvailable: isProductAvailable,
+          isExternal: isExternal,
+          external_title: external_title,
+          external_link: external_link,
+          isPreoder: isPreoder,
+          cus_qty: cus_qty,
+          PR_buy_pr: PR_buy_pr,
+          type: 'main',
+          payment_button_html: payment_btn
+        -%}
+
+      {%- endform -%}
+    </div>
+  </div>
+  {%- if PR_buy_pr and current_variant.available != true -%}
+    <style>#t4s-callBackVariant-product-form-{{ pr_sid }} .shopify-payment-button { display: none;}</style>
+  {%- endif -%}
+{%- endif -%}

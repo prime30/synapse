@@ -136,7 +136,7 @@ export default function SignupPage() {
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-sky-500/50 transition-colors"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-accent/50 transition-colors"
                       placeholder="Jane Smith"
                       autoFocus
                     />
@@ -147,7 +147,7 @@ export default function SignupPage() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-sky-500/50 transition-colors"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-accent/50 transition-colors"
                       placeholder="you@company.com"
                       required
                     />
@@ -158,7 +158,7 @@ export default function SignupPage() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-sky-500/50 transition-colors"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-accent/50 transition-colors"
                       placeholder="Min. 8 characters"
                       required
                       minLength={8}
@@ -167,7 +167,7 @@ export default function SignupPage() {
                   <button
                     type="submit"
                     disabled={state === 'submitting' || !email.trim() || password.length < 8}
-                    className="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full py-3 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {state === 'submitting' ? 'Creating account...' : 'Create Account'}
                   </button>
@@ -175,7 +175,7 @@ export default function SignupPage() {
 
                 <p className="text-white/50 text-xs text-center mt-6">
                   Already have an account?{' '}
-                  <Link href="/auth/signin" className="text-sky-400 hover:underline">
+                  <Link href="/auth/signin" className="text-accent hover:underline">
                     Sign in
                   </Link>
                 </p>

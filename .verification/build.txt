@@ -1,0 +1,786 @@
+﻿
+> synapse1@0.1.0 build
+> next build
+
+node.exe : ΓÜá Warning: Next.js inferred your workspace root, but it may not be correct.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\alexm\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ΓÜá Warning: Ne...not be correct.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ We detected multiple lockfiles and selected the directory of C:\Users\alexm\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if 
+it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\alexm\synapse1\package-lock.json
+
+Γû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: 
+https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Turbopack build encountered 15 warnings:
+./synapse1/instrumentation.ts:12:52
+Ecmascript file had an error
+[0m [90m 10 |[39m [90m */[39m
+ [90m 11 |[39m [36mexport[39m [36masync[39m [36mfunction[39m register() {
+[31m[1m>[22m[39m[90m 12 |[39m   [36mconst[39m isNode [33m=[39m [36mtypeof[39m process [33m!==[39m 
+[32m'undefined'[39m [33m&&[39m process[33m.[39mversions[33m?[39m[33m.[39mnode[33m;[39m
+ [90m    |[39m                                                    [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m
+^[22m[39m[31m[1m^[22m[39m
+ [90m 13 |[39m   [36mif[39m ([33m![39misNode) [36mreturn[39m[33m;[39m
+ [90m 14 |[39m
+ [90m 15 |[39m   [90m// Start file watcher for local sync (Node.js runtime only)[39m[0m
+
+A Node.js API is used (process.versions at line: 12) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+
+./synapse1/lib/cache/local-file-cache.ts:19:30
+Ecmascript file had an error
+[0m [90m 17 |[39m [36mimport[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+ [90m 18 |[39m
+[31m[1m>[22m[39m[90m 19 |[39m [36mconst[39m [33mCACHE_ROOT[39m [33m=[39m 
+path[33m.[39mjoin(process[33m.[39mcwd()[33m,[39m [32m'.cache'[39m[33m,[39m [32m'themes'[39m)[33m;[39m
+ [90m    |[39m                              [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[2
+2m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[
+22m[39m[31m[1m^[22m[39m
+ [90m 20 |[39m
+ [90m 21 |[39m [90m// ΓöÇΓöÇ Helpers 
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m
+ [90m 22 |[39m[0m
+
+A Node.js API is used (process.cwd at line: 19) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/app/api/agents/stream/v2/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/cache/local-file-cache.ts:16:1
+Ecmascript file had an error
+[0m [90m 14 |[39m [90m */[39m
+ [90m 15 |[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m fs [36mfrom[39m [32m'fs'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+ [90m 18 |[39m
+ [90m 19 |[39m [36mconst[39m [33mCACHE_ROOT[39m [33m=[39m 
+path[33m.[39mjoin(process[33m.[39mcwd()[33m,[39m [32m'.cache'[39m[33m,[39m [32m'themes'[39m)[33m;[39m[0m
+
+A Node.js module is loaded ('fs' at line 16) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/app/api/agents/stream/v2/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/cache/local-file-cache.ts:17:1
+Ecmascript file had an error
+[0m [90m 15 |[39m
+ [90m 16 |[39m [36mimport[39m fs [36mfrom[39m [32m'fs'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 17 |[39m [36mimport[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m
+ [90m 18 |[39m
+ [90m 19 |[39m [36mconst[39m [33mCACHE_ROOT[39m [33m=[39m 
+path[33m.[39mjoin(process[33m.[39mcwd()[33m,[39m [32m'.cache'[39m[33m,[39m [32m'themes'[39m)[33m;[39m
+ [90m 20 |[39m[0m
+
+A Node.js module is loaded ('path' at line 17) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/app/api/agents/stream/v2/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/shopify/sync-service.ts:6:1
+Ecmascript file had an error
+[0m [90m 4 |[39m [36mimport[39m type { [33mShopifyAsset[39m[33m,[39m [33mShopifyAdminAPI[39m } 
+[36mfrom[39m [32m'./admin-api'[39m[33m;[39m
+ [90m 5 |[39m [36mimport[39m type { [33mThemeFile[39m[33m,[39m [33mThemeFileSyncStatus[39m } [36mfrom[39m 
+[32m'@/lib/types/shopify'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 6 |[39m [36mimport[39m { createHash } [36mfrom[39m [32m'crypto'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[3
+1m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m
+ [90m 7 |[39m [36mimport[39m { [33mAPIError[39m } [36mfrom[39m [32m'@/lib/errors/handler'[39m[33m;[39m
+ [90m 8 |[39m [36mimport[39m { createFile[33m,[39m updateFile } [36mfrom[39m 
+[32m'@/lib/services/files'[39m[33m;[39m
+ [90m 9 |[39m [36mimport[39m { detectFileTypeFromName } [36mfrom[39m [32m'@/lib/types/files'[39m[33m;[39m[0m
+
+A Node.js module is loaded ('crypto' at line 6) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/shopify/sync-service.ts
+    ./synapse1/app/api/projects/[projectId]/shopify/sync/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/shopify/sync-service.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/shopify/sync-service.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/shopify/token-manager.ts:1:1
+Ecmascript file had an error
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m crypto [36mfrom[39m [32m'crypto'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[3
+1m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 2 |[39m
+ [90m 3 |[39m [36mimport[39m { createClient [36mas[39m createServiceClient } [36mfrom[39m 
+[32m'@supabase/supabase-js'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m { [33mAPIError[39m } [36mfrom[39m [32m'@/lib/errors/handler'[39m[33m;[39m[0m
+
+A Node.js module is loaded ('crypto' at line 1) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/shopify/token-manager.ts
+    ./synapse1/app/api/projects/[projectId]/shopify/sync/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/shopify/token-manager.ts
+    ./synapse1/app/api/projects/[projectId]/preview/route.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/shopify/token-manager.ts
+    ./synapse1/app/api/projects/[projectId]/preview/route.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/disk-sync.ts:125:10
+Ecmascript file had an error
+[0m [90m 123 |[39m [36mfunction[39m getWorkspaceRoot()[33m:[39m string {
+ [90m 124 |[39m   [90m// In dev, process.cwd() is the Next.js project root.[39m
+[31m[1m>[22m[39m[90m 125 |[39m   [36mreturn[39m process[33m.[39mcwd()[33m;[39m
+ [90m     |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[
+22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^
+[22m[39m
+ [90m 126 |[39m }
+ [90m 127 |[39m
+ [90m 128 |[39m [90m/** Returns the absolute path to .synapse-themes/ */[39m[0m
+
+A Node.js API is used (process.cwd at line: 125) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/app/api/projects/[projectId]/files/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/disk-sync.ts:18:1
+Ecmascript file had an error
+[0m [90m 16 |[39m [90m */[39m
+ [90m 17 |[39m
+[31m[1m>[22m[39m[90m 18 |[39m [36mimport[39m [33m*[39m [36mas[39m fs [36mfrom[39m 
+[32m'fs/promises'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 19 |[39m [36mimport[39m [33m*[39m [36mas[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+ [90m 20 |[39m [36mimport[39m [33m*[39m [36mas[39m os [36mfrom[39m [32m'os'[39m[33m;[39m
+ [90m 21 |[39m [36mimport[39m { createClient [36mas[39m createServiceClient } [36mfrom[39m 
+[32m'@supabase/supabase-js'[39m[33m;[39m[0m
+
+A Node.js module is loaded ('fs/promises' at line 18) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/app/api/projects/[projectId]/files/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/disk-sync.ts:20:1
+Ecmascript file had an error
+[0m [90m 18 |[39m [36mimport[39m [33m*[39m [36mas[39m fs [36mfrom[39m [32m'fs/promises'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33m*[39m [36mas[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m [33m*[39m [36mas[39m os [36mfrom[39m 
+[32m'os'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 21 |[39m [36mimport[39m { createClient [36mas[39m createServiceClient } [36mfrom[39m 
+[32m'@supabase/supabase-js'[39m[33m;[39m
+ [90m 22 |[39m
+ [90m 23 |[39m [90m// ΓöÇΓöÇ Constants ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö
+ÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m[0m
+
+A Node.js module is loaded ('os' at line 20) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/app/api/projects/[projectId]/files/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/disk-sync.ts:19:1
+Ecmascript file had an error
+[0m [90m 17 |[39m
+ [90m 18 |[39m [36mimport[39m [33m*[39m [36mas[39m fs [36mfrom[39m [32m'fs/promises'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 19 |[39m [36mimport[39m [33m*[39m [36mas[39m path [36mfrom[39m 
+[32m'path'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m
+ [90m 20 |[39m [36mimport[39m [33m*[39m [36mas[39m os [36mfrom[39m [32m'os'[39m[33m;[39m
+ [90m 21 |[39m [36mimport[39m { createClient [36mas[39m createServiceClient } [36mfrom[39m 
+[32m'@supabase/supabase-js'[39m[33m;[39m
+ [90m 22 |[39m[0m
+
+A Node.js module is loaded ('path' at line 19) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/app/api/projects/[projectId]/files/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/disk-sync.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/file-watcher.ts:264:3
+Ecmascript file had an error
+[0m [90m 262 |[39m
+ [90m 263 |[39m   [90m// Ensure the themes root directory exists[39m
+[31m[1m>[22m[39m[90m 264 |[39m   [36mimport[39m([32m'fs'[39m)[33m.[39mthen((fsSync) [33m=>[39m {
+ [90m     |[39m   [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m
+ [90m 265 |[39m     [36mif[39m ([33m![39mfsSync[33m.[39mexistsSync(themesRoot)) {
+ [90m 266 |[39m       fsSync[33m.[39mmkdirSync(themesRoot[33m,[39m { recursive[33m:[39m [36mtrue[39m 
+})[33m;[39m
+ [90m 267 |[39m     }[0m
+
+A Node.js module is loaded ('fs' at line 264) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/app/api/projects/[projectId]/sync-to-disk/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/file-watcher.ts:12:1
+Ecmascript file had an error
+[0m [90m 10 |[39m [90m */[39m
+ [90m 11 |[39m
+[31m[1m>[22m[39m[90m 12 |[39m [36mimport[39m [33m*[39m [36mas[39m fs [36mfrom[39m 
+[32m'fs/promises'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 13 |[39m [36mimport[39m [33m*[39m [36mas[39m path [36mfrom[39m [32m'path'[39m[33m;[39m
+ [90m 14 |[39m [36mimport[39m type { [33mFSWatcher[39m } [36mfrom[39m [32m'chokidar'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m { isBeingWritten[33m,[39m getThemesRoot[33m,[39m isLocalSyncEnabled } 
+[36mfrom[39m [32m'./disk-sync'[39m[33m;[39m[0m
+
+A Node.js module is loaded ('fs/promises' at line 12) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/app/api/projects/[projectId]/sync-to-disk/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/sync/file-watcher.ts:13:1
+Ecmascript file had an error
+[0m [90m 11 |[39m
+ [90m 12 |[39m [36mimport[39m [33m*[39m [36mas[39m fs [36mfrom[39m [32m'fs/promises'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 13 |[39m [36mimport[39m [33m*[39m [36mas[39m path [36mfrom[39m 
+[32m'path'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m
+ [90m 14 |[39m [36mimport[39m type { [33mFSWatcher[39m } [36mfrom[39m [32m'chokidar'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m { isBeingWritten[33m,[39m getThemesRoot[33m,[39m isLocalSyncEnabled } 
+[36mfrom[39m [32m'./disk-sync'[39m[33m;[39m
+ [90m 16 |[39m[0m
+
+A Node.js module is loaded ('path' at line 13) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/app/api/projects/[projectId]/sync-to-disk/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/tasks/built-in/warm-embeddings.ts:12:1
+Ecmascript file had an error
+[0m [90m 10 |[39m [36mimport[39m { getStaleFiles[33m,[39m upsertEmbedding[33m,[39m type 
+[33mEmbeddingChunk[39m } [36mfrom[39m [32m'@/lib/ai/vector-store'[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { generateEmbeddingsBatch } [36mfrom[39m [32m'@/lib/ai/embeddings'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 12 |[39m [36mimport[39m { createHash } [36mfrom[39m [32m'crypto'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[
+31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39
+m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[3
+9m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[
+39m[31m[1m^[22m[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mconst[39m [33mBATCH_SIZE[39m [33m=[39m [35m20[39m[33m;[39m
+ [90m 15 |[39m [36mconst[39m [33mMAX_CHUNK_CHARS[39m [33m=[39m [35m32[39m_000[33m;[39m [90m// ~8000 
+tokens[39m[0m
+
+A Node.js module is loaded ('crypto' at line 12) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import traces:
+  App Route:
+    ./synapse1/lib/tasks/built-in/warm-embeddings.ts
+    ./synapse1/lib/tasks/built-in/index.ts
+    ./synapse1/app/api/internal/cron/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/tasks/built-in/warm-embeddings.ts
+    ./synapse1/lib/shopify/sync-service.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/tasks/built-in/warm-embeddings.ts
+    ./synapse1/lib/shopify/sync-service.ts
+    ./synapse1/lib/shopify/push-queue.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+./synapse1/lib/cache/local-file-cache.ts:34:10
+The file pattern ('/ROOT/synapse1/.cache/themes/' <dynamic> '/' <dynamic> | '/ROOT/synapse1/.cache/themes' <dynamic> 
+'/' <dynamic> | '/ROOT/synapse1/.cache/themes/' <dynamic> | '/ROOT/synapse1/.cache/themes' <dynamic>) matches 10048 
+files in [project]/synapse1
+[0m [90m 32 |[39m [36mfunction[39m localFilePath(projectId[33m:[39m string[33m,[39m relativePath[33m:[39m 
+string)[33m:[39m string {
+ [90m 33 |[39m   [36mconst[39m normalized [33m=[39m relativePath[33m.[39mreplace([35m/\\/g[39m[33m,[39m 
+[32m'/'[39m)[33m.[39mreplace([35m/\.\./g[39m[33m,[39m [32m''[39m)[33m;[39m
+[31m[1m>[22m[39m[90m 34 |[39m   [36mreturn[39m path[33m.[39mjoin(projectDir(projectId)[33m,[39m 
+normalized)[33m;[39m
+ [90m    |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[2
+2m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[
+22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^
+[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m
+^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1
+m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[
+1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 35 |[39m }
+ [90m 36 |[39m
+ [90m 37 |[39m [90m// ΓöÇΓöÇ Types 
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m[0m
+
+Overly broad patterns can lead to build performance issues and over bundling.
+
+Import traces:
+  App Route:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/app/api/agents/stream/v2/route.ts
+
+  Edge Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+  Instrumentation:
+    ./synapse1/lib/cache/local-file-cache.ts
+    ./synapse1/lib/supabase/file-loader.ts
+    ./synapse1/lib/sync/file-watcher.ts
+    ./synapse1/instrumentation-file-watcher.ts
+    ./synapse1/instrumentation.ts
+
+
+Γ£ô Compiled successfully in 19.9s
+  Running TypeScript ...
+  Collecting page data using 31 workers ...
+  Generating static pages using 31 workers (0/100) ...
+  Generating static pages using 31 workers (25/100) 
+  Generating static pages using 31 workers (50/100) 
+  Generating static pages using 31 workers (75/100) 
+Γ£ô Generating static pages using 31 workers (100/100) in 549.1ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /.well-known/shopify/monorail/unstable/produce_batch
+Γö£ Γùï /about
+Γö£ ╞Æ /account
+Γö£ ╞Æ /account/accept-invite
+Γö£ ╞Æ /account/agents
+Γö£ ╞Æ /account/billing
+Γö£ ╞Æ /account/integrations
+Γö£ ╞Æ /account/members
+Γö£ ╞Æ /account/settings
+Γö£ ╞Æ /account/spending
+Γö£ ╞Æ /account/usage
+Γö£ ╞Æ /ai.txt
+Γö£ ╞Æ /api/admin
+Γö£ ╞Æ /api/admin/invite
+Γö£ ╞Æ /api/agents/execute
+Γö£ ╞Æ /api/agents/executions
+Γö£ ╞Æ /api/agents/executions/[id]
+Γö£ ╞Æ /api/agents/health
+Γö£ ╞Æ /api/agents/preferences
+Γö£ ╞Æ /api/agents/stream
+Γö£ ╞Æ /api/agents/stream/v2
+Γö£ ╞Æ /api/agents/upload
+Γö£ ╞Æ /api/ai/chat
+Γö£ ╞Æ /api/ai/complete-inline
+Γö£ ╞Æ /api/ai/stream
+Γö£ ╞Æ /api/ai/usage
+Γö£ ╞Æ /api/auth/dev-login
+Γö£ ╞Æ /api/auth/forgot-password
+Γö£ ╞Æ /api/auth/login
+Γö£ ╞Æ /api/auth/logout
+Γö£ ╞Æ /api/auth/refresh
+Γö£ ╞Æ /api/auth/session
+Γö£ ╞Æ /api/auth/signup
+Γö£ ╞Æ /api/billing/api-keys
+Γö£ ╞Æ /api/billing/api-keys/[provider]
+Γö£ ╞Æ /api/billing/api-keys/[provider]/verify
+Γö£ ╞Æ /api/billing/checkout
+Γö£ ╞Æ /api/billing/on-demand
+Γö£ ╞Æ /api/billing/portal
+Γö£ ╞Æ /api/billing/subscription
+Γö£ ╞Æ /api/billing/webhook
+Γö£ ╞Æ /api/cron/report-overage
+Γö£ ╞Æ /api/files
+Γö£ ╞Æ /api/files/[id]
+Γö£ ╞Æ /api/files/[id]/duplicate
+Γö£ ╞Æ /api/files/[id]/redo
+Γö£ ╞Æ /api/files/[id]/restore
+Γö£ ╞Æ /api/files/[id]/undo
+Γö£ ╞Æ /api/files/[id]/versions
+Γö£ ╞Æ /api/files/[id]/versions/[versionId]
+Γö£ ╞Æ /api/health
+Γö£ ╞Æ /api/internal/agent-dispatch
+Γö£ ╞Æ /api/internal/cron
+Γö£ ╞Æ /api/media/generate-image
+Γö£ ╞Æ /api/media/generate-video
+Γö£ ╞Æ /api/profile
+Γö£ ╞Æ /api/projects
+Γö£ ╞Æ /api/projects/[projectId]
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat/sessions
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat/sessions/[sessionId]
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat/sessions/[sessionId]/apply-stats
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat/sessions/[sessionId]/fork
+Γö£ ╞Æ /api/projects/[projectId]/agent-chat/sessions/[sessionId]/share
+Γö£ ╞Æ /api/projects/[projectId]/archive
+Γö£ ╞Æ /api/projects/[projectId]/batch
+Γö£ ╞Æ /api/projects/[projectId]/checkpoints
+Γö£ ╞Æ /api/projects/[projectId]/clone
+Γö£ ╞Æ /api/projects/[projectId]/dependencies
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/apply
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/cleanup-suggest
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/components
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/create
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/drift
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/drift/batch
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/impact
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/scan
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/versions
+Γö£ ╞Æ /api/projects/[projectId]/design-tokens/versions/[versionId]/rollback
+Γö£ ╞Æ /api/projects/[projectId]/dev-report
+Γö£ ╞Æ /api/projects/[projectId]/export
+Γö£ ╞Æ /api/projects/[projectId]/files
+Γö£ ╞Æ /api/projects/[projectId]/files/batch
+Γö£ ╞Æ /api/projects/[projectId]/files/count
+Γö£ ╞Æ /api/projects/[projectId]/files/upload
+Γö£ ╞Æ /api/projects/[projectId]/git/branches
+Γö£ ╞Æ /api/projects/[projectId]/git/commit
+Γö£ ╞Æ /api/projects/[projectId]/git/diff
+Γö£ ╞Æ /api/projects/[projectId]/git/init
+Γö£ ╞Æ /api/projects/[projectId]/git/log
+Γö£ ╞Æ /api/projects/[projectId]/git/pull
+Γö£ ╞Æ /api/projects/[projectId]/git/push
+Γö£ ╞Æ /api/projects/[projectId]/git/remotes
+Γö£ ╞Æ /api/projects/[projectId]/git/status
+Γö£ ╞Æ /api/projects/[projectId]/memory
+Γö£ ╞Æ /api/projects/[projectId]/preview
+Γö£ ╞Æ /api/projects/[projectId]/preview/events
+Γö£ ╞Æ /api/projects/[projectId]/preview/inspect
+Γö£ ╞Æ /api/projects/[projectId]/restore
+Γö£ ╞Æ /api/projects/[projectId]/shopify
+Γö£ ╞Æ /api/projects/[projectId]/shopify/push-history
+Γö£ ╞Æ /api/projects/[projectId]/shopify/push-history/[pushId]/rollback
+Γö£ ╞Æ /api/projects/[projectId]/shopify/setup-preview-theme
+Γö£ ╞Æ /api/projects/[projectId]/shopify/sync
+Γö£ ╞Æ /api/projects/[projectId]/shopify/themes
+Γö£ ╞Æ /api/projects/[projectId]/shopify/themes/[themeId]
+Γö£ ╞Æ /api/projects/[projectId]/shopify/themes/[themeId]/clone
+Γö£ ╞Æ /api/projects/[projectId]/shopify/themes/[themeId]/diff
+Γö£ ╞Æ /api/projects/[projectId]/shopify/themes/[themeId]/publish
+Γö£ ╞Æ /api/projects/[projectId]/sync-binary
+Γö£ ╞Æ /api/projects/[projectId]/sync-dev-theme
+Γö£ ╞Æ /api/projects/[projectId]/sync-to-disk
+Γö£ ╞Æ /api/projects/[projectId]/thumbnail
+Γö£ ╞Æ /api/projects/import/git
+Γö£ ╞Æ /api/projects/reconcile
+Γö£ ╞Æ /api/providers
+Γö£ ╞Æ /api/providers/[providerId]/health
+Γö£ ╞Æ /api/shopify-monorail-stub
+Γö£ ╞Æ /api/shopify/callback
+Γö£ ╞Æ /api/shopify/install
+Γö£ ╞Æ /api/shopify/webhooks
+Γö£ ╞Æ /api/stores
+Γö£ ╞Æ /api/stores/[connectionId]/discounts
+Γö£ ╞Æ /api/stores/[connectionId]/files
+Γö£ ╞Æ /api/stores/[connectionId]/import
+Γö£ ╞Æ /api/stores/[connectionId]/inventory
+Γö£ ╞Æ /api/stores/[connectionId]/metafields
+Γö£ ╞Æ /api/stores/[connectionId]/navigation
+Γö£ ╞Æ /api/stores/[connectionId]/pages
+Γö£ ╞Æ /api/stores/[connectionId]/storefront
+Γö£ ╞Æ /api/stores/[connectionId]/themes
+Γö£ ╞Æ /api/stores/[connectionId]/themes/[themeId]/asset-count
+Γö£ ╞Æ /api/stores/[connectionId]/themes/[themeId]/assets
+Γö£ ╞Æ /api/stores/[connectionId]/themes/[themeId]/settings
+Γö£ ╞Æ /api/suggestions/[id]
+Γö£ ╞Æ /api/suggestions/[id]/apply
+Γö£ ╞Æ /api/suggestions/[id]/reject
+Γö£ ╞Æ /api/suggestions/[id]/undo
+Γö£ ╞Æ /api/suggestions/generate
+Γö£ ╞Æ /api/suggestions/history
+Γö£ ╞Æ /api/support/ticket
+Γö£ ╞Æ /api/v1/ai/suggest
+Γö£ ╞Æ /api/v1/files/[file_path]/versions
+Γö£ ╞Æ /api/v1/files/[file_path]/versions/[version_id]/diff
+Γö£ ╞Æ /api/v1/files/[file_path]/versions/[version_id]/restore
+Γö£ ╞Æ /api/v1/preview/refresh
+Γö£ ╞Æ /api/v1/preview/resources
+Γö£ ╞Æ /api/v1/preview/state
+Γö£ ╞Æ /api/v1/templates/validate
+Γö£ ╞Æ /api/v1/workspaces/[workspace_id]/presence
+Γö£ ╞Æ /api/v1/workspaces/[workspace_id]/versions/cleanup
+Γö£ ╞Æ /architecture
+Γö£ Γùï /auth/confirm
+Γö£ Γùï /auth/error
+Γö£ Γùï /auth/forgot-password
+Γö£ Γùï /auth/mcp
+Γö£ Γùï /auth/reset-password
+Γö£ Γùï /auth/signin
+Γö£ Γùï /benchmarks
+Γö£ Γùï /blog
+Γö£ Γùï /careers
+Γö£ Γùï /changelog
+Γö£ Γùï /contact
+Γö£ ╞Æ /demo/onboarding
+Γö£ Γùï /docs
+Γö£ Γùï /docs/api-reference
+Γö£ Γùï /docs/getting-started
+Γö£ Γùï /examples
+Γö£ Γùï /features
+Γö£ Γùï /manifest.webmanifest
+Γö£ Γùï /onboarding
+Γö£ Γùï /pricing
+Γö£ Γùï /privacy
+Γö£ Γùï /projects
+Γö£ ╞Æ /projects/[projectId]
+Γö£ ╞Æ /projects/[projectId]/design-system
+Γö£ Γùï /public/marketing
+Γö£ Γùï /public/marketing/store
+Γö£ Γùï /roadmap
+Γö£ Γùï /robots.txt
+Γö£ Γùï /security
+Γö£ Γùï /signup
+Γö£ Γùï /sitemap.xml
+Γö£ Γùï /terms
+Γö£ Γùï /v2
+Γöö Γùï /welcome
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

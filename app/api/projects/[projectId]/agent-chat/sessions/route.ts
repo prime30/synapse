@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createReadClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const userId = await requireAuth(request);
     const { projectId } = await params;
-    const supabase = await createClient();
+    const supabase = await createReadClient();
 
     const url = new URL(request.url);
     const archived = url.searchParams.get('archived') === 'true';
@@ -59,21 +59,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (error) throw error;
 
-    // Fetch message counts per session
+    // Fix N+1: Single aggregate query for message counts instead of
+    // fetching all message rows and counting in JS.
     const sessionIds = (sessions ?? []).map((s) => s.id);
     let messageCounts: Record<string, number> = {};
 
     if (sessionIds.length > 0) {
-      const { data: counts, error: countError } = await supabase
-        .from('ai_messages')
-        .select('session_id')
-        .in('session_id', sessionIds);
+      const { data: countRows, error: countError } = await supabase
+        .rpc('count_messages_by_session', { session_ids: sessionIds });
 
-      if (!countError && counts) {
-        messageCounts = counts.reduce<Record<string, number>>((acc, row) => {
-          acc[row.session_id] = (acc[row.session_id] ?? 0) + 1;
-          return acc;
-        }, {});
+      if (!countError && countRows) {
+        for (const row of countRows as Array<{ session_id: string; count: number }>) {
+          messageCounts[row.session_id] = row.count;
+        }
+      } else {
+        // Fallback: single query with group-by emulation if RPC not available
+        const { data: rawCounts, error: rawError } = await supabase
+          .from('ai_messages')
+          .select('session_id')
+          .in('session_id', sessionIds);
+
+        if (!rawError && rawCounts) {
+          messageCounts = rawCounts.reduce<Record<string, number>>((acc, row) => {
+            acc[row.session_id] = (acc[row.session_id] ?? 0) + 1;
+            return acc;
+          }, {});
+        }
       }
     }
 
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         project_id: projectId,
         user_id: userId,
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         title: title ?? 'New Chat',
       })
       .select('id, title, created_at, updated_at')

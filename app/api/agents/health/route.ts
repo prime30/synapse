@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { MODELS } from '@/lib/agents/model-router';
+import { isVertexConfigured } from '@/lib/ai/providers/google';
 import type { AIProvider } from '@/lib/ai/types';
 
 interface ProviderStatus {
@@ -57,8 +58,9 @@ export async function GET(request: NextRequest) {
   const checks = Object.entries(HEALTH_MODELS).map(
     async ([name, { provider: providerName, model, envKey }]) => {
       const apiKey = process.env[envKey];
+      const isConfigured = !!apiKey || (name === 'google' && isVertexConfigured());
 
-      if (!apiKey) {
+      if (!isConfigured) {
         providerResults[name] = {
           configured: false,
           status: 'skipped',

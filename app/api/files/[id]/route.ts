@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { getFile, updateFile, deleteFile } from '@/lib/services/files';
+import { invalidateFileContent } from '@/lib/supabase/file-loader';
 import {
   resolveProjectSlug,
   writeFileToDisk,
@@ -40,8 +41,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     const file = await updateFile(id, { content: body.content });
 
-    let shopifyPushQueued = false;
+    // Granular: only bust per-file content cache (metadata unchanged)
+    invalidateFileContent(id);
     const projectId = file.project_id as string;
+
+    let shopifyPushQueued = false;
     if (projectId) {
       const supabase = await createClient();
 
@@ -127,6 +131,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       ).catch(() => {});
     }
 
+    // Fire-and-forget: update term mappings for renamed file
+    if (file.project_id && oldPath) {
+      import('@/lib/ai/theme-term-extractor')
+        .then(({ invalidateMappingsForFile }) =>
+          invalidateMappingsForFile(file.project_id as string, oldPath!),
+        )
+        .catch(() => {});
+    }
+
     return successResponse(file);
   } catch (error) {
     return handleAPIError(error);
@@ -153,6 +166,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       resolveProjectSlug(fileInfo.project_id).then((slug) =>
         deleteFileFromDisk(slug, fileInfo!.path!),
       ).catch(() => {});
+    }
+
+    // Fire-and-forget: remove term mappings referencing deleted file
+    if (fileInfo?.project_id && fileInfo?.path) {
+      import('@/lib/ai/theme-term-extractor')
+        .then(({ invalidateMappingsForFile }) =>
+          invalidateMappingsForFile(fileInfo!.project_id!, fileInfo!.path!),
+        )
+        .catch(() => {});
     }
 
     return successResponse({ message: 'File deleted' });

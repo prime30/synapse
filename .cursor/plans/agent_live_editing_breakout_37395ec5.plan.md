@@ -4,28 +4,28 @@ overview: When agents identify files to work on, auto-open those tabs and scroll
 todos:
   - id: backend-metadata
     content: "Emit affectedFiles and agentType in coordinator thinking/worker_progress metadata when phase is executing"
-    status: pending
+    status: completed
   - id: editor-reveal
     content: "Expose revealLine(line) on MonacoEditor and FileEditorHandle; wire from page with timing guard when active file matches edited file"
-    status: pending
+    status: completed
   - id: diff-util
     content: "Add getFirstChangedLineRange(original, newContent) util and use on propose_code_edit to compute scroll target"
-    status: pending
+    status: completed
   - id: auto-open
     content: "Page handleOpenFiles(paths); AgentPromptPanel on thinking metadata.affectedFiles call onOpenFiles; throttle/debounce; skip when empty or resolve fails"
-    status: pending
+    status: completed
   - id: auto-scroll
     content: "On propose_code_edit pass scroll target to page; call revealLine after file is open (delay or effect when activeFileId matches)"
-    status: pending
+    status: completed
   - id: agent-colors
     content: "Centralize agent color map in lib/agents/agent-colors.ts with dark variants; reuse in ThinkingBlock, ContextMeter, Breakout"
-    status: pending
+    status: completed
   - id: breakout-component
     content: "Build AgentLiveBreakout (floating panel, ide-* classes, z-overlay, agent header+border, live code); integrate state from AgentPromptPanel/page"
-    status: pending
+    status: completed
   - id: polish
     content: "Optional main-editor line decoration with agent color; persist breakout position/size; a11y (keyboard close, focus trap)"
-    status: pending
+    status: completed
 isProject: false
 ---
 

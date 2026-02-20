@@ -129,6 +129,60 @@ function invalidateFileMap(projectSlug: string): void {
   if (entry) entry.fileMap = null;
 }
 
+// ── Shopify push integration ────────────────────────────────────────────
+
+/**
+ * After a local file change is synced to Supabase, mark the corresponding
+ * theme_file as 'pending' so the push queue picks it up and pushes to the
+ * Shopify dev theme.
+ */
+async function markThemeFilePending(projectId: string, filePath: string): Promise<void> {
+  try {
+    const { createClient: createSC } = await import('@supabase/supabase-js');
+    const supabase = createSC(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    // Look up the connection for this project
+    const { data: project } = await supabase
+      .from('projects')
+      .select('shopify_connection_id')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    if (!project?.shopify_connection_id) return;
+
+    // Mark the theme_file row as pending
+    await supabase
+      .from('theme_files')
+      .update({
+        sync_status: 'pending',
+        local_updated_at: new Date().toISOString(),
+      })
+      .eq('connection_id', project.shopify_connection_id)
+      .eq('file_path', filePath);
+
+    // Schedule debounced push via internal API (avoids importing push-queue →
+    // sync-service → crypto, which breaks the client build).
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    const secret = process.env.CRON_SECRET ?? '';
+    fetch(`${base}/api/internal/schedule-push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+      },
+      body: JSON.stringify({ projectId }),
+    }).catch(() => {});
+
+    console.log(`[FileWatcher] Marked ${filePath} as pending for Shopify push`);
+  } catch (err) {
+    console.warn(`[FileWatcher] Failed to mark theme_file pending:`, err);
+  }
+}
+
 // ── Event handlers ─────────────────────────────────────────────────────
 
 async function handleFileChange(filePath: string): Promise<void> {
@@ -158,7 +212,7 @@ async function handleFileChange(filePath: string): Promise<void> {
       await updateFile(fileId, { content });
       console.log(`[FileWatcher] Updated: ${relativePath}`);
     } else {
-      // New file — create
+      // New file — create (structural change → bust metadata cache)
       const { createFile } = await import('@/lib/services/files');
       const fileName = path.basename(relativePath);
       await createFile({
@@ -172,6 +226,9 @@ async function handleFileChange(filePath: string): Promise<void> {
       invalidateFileMap(projectSlug);
       console.log(`[FileWatcher] Created: ${relativePath}`);
     }
+
+    // Mark theme_file as pending for Shopify push and schedule push
+    await markThemeFilePending(meta.projectId, relativePath);
   } catch (err) {
     console.warn(`[FileWatcher] Failed to sync ${relativePath}:`, err);
   }
@@ -189,6 +246,23 @@ async function handleFileDelete(filePath: string): Promise<void> {
 
   // Log only — do NOT auto-delete from Supabase (too dangerous)
   console.log(`[FileWatcher] Local delete detected (not synced): ${relativePath}`);
+
+  // Invalidate project files cache via internal API (avoids importing file-loader,
+  // which would pull in local-file-cache and trigger "Can't resolve 'fs'" in client build).
+  const meta = await getProjectMeta(projectSlug);
+  if (meta) {
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    const secret = process.env.CRON_SECRET ?? '';
+    fetch(`${base}/api/internal/invalidate-files-cache`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+      },
+      body: JSON.stringify({ projectId: meta.projectId }),
+    }).catch(() => {});
+  }
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────

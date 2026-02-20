@@ -1,0 +1,260 @@
+{%- comment -%}
+  Product Gallery Block
+  Renders the product media gallery with support for multiple layouts:
+  thumbnails (left/bottom/right), without thumbnails, slider center,
+  one column, two columns, combined grid.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - product_media: {Array} Product media collection
+  - media_layout: {String} Gallery layout mode
+  - se_stts: {Object} Section settings
+  - current_variant: {Object} Currently selected variant
+  - variant_images: {Array} Images attached to variants
+  - image_ratio: {String} Image ratio setting
+  - imgatt: {String} Image attribute prefix
+  - height: {Number} Image height
+  - sid: {String} Section ID
+  - class_pswp_disable: {String} PhotoSwipe disable class
+  - canMedia_group: {Boolean} Whether media grouping is active
+  - isMediaHidden: {String} Hidden media class
+  - current_option1-3: {String} Current option values (lowercased)
+  - ops_name, ops_name_1-3: {Array} Option name arrays
+  - has_media_360: {Boolean} Whether 360 media exists
+  - enable_video_looping: {Boolean}
+  - enable_video_muting: {Boolean}
+  - enable_video_autoplaying: {Boolean}
+  - isSliderCenter: {Boolean}
+  - variants_size: {Number} Number of variants
+{%- endcomment -%}
+
+{%- case media_layout -%}
+
+  {%- when 'no_media_size' -%}
+    {%- assign image = settings.placeholder_img -%}
+    {%- if image != blank -%}
+      <div class="t4s-product__info-container--sticky">
+        <div class="t4s-product__no_media t4s-pr">
+          <div
+            data-t4s-gallery
+            data-t4s-thumb-false
+            data-main-media
+            class="t4s-product__media-item t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}"
+          >
+            <div
+              data-t4s-gallery--open
+              data-media-type="image"
+              class="t4s_ratio t4s-product__media{{ class_pswp_disable }}"
+              {{ imgatt }}style="--aspect-ratioapt: {{ image.aspect_ratio }};--mw-media: {{ image.width }}px"
+            >
+              <noscript>
+                {{- image | image_url: width: 1500 | image_tag:
+                  widths: '288, 576, 750, 1100, 1500',
+                  class: 't4s-img-noscript',
+                  loading: 'lazy',
+                  sizes: '(min-width: 1500px) 1500px, (min-width: 750px) calc((100vw - 11.5rem) / 2), calc(100vw - 4rem)'
+                -}}
+              </noscript>
+              <img
+                data-master="{{ image | image_url }}"
+                class="lazyloadt4s t4s-lz--fadeIn"
+                data-src="{{ image | image_url: width: 1 }}"
+                data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]"
+                data-optimumx="1.5"
+                data-sizes="auto"
+                src="{% render 'img_svg', w: image.width, h: image.height %}"
+                width="{{ image.width }}"
+                height="{{ image.height }}"
+                alt="{{ image.alt | escape }}"
+              ><span class="lazyloadt4s-loader"></span>
+            </div>
+          </div>
+          {% if customer %}
+            <div
+              data-product-single-badge
+              data-sort="sale,new,soldout"
+              class="t4s-single-product-badge lazyloadt4s t4s-pa t4s-pe-none t4s-op-0"
+              data-rendert4s="css:{{ 'single-pr-badge.css' | asset_url }}"
+            ></div>
+          {% endif %}
+          {%- render 'product-btns', se_stts: se_stts, product: product -%}
+        </div>
+      </div>
+    {%- endif -%}
+
+  {%- when 'one_media_size' -%}
+    {%- assign media = product_media.first -%}
+    <div class="t4s-product__info-container--sticky">
+      <div data-product-single-media-group class="t4s-product__one_media t4s-pr">
+        <div
+          data-t4s-gallery
+          data-t4s-thumb-false
+          data-main-media
+          class="t4s-row t4s-g-0 t4s-product__media t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}"
+        >
+          {%- render 'product-thumbnail',
+            media: media,
+            imgatt: imgatt,
+            variant_images: variant_images,
+            loop: enable_video_looping,
+            mute: enable_video_muting,
+            autoplay: enable_video_autoplaying,
+            height: height,
+            sid: sid,
+            class_pswp_disable: class_pswp_disable,
+            variants_size: 1
+          -%}
+        </div>
+        {% if customer %}
+          <div
+            data-product-single-badge
+            data-sort="sale,new,soldout"
+            class="t4s-single-product-badge lazyloadt4s t4s-pa t4s-pe-none t4s-op-0"
+            data-rendert4s="css:{{ 'single-pr-badge.css' | asset_url }}"
+          ></div>
+        {% endif %}
+        {%- render 'product-btns', se_stts: se_stts, product: product -%}
+      </div>
+    </div>
+
+  {%- when 'thumbnails_left', 'thumbnails_bottom', 'thumbnails_right', 'without_thumbnails', 'slider_center' -%}
+    {%- liquid
+      if media_layout == 'thumbnails_left'
+        assign class_main = 't4s-col-lg t4s-order-lg-last '
+        assign class_thumb = 't4s-col-lg-auto t4s-order-lg-first '
+      elsif media_layout == 'thumbnails_right'
+        assign class_main = 't4s-col-lg '
+        assign class_thumb = 't4s-col-lg-auto '
+      elsif isSliderCenter and se_stts.media_size == 'full'
+        assign class_gx_lg_main = ' t4s-g-md-30 '
+      elsif isSliderCenter
+        assign class_gx_lg_main = ' t4s-g-md-10 '
+      else
+        assign class_gx_lg = ' t4s-g-lg-10 '
+      endif
+    -%}
+    {{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+
+    <div class="slick_gallery t4s-product__info-container--sticky" style="display:none;">
+      {% if customer %}
+        <div
+          data-product-single-badge
+          data-sort="sale,new,soldout"
+          class="t4s-single-product-badge lazyloadt4s t4s-pa t4s-pe-none t4s-op-0"
+          data-rendert4s="css:{{ 'single-pr-badge.css' | asset_url }}"
+        ></div>
+      {% endif %}
+      <div class="slider_for"></div>
+      <div class="slider_nav"></div>
+    </div>
+
+    <div class="slider_sec_main t4s-row t4s-g-0 t4s-product__info-container--sticky">
+      <div data-product-single-media-group class="{{ class_main }}t4s-col-12 t4s-col-item t4s-pr">
+        <div
+          data-t4s-gallery
+          data-main-media
+          data-t4s-thumb-true
+          class="t4s-row t4s-g-0{{ class_gx_lg_main }}{% unless isSliderCenter %} t4s-slide-eff-{{ se_stts.eff }}{% endunless %} flickityt4s t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }} t4s-flickity-slider {% if se_stts.nav_btn %}  t4s-slider-btn-{{ se_stts.nav_btn }} t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }}  t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-{{ se_stts.btn_cl }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }} {% endif %}{% if se_stts.nav_dot %} t4s-dots-style-{{ se_stts.dot_owl }} t4s-dots-cl-{{ se_stts.dots_cl }} t4s-dots-round-{{ se_stts.dots_round }} t4s-dots-hidden-mobile-{{ se_stts.dots_hidden_mobile }} {% endif %}"
+          data-flickityt4s-js='{"t4sid": "{{ sid }}", "status": true, "cellSelector": "[data-main-slide]:not(.is--media-hide)","isFilter": {{ canMedia_group }}, "checkVisibility": false,"imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : {% if se_stts.eff == 'fade' %}6{% else %}5{% endif %}, "cellAlign": "{% if isSliderCenter %}center{% else %}left{% endif %}","wrapAround": true,"prevNextButtons": {{ se_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ se_stts.nav_dot }}, "autoPlay" : 0, "pauseAutoPlayOnHover" : true ,  "thumbNav": {% if media_layout != 'without_thumbnails' and isSliderCenter == false %}true{% else %}false{% endif %}, "thumbVertical": {% if media_layout != 'thumbnails_bottom' and isSliderCenter == false %}true{% else %}false{% endif %}, "isMedia": true }'
+          style="--space-dots: {{ se_stts.dots_space }}px;"
+        >
+          {%- liquid
+            for media in product_media
+              if media.preview_image and media.preview_image.alt contains 'break--360'
+                break
+              endif
+              render 'product-thumbnail', media: media, imgatt: imgatt, variant_images: variant_images, loop: enable_video_looping, mute: enable_video_muting, autoplay: enable_video_autoplaying, height: height, sid: sid, isMediaHidden: isMediaHidden, current_option1: current_option1, current_option2: current_option2, current_option3: current_option3, ops_name: ops_name, ops_name_1: ops_name_1, ops_name_2: ops_name_2, ops_name_3: ops_name_3, class_pswp_disable: class_pswp_disable, variants_size: variants_size
+            endfor
+            if has_media_360
+              render 'product-360', product: product, sid: sid
+            endif
+          -%}
+          {%- if se_stts.nav_dot and se_stts.dot_owl == 'number' -%}
+            <div class="flickityt4s-page-dots t4s-dots-list carousel--status{{ sid }}">
+              <span data-current-slide></span> / <span data-total-number></span>
+            </div>
+          {%- endif -%}
+        </div>
+        {% if customer %}
+          <div
+            data-product-single-badge
+            data-sort="sale,new,soldout"
+            class="t4s-single-product-badge lazyloadt4s t4s-pa t4s-pe-none t4s-op-0"
+            data-rendert4s="css:{{ 'single-pr-badge.css' | asset_url }}"
+          ></div>
+        {% endif %}
+        {%- render 'product-btns', se_stts: se_stts, product: product -%}
+      </div>
+
+      {%- if media_layout != 'without_thumbnails' and isSliderCenter == false -%}
+        <div class="{{ class_thumb }}t4s-col-12 t4s-col-item t4s-col-thumb t4s-pr t4s-oh">
+          <div
+            data-thumb__scroller="{{ sid }}"
+            class="t4s-carousel__nav-scroller is__position-{{ media_layout | remove: 'thumbnails_' }}"
+          >
+            <div class="t4s-row t4s-row-mt t4s-row-cols-4 t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }} {{ class_gx_lg }}t4s-g-5 t4s-carousel__nav carousel__nav--{{ sid }} carousel__nav-hover{{ se_stts.thumb_lr_hover }}">
+              {%- for media in product_media limit: 4 -%}
+                {%- assign image = media.preview_image -%}
+                <div class="t4s-col-item t4s-product__thumb-item">
+                  <div
+                    class="t4s_ratio t4s-product__thumb"
+                    {{ imgatt }}style="--aspect-ratioapt: {{ image.aspect_ratio }}"
+                  ></div>
+                </div>
+              {%- endfor -%}
+            </div>
+          </div>
+          <button type="button" data-thumb-btn__prev="{{ sid }}" aria-label="Previous" class="btn_pnav_prev t4s-pa t4s-pe-none t4s-op-0"></button>
+          <button type="button" data-thumb-btn__next="{{ sid }}" aria-label="Next" class="btn_pnav_next t4s-pa t4s-pe-none t4s-op-0"></button>
+        </div>
+      {%- endif -%}
+    </div>
+
+  {%- when 'one_column', 'two_columns', 'combined_grid' -%}
+    {%- liquid
+      if media_layout == 'one_column'
+        assign class_col = 't4s-col-md-12 '
+        assign row_g = '0'
+      elsif media_layout == 'two_columns'
+        assign class_col = 't4s-col-md-6 '
+        assign row_g = '10'
+      else
+        assign class_col = 't4s-col-md-12 '
+        assign row_g = '10'
+      endif
+    -%}
+    <div class="t4s-row t4s-g-0 t4s-product__info-container--sticky">
+      <div data-product-single-media-group class="t4s-col-12 t4s-col-item t4s-pr">
+        <div
+          data-media-sizes="{{ product_media.size }}"
+          data-t4s-gallery
+          data-t4s-thumb-true
+          data-main-media
+          class="t4s-main-media t4s-row t4s-g-{{ row_g }} t4s-slide-eff-{{ se_stts.eff }} flickityt4s isotopet4s isotopet4s-later carousel-disable-md t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}{% if se_stts.nav_btn %} t4s-flickity-slider t4s-slider-btn-{{ se_stts.nav_btn }} t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }} t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-{{ se_stts.btn_cl }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }} {% endif %}"
+          data-isotopet4s-js='{"transitionDuration": 0,"itemSelector-": "[data-main-slide]:not(.is--media-hide)","filter": "[data-main-slide]:not(.is--media-hide)", "layoutMode": "packery" }'
+          data-flickityt4s-js='{"cellSelector": "[data-main-slide]:not(.is--media-hide)","isFilter": {{ canMedia_group }},"watchCSS": true, "checkVisibility": false,"imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : {% if se_stts.eff == 'fade' %}6{% else %}5{% endif %}, "cellAlign": "left","wrapAround": true,"prevNextButtons": {{ se_stts.nav_btn }},"percentPosition": 1,"pageDots": false, "autoPlay" : 0, "pauseAutoPlayOnHover" : true , "t4sid": "{{ sid }}", "thumbNav": false, "thumbVertical": false, "isMedia": true }'
+        >
+          {%- liquid
+            for media in product_media
+              if media.preview_image and media.preview_image.alt contains 'break--360'
+                break
+              endif
+              render 'product-thumbnail', media: media, imgatt: imgatt, variant_images: variant_images, loop: enable_video_looping, mute: enable_video_muting, autoplay: false, height: height, sid: sid, isMediaHidden: isMediaHidden, current_option1: current_option1, current_option2: current_option2, current_option3: current_option3, class_col: class_col, ops_name: ops_name, ops_name_1: ops_name_1, ops_name_2: ops_name_2, ops_name_3: ops_name_3, class_pswp_disable: class_pswp_disable, variants_size: variants_size
+            endfor
+            if has_media_360
+              render 'product-360', product: product, sid: sid
+            endif
+          -%}
+        </div>
+        <link href="{{ 'single-pr-badge.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+        {% if customer %}
+          <div
+            data-product-single-badge
+            data-sort="sale,new,soldout"
+            class="t4s-single-product-badge t4s-pa t4s-pe-none t4s-op-0"
+          ></div>
+        {% endif %}
+        {%- render 'product-btns', se_stts: se_stts, product: product -%}
+      </div>
+    </div>
+{%- endcase -%}

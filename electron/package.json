@@ -1,35 +1,172 @@
 {
   "name": "synapse-desktop",
   "version": "0.1.0",
-  "description": "Synapse desktop wrapper",
+  "description": "Synapse — AI-Powered Shopify Development",
   "main": "main.js",
   "private": true,
+  "author": {
+    "name": "Synapse Inc.",
+    "email": "hello@synapse.so"
+  },
   "scripts": {
     "start": "electron .",
+    "start:dev": "cross-env NODE_ENV=development electron .",
     "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --mac --linux"
   },
   "build": {
     "appId": "so.synapse.desktop",
     "productName": "Synapse",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "copyright": "Copyright 2024-2026 Synapse Inc.",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "../build"
     },
-    "files": ["main.js"],
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "icon": "icon.png"
-    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../.next/standalone",
+        "to": "standalone",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../.next/static",
+        "to": "standalone/.next/static",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../public",
+        "to": "standalone/public",
+        "filter": [
+          "**/*",
+          "!electron.js",
+          "!preload.js"
+        ]
+      },
+      {
+        "from": "../build/icons",
+        "to": "icons",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "win": {
-      "icon": "icon.png"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../build/icons/icon.png",
+      "publisherName": "Synapse Inc."
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Synapse",
+      "uninstallDisplayName": "Synapse",
+      "installerIcon": "../build/icons/icon.png",
+      "uninstallerIcon": "../build/icons/icon.png",
+      "installerHeader": "../build/icons/icon.png",
+      "license": "../LICENSE"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../build/icons/icon.png",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": false
+    },
+    "dmg": {
+      "backgroundColor": "#0a0a0a",
+      "artifactName": "${productName}-${version}.${ext}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "linux": {
-      "icon": "icon.png"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../build/icons",
+      "category": "Development",
+      "maintainer": "hello@synapse.so",
+      "synopsis": "AI-Powered Shopify Development",
+      "description": "Build and deploy Shopify themes 10x faster with multi-agent AI."
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "synapse",
+      "repo": "desktop",
+      "releaseType": "release"
     }
   },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "electron-updater": "^6.3.0"
+  },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }

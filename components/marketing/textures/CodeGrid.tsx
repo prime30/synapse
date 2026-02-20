@@ -29,9 +29,11 @@ export function CodeGrid({ opacity = 0.02, className = '' }: CodeGridProps) {
       aria-hidden="true"
       style={{ opacity }}
     >
-      <pre className="font-mono text-[6px] leading-[8px] text-sky-500 whitespace-pre">
+      <pre className="font-mono text-[6px] leading-[8px] text-stone-500 dark:text-stone-400 whitespace-pre">
         {GRID_CONTENT}
       </pre>
     </div>
   );
 }
+
+

@@ -1,0 +1,793 @@
+<!-- sections/testimonials.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'testimonials.css' | asset_url | stylesheet_tag }}
+{{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+{{ 'pre_flickityt4s.min.css' | asset_url | stylesheet_tag }}
+<link href="{{ 'loading.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- liquid
+  assign image_fix = image_nt | image_tag
+    assign sid = section.id
+    assign se_stts = section.settings
+    assign se_blocks = section.blocks
+    assign stt_layout = se_stts.layout
+    assign stt_image_bg = se_stts.image_bg
+    if se_stts.layout == 't4s-cus-width'
+      assign html_layout = '<div class="t4s-container" style="--width: 010693px">__</div>' | split: '__'
+    elsif stt_layout == 't4s-se-container' 
+      assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+    elsif stt_layout == 't4s-container-wrap'
+      assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+    else
+      assign html_layout = '__' | split: '__'
+    endif
+
+    assign image_ratio = se_stts.image_ratio
+ -%}
+
+<div class="t4s-section-inner t4s_nt_se_{{ sid }} t4s_se_{{ sid }} {{ stt_layout }}{% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{% endif %} {% render 'section_style', se_stts: se_stts -%} >
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner{% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto" data-optimumx="1.5"{% endif %}>{% endif -%}
+    {%- render 'section_tophead', se_stts: se_stts, get_height: true -%}
+    <div class="t4s-list-testimonials t4s-testimonials-slider t4s-text-{{ se_stts.content_align }} t4s-pr t4s-row t4s-align-items-center t4s-g-0 t4s-gy-20 t4s-gy-md-0" style="--cl-name: {{ se_stts.cl_name }};--cl-content: {{ se_stts.cl_content }};--bd-cl: {{ se_stts.cl_bd }};--bg-cl: {{ se_stts.cl_bg_item }};--rating-cl: {{ se_stts.rating_cl }};--bdr: {{ se_stts.bdr }}px;--content-width: {{ se_stts.custom_width }}px;">
+      <div class="t4s-testimonial-main t4s-col-item t4s-col-12 t4s-col-md-8">
+          <div id="t4s-testimonial-main__{{ sid }}" class="t4s-flickity-slider flickityt4s t4s-row t4s-row-cols-1 t4s-g-lg-0 t4s-g-mg-0 t4s-g-0 {% if se_stts.nav_btn %}t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }} t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-{{ se_stts.btn_cl }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-slider-btn__{{ se_stts.btn_pos }}-content t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }} {% endif %} {% if se_stts.nav_dot %} t4s-dots-style-{{ se_stts.dot_owl }} t4s-dots-round-{{ se_stts.dots_round }} t4s-dots-hidden-mobile-{{ se_stts.dots_hidden_mobile }} {% endif %}{% if se_stts.nav_dot %} t4s-dots-style-{{ se_stts.dot_owl }} t4s-dots-cl-{{ se_stts.dots_cl }} t4s-dots-round-{{ se_stts.dots_round }} t4s-dots-hidden-mobile-{{ se_stts.dots_hidden_mobile }}{% endif %}" data-flickityt4s-js='{"cellAlign": "center","freeScroll": 0, "contain" : 1,"dragThreshold" : 15,"percentPosition": 1,"imagesLoaded": 0,"lazyload": 0, "prevNextButtons": 0,"pageDots": {{ se_stts.nav_dot }},"pauseAutoPlayOnHover": 1,"wrapAround": {{ se_stts.loop }},"autoPlay": {{ se_stts.au_time | times: 1000 }},"arrowIcon": "2","pauseAutoPlayOnHover" : {{ se_stts.au_hover }}, "t4sid": "{{ sid }}","navUI": 1,"cellSelector": ".t4s-testimonial-item"}' style="--btn-distance: {{ se_stts.btn_distance }}px;--space-dots: {{ se_stts.dots_space }}px;">
+              {%- for block in se_blocks -%}
+                {%- assign bk_stts = block.settings -%}
+                <div class="t4s-col-item t4s-col-auto t4s-testimonial-item" id="b_{{ block.id }}" data-select-flickity {{ block.shopify_attributes }}>
+                  <div class="t4s-testimonial-wrap">
+                    {% if bk_stts.heading != blank %}
+                      <h3 class="t4s-testimonial-heading">{{ bk_stts.heading }}</h3>
+                    {% endif %}
+                    {%- render 'rating_star',rating: bk_stts.rating -%}
+                    {% if bk_stts.content != blank %}
+                      <div class="t4s-testimonial-content t4s-rte">
+                        {{ bk_stts.content }}
+                      </div>
+                    {% endif %}
+                    {% if bk_stts.title != blank %}<div class="t4s-testimonial-name">{{ bk_stts.title }}</div>{% endif %}
+                  </div>
+                </div>
+              {%- endfor -%}
+              {%- if se_stts.nav_btn -%}
+                  <div class="t4s-flicky-btn__custom t4s-pa t4s-h-100 t4s-flickity-slider t4s-slider-btn-{{ se_stts.btn_pos }} t4s-flickity-slider t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }} t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }} t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-{{ se_stts.btn_cl }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }}">
+                      <button class="flickityt4s-button flickityt4s-prev-next-button previous btn__prev--{{ sid }}" type="button" aria-label="Previous">
+                          <svg class="flickityt4s-button-icon" viewBox="0 0 491 491">
+                              <path d="m120.7 253.2c-4.2-4.2-4.2-10.9 0-15.1l234.6-234.6q0.2-0.2 0.3-0.3c4.2-4.1 11-4 15.1 0.3 4.1 4.2 4 10.9-0.3 15l-227.1 227.2 227.1 227.1c4 4.1 4 10.7 0 14.8-4.1 4.2-10.8 4.4-15.1 0.3z"/>
+                              <path d="m362.9 0.3c5.9 0 10.6 4.8 10.7 10.7 0 2.8-1.2 5.5-3.2 7.5l-227.1 227.2 227.1 227.1c4.2 4.1 4.2 10.9 0 15.1-4.2 4.1-10.9 4.1-15.1 0l-234.7-234.7c-4.1-4.2-4.1-10.9 0-15.1l234.7-234.6c2-2.1 4.7-3.2 7.6-3.2z"/>
+                          </svg>
+                      </button><button class="flickityt4s-button flickityt4s-prev-next-button next btn__next--{{ sid }}" type="button" aria-label="Next">
+                          <svg class="flickityt4s-button-icon" viewBox="0 0 491 491">
+                              <path d="m370.3 237.8c4.2 4.2 4.2 10.9 0 15.1l-234.6 234.6q-0.2 0.2-0.3 0.3c-4.2 4.1-11 4-15.1-0.3-4.1-4.2-4-10.9 0.3-15l227.1-227.2-227.1-227.1c-4-4.1-4-10.7 0-14.8 4.1-4.2 10.8-4.4 15.1-0.3z"/>
+                              <path d="m128.1 490.7c-5.9 0-10.6-4.8-10.7-10.7 0-2.8 1.2-5.5 3.2-7.5l227.1-227.2-227.1-227.1c-4.2-4.1-4.2-10.9 0-15.1 4.2-4.1 10.9-4.1 15.1 0l234.7 234.7c4.1 4.2 4.1 10.9 0 15.1l-234.7 234.6c-2 2.1-4.7 3.2-7.6 3.2z"/>
+                          </svg>
+                      </button>  
+                  </div>
+              {%- endif -%}
+          </div>
+      </div>
+      <div class="t4s-testimonial-image t4s-col-item t4s-col-12 t4s-col-md-4 t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}">
+          <div class="t4s-flickity-slider flickityt4s t4s-pr t4s-oh t4s-row t4s-row-cols-1 t4s-g-0 t4s-slide-eff-fade" data-flickityt4s-js='{"sync": "#t4s-testimonial-main__{{ sid }}", "contain": 1, "pageDots": 0,"prevNextButtons": 0,"wrapAround": {{ se_stts.loop }},"adaptiveHeight": 1 }'>
+              {%- for block in se_blocks -%}
+                {%- liquid 
+                  assign bk_stts = block.settings
+                  assign image = bk_stts.image 
+                  -%}
+              <div class="t4s-testimonial-img t4s-w-100 t4s-d-block t4s-col-item t4s-pr t4s-oh">
+                <div class="t4s_ratio t4s-bg-11" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1.2 }}; {%- if image != blank -%}background: url({{ image | image_url: width: 1 }}); {%- endif -%}">
+                    {% capture class_img %} t4s-slide-{{ bk_stts.animate_slide }}{% endcapture %}
+                    {%- if image != blank -%}
+                      <img {% if image.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image.presentation.focal_point}}"{% endif %} class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff t4s-img-as-bg t4s-slide-{{ bk_stts.animate_slide }}" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src=" {%- render 'img_svg',w: image.width,h: image.height -%}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+                    {%- else -%}
+                      {%- capture current -%}{% cycle 1, 2 %}{%- endcapture -%}
+                      {{ 'lifestyle-' | append: current | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1' }}
+                    {%- endif -%}
+                </div>
+              </div>
+              {%- endfor -%}
+          </div>
+      </div>
+    </div>
+
+
+    <div class="t4s-d-none">
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <symbol id="t4s_star"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M329.6 176H488C498.3 176 507.4 182.5 510.7 192.2C514 201.9 510.8 212.6 502.7 218.9L371.9 320.7L422.9 480.7C426.1 490.7 422.4 501.7 413.7 507.7C405.1 513.7 393.6 513.4 385.3 506.9L256 406.4L126.7 506.9C118.4 513.4 106.9 513.7 98.27 507.7C89.65 501.7 85.94 490.7 89.13 480.7L140.1 320.7L9.267 218.9C1.174 212.6-2.027 201.9 1.3 192.2C4.628 182.5 13.75 176 24 176H182.5L233.1 16.72C236.3 6.764 245.6 0 256 0C266.5 0 275.7 6.764 278.9 16.72L329.6 176z"/></svg></symbol>
+        <symbol id="t4s_star_half"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M233.1 16.72C236.3 6.764 245.5 .0006 256 0V406.4L126.7 506.9C118.4 513.4 106.9 513.7 98.27 507.7C89.65 501.7 85.94 490.7 89.13 480.7L140.1 320.7L9.267 218.9C1.174 212.6-2.027 201.9 1.3 192.2C4.628 182.5 13.75 175.1 24 175.1H182.5L233.1 16.72z"/><path class="t4s-star-emty" d="M278.9 16.72C275.7 6.764 266.5 .0006 255.1 0V406.4L385.3 506.9C393.6 513.4 405.1 513.7 413.7 507.7C422.4 501.7 426.1 490.7 422.9 480.7L371.9 320.7L502.7 218.9C510.8 212.6 514 201.9 510.7 192.2C507.4 182.5 498.3 175.1 488 175.1H329.5L278.9 16.72z"/></svg></symbol>
+      </svg>
+      <style>
+        path.t4s-star-emty {
+            fill: #dedede;
+        }
+      </style>
+    </div>
+    {{- html_layout[1] -}}
+</div>
+{%- schema -%}
+  {
+    "name": "Testimonials slider",
+    "tag": "section",
+    "class": "t4s-section t4s_bk_flickity t4s-section-all t4s_tp_cdt t4s-testimonials-slider",
+    "settings": [
+      {
+          "type": "header",
+          "content": "1. Heading options"
+      },
+      {
+          "type": "select",
+          "id": "design_heading",
+          "label": "Heading design",
+          "default": "1",
+          "options": [
+              {
+                  "value": "1",
+                  "label": "Design 01"
+              },
+              {
+                  "value": "2",
+                  "label": "Design 02"
+              },
+              {
+                  "value": "3",
+                  "label": "Design 03"
+              },
+              {
+                  "value": "4",
+                  "label": "Design 04 (Working when description has content)"
+              },
+              {
+                  "value": "5",
+                  "label": "Design 05"
+              }
+          ]
+      },
+      {
+          "type": "checkbox",
+          "id": "heading_center",
+          "label": "Center align the heading",
+          "default": true
+      },
+      {
+          "type": "text",
+          "id": "top_heading",
+          "label": "Heading",
+          "default": "Testimonials"
+      },
+      {
+          "type": "richtext",
+          "id": "top_subheading",
+          "label": "Description"
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb",
+          "label": "Bottom space (Desktop)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 30
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb_tb",
+          "label": "Bottom space (Tablet)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 30
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb_mb",
+          "label": "Bottom space (Mobile)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 25
+      },
+      {
+        "type": "header",
+        "content": "2. General options"
+      },
+      {
+        "type": "color",
+        "id": "cl_name",
+        "label": "Color heading/name",
+        "default": "#222222"
+      },
+      {
+        "type": "color",
+        "id": "cl_content",
+        "label": "Color content/position",
+        "default": "#878787"
+      },
+      {
+        "type": "color",
+        "id": "cl_bg_item",
+        "label": "Background item"
+      },
+      {
+        "type": "color",
+        "id": "rating_cl",
+        "label": "Rating color",
+        "default": "#fec42d"
+      },
+      {
+        "type": "select",
+        "id": "content_align",
+        "label": "Content align",
+        "default": "start",
+        "options": [
+          {
+            "label": "Default",
+            "value": "start"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
+      },
+      {
+        "type": "header",
+        "content": "+Options for testimonial image "
+      },
+      {
+        "type": "select",
+        "id": "image_ratio",
+        "label": "Image ratio",
+        "default": "ratio1_1",
+        "info": "Aspect ratio custom will settings in general panel",
+        "options": [
+          {
+            "group": "Natural",
+            "value": "ratioadapt",
+            "label": "Adapt to image"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio2_1",
+            "label": "2:1"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio16_9",
+            "label": "16:9"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio8_5",
+            "label": "8:5"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio3_2",
+            "label": "3:2"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio4_3",
+            "label": "4:3"
+          },
+          {
+            "group": "Landscape",
+            "value": "rationt",
+            "label": "Ratio ASOS"
+          },
+          {
+            "group": "Squared",
+            "value": "ratio1_1",
+            "label": "1:1"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio2_3",
+            "label": "2:3"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio1_2",
+            "label": "1:2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus1",
+            "label": "Ratio custom 1"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus2",
+            "label": "Ratio custom 2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratio_us3",
+            "label": "Ratio custom 3"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus4",
+            "label": "Ratio custom 4"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_size",
+        "label": "Image size",
+        "default": "cover",
+        "info": "This settings apply only if the image ratio is not set to 'Adapt to image'",
+        "options": [
+          {
+            "value": "cover",
+            "label": "Full"
+          },
+          {
+            "value": "contain",
+            "label": "Auto"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_position",
+        "info": "The first value is the horizontal position and the second value is the vertical. This settings apply only if the image ratio is not set to 'Adapt to image'. And not works when use 'Focal point' on image",
+        "options": [
+          {
+            "value": "default",
+            "label": "Default"
+          },
+          {
+            "value": "1",
+            "label": "Left top"
+          },
+          {
+            "value": "2",
+            "label": "Left center"
+          },
+          {
+            "value": "3",
+            "label": "Left bottom"
+          },
+          {
+            "value": "4",
+            "label": "Right top"
+          },
+          {
+            "value": "5",
+            "label": "Right center"
+          },
+          {
+            "value": "6",
+            "label": "Right bottom"
+          },
+          {
+            "value": "7",
+            "label": "Center top"
+          },
+          {
+            "value": "8",
+            "label": "Center center"
+          },
+          {
+            "value": "9",
+            "label": "Center bottom"
+          }
+        ],
+        "label": "Image position",
+        "default": "8"
+      },
+      {
+        "type": "header",
+        "content": "+Options for carousel layout"
+      },
+      {
+          "type": "checkbox",
+          "id": "loop",
+          "label": "Enable loop",
+          "info": "At the end of cells, wrap-around to the other end for infinite scrolling",
+          "default": true
+      },
+      {
+          "type": "range",
+          "id": "au_time",
+          "min": 0,
+          "max": 30,
+          "step": 0.5,
+          "label": "Autoplay speed in second.",
+          "info": "Set is '0' to disable autoplay",
+          "unit": "s",
+          "default": 0
+      },
+      {
+          "type": "checkbox",
+          "id": "au_hover",
+          "label": "Pause autoplay on hover",
+          "info": "Auto-playing will pause when the user hovers over the carousel",
+          "default": true
+      },
+      {
+          "type": "paragraph",
+          "content": "—————————————————"
+      },
+      {
+          "type": "paragraph",
+          "content": "Prev next button"
+      },
+      {
+          "type": "checkbox",
+          "id": "nav_btn",
+          "label": "Use prev next button",
+          "info": "Enable previous & next buttons",
+          "default": false
+      },
+      {
+          "type": "select",
+          "id": "btn_pos",
+          "label": "Prev next position",
+          "info": "Working on screen Desktop",
+          "default": "in",
+          "options": [
+              {
+                  "label": "In content",
+                  "value": "in"
+              },
+              {
+                  "label": "Out content",
+                  "value": "out"
+              },
+              {
+                  "label": "Content side center",
+                  "value": "between"
+              },
+              {
+                  "label": "In bottom content",
+                  "value": "bottom"
+              }
+          ]
+      },
+      {
+          "type": "range",
+          "id": "btn_distance",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "label": "Distance from buttons to boundary",
+          "info": "Only works when \"Prev next position is In content\". Only works on desktop.",
+          "unit": "px",
+          "default": 15
+      },
+      {
+          "type": "select",
+          "id": "btn_vi",
+          "label": "Visible",
+          "default": "hover",
+          "options": [
+              {
+                  "value": "always",
+                  "label": "Always"
+              },
+              {
+                  "value": "hover",
+                  "label": "Only hover"
+              }
+          ]
+      },
+      {
+          "type": "select",
+          "id": "btn_owl",
+          "label": "Button style",
+          "default": "default",
+          "options": [
+              {
+                  "value": "default",
+                  "label": "Default"
+              },
+              {
+                  "value": "outline",
+                  "label": "Outline"
+              },
+              {
+                  "value": "simple",
+                  "label": "Simple"
+              }
+          ]
+      },
+      {
+          "type": "select",
+          "id": "btn_shape",
+          "label": "Button shape",
+          "info": "Not work for 'Simple' button style",
+          "default": "none",
+          "options": [
+              {
+                  "value": "none",
+                  "label": "Default"
+              },
+              {
+                  "value": "round",
+                  "label": "Round"
+              },
+              {
+                  "value": "rotate",
+                  "label": "Rotate"
+              }
+          ]
+      },
+      {
+          "type": "select",
+          "id": "btn_cl",
+          "label": "Button color",
+          "default": "dark",
+          "options": [
+              {
+                  "value": "light",
+                  "label": "Light"
+              },
+              {
+                  "value": "dark",
+                  "label": "Dark"
+              },
+              {
+                  "value": "primary",
+                  "label": "Primary"
+              },
+              {
+                  "value": "custom1",
+                  "label": "Custom color 1"
+              },
+              {
+                  "value": "custom2",
+                  "label": "Custom color 2"
+              }
+          ]
+      },
+      {
+          "type": "select",
+          "id": "btn_size",
+          "label": "Buttons size",
+          "default": "small",
+          "options": [
+              {
+                  "value": "small",
+                  "label": "Small"
+              },
+              {
+                  "value": "medium",
+                  "label": "Medium"
+              },
+              {
+                  "value": "large",
+                  "label": "Large"
+              },
+              {
+                  "value": "extra_large",
+                  "label": "Extra large"
+              }
+          ]
+      },
+      {
+          "type": "checkbox",
+          "id": "btn_hidden_mobile",
+          "label": "Hidden buttons on mobile ",
+          "default": false
+      },
+      {
+          "type": "paragraph",
+          "content": "—————————————————"
+      },
+      {
+          "type": "paragraph",
+          "content": "Page dots"
+      },
+      {
+          "type": "checkbox",
+          "id": "nav_dot",
+          "label": "Use page dots",
+          "info": "Creates and show page dots",
+          "default": false
+      },
+      {
+          "type": "select",
+          "id": "dot_owl",
+          "label": "Dots style",
+          "default": "default",
+          "options": [
+              {
+                  "value": "default",
+                  "label": "Default"
+              },
+              {
+                  "value": "outline",
+                  "label": "Outline"
+              },
+              {
+                  "value": "elessi",
+                  "label": "Elessi"
+              },
+              {
+                  "value": "br-outline",
+                  "label": "Bordered outline"
+              }
+          ]
+      },
+      {
+          "type": "select",
+          "id": "dots_cl",
+          "label": "Dots color",
+          "default": "dark",
+          "options": [
+              {
+                  "value": "light",
+                  "label": "Light (Best on dark background)"
+              },
+              {
+                  "value": "dark",
+                  "label": "Dark"
+              },
+              {
+                  "value": "primary",
+                  "label": "Primary"
+              },
+              {
+                  "value": "custom1",
+                  "label": "Custom color 1"
+              },
+              {
+                  "value": "custom2",
+                  "label": "Custom color 2"
+              }
+          ]
+      },
+      {
+          "type": "checkbox",
+          "id": "dots_round",
+          "label": "Enable round dots",
+          "default": true
+      },
+      {
+          "type": "range",
+          "id": "dots_space",
+          "min": 2,
+          "max": 20,
+          "step": 1,
+          "label": "Space among dots",
+          "unit": "px",
+          "default": 10
+      },
+      {
+          "type": "range",
+          "id": "dots_bottom_pos",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "label": "Distance from dots to boundary",
+          "unit": "px",
+          "default": 20
+      },
+      {
+          "type": "checkbox",
+          "id": "dots_hidden_mobile",
+          "label": "Hidden dots on mobile ",
+          "default": false
+      },
+      {
+        "type": "header",
+        "content": "3. Design options"
+      },
+      {
+        "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+        "options": [
+            { "value": "t4s-se-container", "label": "Container"},
+            { "value": "t4s-container-wrap", "label": "Wrapped container"},
+            { "value": "t4s-container-fluid", "label": "Full width"}
+        ]
+      },
+      {
+        "type": "color",
+        "id": "cl_bg",
+        "label": "Background"
+      },
+      {
+        "type": "color_background",
+        "id": "cl_bg_gradient",
+        "label": "Background gradient"
+      },
+      {
+        "type": "image_picker",
+        "id": "image_bg",
+        "label": "Background image"
+      },
+      {
+          "type": "text",
+          "id": "mg",
+          "label": "Margin",
+          "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd",
+          "label": "Padding",
+          "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+          "placeholder": "50px,,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design tablet options"
+      },
+      {
+          "type": "text",
+          "id": "mg_tb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_tb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design mobile options"
+      },
+      {
+          "type": "text",
+          "id": "mg_mb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_mb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      }
+    ],
+    "blocks": [
+      {
+        "type": "quote",
+        "name": "Testimonial",
+        "settings": [
+
+              {
+                  "type": "text",
+                  "id": "heading",
+                  "label": "Heading"
+              },
+              {
+                  "type": "richtext",
+                  "id": "content",
+                  "label": "Text",
+                  "default": "<p>Add customer reviews and testimonials to showcase your store’s happy customers.</p>"
+              },
+              {
+                  "type": "text",
+                  "id": "title",
+                  "label": "Author",
+                  "default": "Author's name"
+              },
+              {
+                  "type": "image_picker",
+                  "id": "image",
+                  "label": "Image"
+              },
+              {
+                  "type": "range",
+                  "id": "rating",
+                  "min": 0,
+                  "max": 5,
+                  "step": 0.5,
+                  "label": "Rating",
+                  "info": "Set less than '1' to disable Rating.",
+                  "default": 5
+              }
+          ]
+      }
+    ],
+    "presets": [
+      {
+        "name": "Testimonials slider",
+        "category": "Homepage",
+        "blocks": [{"type": "quote"},{"type": "quote"},{ "type": "quote"}]
+      }
+    ]
+  }
+{% endschema %}

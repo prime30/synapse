@@ -1,0 +1,483 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "breadcrumb": {
+      "type": "brc-nav-product",
+      "settings": {
+        "breadcrumb_pr": true,
+        "back_next_pr": true,
+        "box_border": "top",
+        "cl_bg": "rgba(0,0,0,0)",
+        "cl_link": "#222222",
+        "margin_bt": 5
+      }
+    },
+    "main": {
+      "type": "main-product",
+      "blocks": {
+        "3eaacecf-c956-46e5-84ef-40474509a065": {
+          "type": "title",
+          "settings": {
+            "txt_tr_pr": "uppercase",
+            "fnt_df_pr": "1",
+            "size_pr": 26,
+            "fw_pr": 400,
+            "lh_pr": 0,
+            "ls_pr": 0,
+            "pr_title_color": "#000000"
+          }
+        },
+        "loox_reviews_loox_rating_NrmjfJ": {
+          "type": "shopify://apps/loox-reviews/blocks/loox-rating/5c3b337f-fd14-4df5-b1d6-80ec13e6e28e",
+          "settings": {
+            "contentSize": 16,
+            "pattern": "",
+            "hideText": false,
+            "alignment": "",
+            "layout": "",
+            "textColor": "",
+            "starColor": "",
+            "showAllReviews": false,
+            "looxOpenFloatingWidget": true,
+            "emptyRatingWidget": false
+          }
+        },
+        "49fc91c0-8308-4d0f-90f1-cfe6c5d8ea04": {
+          "type": "line",
+          "disabled": true,
+          "settings": {
+            "color_line": "#e9e9e9",
+            "height_line": 1,
+            "space_tb": 15,
+            "space_tb_mb": 10
+          }
+        },
+        "klaviyo_email_marketing_sms_customer_hub_wishlist_qLiDeY": {
+          "type": "shopify://apps/klaviyo-email-marketing-sms/blocks/customer-hub-wishlist/2632fe16-c075-4321-a88b-50b567f42507",
+          "settings": {}
+        },
+        "18a8b200-4f94-4b72-b0eb-01abf185ecb3": {
+          "type": "price",
+          "settings": {
+            "price": "0",
+            "type_sale": "0",
+            "tax_ship": false,
+            "discount_black_friday": true,
+            "size_price_pr": 20,
+            "fw_price_pr": 400,
+            "primary_price_color": "#000000",
+            "secondary_price_color": "#868686",
+            "price_sale": "#fa0000"
+          }
+        },
+        "regios_discounts_product_page_extension_KzhaNK": {
+          "type": "shopify://apps/regios-discounts/blocks/product_page_extension/dc1514bb-4830-4102-bffa-e8b300bac5bd",
+          "disabled": true,
+          "settings": {
+            "product": "{{product}}",
+            "valueType": "percentage",
+            "value": 20,
+            "calculate_discount_based_on": "product_price",
+            "limit_to_tags": true,
+            "limit_to_tags_string": "wholesale",
+            "limit_to_collection": "",
+            "exclude_products_on_sale": true,
+            "show_badge": true,
+            "badge_bg": "#f2f2f2",
+            "badge_fg": "#000000",
+            "badge_text_if_no_discount": "",
+            "badge_css": "font-family: aeonikpro-regular;",
+            "show_strikethrough": true,
+            "show_original_price_if_not_eligible": false,
+            "currency_code_enabled": false,
+            "price_css": "",
+            "original_price_css": "",
+            "discounted_price_css": "",
+            "show_text": true,
+            "text_before_price": "Your price:",
+            "text_after_price": "for Cyber Monday",
+            "text_css": ""
+          }
+        },
+        "1a3a9220-2bb3-4ab1-a2cb-03d0d9bb32c6": {
+          "type": "description",
+          "settings": {
+            "des": "1",
+            "text": "<p>The most sought after extension method and most popular weft type due to its ultra-thin weft profile and artisanal craftsmanship. This low-profile weft allows you to seamlessly blend any hair type with professional results.</p>",
+            "length": 30,
+            "readm": false,
+            "readm_txt": "Read more"
+          }
+        },
+        "8efd84b3-4647-43eb-8040-d7451a522e7d": {
+          "type": "size",
+          "disabled": true,
+          "settings": {
+            "size_chart": "2",
+            "pos_sizeg": "1",
+            "sc_type": "1",
+            "page": "size-chart",
+            "size_ck": "",
+            "icon": "default",
+            "icon_name": "las la-ruler-horizontal",
+            "ani": "none"
+          }
+        },
+        "8f619784-04a8-4c20-b813-6902f9e3e922": {
+          "type": "form",
+          "settings": {
+            "selector_mode": "radio is-sw__full",
+            "color_mode": "variant_image is-sw-cl__round is-sw-cl__label",
+            "enable_fit_ratio_img": false,
+            "color_size": "large",
+            "show_qty": true,
+            "enable_wishlist": false,
+            "enable_compare": false,
+            "btn_atc_full": false,
+            "pr_btn_round": 40,
+            "wis_cp_btn_round": 40,
+            "ani": "none",
+            "time": 6,
+            "btn_txt": "3",
+            "btn_icon": true,
+            "button_style": "default",
+            "button_color": "dark",
+            "button_effect": "sweep-to-right",
+            "wishlist_color": "#000000",
+            "wishlist_color_hover": "#fa0000",
+            "wishlist_color_active": "#e81e1e",
+            "compare_color": "#000000",
+            "compare_color_hover": "#fa0000",
+            "show_dynamic_checkout": false,
+            "btn_txt2": "3",
+            "button_color_payment": "dark",
+            "product_list": [],
+            "show_product_current": true,
+            "show_text_price": true,
+            "qty_val": "1",
+            "advance_label": "Choose style",
+            "advance_pr_list": []
+          }
+        },
+        "fabrikator_inventory_assistant_app_block_fYeCq8": {
+          "type": "shopify://apps/fabrikator-inventory-assistant/blocks/app-block/bb5d39a7-1a52-44bc-9d6a-93a2f8a651ba",
+          "settings": {
+            "shipmentInfoText": "PREORDER: Estimated shipment by",
+            "date_format": "english"
+          }
+        },
+        "es_back_in_stock_product_restore_email_wLHBBR": {
+          "type": "shopify://apps/sw-back-in-stock/blocks/product-restore-email/b190bced-3b7b-47da-a05f-6ea4821c3a77",
+          "settings": {}
+        },
+        "54c54de4-47b1-4ce9-91b6-7239a5517aaa": {
+          "type": "order",
+          "disabled": true,
+          "settings": {
+            "hide_pre": true,
+            "icon": "2",
+            "icon_name": "las la-box",
+            "ani": "none",
+            "txt": "<span style=\"line-height:1.5\">Free Express shipping on all hair orders over $250 in the Continental US<strong></strong></span>",
+            "ds": 2,
+            "de": 6,
+            "mode": "2",
+            "cut_day": "SAT,SUN",
+            "frm_day": "t44, t46 t45",
+            "time": "16:00:00",
+            "hr": "hours",
+            "min": "minutes"
+          }
+        },
+        "custom_liquid_GAMwRT": {
+          "type": "custom_liquid",
+          "settings": {
+            "custom_liquid": "<div id=\"countdown-timer\" style=\"display: flex; gap: 6px; align-items: center; font-family: 'AeonikPro-Regular', sans-serif; font-size: 13px; margin-top: 0; padding: 0; white-space: nowrap;\">\n  <span style=\"color: #868686; font-weight: 500;\">Everything restocked in</span>\n  <span id=\"days\" style=\"font-weight: 600; font-size: 14px;\">0</span>\n  <span style=\"color: #868686;\">days</span>\n  <span id=\"hours\" style=\"font-weight: 600; font-size: 14px;\">0</span>\n  <span style=\"color: #868686;\">hours</span>\n</div>\n\n<script>\n(function() {\n  // Target date: January 30, 2026 at 11:59 PM MST\n  // MST is UTC-7\n  const targetDate = new Date('2026-01-30T23:59:00-07:00').getTime();\n  const timerElement = document.getElementById('countdown-timer');\n  \n  function updateCountdown() {\n    const now = new Date().getTime();\n    const distance = targetDate - now;\n    \n    if (distance <= 0) {\n      timerElement.style.display = 'none';\n      return;\n    }\n    \n    const days = Math.floor(distance / (1000 * 60 * 60 * 24));\n    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));\n    \n    document.getElementById('days').textContent = days;\n    document.getElementById('hours').textContent = hours;\n  }\n  \n  updateCountdown();\n  setInterval(updateCountdown, 1000);\n})();\n</script>"
+          }
+        },
+        "63217937-b18c-4e9f-b8c9-eb0b670c14fc": {
+          "type": "meta",
+          "disabled": true,
+          "settings": {
+            "pr_meta_horizontal": false,
+            "show_options": false,
+            "show_vendor": false,
+            "show_type": false,
+            "show_sku": false,
+            "show_barcode": false,
+            "show_available": true,
+            "show_category": false,
+            "show_tags": false
+          }
+        },
+        "6927e5dd-04a4-4db6-a60c-76fab4d0069a": {
+          "type": "socials",
+          "disabled": true,
+          "settings": {
+            "title": "Follow",
+            "social_mode": "1",
+            "social_style": "simple",
+            "social_size": "small",
+            "bd_radius": 0,
+            "use_color_set": true,
+            "pri_cl": "#222222",
+            "pri_hover_cl": "#222222",
+            "space_h_item": "20",
+            "space_v_item": "5",
+            "space_h_item_mb": "10",
+            "space_v_item_mb": "2"
+          }
+        },
+        "ff4e4ed9-2087-42f7-8182-94e5a5181c84": {
+          "type": "tab_add",
+          "disabled": true,
+          "settings": {
+            "title": "Additional Information"
+          }
+        },
+        "3090d62a-b7a8-4f60-9743-2d26b84a78f3": {
+          "type": "tab_rivui",
+          "disabled": true,
+          "settings": {
+            "title": "Customer Reviews",
+            "review_liquid": ""
+          }
+        }
+      },
+      "block_order": [
+        "3eaacecf-c956-46e5-84ef-40474509a065",
+        "loox_reviews_loox_rating_NrmjfJ",
+        "49fc91c0-8308-4d0f-90f1-cfe6c5d8ea04",
+        "klaviyo_email_marketing_sms_customer_hub_wishlist_qLiDeY",
+        "18a8b200-4f94-4b72-b0eb-01abf185ecb3",
+        "regios_discounts_product_page_extension_KzhaNK",
+        "1a3a9220-2bb3-4ab1-a2cb-03d0d9bb32c6",
+        "8efd84b3-4647-43eb-8040-d7451a522e7d",
+        "8f619784-04a8-4c20-b813-6902f9e3e922",
+        "fabrikator_inventory_assistant_app_block_fYeCq8",
+        "es_back_in_stock_product_restore_email_wLHBBR",
+        "54c54de4-47b1-4ce9-91b6-7239a5517aaa",
+        "custom_liquid_GAMwRT",
+        "63217937-b18c-4e9f-b8c9-eb0b670c14fc",
+        "6927e5dd-04a4-4db6-a60c-76fab4d0069a",
+        "ff4e4ed9-2087-42f7-8182-94e5a5181c84",
+        "3090d62a-b7a8-4f60-9743-2d26b84a78f3"
+      ],
+      "custom_css": [],
+      "settings": {
+        "pr_layout": "default",
+        "enable_sticky_info": false,
+        "enable_space_content": false,
+        "media_layout": "thumbnails_right",
+        "media_size": "medium",
+        "thumb_lr_size": "medium",
+        "thumb_lr_hover": "1",
+        "image_ratio": "ratio1_1",
+        "image_size": "cover",
+        "image_position": "8",
+        "main_click": "none",
+        "zoom_tp": "inner",
+        "enable_zoom_icon": true,
+        "enable_zoom_click_mb": true,
+        "enable_video_looping": true,
+        "enable_video_muting": true,
+        "enable_video_autoplaying": true,
+        "eff": "slide",
+        "nav_btn": false,
+        "btn_vi": "hover",
+        "btn_owl": "simple",
+        "btn_shape": "round",
+        "btn_cl": "dark",
+        "btn_size": "small",
+        "btn_hidden_mobile": true,
+        "nav_dot": false,
+        "dot_owl": "default",
+        "dots_cl": "dark",
+        "dots_round": true,
+        "dots_space": 10,
+        "dots_hidden_mobile": false,
+        "tabs_design": "tab",
+        "tabs_accordion_mb": true,
+        "enable_line_tabs": true,
+        "tabs_position": "inner",
+        "enable_first_tab": true,
+        "tabs_layout": "default",
+        "bg": "#ffffff",
+        "bg_mb": "#ffffff",
+        "product_list": [],
+        "sticky_mode": "0",
+        "sticky_show": "2",
+        "sticky_layout_mb": "default",
+        "enable_select": true,
+        "ani": "none",
+        "time": 6,
+        "option_units": "Length:inches"
+      }
+    },
+    "sidebar": {
+      "type": "sidebar-product",
+      "disabled": true,
+      "settings": {
+        "enable_drawer": false,
+        "space": 50,
+        "size": "medium",
+        "br_style": "none",
+        "brcolor": "#222222",
+        "sidebar_bdr": 5,
+        "sidebar_pd": 10
+      }
+    },
+    "product-related-recent": {
+      "type": "product-related-recent",
+      "blocks": {
+        "942d0ec4-5182-4818-a3d6-d06cbf2680a1": {
+          "type": "recommendations",
+          "settings": {
+            "design_heading": "1",
+            "heading_center": true,
+            "title": "Related products",
+            "description": "",
+            "tophead_mb": 30,
+            "tophead_mb_tb": 30,
+            "tophead_mb_mb": 25,
+            "product_des": "1",
+            "rating_pos": "1",
+            "list_color_pos": "1",
+            "list_size_pos": "1",
+            "show_vendor": false,
+            "use_cdt": false,
+            "limit": 10,
+            "display_type": "3",
+            "image_ratio": "rationt",
+            "image_size": "cover",
+            "image_position": "8",
+            "content_align": "default",
+            "col_dk": "4",
+            "col_tb": "3",
+            "col_mb": "2",
+            "space_h_item": "30",
+            "space_v_item": "30",
+            "space_h_item_tb": "15",
+            "space_v_item_tb": "15",
+            "space_h_item_mb": "15",
+            "space_v_item_mb": "15",
+            "layout_des": "2",
+            "loop": true,
+            "au_time": 0,
+            "au_hover": true,
+            "nav_btn": false,
+            "btn_pos": "in",
+            "btn_distance": 15,
+            "btn_vi": "hover",
+            "btn_owl": "default",
+            "btn_shape": "none",
+            "btn_cl": "dark",
+            "btn_size": "small",
+            "btn_hidden_mobile": true,
+            "nav_dot": true,
+            "dot_owl": "elessi2",
+            "dots_cl": "dark",
+            "dots_round": true,
+            "dots_space": 15,
+            "dots_hidden_mobile": false,
+            "mgb": 35,
+            "mgb_tb": 50,
+            "mgb_mb": 15
+          }
+        },
+        "67689988-9945-4e23-8a5b-10f1dd3e4b39": {
+          "type": "recently",
+          "settings": {
+            "design_heading": "1",
+            "heading_center": true,
+            "title": "Recently viewed",
+            "description": "",
+            "tophead_mb": 30,
+            "tophead_mb_tb": 30,
+            "tophead_mb_mb": 25,
+            "product_des": "1",
+            "rating_pos": "1",
+            "list_color_pos": "1",
+            "list_size_pos": "1",
+            "show_vendor": false,
+            "use_cdt": false,
+            "limit": 8,
+            "sortby": "3",
+            "unavailable_prs": "show",
+            "image_ratio": "rationt",
+            "image_size": "cover",
+            "image_position": "8",
+            "content_align": "default",
+            "col_dk": "4",
+            "col_tb": "3",
+            "col_mb": "2",
+            "space_h_item": "30",
+            "space_v_item": "30",
+            "space_h_item_tb": "15",
+            "space_v_item_tb": "15",
+            "space_h_item_mb": "15",
+            "space_v_item_mb": "15",
+            "layout_des": "2",
+            "loop": true,
+            "au_time": 0,
+            "au_hover": true,
+            "nav_btn": false,
+            "btn_pos": "in",
+            "btn_distance": 15,
+            "btn_vi": "hover",
+            "btn_owl": "default",
+            "btn_shape": "none",
+            "btn_cl": "dark",
+            "btn_size": "small",
+            "btn_hidden_mobile": true,
+            "nav_dot": true,
+            "dot_owl": "elessi2",
+            "dots_cl": "dark",
+            "dots_round": true,
+            "dots_space": 15,
+            "dots_hidden_mobile": false,
+            "mgb": 35,
+            "mgb_tb": 50,
+            "mgb_mb": 15
+          }
+        }
+      },
+      "block_order": [
+        "942d0ec4-5182-4818-a3d6-d06cbf2680a1",
+        "67689988-9945-4e23-8a5b-10f1dd3e4b39"
+      ],
+      "disabled": true,
+      "settings": {
+        "enable_tab": false,
+        "layout": "t4s-se-container",
+        "cl_bg": "",
+        "cl_bg_gradient": "",
+        "mg": ",,50px,",
+        "pd": "",
+        "mg_tb": ",,50px,",
+        "pd_tb": "",
+        "mg_mb": "30px,,50px,",
+        "pd_mb": ""
+      }
+    },
+    "17652153982dfce9e8": {
+      "type": "apps",
+      "settings": {}
+    }
+  },
+  "order": [
+    "breadcrumb",
+    "main",
+    "sidebar",
+    "product-related-recent",
+    "17652153982dfce9e8"
+  ]
+}

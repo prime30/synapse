@@ -1,0 +1,304 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "mega-menu": {
+      "type": "mega-menu",
+      "blocks": {
+        "926fb2e5-732d-459f-a8a9-b0d7683bb010": {
+          "type": "mega",
+          "settings": {
+            "id": 1
+          }
+        },
+        "dfcb9569-dc1b-4e58-9c14-5bcd911c0c5f": {
+          "type": "banner",
+          "settings": {
+            "image_ratio": "ratioadapt",
+            "image_size": "cover",
+            "image_position": "8",
+            "height_dk": 400,
+            "img_effect": "none",
+            "b_effect": "none",
+            "b_link": "",
+            "open_link": "_self",
+            "html": "<h3 class=\"fs__30 mg__0 lh__1 cw mb__10\">lighting collections</h3><h4 class=\"fs__16 mg__0 cw\">Explorer</h4>",
+            "content_align": "center",
+            "cv_pos": 50,
+            "ch_pos": 50,
+            "cl_txt": "#ffffff",
+            "cl_overlay": "#000000",
+            "cl_opacity": 0,
+            "col": "4"
+          }
+        },
+        "02e1513f-10d1-42fc-91e8-c2880e221186": {
+          "type": "pr",
+          "settings": {
+            "mg_heading": "HEADING",
+            "use_heading": false,
+            "collection": "frontpage",
+            "product_des": "1",
+            "rating_pos": "1",
+            "list_color_pos": "1",
+            "list_size_pos": "1",
+            "show_vendor": true,
+            "use_cdt": false,
+            "image_ratio": "rationt",
+            "image_size": "cover",
+            "image_position": "8",
+            "content_align": "default",
+            "limit": 8,
+            "col_dk": "3",
+            "space_h_item": "20",
+            "space_v_item": "30",
+            "layout_des": "2",
+            "nav_btn": true,
+            "btn_vi": "hover",
+            "btn_pos": "in",
+            "btn_owl": "simple",
+            "btn_shape": "round",
+            "btn_cl": "dark",
+            "btn_size": "small",
+            "btn_hidden_mobile": true,
+            "col": "8"
+          }
+        },
+        "10c36dd8-9579-4b32-9578-0d5ffb00cf32": {
+          "type": "mega",
+          "settings": {
+            "id": 2
+          }
+        },
+        "10d6b904-7c22-49ae-b715-702a2a42001d": {
+          "type": "blogs",
+          "settings": {
+            "blog": "fashions",
+            "show_border": true,
+            "post_des": "1",
+            "show_blog_title": "blog_current",
+            "show_content": true,
+            "show_tags": true,
+            "show_author": true,
+            "show_comment": true,
+            "show_readmore": true,
+            "show_date": true,
+            "date": "date",
+            "content_align": "start",
+            "limit": 8,
+            "img_effect": "none",
+            "b_effect": "none",
+            "image_ratio": "ratioadapt",
+            "image_size": "cover",
+            "image_position": "8",
+            "col_dk": "2",
+            "space_h_item": "30",
+            "space_v_item": "30",
+            "layout_des": "2",
+            "nav_btn": true,
+            "btn_vi": "hover",
+            "btn_pos": "in",
+            "btn_owl": "default",
+            "btn_shape": "none",
+            "btn_cl": "dark",
+            "btn_size": "small",
+            "btn_hidden_mobile": true,
+            "col": "12"
+          }
+        }
+      },
+      "block_order": [
+        "926fb2e5-732d-459f-a8a9-b0d7683bb010",
+        "dfcb9569-dc1b-4e58-9c14-5bcd911c0c5f",
+        "02e1513f-10d1-42fc-91e8-c2880e221186",
+        "10c36dd8-9579-4b32-9578-0d5ffb00cf32",
+        "10d6b904-7c22-49ae-b715-702a2a42001d"
+      ],
+      "settings": {}
+    },
+    "mb_cat": {
+      "type": "mb_cat",
+      "blocks": {
+        "fe5c3396-2305-4bfc-9ac2-9e521ed36079": {
+          "type": "cat",
+          "settings": {
+            "cat": "men",
+            "title": "",
+            "url": "",
+            "menu": "",
+            "lb": "",
+            "lb_cl": "#e91e63",
+            "icons_op": "2",
+            "icon": "chair"
+          }
+        },
+        "7f7c3653-e15b-439f-a697-1ac1394015a7": {
+          "type": "catimg",
+          "settings": {
+            "cat": "bags",
+            "title": "dfdf",
+            "url": "",
+            "lb": "new",
+            "lb_cl": "#e91e63",
+            "icons_op": "2",
+            "icon": "chair",
+            "cat1": "men",
+            "url1": "",
+            "cat2": "",
+            "url2": "",
+            "cat3": "",
+            "url3": "",
+            "cat4": "",
+            "url4": "",
+            "cat5": "",
+            "url5": "",
+            "cat6": "",
+            "url6": "",
+            "cat7": "",
+            "url7": "",
+            "cat8": "",
+            "url8": "",
+            "cat9": "",
+            "url9": "",
+            "cat10": "",
+            "url10": "",
+            "cat11": "",
+            "url11": "",
+            "cat12": "",
+            "url12": "",
+            "cat13": "",
+            "url13": "",
+            "cat14": "",
+            "url14": "",
+            "cat15": "",
+            "url15": "",
+            "cat16": "",
+            "url16": "",
+            "cat17": "",
+            "url17": "",
+            "cat18": "",
+            "url18": "",
+            "cat19": "",
+            "url19": "",
+            "cat20": "",
+            "url20": "",
+            "cat21": "",
+            "url21": "",
+            "cat22": "",
+            "url22": "",
+            "cat23": "",
+            "url23": "",
+            "cat24": "",
+            "url24": "",
+            "cat25": "",
+            "url25": ""
+          }
+        }
+      },
+      "block_order": [
+        "fe5c3396-2305-4bfc-9ac2-9e521ed36079",
+        "7f7c3653-e15b-439f-a697-1ac1394015a7"
+      ],
+      "settings": {
+        "title": ""
+      }
+    },
+    "c5cd4112-c3b9-4eb4-94d7-b555caf6dc3d": {
+      "type": "featured-collection",
+      "settings": {
+        "design_heading": "1",
+        "heading_center": true,
+        "top_heading": "",
+        "top_subheading": "",
+        "head_bigger": false,
+        "tophead_mb": 30,
+        "tophead_mb_tb": 30,
+        "tophead_mb_mb": 25,
+        "collection": "tools",
+        "product_des": "2",
+        "rating_pos": "1",
+        "list_color_pos": "1",
+        "list_size_pos": "1",
+        "show_vendor": true,
+        "use_cdt": false,
+        "image_ratio": "ratio1_1",
+        "image_size": "cover",
+        "image_position": "8",
+        "content_align": "default",
+        "limit": 8,
+        "col_dk": "4",
+        "col_tb": "3",
+        "col_mb": "2",
+        "space_h_item": "30",
+        "space_v_item": "30",
+        "space_h_item_tb": "30",
+        "space_v_item_tb": "30",
+        "space_h_item_mb": "10",
+        "space_v_item_mb": "10",
+        "layout_des": "2",
+        "border_pr": false,
+        "loop": true,
+        "au_time": 0,
+        "au_hover": true,
+        "nav_btn": false,
+        "btn_pos": "in",
+        "btn_distance": 15,
+        "btn_vi": "hover",
+        "btn_owl": "default",
+        "btn_shape": "none",
+        "btn_cl": "dark",
+        "btn_size": "small",
+        "btn_hidden_mobile": false,
+        "nav_dot": false,
+        "dot_owl": "default",
+        "dots_cl": "dark",
+        "dots_round": true,
+        "dots_space": 10,
+        "dots_bottom_pos": 20,
+        "dots_hidden_mobile": false,
+        "border_pr_img": false,
+        "use_pagination": "none",
+        "enable_bar_lm": true,
+        "text_view_all": "",
+        "btn_icon": false,
+        "btn_rounded": false,
+        "button_style": "default",
+        "btns_size": "default",
+        "btns_cl": "dark",
+        "button_effect": "default",
+        "btns_pos": "t4s-text-center",
+        "head_btn_label": "Shop All",
+        "head_btn_url": "",
+        "head_btn_icon": true,
+        "head_btn_rounded": false,
+        "head_button_style": "outline",
+        "head_btns_size": "default",
+        "head_btns_cl": "dark",
+        "head_button_effect": "default",
+        "hidden_btn_mb": false,
+        "head_slide_btn": false,
+        "layout": "t4s-container-wrap",
+        "cl_bg": "",
+        "cl_bg_gradient": "",
+        "mg": ",,50px,",
+        "pd": "",
+        "mg_tb": ",,30px,",
+        "pd_tb": "",
+        "mg_mb": ",,30px,",
+        "pd_mb": ""
+      }
+    }
+  },
+  "order": [
+    "mega-menu",
+    "mb_cat",
+    "c5cd4112-c3b9-4eb4-94d7-b555caf6dc3d"
+  ]
+}

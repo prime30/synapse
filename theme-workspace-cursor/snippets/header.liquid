@@ -1,0 +1,54 @@
+{%- comment -%}
+header-inline - design 3( logo left ) , 5( logo center ), 9( logo left,search form ), 2 (header menu split)
+header-sidebar - design 1( button opend menu left ), design 6( button opend menu right - social ), design 10( search form )
+header With categories menu - design 8
+header Menu in bottom  - design 4 - social
+header vertical  - design 7 - social
+if link.links != blank and link.active or link.child_active or link.child_current 
+{%- endcomment -%}
+{%- liquid
+if template.suffix != 'config' and request.design_mode == false
+  section 'title_config'
+  section 'pr_item_config'
+  section 'btn_config'
+endif
+if request.page_type == 'page' and page.template_suffix == 't4sindex' and settings.header_design == 'e-commerce'
+ assign is_page_index = true
+else
+ assign is_page_index = false
+endif -%}
+
+{%- if t_name == 'index' -%}<h1 class="site-header__logo t4s-d-none">{{- shop.name -}}</h1>{%- endif -%}
+{%- liquid
+  assign admin_sp = request.design_mode
+  if template contains 'index'
+    section 'black-friday-promo-banner'
+  endif
+  if template contains 'index'
+    section 'promo-banner-2'
+  endif
+  section 'announcement-bar'
+  section 'top-bar'
+  case settings.header_design 
+   when 'inline' 
+     section 'header-inline'
+   when 'bottom'
+     section 'header-bottom'
+   when 'search' 
+     section 'header-search'
+     if admin_sp 
+      section 'header-categories' 
+     endif
+   when 'e-commerce'
+     section 'header-e-commerce'
+  endcase
+  assign link_index = 0
+  for link in linklists.menu-e-commerce-connect.links
+     if link.active or link.child_active or link.child_current 
+        assign link_index = forloop.index
+        break
+     endif
+   endfor 
+  if admin_sp and settings.header_design != 'sidebar' and link_index == 0
+  section 'mega-menu'
+  endif  -%}

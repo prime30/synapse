@@ -250,3 +250,44 @@ export function formatDiagnostics(diagnostics: UnifiedDiagnostic[]): string {
 export function clearDiagnosticsCache(): void {
   diagnosticsCache.clear();
 }
+
+// ── Post-apply diagnostics ──────────────────────────────────────────────
+
+export interface DiagnosticsResult {
+  valid: boolean;
+  issues: { line: number; message: string; severity: 'error' | 'warning' }[];
+}
+
+function inferFileType(filePath: string): string {
+  if (filePath.endsWith('.liquid')) return 'liquid';
+  if (filePath.endsWith('.js') || filePath.endsWith('.ts')) return 'javascript';
+  if (filePath.endsWith('.css') || filePath.endsWith('.scss')) return 'css';
+  if (filePath.endsWith('.json')) return 'json';
+  return 'other';
+}
+
+/**
+ * Run diagnostics on a file after apply and return a simplified result
+ * suitable for the apply-with-diagnostics API response.
+ */
+export async function runPostApplyDiagnostics(
+  filePath: string,
+  content: string,
+): Promise<DiagnosticsResult> {
+  const fileType = inferFileType(filePath);
+
+  const diagnostics = await runDiagnosticsDeep(filePath, content, fileType);
+
+  const issues = diagnostics
+    .filter(d => d.severity === 'error' || d.severity === 'warning')
+    .map(d => ({
+      line: d.line,
+      message: d.message,
+      severity: d.severity as 'error' | 'warning',
+    }));
+
+  return {
+    valid: !issues.some(i => i.severity === 'error'),
+    issues,
+  };
+}

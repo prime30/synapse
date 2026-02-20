@@ -1,0 +1,96 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "heading": {
+      "type": "heading-template",
+      "blocks": {
+        "b49343f1-a16f-4a0c-834a-46b77fe777da": {
+          "type": "1",
+          "settings": {
+            "heading": "Page Heading",
+            "fontf": "inherit",
+            "text_cl": "#000000",
+            "text_fs": 40,
+            "text_lh": 56,
+            "text_fw": 300,
+            "text_ls": 0,
+            "font_italic": false,
+            "font_uppercase": false,
+            "text_shadow": false,
+            "mgb": 0,
+            "text_fs_tb": 35,
+            "text_lh_tb": 46,
+            "text_ls_tb": 0,
+            "mgb_tb": 0,
+            "hidden_mobile": false,
+            "text_fs_mb": 35,
+            "text_lh_mb": 46,
+            "text_ls_mb": 0,
+            "mgb_mb": 0
+          }
+        },
+        "46ff9c32-9810-4c24-b2bd-9c6e38cc2ea8": {
+          "type": "3",
+          "settings": {
+            "breadcrumb_color": "#868686",
+            "breadcrumb_color_link": "#000000",
+            "brc_mgb": 0
+          }
+        }
+      },
+      "block_order": [
+        "b49343f1-a16f-4a0c-834a-46b77fe777da",
+        "46ff9c32-9810-4c24-b2bd-9c6e38cc2ea8"
+      ],
+      "disabled": true,
+      "settings": {
+        "parallax": false,
+        "color": "#000000",
+        "overlay": 0,
+        "padding_top": 50,
+        "padding_bottom": 50,
+        "mg_b": 50,
+        "padding_top_tb": 50,
+        "padding_bottom_tb": 50,
+        "mg_btb": 50,
+        "padding_top_mb": 50,
+        "padding_bottom_mb": 50,
+        "mg_bmb": 50,
+        "box_border": "top_bottom",
+        "bg_pos": "center center",
+        "bg_repeat": "no-repeat",
+        "bg_size": "cover"
+      }
+    },
+    "main": {
+      "type": "main-page",
+      "disabled": true,
+      "custom_css": [
+        ".t4-section-announcement-bar {display: none!important;}"
+      ],
+      "settings": {
+        "layout": "t4s-container-fluid",
+        "cl_bg": "",
+        "cl_bg_gradient": "",
+        "mg": "60px,,60px,",
+        "pd": "",
+        "mg_tb": ",,50px,",
+        "pd_tb": "",
+        "mg_mb": ",,30px,",
+        "pd_mb": ""
+      }
+    }
+  },
+  "order": [
+    "heading",
+    "main"
+  ]
+}

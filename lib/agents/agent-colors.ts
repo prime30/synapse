@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared agent color map - single source of truth for agent colors across UI.
  * Used by ThinkingBlock, ContextMeter, AgentLiveBreakout, and editor decorations.
  */
@@ -70,9 +70,19 @@ export const DEFAULT_AGENT_COLOR: AgentColorSet = {
   cssDarkColor: '#a8a29e',
 };
 
+/** General subagent color (shared by general_1 through general_4). */
+const GENERAL_AGENT_COLOR: AgentColorSet = {
+  border: 'border-indigo-300 dark:border-indigo-700',
+  bg: 'bg-indigo-50 dark:bg-indigo-950',
+  text: 'text-indigo-600 dark:text-indigo-400',
+  cssColor: '#4f46e5',
+  cssDarkColor: '#818cf8',
+};
+
 /** Get the color set for a given agent type, with a safe fallback. */
 export function getAgentColor(agentType: string | undefined | null): AgentColorSet {
   if (!agentType) return DEFAULT_AGENT_COLOR;
+  if (agentType.startsWith('general')) return GENERAL_AGENT_COLOR;
   return AGENT_COLORS[agentType] ?? DEFAULT_AGENT_COLOR;
 }
 
@@ -84,4 +94,18 @@ export const AGENT_BADGE_COLORS: Record<string, string> = {
   javascript: 'bg-yellow-500/20 text-yellow-400',
   json: 'bg-emerald-500/20 text-emerald-400',
   review: 'bg-rose-500/20 text-rose-400',
+  general: 'bg-indigo-500/20 text-indigo-400',
+  general_1: 'bg-indigo-500/20 text-indigo-400',
+  general_2: 'bg-indigo-500/20 text-indigo-400',
+  general_3: 'bg-indigo-500/20 text-indigo-400',
+  general_4: 'bg-indigo-500/20 text-indigo-400',
 };
+
+/** Format agent type for user-friendly display. */
+export function formatAgentLabel(agentType: string): string {
+  if (agentType.startsWith('general_')) {
+    const n = agentType.split('_')[1];
+    return `Subagent ${n}`;
+  }
+  return agentType.replace('_', ' ');
+}

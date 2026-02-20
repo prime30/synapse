@@ -4,11 +4,14 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallba
 import { createPortal } from 'react-dom';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
 import { SuggestionChips } from './SuggestionChips';
+import { SynapseIconAnim } from './SynapseIconAnim';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
 import type { Suggestion } from '@/lib/ai/prompt-suggestions';
-import type { AgentMode, IntentMode, MaxAgents } from '@/hooks/useAgentSettings';
+import type { IntentMode, MaxAgents } from '@/hooks/useAgentSettings';
 import type { OutputMode } from '@/lib/ai/signal-detector';
 import { ThinkingBlock, type ThinkingStep } from './ThinkingBlock';
+import { ThinkingBlockV2 } from './ThinkingBlockV2';
+import { ToolActionItem } from './ToolActionItem';
 import { ProgressRail } from './ProgressRail';
 import { deriveRailSteps } from '@/lib/agents/phase-mapping';
 import type { ExecutionMode } from '@/lib/agents/phase-mapping';
@@ -23,7 +26,7 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, User, Users, Send } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle } from 'lucide-react';
 import { PromptTemplateLibrary } from './PromptTemplateLibrary';
 import { ShareButton } from './ShareButton';
 import { ConflictResolver } from './ConflictResolver';
@@ -33,6 +36,7 @@ import { usePromptProgress } from '@/hooks/usePromptProgress';
 import { useContextMeter } from '@/hooks/useContextMeter';
 import { ContextMeter } from './ContextMeter';
 import type { ChatSession } from './SessionHistory';
+import { logInteractionEvent } from '@/lib/ai/interaction-client';
 
 /** Sanitize user message content for the sticky prompt banner. */
 function sanitizeForStickyPrompt(content: string): string {
@@ -128,17 +132,17 @@ function UserMessageContent({ content }: { content: string }) {
 
   // Parse [Selected code in editor ...]: ```...``` into pills (collapsed by default)
   const parts: Array<{ type: 'text'; text: string } | { type: 'code'; startLine?: number; endLine?: number; code: string }> = [];
-  SELECTED_CODE_BLOCK_RE.lastIndex = 0;
+  const re = new RegExp(SELECTED_CODE_BLOCK_RE.source, SELECTED_CODE_BLOCK_RE.flags);
   let lastEnd = 0;
   let match: RegExpExecArray | null;
-  while ((match = SELECTED_CODE_BLOCK_RE.exec(cleaned)) !== null) {
+  while ((match = re.exec(cleaned)) !== null) {
     if (match.index > lastEnd) {
       parts.push({ type: 'text', text: cleaned.slice(lastEnd, match.index) });
     }
     const startLine = match[1] ? parseInt(match[1], 10) : undefined;
     const endLine = match[2] ? parseInt(match[2], 10) : undefined;
     parts.push({ type: 'code', startLine, endLine, code: match[3] ?? '' });
-    lastEnd = SELECTED_CODE_BLOCK_RE.lastIndex;
+    lastEnd = re.lastIndex;
   }
   if (lastEnd < cleaned.length) {
     parts.push({ type: 'text', text: cleaned.slice(lastEnd) });
@@ -170,6 +174,19 @@ function UserMessageContent({ content }: { content: string }) {
 
 // PlanStep is now unified in PlanApprovalModal (supports both `text` and `description`)
 export type { PlanStep } from './PlanApprovalModal';
+
+// ── Cursor-style content blocks for interleaved rendering ───────────
+export type ContentBlock =
+  | { type: 'text'; id: string; text: string }
+  | { type: 'tool_action'; id: string; toolId: string; toolName: string;
+      label: string; subtitle?: string;
+      status: 'loading' | 'done' | 'error';
+      cardType?: 'plan' | 'code_edit' | 'clarification' | 'file_create' |
+                 'preview_nav' | 'file_op' | 'shopify_op' | 'screenshot' |
+                 'screenshot_comparison' | 'change_preview';
+      cardData?: unknown; error?: string }
+  | { type: 'thinking'; id: string; startedAt: number;
+      reasoningText: string; done: boolean; elapsedMs: number };
 
 export interface ChatMessage {
   id: string;
@@ -212,6 +229,16 @@ export interface ChatMessage {
   screenshots?: Array<{ url: string; storeDomain?: string; themeId?: string; path?: string; error?: string }>;
   /** Screenshot comparison result from agent tools. */
   screenshotComparison?: { beforeUrl: string; afterUrl: string; diffPercentage?: number; threshold?: number; passed?: boolean };
+
+  // ── Model & rate-limit indicators ──────────────────────────────────
+  /** The model actually used for this response (may differ from selection after fallback). */
+  activeModel?: string;
+  /** Whether a rate limit was hit during this response, triggering model fallback. */
+  rateLimitHit?: boolean;
+
+  // ── Cursor-style content blocks (ephemeral, not persisted) ─────────
+  /** Ordered content blocks for interleaved rendering. If present, drives Cursor-style rendering. */
+  blocks?: ContentBlock[];
 }
 
 interface ChatInterfaceProps {
@@ -238,10 +265,10 @@ interface ChatInterfaceProps {
   currentModel?: string;
   /** Called when model is changed */
   onModelChange?: (model: string) => void;
-  /** Current agent mode */
-  agentMode?: AgentMode;
-  /** Called when mode is toggled */
-  onModeChange?: (mode: AgentMode) => void;
+  /** Whether specialist mode is enabled (domain-specific agents). */
+  specialistMode?: boolean;
+  /** Called when specialist mode is toggled. */
+  onSpecialistModeChange?: (enabled: boolean) => void;
   /** Whether streaming was stopped by user */
   isStopped?: boolean;
   /** Called when user wants to apply a code block to a file */
@@ -282,12 +309,16 @@ interface ChatInterfaceProps {
   intentMode?: IntentMode;
   /** Called when the user switches intent mode */
   onIntentModeChange?: (mode: IntentMode) => void;
+  /** Switch mode AND auto-submit a message (mode-switch acceleration). */
+  onModeSwitchAndSend?: (mode: IntentMode, autoMessage: string) => void;
   /** Max sub-agents per specialist (1-4) */
   maxAgents?: MaxAgents;
   /** Called when the user changes the max agent count */
   onMaxAgentsChange?: (count: MaxAgents) => void;
   /** Called when user edits a message — resends from that point (index, new content) */
   onEditMessage?: (index: number, content: string) => void;
+  /** Truncate messages from a given index (used by edit-and-resend to remove before sending) */
+  onTruncateMessages?: (index: number) => void;
   /** Called when user wants to regenerate the last assistant response */
   onRegenerateMessage?: () => void;
   /** Called when user clicks a file path in an AI response to open it */
@@ -372,11 +403,21 @@ function HistorySummaryBlock({ count, summary }: { count: number; summary?: stri
 // ── Model options ──────────────────────────────────────────────────────────────
 
 const MODEL_OPTIONS = [
-  { value: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5', description: 'Fast, balanced' },
+  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', description: 'Fast, balanced + thinking' },
   { value: 'claude-opus-4-6', label: 'Opus 4.6', description: 'Most capable' },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Google AI' },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast, efficient' },
 ];
+
+const MODEL_LABELS: Record<string, string> = {
+  'claude-sonnet-4-6': 'Sonnet 4.6',
+  'claude-opus-4-6': 'Opus 4.6',
+  'claude-haiku-4-5-20251001': 'Haiku 4.5',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gpt-4o': 'GPT-4o',
+  'gpt-4o-mini': 'GPT-4o Mini',
+};
 
 // ── Action-specific loading labels ────────────────────────────────────────────
 
@@ -453,6 +494,74 @@ function generateSessionSummary(msgs: ChatMessage[]): string {
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// ── Mode-switch detection ─────────────────────────────────────────────────────
+
+/** Target modes that the assistant might suggest switching to. */
+type SuggestedMode = Extract<IntentMode, 'code' | 'plan' | 'debug'>;
+
+/** Detects if an assistant message suggests the user switch to a different mode. */
+function detectModeSwitchSuggestion(content: string, currentMode: IntentMode): SuggestedMode | null {
+  if (!content) return null;
+  const plain = content.replace(/\*\*/g, '');
+  // Match "switch to X mode" or "in X mode"
+  const modeMap: [RegExp, SuggestedMode][] = [
+    [/switch to code mode/i, 'code'],
+    [/switch to plan mode/i, 'plan'],
+    [/switch to debug mode/i, 'debug'],
+    [/in code mode.*(?:I can|to (?:create|apply|implement|make|write))/i, 'code'],
+    [/in plan mode.*(?:I can|to (?:create|design|plan))/i, 'plan'],
+  ];
+  for (const [regex, mode] of modeMap) {
+    if (regex.test(plain) && mode !== currentMode) return mode;
+  }
+  return null;
+}
+
+/** Inline button shown when the agent suggests switching modes. */
+function ModeSwitchButton({
+  targetMode,
+  onModeSwitchAndSend,
+  onSwitch,
+}: {
+  targetMode: SuggestedMode;
+  /** Combined switch + auto-send (preferred — avoids stale closure issues). */
+  onModeSwitchAndSend?: (mode: IntentMode, autoMessage: string) => void;
+  /** Fallback: just switch mode, no auto-send. */
+  onSwitch: (mode: IntentMode) => void;
+}) {
+  const [clicked, setClicked] = React.useState(false);
+
+  const handleClick = useCallback(() => {
+    if (clicked) return;
+    setClicked(true);
+
+    const autoMsg = 'Implement the code changes you just suggested.';
+    if (onModeSwitchAndSend) {
+      onModeSwitchAndSend(targetMode, autoMsg);
+    } else {
+      onSwitch(targetMode);
+    }
+  }, [clicked, targetMode, onModeSwitchAndSend, onSwitch]);
+
+  const label = `Switch to ${targetMode.charAt(0).toUpperCase() + targetMode.slice(1)} mode`;
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={clicked}
+      className={`mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+        clicked
+          ? 'border-accent/30 bg-accent/10 text-accent cursor-default'
+          : 'border-sky-400/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 hover:border-sky-400/60 cursor-pointer'
+      }`}
+    >
+      <ArrowRightCircle className="h-3.5 w-3.5" />
+      {clicked ? `Switched — implementing...` : label}
+    </button>
+  );
+}
+
 // ── ChatInterface component ───────────────────────────────────────────────────
 
 export function ChatInterface({
@@ -470,8 +579,8 @@ export function ChatInterface({
   onReview,
   currentModel,
   onModelChange,
-  agentMode = 'orchestrated',
-  onModeChange,
+  specialistMode = false,
+  onSpecialistModeChange,
   isStopped = false,
   onApplyCode,
   onSaveCode,
@@ -498,12 +607,14 @@ export function ChatInterface({
   onRenameSession: _onRenameSession,
   intentMode = 'code',
   onIntentModeChange,
+  onModeSwitchAndSend,
   maxAgents = 1,
   onMaxAgentsChange,
   onEditMessage,
+  onTruncateMessages,
   onRegenerateMessage,
   onOpenFile,
-  // errorCode — available via prop for future in-thread use
+  errorCode,
   resolveFileId: resolveFileIdProp,
   trimmedMessageCount = 0,
   historySummary,
@@ -529,6 +640,7 @@ export function ChatInterface({
   const scrollRef = useRef<HTMLDivElement>(null);
   /** When set, the next submit should edit-and-resend at this message index instead of appending. */
   const editPendingRef = useRef<number | null>(null);
+  const [editAnimatingId, setEditAnimatingId] = useState<string | null>(null);
   const [inputHasText, setInputHasText] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
@@ -564,6 +676,22 @@ export function ChatInterface({
   const intentDropdownOpenTimeRef = useRef<number>(0);
   const [modelPickerRect, setModelPickerRect] = useState<{ bottom: number; left: number } | null>(null);
   const modelPickerAnchorRef = useRef<HTMLButtonElement>(null);
+  const emitInteraction = useCallback(
+    (
+      kind: 'button_click' | 'mode_change' | 'system',
+      label: string,
+      metadata?: Record<string, unknown>,
+    ) => {
+      logInteractionEvent(projectId, {
+        kind,
+        sessionId: activeSessionId ?? null,
+        source: 'chat.ui',
+        label,
+        metadata,
+      });
+    },
+    [projectId, activeSessionId],
+  );
 
   useLayoutEffect(() => {
     if (!showIntentDropdown || !intentDropdownAnchorRef.current) {
@@ -685,11 +813,13 @@ export function ChatInterface({
   // ── EPIC 5: Plan modal handlers ──────────────────────────────────────────
   const handlePlanApprove = (steps: PlanStep[]) => {
     setPlanDismissedKey(planKey);
+    emitInteraction('button_click', 'plan.approve', { stepCount: steps.length });
     onSend(`Approved plan. Execute these ${steps.length} steps.`);
   };
 
   const handlePlanModify = (feedback: string) => {
     setPlanDismissedKey(planKey);
+    emitInteraction('button_click', 'plan.modify', { feedbackLength: feedback.length });
     onSend(`Modify the plan: ${feedback}`);
   };
 
@@ -750,6 +880,7 @@ export function ChatInterface({
 
   const handleClearChat = () => {
     if (!onClearChat) return;
+    emitInteraction('button_click', 'chat.clear');
     const summary = generateSessionSummary(messages);
     setSessionSummary(summary);
     onSessionSummary?.(summary);
@@ -873,6 +1004,7 @@ export function ChatInterface({
   };
 
   const handleSuggestionSelect = (prompt: string) => {
+    emitInteraction('button_click', 'suggestion.select', { prompt });
     onSend(prompt);
   };
 
@@ -897,11 +1029,13 @@ export function ChatInterface({
     if (!steps || steps.length === 0) return [];
     // Determine execution mode from intent + agent mode
     let execMode: ExecutionMode = 'orchestrated';
-    if (intentMode === 'ask') return []; // No rail for ask mode
     if (intentMode === 'plan') execMode = 'plan';
-    else if (agentMode === 'solo') execMode = 'solo';
-    return deriveRailSteps(steps, execMode);
-  }, [isLoading, messages, intentMode, agentMode]);
+    else if (intentMode === 'ask') execMode = 'solo'; // Ask mode uses solo pipeline
+    else if (maxAgents === 1) execMode = 'solo';
+    else execMode = specialistMode ? 'orchestrated' : 'general';
+    // Pass error code to deriveRailSteps so the active phase shows error state
+    return deriveRailSteps(steps, execMode, errorCode ?? undefined);
+  }, [isLoading, messages, intentMode, maxAgents, specialistMode, errorCode]);
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
@@ -912,12 +1046,14 @@ export function ChatInterface({
         aria-label="Conversation"
         aria-busy={isLoading || false}
       >
-        {/* Progress rail (sticky at top during streaming) */}
-        <ProgressRail
-          steps={activeRailSteps}
-          isStreaming={!!isLoading}
-          onStop={onStop}
-        />
+        {/* Progress rail -- hidden when Cursor-style blocks are active */}
+        {!messages[messages.length - 1]?.blocks?.length && (
+          <ProgressRail
+            steps={activeRailSteps}
+            isStreaming={!!isLoading}
+            onStop={onStop}
+          />
+        )}
 
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
@@ -966,12 +1102,7 @@ export function ChatInterface({
         {messages.length === 0 && !isLoading && (
           <div className="py-8 flex flex-col items-center">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl ide-surface-inset border ide-border flex items-center justify-center">
-                <svg className="w-7 h-7 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
-                  <circle cx="12" cy="11" r="3" />
-                </svg>
-              </div>
+              <SynapseIconAnim size={56} />
               <p className="text-base ide-text-2 font-semibold">Synapse AI</p>
               <p className="text-sm ide-text-3 text-center">What would you like to build?</p>
             </div>
@@ -985,7 +1116,10 @@ export function ChatInterface({
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => onIntentModeChange?.(item.key as IntentMode)}
+                  onClick={() => {
+                    emitInteraction('mode_change', 'intent.change', { mode: item.key, source: 'empty_state' });
+                    onIntentModeChange?.(item.key as IntentMode);
+                  }}
                   className={`rounded-lg px-3 py-2.5 text-center text-sm transition-colors border ${
                     intentMode === item.key
                       ? 'border-sky-400/40 bg-sky-500/10 ide-text'
@@ -998,15 +1132,6 @@ export function ChatInterface({
                 </button>
               ))}
             </div>
-            {showPreSuggestions && (
-              <div className="flex justify-center mt-5 w-full">
-                <SuggestionChips
-                  suggestions={contextSuggestions}
-                  onSelect={handleSuggestionSelect}
-                  variant="pre"
-                />
-              </div>
-            )}
           </div>
         )}
 
@@ -1047,7 +1172,15 @@ export function ChatInterface({
 
         {/* Messages */}
         {messages.map((m, idx) => (
-          <div key={m.id} className={`group/msg relative transition-colors ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}>
+          <div
+            key={m.id}
+            className={`group/msg relative transition-all duration-250 ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}
+            style={
+              editAnimatingId === m.id || (editAnimatingId && idx > messages.findIndex((msg) => msg.id === editAnimatingId))
+                ? { opacity: 0, transform: 'translateY(40px) scale(0.95)', pointerEvents: 'none' as const }
+                : undefined
+            }
+          >
             {/* Hover action buttons */}
             <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10 ide-surface-pop rounded-md px-0.5 py-0.5 border ide-border-subtle">
               {/* Edit & resend (user messages only) */}
@@ -1055,14 +1188,18 @@ export function ChatInterface({
                 <button
                   type="button"
                   onClick={() => {
-                    const el = inputRef.current;
-                    if (el) {
-                      el.value = m.content;
-                      setInputHasText(true);
-                      el.focus();
-                      // Store the index so submit triggers edit-and-resend
-                      editPendingRef.current = idx;
-                    }
+                    const content = m.content;
+                    setEditAnimatingId(m.id);
+                    setTimeout(() => {
+                      onTruncateMessages?.(idx);
+                      setEditAnimatingId(null);
+                      const el = inputRef.current;
+                      if (el) {
+                        el.value = content;
+                        setInputHasText(true);
+                        el.focus();
+                      }
+                    }, 250);
                   }}
                   className="rounded p-1 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
                   title="Edit and resend"
@@ -1147,164 +1284,244 @@ export function ChatInterface({
             >
               {m.role === 'assistant' ? (
                 <>
-                  {/* Thinking block (inline, above response content) with progress bar */}
-                  {m.thinkingSteps && m.thinkingSteps.length > 0 && (
-                    <ThinkingBlock
-                      steps={m.thinkingSteps}
-                      isComplete={m.thinkingComplete ?? false}
-                      defaultExpanded={!m.thinkingComplete}
-                      isStreaming={isLoading && idx === messages.length - 1}
-                      progress={isLoading && idx === messages.length - 1 ? promptProgress.progress : undefined}
-                      secondsRemaining={isLoading && idx === messages.length - 1 ? promptProgress.secondsRemaining : undefined}
-                      onOpenFile={onOpenFile}
-                      verbose={verbose}
-                      onToggleVerbose={onToggleVerbose}
-                      workers={m.workers}
-                    />
-                  )}
-                  {/* Markdown-rendered content */}
-                  <MarkdownRenderer
-                    content={m.content}
-                    onOpenFile={onOpenFile}
-                    onApplyCode={onApplyCode}
-                    onSaveCode={onSaveCode}
-                    resolveFileId={resolveFileIdProp}
-                  />
-
-                  {/* Tool cards (Phase 3) */}
-                  <div aria-live="polite">
-                    {/* Loading skeleton for active tool call */}
-                    {m.activeToolCall && (
-                      <div
-                        className="my-2 rounded-lg border ide-border ide-surface-inset p-3 animate-pulse"
-                        role="status"
-                        aria-live="polite"
-                        aria-label={`Loading tool: ${m.activeToolCall.name}`}
-                      >
-                        <div className="h-2.5 w-24 rounded ide-surface-input mb-2" />
-                        <div className="h-2 w-40 rounded ide-surface-input" />
-                      </div>
-                    )}
-                    {m.planData && (
-                      <PlanCard
-                        planData={m.planData}
-                        onOpenPlanFile={onOpenPlanFile}
-                        onBuildPlan={onBuildPlan}
-                      />
-                    )}
-                    {m.codeEdits && m.codeEdits.length > 0 && (() => {
-                      // Phase 8c: Detect file conflicts (multiple edits to same file)
-                      const fileMap = new Map<string, number[]>();
-                      m.codeEdits!.forEach((edit, i) => {
-                        const existing = fileMap.get(edit.filePath) || [];
-                        existing.push(i);
-                        fileMap.set(edit.filePath, existing);
-                      });
-                      const conflicts = Array.from(fileMap.entries())
-                        .filter(([, indices]) => indices.length > 1)
-                        .map(([filePath, indices]) => ({
-                          filePath,
-                          edits: indices.map(i => ({
-                            agentId: String(i),
-                            agentLabel: 'Edit ' + (i + 1),
-                            newContent: m.codeEdits![i].newContent,
-                            reasoning: m.codeEdits![i].reasoning,
-                          })),
-                        }));
-
-                      return (
-                        <>
-                          {conflicts.length > 0 && (
-                            <ConflictResolver
-                              conflicts={conflicts}
-                              onResolve={(filePath, selectedAgentId) => {
-                                // Reject all non-selected edits for this file
-                                const indices = fileMap.get(filePath) || [];
-                                for (const i of indices) {
-                                  if (String(i) !== selectedAgentId) {
-                                    onEditStatusChange?.(m.id, i, 'rejected');
-                                  }
-                                }
-                              }}
-                              onResolveAll={() => {
-                                // Auto-resolve: keep first edit, reject rest
-                                for (const [, indices] of fileMap.entries()) {
-                                  if (indices.length > 1) {
-                                    for (let k = 1; k < indices.length; k++) {
-                                      onEditStatusChange?.(m.id, indices[k], 'rejected');
-                                    }
-                                  }
-                                }
-                              }}
-                            />
-                          )}
-                          <ReviewBlock
-                            edits={m.codeEdits!}
-                            onApplyCode={onApplyCode}
-                            resolveFileId={resolveFileIdProp}
-                            onOpenFile={onOpenFile}
-                            onEditStatusChange={(editIdx, status) => onEditStatusChange?.(m.id, editIdx, status)}
+                  {/* ── NEW: Cursor-style block rendering ── */}
+                  {m.blocks && m.blocks.length > 0 ? (
+                    <>
+                      {m.blocks.map((block) => {
+                        switch (block.type) {
+                          case 'thinking':
+                            return (
+                              <ThinkingBlockV2
+                                key={block.id}
+                                reasoningText={block.reasoningText}
+                                isComplete={block.done}
+                                startedAt={block.startedAt}
+                                elapsedMs={block.elapsedMs}
+                              />
+                            );
+                          case 'text':
+                            return (
+                              <MarkdownRenderer
+                                key={block.id}
+                                content={block.text}
+                                isStreaming={isLoading && idx === messages.length - 1}
+                                onOpenFile={onOpenFile}
+                                onApplyCode={onApplyCode}
+                                onSaveCode={onSaveCode}
+                                resolveFileId={resolveFileIdProp}
+                              />
+                            );
+                          case 'tool_action':
+                            return (
+                              <ToolActionItem
+                                key={block.id}
+                                block={block}
+                                onApplyCode={onApplyCode}
+                                onOpenFile={onOpenFile}
+                                resolveFileId={resolveFileIdProp}
+                                onOpenPlanFile={onOpenPlanFile}
+                                onBuildPlan={onBuildPlan}
+                                onSend={onSend}
+                                onConfirmFileCreate={onConfirmFileCreate}
+                              />
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
+                      {/* Citations (Phase 6) */}
+                      {m.citations && m.citations.length > 0 && (
+                        <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
+                      )}
+                      {/* Mode-switch inline button */}
+                      {(() => {
+                        const suggested = detectModeSwitchSuggestion(m.content, intentMode);
+                        return suggested && onIntentModeChange && !isLoading ? (
+                          <ModeSwitchButton
+                            targetMode={suggested}
+                            onModeSwitchAndSend={onModeSwitchAndSend}
+                            onSwitch={onIntentModeChange}
                           />
-                        </>
-                      );
-                    })()}
-                    {m.clarification && (
-                      <ClarificationCard
-                        question={m.clarification.question}
-                        options={m.clarification.options}
-                        allowMultiple={m.clarification.allowMultiple}
-                        onSend={onSend}
+                        ) : null;
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      {/* ── LEGACY: Existing ThinkingBlock + content + cards rendering ── */}
+                      {m.thinkingSteps && m.thinkingSteps.length > 0 && (
+                        <ThinkingBlock
+                          steps={m.thinkingSteps}
+                          isComplete={m.thinkingComplete ?? false}
+                          defaultExpanded={!m.thinkingComplete}
+                          isStreaming={isLoading && idx === messages.length - 1}
+                          progress={isLoading && idx === messages.length - 1 ? promptProgress.progress : undefined}
+                          secondsRemaining={isLoading && idx === messages.length - 1 ? promptProgress.secondsRemaining : undefined}
+                          onOpenFile={onOpenFile}
+                          verbose={verbose}
+                          onToggleVerbose={onToggleVerbose}
+                          workers={m.workers}
+                        />
+                      )}
+                      <MarkdownRenderer
+                        content={m.content}
+                        isStreaming={isLoading && idx === messages.length - 1}
+                        onOpenFile={onOpenFile}
+                        onApplyCode={onApplyCode}
+                        onSaveCode={onSaveCode}
+                        resolveFileId={resolveFileIdProp}
                       />
-                    )}
-                    {m.previewNav && (
-                      <PreviewNavToast
-                        path={m.previewNav.path}
-                        description={m.previewNav.description}
-                      />
-                    )}
-                    {m.fileCreates?.map((fc, fcIdx) => (
-                      <FileCreateCard
-                        key={`${m.id}-file-${fcIdx}`}
-                        fileName={fc.fileName}
-                        content={fc.content}
-                        reasoning={fc.reasoning}
-                        status={fc.status}
-                        onConfirm={onConfirmFileCreate}
-                      />
-                    ))}
-                    {/* Agent Power Tools cards (Phase 7) */}
-                    {m.fileOps && m.fileOps.length > 0 && (
-                      <FileOperationToast operations={m.fileOps} />
-                    )}
-                    {m.shopifyOps && m.shopifyOps.length > 0 && (
-                      <ShopifyOperationCard operations={m.shopifyOps} />
-                    )}
-                    {(m.screenshots || m.screenshotComparison) && (
-                      <ScreenshotCard
-                        screenshots={m.screenshots}
-                        comparison={m.screenshotComparison}
-                      />
-                    )}
-                  </div>
 
-                  {/* Citations (Phase 6) */}
-                  {m.citations && m.citations.length > 0 && (
-                    <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
-                  )}
-
-                  {/* Blinking caret only once streaming has started (not during Understanding/planning) */}
-                  {isLoading && idx === messages.length - 1 && (m.content?.trim().length ?? 0) > 0 && (
-                    <span
-                      className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
-                      style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}
-                      aria-hidden="true"
-                    />
+                      <div aria-live="polite">
+                        {m.activeToolCall && (
+                          <div
+                            className="my-2 rounded-lg border ide-border ide-surface-inset p-3 animate-pulse"
+                            role="status"
+                            aria-live="polite"
+                            aria-label={`Loading tool: ${m.activeToolCall.name}`}
+                          >
+                            <div className="h-2.5 w-24 rounded ide-surface-input mb-2" />
+                            <div className="h-2 w-40 rounded ide-surface-input" />
+                          </div>
+                        )}
+                        {m.planData && (
+                          <PlanCard
+                            planData={m.planData}
+                            onOpenPlanFile={onOpenPlanFile}
+                            onBuildPlan={onBuildPlan}
+                          />
+                        )}
+                        {m.codeEdits && m.codeEdits.length > 0 && (() => {
+                          const fileMap = new Map<string, number[]>();
+                          m.codeEdits!.forEach((edit, i) => {
+                            const existing = fileMap.get(edit.filePath) || [];
+                            existing.push(i);
+                            fileMap.set(edit.filePath, existing);
+                          });
+                          const conflicts = Array.from(fileMap.entries())
+                            .filter(([, indices]) => indices.length > 1)
+                            .map(([filePath, indices]) => ({
+                              filePath,
+                              edits: indices.map(i => ({
+                                agentId: String(i),
+                                agentLabel: 'Edit ' + (i + 1),
+                                newContent: m.codeEdits![i].newContent,
+                                reasoning: m.codeEdits![i].reasoning,
+                              })),
+                            }));
+                          return (
+                            <>
+                              {conflicts.length > 0 && (
+                                <ConflictResolver
+                                  conflicts={conflicts}
+                                  onResolve={(filePath, selectedAgentId) => {
+                                    const indices = fileMap.get(filePath) || [];
+                                    for (const i of indices) {
+                                      if (String(i) !== selectedAgentId) {
+                                        onEditStatusChange?.(m.id, i, 'rejected');
+                                      }
+                                    }
+                                  }}
+                                  onResolveAll={() => {
+                                    for (const [, indices] of fileMap.entries()) {
+                                      if (indices.length > 1) {
+                                        for (let k = 1; k < indices.length; k++) {
+                                          onEditStatusChange?.(m.id, indices[k], 'rejected');
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
+                              )}
+                              <ReviewBlock
+                                edits={m.codeEdits!}
+                                onApplyCode={onApplyCode}
+                                resolveFileId={resolveFileIdProp}
+                                onOpenFile={onOpenFile}
+                                onEditStatusChange={(editIdx, status) => onEditStatusChange?.(m.id, editIdx, status)}
+                              />
+                            </>
+                          );
+                        })()}
+                        {m.clarification && (
+                          <ClarificationCard
+                            question={m.clarification.question}
+                            options={m.clarification.options}
+                            allowMultiple={m.clarification.allowMultiple}
+                            onSend={onSend}
+                          />
+                        )}
+                        {m.previewNav && (
+                          <PreviewNavToast
+                            path={m.previewNav.path}
+                            description={m.previewNav.description}
+                          />
+                        )}
+                        {m.fileCreates?.map((fc, fcIdx) => (
+                          <FileCreateCard
+                            key={`${m.id}-file-${fcIdx}`}
+                            fileName={fc.fileName}
+                            content={fc.content}
+                            reasoning={fc.reasoning}
+                            status={fc.status}
+                            onConfirm={onConfirmFileCreate}
+                          />
+                        ))}
+                        {m.fileOps && m.fileOps.length > 0 && (
+                          <FileOperationToast operations={m.fileOps} />
+                        )}
+                        {m.shopifyOps && m.shopifyOps.length > 0 && (
+                          <ShopifyOperationCard operations={m.shopifyOps} />
+                        )}
+                        {(m.screenshots || m.screenshotComparison) && (
+                          <ScreenshotCard
+                            screenshots={m.screenshots}
+                            comparison={m.screenshotComparison}
+                          />
+                        )}
+                      </div>
+                      {m.citations && m.citations.length > 0 && (
+                        <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
+                      )}
+                      {/* Mode-switch inline button (legacy path) */}
+                      {(() => {
+                        const suggested = detectModeSwitchSuggestion(m.content, intentMode);
+                        return suggested && onIntentModeChange && !isLoading ? (
+                          <ModeSwitchButton
+                            targetMode={suggested}
+                            onModeSwitchAndSend={onModeSwitchAndSend}
+                            onSwitch={onIntentModeChange}
+                          />
+                        ) : null;
+                      })()}
+                      {isLoading && idx === messages.length - 1 && (m.content?.trim().length ?? 0) > 0 && (
+                        <span
+                          className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
+                          style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </>
                   )}
                 </>
               ) : (
                 <UserMessageContent content={m.content} />
               )}
             </div>
+
+            {/* Model badge + rate-limit indicator on assistant messages */}
+            {m.role === 'assistant' && m.activeModel && (
+              <div className="mt-1 flex items-center gap-1.5 px-3">
+                <span className="inline-flex items-center gap-1 text-[10px] ide-text-muted">
+                  {MODEL_LABELS[m.activeModel] || m.activeModel}
+                </span>
+                {m.rateLimitHit && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 dark:text-amber-400">
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    rate limited
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Clarification hint — shows when assistant is asking for more info */}
             {m.role === 'assistant' && !isLoading && idx === messages.length - 1 &&
@@ -1326,8 +1543,8 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Loading indicator — only shown when no thinking steps yet (before first SSE event); shimmer on text, no circle loader */}
-        {isLoading && !(lastMessage?.role === 'assistant' && lastMessage?.thinkingSteps?.length) && (
+        {/* Loading indicator — only shown when no thinking/blocks yet (before first SSE event); shimmer on text, no circle loader */}
+        {isLoading && !(lastMessage?.role === 'assistant' && (lastMessage?.thinkingSteps?.length || lastMessage?.blocks?.length)) && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg ide-surface-input border ide-border-subtle">
             <span className="text-xs ide-text-2 font-medium italic animate-pulse">
               {getThinkingLabel(currentAction, reviewFileCount)}
@@ -1341,7 +1558,10 @@ export function ChatInterface({
           <div className="pt-1 px-1">
             <button
               type="button"
-              onClick={() => setManualPlanOpen(true)}
+              onClick={() => {
+                emitInteraction('button_click', 'plan.review_open', { stepCount: planSteps.length });
+                setManualPlanOpen(true);
+              }}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/5 text-accent text-xs font-medium hover:bg-sky-500/10 transition-colors"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1384,7 +1604,7 @@ export function ChatInterface({
       )}
 
       {/* Input area */}
-      <div className="flex-shrink-0 border-t ide-border-subtle">
+      <div className="flex-shrink-0">
         {/* Consolidated context row: element chip + image + attached files + inline suggestions (file count pill removed) */}
         {(editorSelection || selectedElement || attachedImage || attachedFiles.length > 0 || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
           <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap border-b ide-border-subtle">
@@ -1416,12 +1636,12 @@ export function ChatInterface({
                 </button>
               </span>
             )}
-            {/* Inline suggestion chips (compact, max 2) */}
-            {!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0 && (
+            {/* Inline suggestion chips: prefer response-aware suggestions, fall back to contextual */}
+            {!inputHasText && !isLoading && messages.length > 0 && (responseSuggestions.length > 0 || contextSuggestions.length > 0) && (
               <SuggestionChips
-                suggestions={contextSuggestions.slice(0, 2)}
+                suggestions={(responseSuggestions.length > 0 ? responseSuggestions : contextSuggestions).slice(0, 2)}
                 onSelect={handleSuggestionSelect}
-                variant="pre"
+                variant="post"
               />
             )}
           </div>
@@ -1488,24 +1708,9 @@ export function ChatInterface({
             </div>
 
             {/* Footer row: controls + context % + send — all items h-9, single/team leftmost */}
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2 border-t ide-border-subtle h-9">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2 h-9">
               <div className="flex items-center gap-2 min-w-0 h-9">
-              {/* Solo / Team switcher — leftmost */}
-              {onModeChange && (
-                <button
-                  type="button"
-                  onClick={() => onModeChange(agentMode === 'orchestrated' ? 'solo' : 'orchestrated')}
-                  className={`inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
-                    agentMode === 'solo'
-                      ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
-                  }`}
-                  title={agentMode === 'orchestrated' ? 'Solo mode (single-pass)' : 'Team mode (multi-agent)'}
-                  aria-label={agentMode === 'orchestrated' ? 'Switch to solo mode' : 'Switch to team mode'}
-                >
-                  {agentMode === 'solo' ? <User className="h-4 w-4" /> : <Users className="h-4 w-4" />}
-                </button>
-              )}
+              {/* Solo/Team toggle removed — replaced by maxAgents cycle + specialist switch */}
 
               {/* Intent mode dropdown — Ask / Plan / Code / Debug (always visible) */}
               {onIntentModeChange && (
@@ -1550,7 +1755,11 @@ export function ChatInterface({
                             <li key={mode} role="option" aria-selected={intentMode === mode}>
                               <button
                                 type="button"
-                                onClick={() => { onIntentModeChange(mode); setShowIntentDropdown(false); }}
+                                onClick={() => {
+                                  emitInteraction('mode_change', 'intent.change', { mode, source: 'dropdown' });
+                                  onIntentModeChange(mode);
+                                  setShowIntentDropdown(false);
+                                }}
                                 className={`w-full text-left px-3 py-2 text-xs transition-colors ${
                                   intentMode === mode ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400' : 'ide-text-2 hover:ide-surface-inset'
                                 }`}
@@ -1607,7 +1816,7 @@ export function ChatInterface({
                 </div>
               )}
 
-              {/* Agent count control (1-4 sub-agents) */}
+              {/* Subagent count control (1x-4x) — primary mode selector */}
               {onMaxAgentsChange && (
                 <button
                   type="button"
@@ -1620,15 +1829,17 @@ export function ChatInterface({
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 border-sky-500/30'
                       : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
                   }`}
-                  title={`Max sub-agents per specialist: ${maxAgents} (click to cycle 1-4)`}
-                  aria-label={`Sub-agent count: ${maxAgents}`}
+                  title={`Subagents: ${maxAgents}x (click to cycle 1x-4x)`}
+                  aria-label={`Subagent count: ${maxAgents}x`}
                 >
                   <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" />
                   </svg>
-                  <span className="tabular-nums font-medium">{maxAgents}</span>
+                  <span className="tabular-nums font-medium">{maxAgents}x</span>
                 </button>
               )}
+
+              {/* Specialist mode is now auto-derived from maxAgents > 1 — no toggle needed */}
 
               {/* File/image upload — icon only */}
               {onImageUpload && (
@@ -1694,20 +1905,6 @@ export function ChatInterface({
           )}
         </form>
       </div>
-
-      {/* Prompt template library — opened from sidebar header when templateLibraryOpen/onTemplateLibraryClose are provided */}
-      <PromptTemplateLibrary
-        open={templateLibraryOpen}
-        onClose={onTemplateLibraryClose ?? (() => {})}
-        onSelectTemplate={(prompt) => {
-          if (inputRef.current) {
-            inputRef.current.value = prompt;
-            setInputHasText(true);
-            inputRef.current.focus();
-          }
-          onTemplateLibraryClose?.();
-        }}
-      />
 
       {/* EPIC 5: Plan approval modal */}
       <PlanApprovalModal

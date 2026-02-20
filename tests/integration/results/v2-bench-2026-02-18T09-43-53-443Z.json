@@ -1,0 +1,234 @@
+{
+  "timestamp": "2026-02-18T09:43:53.443Z",
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse v2 (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "generic-assistant"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 98805,
+          "firstChunkMs": 32880,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 7186,
+          "outputTokens": 1073,
+          "cacheRead": 87752,
+          "cacheWrite": 0,
+          "costUSD": 0.01706096,
+          "toolCalls": 8,
+          "toolsUsed": [
+            "search_replace",
+            "read_file",
+            "grep_content"
+          ],
+          "changes": 2,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "reviewTimeMs": 51651
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 47395,
+          "firstChunkMs": 3137,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 72203,
+          "outputTokens": 5295,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.0789424,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "search_files",
+            "create_file"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 75237,
+          "firstChunkMs": 2818,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 73065,
+          "outputTokens": 9366,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.095916,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "create_file",
+            "propose_code_edit"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "simple-ask": {
+      "name": "Simple: Accessibility audit",
+      "intentMode": "ask",
+      "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? Give specific WCAG violations and fixes.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "snippets/product-img.liquid"
+      ],
+      "expectedTier": "SIMPLE",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 45788,
+          "firstChunkMs": 45787,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 1602,
+          "cacheRead": 6256,
+          "cacheWrite": 0,
+          "costUSD": 0.0069108799999999995,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 19100,
+          "firstChunkMs": 5536,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 8212,
+          "outputTokens": 1727,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.013477600000000001,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "search_files",
+            "grep_content"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 18907,
+          "firstChunkMs": 1805,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 8185,
+          "outputTokens": 2168,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.01522,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "read_file"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    }
+  },
+  "gapAnalysis": [
+    {
+      "scenario": "simple-ask",
+      "metric": "time",
+      "synapseValue": "45.8s",
+      "cursorValue": "18.9s",
+      "delta": "+142%",
+      "severity": "gap",
+      "likelyCause": "No review/thinking overhead. Possible stream or iteration issue.",
+      "recommendation": "Investigate stream health, reduce iterations, check tool calls."
+    }
+  ]
+}

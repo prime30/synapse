@@ -1,0 +1,203 @@
+{%- liquid 
+  assign SETTINGS = shop.metafields.ecomposer.page_loading_effect.value
+  assign overlay_effect = SETTINGS.overlay_effect
+  assign overlay_effect_duration = SETTINGS.overlay_effect_duration
+  assign background = SETTINGS.background
+  assign loader_type = SETTINGS.loader_type
+  assign loader_style = SETTINGS.loader_style
+  assign loader_color_primary = SETTINGS.loader_color_primary
+  assign loader_image = SETTINGS.loader_image
+  assign loader_image_size = SETTINGS.loader_image_size
+  assign image_animation = SETTINGS.image_animation
+-%}
+{% if SETTINGS.enable %}
+<div id="ecom-page-loading" preload>
+  <div class="ecom-page-loading-loader"></div>
+</div>
+
+<style>
+  body {
+    overflow: hidden;
+  }
+  #ecom-page-loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    width: 100%;
+    height: 100%;
+    {{background.native}};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 1;
+    visibility: visible;
+    transition: {{overlay_effect_duration | default: '0'}};
+    box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
+  }
+  .ecom-page-loading-loader:empty {
+    display: block;
+  }
+  
+  {% case overlay_effect %}
+    {% when 'fade' %}
+      .hide-loading {
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+    {% when 'slide' %}
+      .hide-loading {
+        transform: translate(100%,-50%) !important;
+      }
+    {% when 'zoomout' %}
+      .hide-loading {
+        opacity: 0.3 !important;
+        visibility: hidden !important;
+        width: 0% !important;
+        height: 0% !important;
+      }
+  {% endcase %}
+  {% if loader_type == 'css' %}
+    {% case loader_style %}
+      {% when 'circle' %}
+        .ecom-page-loading-loader {
+          width: 50px;
+          aspect-ratio: 1;
+          border-radius: 50%;
+          background: 
+            radial-gradient(farthest-side,{{ loader_color_primary | default: '#ffa516' }} 94%,#0000) top/8px 8px no-repeat,
+            conic-gradient(#0000 30%,{{ loader_color_primary | default: '#ffa516' }});
+          -webkit-mask: radial-gradient(farthest-side,#0000 calc(100% - 8px),#000 0);
+          animation: loadingCircle 0.5s infinite linear;
+        }
+        @keyframes loadingCircle{ 
+          100%{transform: rotate(1turn)}
+        }
+      {% when 'dots' %}
+        .ecom-page-loading-loader {
+          width: 15px;
+          aspect-ratio: 1;
+          border-radius: 50%;
+          animation: loadingDots 1s infinite linear;
+        }
+        @keyframes loadingDots {
+            0%  {box-shadow: 20px 0 {{ loader_color_primary | default: '#000' }}, -20px 0 {{ loader_color_primary | append: '20' | default: '#0002' }};background: {{ loader_color_primary | default: '#000' }} }
+            33% {box-shadow: 20px 0 {{ loader_color_primary | default: '#000' }}, -20px 0 {{ loader_color_primary | append: '20' | default: '#0002' }};background: {{ loader_color_primary | append: '20' | default: '#0002' }}}
+            66% {box-shadow: 20px 0 {{ loader_color_primary | append: '20' | default: '#0002' }},-20px 0 {{ loader_color_primary | default: '#000' }}; background: {{ loader_color_primary | append: '20' | default: '#0002' }}}
+            100%{box-shadow: 20px 0 {{ loader_color_primary | append: '20' | default: '#0002' }},-20px 0 {{ loader_color_primary | default: '#000' }}; background: {{ loader_color_primary | default: '#000' }} }
+        }
+      {% when 'continuous' %}
+        .ecom-page-loading-loader {
+          width: 120px;
+          height: 22px;
+          border-radius: 40px;
+          color: {{ loader_color_primary | default: '#514b82' }};
+          border: 2px solid;
+          position: relative;
+          overflow: hidden;
+        }
+        .ecom-page-loading-loader::before {
+          content: "";
+          position: absolute;
+          margin: 2px;
+          width: 25%;
+          top: 0;
+          bottom: 0;
+          left: -20px;
+          border-radius: inherit;
+          background: currentColor;
+          animation: loadingContinuous 1s infinite linear;
+        }
+        @keyframes loadingContinuous {
+            100% {left: calc(100% + 20px)}
+        }
+      {% when 'infinity' %}
+        .ecom-page-loading-loader {
+          width: calc(80px / cos(45deg));
+          height: 14px;
+          background: repeating-linear-gradient(-45deg,{{ loader_color_primary | default: '#000' }} 0 15px,#fff 0 20px) left/200% 100%;
+          animation: loadingInfinity 2s infinite linear;
+        }
+        @keyframes loadingInfinity {
+            100% {background-position:right}
+        }
+    {% endcase %}
+  {% else %}
+    .ecom-page-loading-loader {
+      background: url({{loader_image.url}});
+      background-position: center center;
+      background-size: cover;
+        border-radius: 1000px;
+      width: {{loader_image_size | default: '50px'}};
+      height: {{ loader_image_size | default: '50px'}};
+    }
+    {% if image_animation == 'rotate' %}
+      .ecom-page-loading-loader {
+        animation: imageSpin 2s linear infinite;
+      }
+      @keyframes imageSpin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    {% elsif image_animation == 'pulse' %}
+      .ecom-page-loading-loader {
+        position: relative;
+        animation: imagePulse 1.5s infinite linear;
+      }
+      .ecom-page-loading-loader:before,
+      .ecom-page-loading-loader:after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        box-shadow: 0 0 0 0 #0004;
+        animation: inherit;
+        animation-delay: -0.5s;
+      }
+      .ecom-page-loading-loader:after {
+        animation-delay: -1s;
+      }
+      @keyframes imagePulse {
+          100% {box-shadow: 0 0 0 40px #0000}
+      }
+      {% elsif image_animation == 'scale' %}
+        .ecom-page-loading-loader {
+          animation: imageScale 1s ease-in-out infinite;
+        }
+        @keyframes imageScale {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.2);
+        }
+      }
+    {% endif %}
+  {% endif %}
+  .hide-loading .ecom-page-loading-loader {
+        display: none;
+      }
+</style>
+<script>
+  // document.addEventListener("DOMContentLoaded", () => {
+  // })
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.href = '{{loader_image.url}}';
+  link.as = 'image';
+  document.head.appendChild(link);
+  function removeLoading() {
+    document.body.style.overflow = 'auto';
+    const loadingElement = document.getElementById("ecom-page-loading");
+    loadingElement.classList.add('hide-loading');
+  }
+  window.addEventListener ? 
+  window.addEventListener("load",removeLoading,false) : 
+  window.attachEvent && window.attachEvent("onload",removeLoading);
+</script>
+{% endif %}

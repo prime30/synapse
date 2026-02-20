@@ -4,7 +4,7 @@
  * Used by the context meter to show how much of the model's window is consumed.
  */
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'claude-sonnet-4-5-20250929': 200_000,
+  'claude-sonnet-4-6': 200_000,
   'claude-opus-4-6': 200_000,
   'claude-haiku-4-5-20251001': 200_000,
   'gemini-2.5-pro': 1_000_000,

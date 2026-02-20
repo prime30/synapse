@@ -27,7 +27,7 @@ export function PixelWatermark({
             {Array.from({ length: cols }).map((_, col) => (
               <span
                 key={col}
-                className="font-pixel text-[80px] md:text-[120px] text-sky-500/30 tracking-[0.3em] select-none"
+                className="font-pixel text-[80px] md:text-[120px] text-accent/30 tracking-[0.3em] select-none"
                 style={{
                   transform: `translateX(${row % 2 === 0 ? 0 : 60}px)`,
                 }}

@@ -27,7 +27,7 @@ export function schedulePushForProject(projectId: string): void {
   timers.set(projectId, timer);
 }
 
-async function runPushForProject(projectId: string): Promise<void> {
+export async function runPushForProject(projectId: string): Promise<void> {
   const supabase = await createClient();
 
   // Store-first: look up the connection and dev_theme_id from the project

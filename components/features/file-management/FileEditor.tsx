@@ -42,6 +42,8 @@ interface FileEditorProps {
   onPeersChange?: (peers: CollaborativePeer[]) => void;
   /** Called when collaboration connection status changes */
   onConnectionStatusChange?: (status: string) => void;
+  /** Called when cursor position changes in the editor */
+  onCursorPositionChange?: (position: { line: number; column: number }) => void;
   /** File path for AI inline completions context (e.g. sections/hero.liquid). */
   filePath?: string | null;
   /** Enable Cursor-like inline (ghost) completions. Default true when filePath is set. */
@@ -65,6 +67,7 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
     collaborationUser,
     onPeersChange,
     onConnectionStatusChange,
+    onCursorPositionChange,
     filePath = null,
     enableInlineCompletions = true,
   },
@@ -174,6 +177,7 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
           className="flex-1 w-full min-h-[200px]"
           onSelectionChange={onSelectionChange}
           onSelectionPosition={onSelectionPosition}
+          onCursorPositionChange={onCursorPositionChange}
           onFixWithAI={onFixWithAI}
           onEditorMount={(editorInstance) => {
             handleEditorMount(editorInstance);

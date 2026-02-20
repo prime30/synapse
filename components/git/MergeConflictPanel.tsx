@@ -108,38 +108,38 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
 
   const highlightDiff = (line: string, otherLine: string): string => {
     if (line === otherLine) {
-      return 'bg-zinc-800';
+      return 'ide-surface-inset';
     }
     if (line.trim() === '') {
-      return 'bg-zinc-900';
+      return 'ide-surface-panel';
     }
     return 'bg-green-900/30';
   };
 
   const highlightDiffTheirs = (line: string, otherLine: string): string => {
     if (line === otherLine) {
-      return 'bg-zinc-800';
+      return 'ide-surface-inset';
     }
     if (line.trim() === '') {
-      return 'bg-zinc-900';
+      return 'ide-surface-panel';
     }
     return 'bg-red-900/30';
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
+    <div className="flex flex-col h-full ide-surface-panel ide-text">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-700">
+      <div className="flex items-center justify-between px-6 py-4 border-b ide-border">
         <div className="flex items-center gap-3">
           <GitMerge className="w-5 h-5 text-yellow-500" />
           <h2 className="text-lg font-semibold">Resolve Merge Conflicts</h2>
-          <span className="px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded">
+          <span className="px-2 py-1 text-sm ide-surface-inset border ide-border rounded">
             {resolutionCount} / {conflicts.length} resolved
           </span>
         </div>
         <button
           onClick={onCancel}
-          className="px-4 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors flex items-center gap-2"
+          className="px-4 py-2 text-sm ide-surface-inset ide-hover border ide-border rounded transition-colors flex items-center gap-2"
         >
           <X className="w-4 h-4" />
           Cancel
@@ -148,9 +148,9 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
 
       <div className="flex flex-1 overflow-hidden">
         {/* File List Sidebar */}
-        <div className="w-64 border-r border-zinc-700 bg-zinc-950 overflow-y-auto">
+        <div className="w-64 border-r ide-border ide-surface-panel overflow-y-auto">
           <div className="p-4">
-            <h3 className="text-sm font-medium text-zinc-400 mb-3">Conflicting Files</h3>
+            <h3 className="text-sm font-medium ide-text-muted mb-3">Conflicting Files</h3>
             <div className="space-y-1">
               {conflicts.map(conflict => {
                 const state = getResolutionState(conflict.path);
@@ -164,8 +164,8 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                     className={
                       'w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 ' +
                       (isSelected
-                        ? 'bg-zinc-800 border border-zinc-600'
-                        : 'hover:bg-zinc-800/50 border border-transparent')
+                        ? 'ide-surface-inset border ide-border'
+                        : 'ide-hover border border-transparent')
                     }
                   >
                     {isResolved ? (
@@ -185,7 +185,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedConflict ? (
             <>
-              <div className="px-6 py-4 border-b border-zinc-700 bg-zinc-950">
+              <div className="px-6 py-4 border-b ide-border ide-surface-panel">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-medium">{selectedConflict.path}</h3>
                   <div className="flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                     <textarea
                       value={manualEdits[selectedConflict.path] || ''}
                       onChange={(e) => handleManualEditChange(selectedConflict.path, e.target.value)}
-                      className="w-full h-full p-4 bg-zinc-950 border border-zinc-700 rounded font-mono text-sm text-zinc-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full h-full p-4 ide-input font-mono text-sm resize-none"
                       style={{ minHeight: '400px' }}
                     />
                   </div>
@@ -219,7 +219,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                     </button>
                     <button
                       onClick={() => setShowManualEdit(prev => ({ ...prev, [selectedConflict.path]: false }))}
-                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-sm transition-colors"
+                      className="px-4 py-2 ide-surface-inset ide-hover border ide-border rounded text-sm transition-colors"
                     >
                       Cancel
                     </button>
@@ -228,8 +228,8 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
               ) : (
                 <div className="flex-1 flex overflow-hidden">
                   {/* Ours (Local) Panel */}
-                  <div className="flex-1 flex flex-col border-r border-zinc-700">
-                    <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-700 flex items-center justify-between">
+                  <div className="flex-1 flex flex-col border-r ide-border">
+                    <div className="px-4 py-2 ide-surface-panel border-b ide-border flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ArrowLeft className="w-4 h-4 text-blue-400" />
                         <span className="text-sm font-medium">Ours (Local)</span>
@@ -238,7 +238,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                         <Check className="w-4 h-4 text-green-500" />
                       )}
                     </div>
-                    <div className="flex-1 overflow-auto bg-zinc-950">
+                    <div className="flex-1 overflow-auto ide-surface-panel">
                       <pre className="p-4 text-sm font-mono">
                         <code>
                           {selectedConflict.oursContent.split('\n').map((line, idx) => {
@@ -258,7 +258,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
 
                   {/* Theirs (Remote) Panel */}
                   <div className="flex-1 flex flex-col">
-                    <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-700 flex items-center justify-between">
+                    <div className="px-4 py-2 ide-surface-panel border-b ide-border flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ArrowRight className="w-4 h-4 text-purple-400" />
                         <span className="text-sm font-medium">Theirs (Remote)</span>
@@ -267,7 +267,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                         <Check className="w-4 h-4 text-green-500" />
                       )}
                     </div>
-                    <div className="flex-1 overflow-auto bg-zinc-950">
+                    <div className="flex-1 overflow-auto ide-surface-panel">
                       <pre className="p-4 text-sm font-mono">
                         <code>
                           {selectedConflict.theirsContent.split('\n').map((line, idx) => {
@@ -289,7 +289,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
 
               {/* Resolution Buttons */}
               {!showManualEdit[selectedConflict.path] && (
-                <div className="px-6 py-4 border-t border-zinc-700 bg-zinc-950">
+                <div className="px-6 py-4 border-t ide-border ide-surface-panel">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleAcceptOurs(selectedConflict.path)}
@@ -297,7 +297,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                         'px-4 py-2 rounded text-sm transition-colors flex items-center gap-2 ' +
                         (getResolutionState(selectedConflict.path) === 'resolved-ours'
                           ? 'bg-blue-600 text-white'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border border-zinc-700')
+                          : 'ide-surface-inset ide-hover border ide-border')
                       }
                     >
                       <ArrowLeft className="w-4 h-4" />
@@ -309,7 +309,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                         'px-4 py-2 rounded text-sm transition-colors flex items-center gap-2 ' +
                         (getResolutionState(selectedConflict.path) === 'resolved-theirs'
                           ? 'bg-purple-600 text-white'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border border-zinc-700')
+                          : 'ide-surface-inset ide-hover border ide-border')
                       }
                     >
                       <ArrowRight className="w-4 h-4" />
@@ -321,7 +321,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
                         'px-4 py-2 rounded text-sm transition-colors flex items-center gap-2 ' +
                         (getResolutionState(selectedConflict.path) === 'resolved-manual'
                           ? 'bg-green-600 text-white'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border border-zinc-700')
+                          : 'ide-surface-inset ide-hover border ide-border')
                       }
                     >
                       Edit Manually
@@ -331,7 +331,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
               )}
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-zinc-400">
+            <div className="flex-1 flex items-center justify-center ide-text-muted">
               <p>No conflicts to resolve</p>
             </div>
           )}
@@ -339,14 +339,14 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-zinc-700 bg-zinc-950 flex items-center justify-between">
-        <div className="text-sm text-zinc-400">
+      <div className="px-6 py-4 border-t ide-border ide-surface-panel flex items-center justify-between">
+        <div className="text-sm ide-text-muted">
           {resolutionCount} of {conflicts.length} conflicts resolved
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-sm transition-colors"
+            className="px-4 py-2 ide-surface-inset ide-hover border ide-border rounded text-sm transition-colors"
           >
             Cancel
           </button>
@@ -357,7 +357,7 @@ export default function MergeConflictPanel({ conflicts, onResolve, onCancel }: M
               'px-4 py-2 rounded text-sm transition-colors flex items-center gap-2 ' +
               (allResolved
                 ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700')
+                : 'bg-stone-700 ide-text-3 cursor-not-allowed border ide-border')
             }
           >
             <Check className="w-4 h-4" />

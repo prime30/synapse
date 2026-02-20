@@ -11,16 +11,22 @@ The AI sidebar provides a Cursor-style chat experience:
 - **Syntax-highlighted code blocks** with line numbers and Copy / Apply / Save actions
 - **Inline diff preview** when applying changes
 - **Model selector** — Choose between Claude, Gemini, and GPT models
-- **Mode toggle** — Switch between Orchestrated and Solo modes
+- **Subagent count** — 1x (single agent) to 4x (multiple subagents)
+- **Specialist mode** — Opt-in toggle for domain agents (Liquid/CSS/JS/JSON) vs general subagents
 - **Image upload** — Paste or drag images for visual analysis
 
 ![Chat interface with code block and action buttons](./images/ai-chat-interface.png)
 
 ## Agent Modes
 
-### Orchestrated Mode
+### Subagent Count (1x–4x)
 
-The Project Manager agent analyzes your request and delegates to specialist agents:
+- **1x** — A single agent handles everything in one pass. Faster for simple tasks like "add a heading to this section" or "change the background color."
+- **2x–4x** — Multiple general-purpose subagents work in parallel. Best for complex, multi-file tasks.
+
+### Specialist Mode
+
+When specialist mode is ON, domain agents are used instead of general subagents:
 
 | Agent | Specialization |
 |-------|---------------|
@@ -28,13 +34,10 @@ The Project Manager agent analyzes your request and delegates to specialist agen
 | **Liquid** | Shopify Liquid templates, schema blocks, Dawn patterns |
 | **CSS** | Theme styles, animations, `prefers-reduced-motion` |
 | **JavaScript** | Theme scripts, IntersectionObserver, scroll handling |
+| **JSON** | Theme config, template JSON, schema |
 | **Review** | Validates all changes for errors, security, and accessibility |
 
-![Orchestrated mode diagram showing PM delegating to specialists](./images/ai-orchestrated-mode.png)
-
-### Solo Mode
-
-A single PM agent handles everything in one pass — faster for simple tasks like "add a heading to this section" or "change the background color."
+![Specialist mode diagram showing PM delegating to domain agents](./images/ai-orchestrated-mode.png)
 
 ## Suggestions
 

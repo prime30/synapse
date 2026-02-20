@@ -1,0 +1,92 @@
+.t4s-grouped-product-list td {
+	padding: 13px 11px;
+}
+.t4s-grouped-pr__img-wrap img {
+    min-width: 50px;
+    max-width: 62px;
+}
+.t4s-grouped-pr__link {
+	 color: var(--secondary-color);
+    font-weight: 500;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+.t4s-grouped-pr__info select {
+    border-radius: 0px;
+    display: block;
+    margin-bottom:10px;
+    height:23px; 
+    font-size: 12px;
+    font-weight: 400;
+    width: auto;
+    padding: 0 30px 0 9px;
+}
+.t4s-grouped-pr__img,
+.t4s-grouped-pr__info{
+    border-left: 0;
+    border-right: 0;
+}
+
+.t4s-grouped-pr__qty .t4s-quantity-wrapper {
+    display: inline-flex;
+    border-radius: 2px;
+    border: 1px solid var(--border-color);
+}
+.t4s-grouped-pr__qty .t4s-quantity-wrapper button.t4s-quantity-selector {
+    background-color: transparent;
+    padding: 0;
+    width: 28px;
+    height: 31px;
+    color: var(--border-color);
+    border: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.t4s-grouped-pr__qty .t4s-quantity-wrapper button.t4s-quantity-selector svg {
+	width: 10px;
+}
+.t4s-grouped-product-list{margin-bottom: 23px;}
+.t4s-grouped-pr__qty input.t4s-quantity-input {
+    width: 53px;
+    border: 0;
+    padding: 0;
+    height: 31px;
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--t4s-dark-color);
+    text-align: center;
+}
+.t4s-grouped-pr__qty .t4s-quantity-wrapper button.t4s-quantity-selector:hover,
+.t4s-grouped-pr__link:hover {
+   color: var(--accent-color); 
+}
+.t4s-grouped-pr__price {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--primary-price-color);
+}
+.t4s-grouped__total-price del,
+.t4s-grouped-pr__price del {
+    color: var(--secondary-price-color);
+}
+.t4s-grouped__total-price {
+    color: var(--primary-price-color);
+}
+.t4s-grouped__text-total-price {
+    font-size: 20px;
+    color: var(--secondary-color);
+    font-weight: 500;
+    margin: 0 5px 10px 0;
+}
+.t4s-grouped-product-list td {
+    text-align: center;
+}
+
+/* Custom CSS */
+@media (min-width: 1025px) {
+    .t4s-product-form__variants.t4s-grouped-product.is-btn-full-width__false .t4s-product-form__buttons, .t4s-product-form__variants.t4s-grouped-product.is-btn-full-width__false .t4s-product-form__submit {
+        min-width: 230px;
+    }
+}

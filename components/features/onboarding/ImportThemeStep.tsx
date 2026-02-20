@@ -239,6 +239,9 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
   // ── Dev theme naming step ───────────────────────────────────────────
   const [selectedTheme, setSelectedTheme] = useState<ShopifyTheme | null>(null);
   const [devThemeName, setDevThemeName] = useState('');
+  const [syncToLocal, setSyncToLocal] = useState(
+    process.env.NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1',
+  );
 
   // ── Progress tracking state ──────────────────────────────────────────
   const [totalAssets, setTotalAssets] = useState(0);
@@ -386,6 +389,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
           themeName: theme.name,
           note: trimmedName,
           projectId: clientProjectId,
+          syncToLocal,
         });
 
         // 5. Import done -- stop polling, set final count
@@ -399,7 +403,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
         setImportingThemeName(null);
       }
     },
-    [connection, importTheme, isImporting, selectedTheme, devThemeName, onImported, stopPolling],
+    [connection, importTheme, isImporting, selectedTheme, devThemeName, syncToLocal, onImported, stopPolling],
   );
 
   // ── Dev theme naming step ────────────────────────────────────────────
@@ -442,6 +446,26 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
               This name will appear in your Shopify admin under development themes.
             </p>
           </div>
+
+          {process.env.NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1' && (
+            <label className="flex items-start gap-2.5 text-left cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={syncToLocal}
+                onChange={(e) => setSyncToLocal(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-stone-300 dark:border-white/20 text-sky-500 focus:ring-sky-500/30 bg-white dark:bg-white/5"
+              />
+              <div>
+                <span className="text-sm font-medium text-stone-700 dark:text-stone-200 group-hover:text-stone-900 dark:group-hover:text-white transition-colors">
+                  Sync to local filesystem
+                </span>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                  Pull theme files to <code className="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-white/5">.synapse-themes/</code> for local editing.
+                  Changes push back to the dev theme automatically.
+                </p>
+              </div>
+            </label>
+          )}
 
           {error && (
             <motion.div

@@ -70,6 +70,25 @@ function aggregateTokens(rows: DesignTokenRow[]) {
  * Returns design tokens that were previously extracted and persisted
  * to the design_tokens table (populated automatically on theme import).
  */
+const EMPTY_TOKEN_RESPONSE = {
+  tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+  tokenCount: 0,
+  fileCount: 0,
+  analyzedFiles: [],
+};
+
+function isTableMissingError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as Record<string, unknown>)?.code as string | undefined;
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    msg.includes('design_tokens') ||
+    msg.includes('schema cache') ||
+    msg.includes('does not exist')
+  );
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
@@ -85,9 +104,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       tokens,
       tokenCount: rows.length,
       fileCount: files?.length ?? 0,
-      analyzedFiles: [], // historical field; no longer tracked per-request
+      analyzedFiles: [],
     });
   } catch (error) {
+    if (isTableMissingError(error)) {
+      return successResponse(EMPTY_TOKEN_RESPONSE);
+    }
     return handleAPIError(error);
   }
 }

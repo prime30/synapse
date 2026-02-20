@@ -13,12 +13,28 @@ import { isPublicPath, getRedirectUrl } from '@/lib/auth/route-guard';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Shopify preview pixel requests sometimes embed our preview API path inside
+  // a /web-pixels... prefix. Rewrite those to the canonical API route so they
+  // don't 404/retry in tight loops.
+  if (pathname.startsWith('/web-pixels')) {
+    const embeddedApiIndex = pathname.indexOf('/api/projects/');
+    if (embeddedApiIndex >= 0) {
+      const embeddedApiPath = pathname.slice(embeddedApiIndex);
+      const url = new URL(`${embeddedApiPath}${request.nextUrl.search}`, request.url);
+      return NextResponse.rewrite(url);
+    }
+  }
+
   // Skip static assets, internal Next.js routes, and all API routes
   // (API routes handle their own auth via requireAuth in lib/middleware/auth.ts)
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon.ico') ||
-    pathname.startsWith('/api/')
+    pathname.startsWith('/api/') ||
+    // Shopify preview pixel requests should never be auth-redirected.
+    // They are script/worker resource fetches and may be prefixed paths.
+    pathname.startsWith('/web-pixels') ||
+    pathname.startsWith('/.well-known/shopify/')
   ) {
     return NextResponse.next();
   }
@@ -44,7 +60,12 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session (important for token refresh to work)
+  // Allow public paths through without hitting Supabase auth
+  if (isPublicPath(pathname)) {
+    return response;
+  }
+
+  // Only call Supabase auth for protected routes (avoids network round-trip on marketing pages)
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -56,11 +77,6 @@ export async function middleware(request: NextRequest) {
     const callbackUrl =
       request.nextUrl.searchParams.get('callbackUrl') ?? '/onboarding';
     return NextResponse.redirect(new URL(callbackUrl, request.url));
-  }
-
-  // Allow public paths through
-  if (isPublicPath(pathname)) {
-    return response;
   }
 
   // Redirect unauthenticated users to sign-in
@@ -80,6 +96,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico, sitemap.xml, robots.txt, ai.txt (metadata / crawler files)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt|manifest.webmanifest).*)',
   ],
 };

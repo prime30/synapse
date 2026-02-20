@@ -1,0 +1,356 @@
+<!-- sections/heading-article2.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'heading-article.css' | asset_url | stylesheet_tag }}
+{%-liquid
+	assign sid = section.id
+    assign se_stts = section.settings
+    if article.image != blank and se_stts.use_specify_image 
+        assign image = article.image | default: se_stts.image
+    else 
+        assign image = se_stts.image 
+    endif  
+
+    assign parallax = se_stts.parallax
+
+    assign bg_opacity = se_stts.bg_opacity | divided_by: 100.0
+    assign bg_overlay = se_stts.bg_overlay | color_modify: 'alpha', bg_opacity
+
+    assign bg_opacity_trans = se_stts.bg_opacity_trans | divided_by: 100.0
+    assign bg_overlay_trans = se_stts.bg_overlay_trans | color_modify: 'alpha', bg_opacity_trans
+
+    if se_stts.use_border
+        assign br_opacity_trans = se_stts.br_opacity_trans | divided_by: 100.0
+        assign br_bg_trans = se_stts.br_bg_trans | color_modify: 'alpha', br_opacity_trans  
+    endif
+ -%} 
+<div class="t4s-heading-article__wrap2 t4s_nt_se_{{ sid }} t4s-pr t4s-heading-article__border-{{ se_stts.box_border }} {% if parallax == true %}t4s-parallax t4s-parallax-bg{% endif %} lazyloadt4s" {% if parallax == true %}data-parallax-t4strue{% endif %} {%- if image != blank -%} data-bgset="{{ image | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1" {%- endif -%} style="--height-img-dk: {{ se_stts.height_img_dk }}px;--height-img-tb: {{ se_stts.height_img_tb }}px;--height-img-mb: {{ se_stts.height_img_mb }}px;--space-mg-dk: {{ se_stts.mg_b }}px;--space-mg-tb: {{ se_stts.mg_btb }}px;--space-mg-mb: {{ se_stts.mg_bmb }}px;--bg-overlay: {{ bg_overlay }};--bg_repeat: {{ se_stts.bg_repeat }};--bg_size: {{ se_stts.bg_size }};--bg_pos: {{ se_stts.bg_pos | replace: '_', ' ' }};">
+</div>
+{%- if parallax -%}
+    {{ 'parallax.min.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- style -%}
+    .is--header-transparent .t4s-heading-article__wrap2{
+        --height-img-dk: {{ se_stts.height_img_dk_trans }}px!important;
+        --height-img-tb: {{ se_stts.height_img_tb_trans }}px!important;
+        --height-img-mb: {{ se_stts.height_img_mb_trans }}px!important;
+        --bg-overlay: {{ bg_overlay_trans }}!important;
+    }
+    {%- if se_stts.use_border -%}
+        .is--header-transparent .t4s-section-header::after {
+            content:"";position: absolute;bottom: 0;left: 0;right: 0;border-bottom: 1px solid {{ br_bg_trans }};
+        }
+    {%- endif -%}
+{%- endstyle -%}
+{% schema %}
+{
+    "name": "Heading article",
+    "tag": "section",
+    "class": "t4s-section t4s-section-all t4s_tp_parallax heading-article2",
+    "settings": [
+        {
+            "type": "header",
+            "content": "1. General options"
+        },
+        {                   
+            "type": "image_picker",
+            "id": "image",
+            "label": "Choose Image"                  
+        }, 
+        {
+            "type": "checkbox",
+            "id": "use_specify_image",
+            "label": "Specify other image for particular page",
+            "info": "Use article image",
+            "default": true
+        },
+        {
+            "type": "checkbox",
+            "id": "parallax",
+            "label": "Enable parallax scroll",
+            "default": false
+        }, 
+        {
+            "type": "range",
+            "id": "height_img_dk",
+            "label": "Height image desktop",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "height_img_tb",
+            "label": "Height image tablet",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "height_img_mb",
+            "label": "Height image mobile",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "color",
+            "id": "bg_overlay",
+            "label": "Background overlay",
+            "default": "#000"
+        },
+        {
+            "type": "range",
+            "id": "bg_opacity",
+            "label": "Background overlay opacity",
+            "default": 0,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "%"
+        },
+        {
+            "type": "select",
+            "id": "box_border",
+            "label": "Border",
+            "default": "top_bottom",
+            "options": [
+                {
+                    "label": "None",
+                    "value": "none"
+                },
+                {
+                    "label": "Top",
+                    "value": "top"
+                },
+                {
+                    "label": "Bottom",
+                    "value": "bottom"
+                },
+                {
+                    "label": "Top + Bottom",
+                    "value": "top_bottom"
+                }
+            ]
+        },
+        {
+            "type": "header",
+            "content": "+ Background image config"
+        },
+        {
+            "type": "paragraph",
+            "content": "Not active when you enable scroll parallax."
+        },
+        {
+            "type": "select",
+            "id": "bg_pos",
+            "label": "Background image position",
+            "default": "center center",
+            "options": [
+                {
+                    "value": "left top",
+                    "label": "Left Top"
+                },
+                {
+                    "value": "left center",
+                    "label": "Left Center"
+                },
+                {
+                    "value": "left bottom",
+                    "label": "Left Bottom"
+                },
+                {
+                    "value": "center top",
+                    "label": "Center Top"
+                },
+                {
+                    "value": "center center",
+                    "label": "Center Center"
+                },
+                {
+                    "value": "center bottom",
+                    "label": "Center Bottom"
+                },
+                {
+                    "value": "right top",
+                    "label": "Right Top"
+                },
+                {
+                    "value": "right center",
+                    "label": "Right Center"
+                },
+                {
+                    "value": "right bottom",
+                    "label": "Right Bottom"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "bg_repeat",
+            "options": [
+                {
+                    "value": "no-repeat",
+                    "label": "No repeat"
+                },
+                {
+                    "value": "repeat",
+                    "label": "Repeat all"
+                },
+                {
+                    "value": "repeat-x",
+                    "label": "Repeat horizontally"
+                },
+                {
+                    "value": "repeat-y",
+                    "label": "Repeat vertically"
+                },
+                {
+                    "value": "inherit",
+                    "label": "Inherit"
+                }
+            ],
+            "label": "Background repeat",
+            "default": "no-repeat",
+            "info": "[Specifies how to repeat the background images](https:\/\/w3schools.com\/cssref\/pr_background-repeat.asp)"
+        },
+        {
+            "type": "select",
+            "id": "bg_size",
+            "options": [
+            {
+                "value": "auto",
+                "label": "Auto"
+            },
+            {
+                "value": "inherit",
+                "label": "Inherit"
+            },
+            {
+                "value": "cover",
+                "label": "Cover"
+            },
+            {
+                "value": "contain",
+                "label": "Contain"
+            }
+            ], 
+            "label": "Background size",
+            "default": "cover",
+            "info": "[Specifies the size of the background images](https:\/\/w3schools.com\/cssref\/css3_pr_background-size.asp)"
+        },
+        {
+            "type": "header",
+            "content": "+ Design for header transparent"
+        },
+        {
+            "type": "checkbox",
+            "id": "use_border",
+            "label": "Use border",
+            "default": true
+        },
+        {
+            "type": "color",
+            "id": "br_bg_trans",
+            "label": "Color border",
+            "default": "#fff"
+        },
+        {
+            "type": "range",
+            "id": "br_opacity_trans",
+            "label": "Color border overlay",
+            "default": 15,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "%"
+        },
+        {
+            "type": "color",
+            "id": "bg_overlay_trans",
+            "label": "Background overlay",
+            "default": "#000"
+        },
+        {
+            "type": "range",
+            "id": "bg_opacity_trans",
+            "label": "Background overlay opacity",
+            "default": 0,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "%"
+        },
+        {
+            "type": "range",
+            "id": "height_img_dk_trans",
+            "label": "Height image desktop",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "height_img_tb_trans",
+            "label": "Height image tablet",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "height_img_mb_trans",
+            "label": "Height image mobile",
+            "default": 350,
+            "min": 0,
+            "max": 500,
+            "step": 5,
+            "unit": "px"
+        },
+        {
+            "type": "header",
+            "content": "2. Design options"
+        },
+        {
+            "type": "range",
+            "id": "mg_b",
+            "label": "Margin space bottom (Desktop)",
+            "default": 50,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "mg_btb",
+            "label": "Margin space bottom (Tablet)",
+            "default": 50,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "px"
+        },
+        {
+            "type": "range",
+            "id": "mg_bmb",
+            "label": "Margin space bottom (Mobile)",
+            "default": 50,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "unit": "px"
+        }
+    ]
+}
+{% endschema %}

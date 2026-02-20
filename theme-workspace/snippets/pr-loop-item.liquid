@@ -8,6 +8,7 @@
 			<a class="t4s-d-block t4s-pr t4s-oh t4s_ratio" href="{{ pr_url }}"style="{{ imgatt }}--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
 				<img data-main-img-change class="lazyloadt4s" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
 				<span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>
+				{%- render 'sale-badge', product: product -%}
 			</a>
 		{%- endif -%} 
 	</div>

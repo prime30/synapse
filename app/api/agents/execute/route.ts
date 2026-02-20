@@ -22,7 +22,10 @@ const executeSchema = z.object({
     'explain', 'refactor', 'document', 'plan', 'chat',
   ] as const).optional(),
   model: z.string().optional(),
-  mode: z.enum(['orchestrated', 'solo']).optional(),
+  mode: z.enum(['orchestrated', 'solo']).optional(), // deprecated, kept for backward compat
+  subagentCount: z.number().int().min(1).max(4).optional().default(1),
+  specialistMode: z.boolean().optional().default(false),
+  intentMode: z.enum(['code', 'ask', 'plan', 'debug']).optional(),
 });
 
 /**
@@ -86,7 +89,15 @@ export async function POST(request: NextRequest) {
     const executionId = crypto.randomUUID();
     const coordinator = new AgentCoordinator();
 
-    const result = await coordinator.execute(
+    const subagentCount = body.subagentCount ?? (body.mode === 'solo' ? 1 : undefined) ?? 1;
+    const specialistMode = body.specialistMode ?? (body.mode === 'orchestrated');
+    const isSoloMode = subagentCount === 1;
+
+    const executeMethod = isSoloMode
+      ? coordinator.executeSolo.bind(coordinator)
+      : coordinator.execute.bind(coordinator);
+
+    const result = await executeMethod(
       executionId,
       body.projectId,
       userId,
@@ -97,7 +108,10 @@ export async function POST(request: NextRequest) {
         action: body.action as AIAction | undefined,
         model: body.model,
         mode: body.mode,
+        subagentMode: specialistMode ? 'specialist' as const : 'general' as const,
+        maxAgents: subagentCount,
         domContext: body.domContext,
+        intentMode: body.intentMode,
       },
     );
 

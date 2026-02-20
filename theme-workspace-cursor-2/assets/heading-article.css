@@ -1,0 +1,138 @@
+.t4s-heading-article__wrap{
+    background-repeat: var(--bg_repeat);
+    background-size:var(--bg_size);
+    background-attachment:var(--bg_att);
+    background-position: var(--bg_pos);
+    padding-top: var(--space-padding-top-mb);
+    padding-bottom: var(--space-padding-bottom-mb);
+    margin-bottom:var(--space-mg-mb);
+    border-top: solid 1px var(--border-color);
+    border-bottom: solid 1px var(--border-color);
+}
+.t4s-heading-article__wrap2{
+    height: var(--height-img-mb);
+    border-top: solid 1px var(--border-color);
+    border-bottom: solid 1px var(--border-color);
+    margin-bottom:var(--space-mg-mb);
+    background-repeat: var(--bg_repeat);
+    background-size:var(--bg_size);
+    background-attachment:var(--bg_att);
+    background-position: var(--bg_pos);
+}
+.t4s-heading-article__wrap2.t4s-heading-article__border-none,
+.t4s-heading-article__wrap.t4s-heading-article__border-none {
+    border: none;
+}
+.t4s-heading-article__wrap2.t4s-heading-article__border-top,
+.t4s-heading-article__wrap.t4s-heading-article__border-top {
+    border-bottom: none;
+}
+.t4s-heading-article__wrap2.t4s-heading-article__border-bottom,
+.t4s-heading-article__wrap.t4s-heading-article__border-bottom {
+    border-top: none;
+}
+.is--header-transparent .t4s-heading-article__wrap2,
+.is--header-transparent .t4s-heading-article__wrap{border: none;}
+
+
+.is--header-transparent .t4s-heading-article__wrap .t4s-text-bl{
+    color: var(--text-cl-trans);
+}
+.t4s-heading-article__wrap2::before,
+.t4s-heading-article__overlay::before {
+    content: '';
+    position: absolute;
+    background-color: var(--bg-overlay); 
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.t4s-heading-article .t4s-article-metas {
+    font-size: 13px;
+    font-weight: 400;
+    margin-bottom: var(--mgb);
+    color: var(--color);
+}
+.is--header-transparent .t4s-heading-article .t4s-article-metas {
+    color:var(--text-cl-trans);
+}
+.t4s-heading-article .t4s-article-metas a{color:inherit}
+.t4s-heading-article .t4s-article-metas>div {
+    display: inline-block;
+    vertical-align: top;
+    position: relative;
+    padding-right: 10px;
+    margin-right: 10px;
+}
+.t4s-heading-article .t4s-article-metas>div:not(:last-child):after {
+    height: 21px;
+    width: 1px;
+    background-color: rgba(var(--border-color-rgb),.95);
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    margin: auto;
+}
+.t4s-heading-article .t4s-article-comment__icon svg,
+.t4s-heading-article .t4s-article-author__icon svg {
+    width: 13px;
+    height: auto;
+    margin-right: 9px;
+    position: relative;
+    top: 2px;
+}
+.t4s-heading-article .t4s-article-tags {
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: var(--mgb);
+    text-transform: uppercase;
+    color:var(--color);
+}
+.is--header-transparent .t4s-heading-article .t4s-article-tags {
+    color:var(--text-cl-trans);
+}
+.t4s-heading-article .t4s-article-tags a{color:inherit}
+
+.t4s-heading-article .t4s-uppercase-true {text-transform: uppercase;}
+@media (max-width:767px){
+
+    .t4s-heading-article .t4s-article-tags,
+    .t4s-heading-article .t4s-article-metas {
+        margin-bottom: var(--mgb-mb);
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+    .t4s-heading-article__wrap{
+        padding-top: var(--space-padding-top-tb);
+        padding-bottom: var(--space-padding-bottom-tb);
+        margin-bottom:var(--space-mg-tb);
+    }
+    .t4s-heading-article__wrap2{
+        height: var(--height-img-tb);
+        margin-bottom:var(--space-mg-tb);
+    }
+   
+}
+@media (min-width: 1025px){
+    .t4s-heading-article__wrap{
+        padding-top: var(--space-padding-top-dk);
+        padding-bottom: var(--space-padding-bottom-dk);
+        margin-bottom:var(--space-mg-dk);
+    }
+    .t4s-heading-article__wrap2{
+        height: var(--height-img-dk);
+        margin-bottom:var(--space-mg-dk);
+    }
+   
+}
+
+@media (-moz-touch-enabled: 0), (hover: hover) and (min-width: 1025px) {
+    .t4s-heading-article .t4s-article-metas a:hover{color:var(--accent-color)}
+    .t4s-heading-article .t4s-article-tags a:hover{color:var(--accent-color)}
+}

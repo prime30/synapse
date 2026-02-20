@@ -20,7 +20,7 @@ const CATEGORY_BADGE_CLASSES: Record<TemplateCategory, string> = {
   accessibility: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
   seo: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
   content: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
-  custom: 'bg-stone-500/10 text-stone-600 border-stone-500/20',
+  custom: 'bg-stone-500/10 text-stone-600 dark:text-stone-400 border-stone-500/20',
 };
 
 function truncatePrompt(text: string, maxLines: number): string {
@@ -104,19 +104,12 @@ export function PromptTemplateLibrary({
   ];
 
   return (
-    <>
-      <div
-        className={'fixed inset-0 z-40'}
-        onClick={onClose}
-        aria-hidden="true"
-      />
       <div
         ref={popoverRef}
         role="dialog"
         aria-label="Prompt template library"
-        aria-modal="true"
         className={
-          'absolute bottom-full left-0 mb-2 w-80 max-h-[400px] rounded-lg border ide-border shadow-lg ide-surface-panel overflow-hidden z-50 flex flex-col'
+          'mx-2 mb-2 rounded-lg border ide-border ide-surface-panel overflow-hidden flex flex-col max-h-[400px]'
         }
       >
         {/* Header */}
@@ -263,7 +256,6 @@ export function PromptTemplateLibrary({
           )}
         </div>
       </div>
-    </>
   );
 }
 

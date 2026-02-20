@@ -1,0 +1,539 @@
+{
+  "timestamp": "2026-02-19T01:26:45.261Z",
+  "runsPerPrompt": 3,
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "cursor-production"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse (Opus 4.6)",
+      "runner": "v2",
+      "model": "claude-opus-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Opus 4.6)",
+      "runner": "baseline",
+      "model": "claude-opus-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Opus 4.6)",
+      "runner": "cursor",
+      "model": "claude-opus-4-6",
+      "features": [
+        "cursor-production"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse (Sonnet 4.6)",
+      "runner": "v2",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Sonnet 4.6)",
+      "runner": "baseline",
+      "model": "claude-sonnet-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Sonnet 4.6)",
+      "runner": "cursor",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "cursor-production"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2867,
+          "firstChunkMs": 1328,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 2,
+          "outputTokens": 285,
+          "cacheRead": 7377,
+          "cacheWrite": 0,
+          "costUSD": 0.0017317333333333334,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 2293,
+          "totalTimeMsHigh": 3343,
+          "firstChunkMsLow": 721,
+          "firstChunkMsHigh": 1859,
+          "costUSDLow": 0.001136,
+          "costUSDHigh": 0.0020356000000000003
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 82951,
+          "firstChunkMs": 2617,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 73211,
+          "outputTokens": 10638,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.1011192,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "create_file",
+            "propose_code_edit"
+          ],
+          "changes": 4,
+          "filesCreated": 1,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 71234,
+          "totalTimeMsHigh": 105164,
+          "firstChunkMsLow": 2356,
+          "firstChunkMsHigh": 2798,
+          "costUSDLow": 0.0794768,
+          "costUSDHigh": 0.12810560000000001
+        },
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": false,
+          "totalTimeMs": 14,
+          "firstChunkMs": 14,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 12,
+          "totalTimeMsHigh": 17,
+          "firstChunkMsLow": 12,
+          "firstChunkMsHigh": 17,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    },
+    "simple-ask": {
+      "name": "Simple: Accessibility audit",
+      "intentMode": "ask",
+      "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? Give specific WCAG violations and fixes.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "snippets/product-img.liquid"
+      ],
+      "expectedTier": "SIMPLE",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 12321,
+          "firstChunkMs": 975,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 1568,
+          "cacheRead": 6256,
+          "cacheWrite": 0,
+          "costUSD": 0.006776213333333333,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 11802,
+          "totalTimeMsHigh": 12936,
+          "firstChunkMsLow": 622,
+          "firstChunkMsHigh": 1457,
+          "costUSDLow": 0.005762879999999999,
+          "costUSDHigh": 0.007526879999999999
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 17468,
+          "firstChunkMs": 1509,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 8135,
+          "outputTokens": 2099,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.0149056,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "read_file"
+          ],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 16441,
+          "totalTimeMsHigh": 18167,
+          "firstChunkMsLow": 1101,
+          "firstChunkMsHigh": 2061,
+          "costUSDLow": 0.0145128,
+          "costUSDHigh": 0.015228799999999999
+        },
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": false,
+          "totalTimeMs": 13,
+          "firstChunkMs": 13,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 10,
+          "totalTimeMsHigh": 17,
+          "firstChunkMsLow": 10,
+          "firstChunkMsHigh": 17,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    },
+    "complex-section": {
+      "name": "Complex: Build announcement bar section",
+      "intentMode": "code",
+      "prompt": "Add a new section for an announcement bar with a background color picker, text content, a link URL, and a dismissible toggle. Follow existing section patterns in the theme.",
+      "files": [
+        "sections/announcement-bar.liquid",
+        "layout/theme.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 106474,
+          "firstChunkMs": 2283,
+          "model": "claude-opus-4-6",
+          "tier": "COMPLEX",
+          "inputTokens": 2468,
+          "outputTokens": 3017,
+          "cacheRead": 20703,
+          "cacheWrite": 0,
+          "costUSD": 0.29431999999999997,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "create_file",
+            "run_review",
+            "propose_code_edit",
+            "search_replace"
+          ],
+          "changes": 2,
+          "filesCreated": 1,
+          "thinkingN": 84,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "reviewTimeMs": 37058,
+          "thinkingTimeMs": 104190,
+          "totalTimeMsLow": 89830,
+          "totalTimeMsHigh": 120647,
+          "firstChunkMsLow": 2138,
+          "firstChunkMsHigh": 2477,
+          "costUSDLow": 0.188523,
+          "costUSDHigh": 0.382143
+        },
+        "baseline": {
+          "name": "Baseline (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 140144,
+          "firstChunkMs": 4394,
+          "model": "claude-opus-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 332239,
+          "outputTokens": 13537,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 5.998835,
+          "toolCalls": 11,
+          "toolsUsed": [
+            "glob_files",
+            "search_files",
+            "grep_content",
+            "list_files",
+            "create_file",
+            "propose_code_edit",
+            "run_specialist",
+            "read_file",
+            "run_diagnostics"
+          ],
+          "changes": 3,
+          "filesCreated": 3,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 128275,
+          "totalTimeMsHigh": 152942,
+          "firstChunkMsLow": 4136,
+          "firstChunkMsHigh": 4526,
+          "costUSDLow": 5.391465,
+          "costUSDHigh": 6.535965
+        },
+        "cursor": {
+          "name": "Cursor production (Opus 4.6)",
+          "success": false,
+          "totalTimeMs": 12,
+          "firstChunkMs": 12,
+          "model": "claude-opus-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 10,
+          "totalTimeMsHigh": 16,
+          "firstChunkMsLow": 10,
+          "firstChunkMsHigh": 16,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    },
+    "arch-rebuild": {
+      "name": "Architectural: Rebuild product template",
+      "intentMode": "code",
+      "prompt": "Rebuild the entire product page template to use a modular section-based architecture with separate blocks for gallery, description, variants, and add-to-cart. Restructure the existing monolithic template.",
+      "files": [
+        "templates/product.json",
+        "sections/main-product.liquid"
+      ],
+      "expectedTier": "ARCHITECTURAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 79711,
+          "firstChunkMs": 3255,
+          "model": "claude-sonnet-4-6",
+          "tier": "ARCHITECTURAL",
+          "inputTokens": 3,
+          "outputTokens": 4575,
+          "cacheRead": 12812,
+          "cacheWrite": 0,
+          "costUSD": 0.07247760000000002,
+          "toolCalls": 3,
+          "toolsUsed": [
+            "ptc:bash_code_execution"
+          ],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 486,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "thinkingTimeMs": 78263,
+          "totalTimeMsLow": 74330,
+          "totalTimeMsHigh": 87560,
+          "firstChunkMsLow": 2825,
+          "firstChunkMsHigh": 3636,
+          "costUSDLow": 0.07055760000000001,
+          "costUSDHigh": 0.0756576
+        },
+        "baseline": {
+          "name": "Baseline (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 292839,
+          "firstChunkMs": 3442,
+          "model": "claude-sonnet-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 717886,
+          "outputTokens": 17326,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 2.413549,
+          "toolCalls": 14,
+          "toolsUsed": [
+            "list_files",
+            "semantic_search",
+            "glob_files",
+            "propose_plan",
+            "create_file",
+            "run_specialist",
+            "propose_code_edit",
+            "search_replace",
+            "grep_content"
+          ],
+          "changes": 2,
+          "filesCreated": 1,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 208001,
+          "totalTimeMsHigh": 369679,
+          "firstChunkMsLow": 3378,
+          "firstChunkMsHigh": 3567,
+          "costUSDLow": 2.351565,
+          "costUSDHigh": 2.457606
+        },
+        "cursor": {
+          "name": "Cursor production (Sonnet 4.6)",
+          "success": false,
+          "totalTimeMs": 13,
+          "firstChunkMs": 13,
+          "model": "claude-sonnet-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 11,
+          "totalTimeMsHigh": 14,
+          "firstChunkMsLow": 11,
+          "firstChunkMsHigh": 14,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

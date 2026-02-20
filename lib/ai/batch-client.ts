@@ -165,7 +165,7 @@ export function messagesToBatchRequest(
   return {
     custom_id: customId,
     params: {
-      model: options?.model ?? 'claude-sonnet-4-5-20250929',
+      model: options?.model ?? 'claude-sonnet-4-6',
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
       messages: chatMessages.map(m => ({ role: m.role, content: m.content })),

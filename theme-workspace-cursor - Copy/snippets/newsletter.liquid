@@ -1,0 +1,142 @@
+{%- comment -%}
+    Renders a form newsletter
+
+    Accepts: 
+    - form_id: {String} Form's id attribute for accessibility purpose (required)
+    - layout: '1', '2' (optional)
+    - html:          (optional)
+    - margin:        (optional)
+    - class:         (optional)
+    - styleInline:   (optional)
+    - buttonIcon:   (optional)
+    
+    Usage: 
+    {%- render 'newsletter', form_id: formId, layout: -%}
+{%- endcomment -%}
+
+{%- liquid
+  unless form_id
+    assign form_id = 'newsletter'
+  endunless
+  unless html
+    assign html = 'p'
+  endunless
+  assign checkbox_mail = settings.checkbox_mail
+  if layout == '10'
+    assign class_email = 't4s-col-md t4s-col-12'
+    assign class_btn = 't4s-col-md-auto t4s-col-12'
+    assign class_ip = ''
+  else
+    assign class_email = 't4s-col'
+    assign class_btn = 't4s-col-auto' 
+    assign class_ip = ''
+  endif
+  unless required_ck
+    assign required_ck = 'on'
+  endunless -%}
+
+{%- capture conditions_mail -%}
+  {%- if checkbox_mail -%}
+    <div class="t4s-clearfix"></div>
+    {%- assign page_url = pages[settings.link_mail].url -%}
+    <{{ html }} class="t4s-agree__checkbox t4s-pr t4s-d-inline-block {{ margin }}">
+      <input type="checkbox" id="t4s-agree_{{ form_id }}" name="t4s-agree_{{ form_id }}"{% if required_ck == 'on' %} data-agreeMail-checkbox required="required"{% endif %}>
+      <label for="t4s-agree_{{ form_id }}">{% if page_url != blank %}{{ 'sections.agree_mail.link_conditions_html' | t: link: page_url }}{% else %}{{ 'sections.agree_mail.link_conditions_emty' | t }}{% endif %}</label>
+      <svg class="t4s-dn t4s-icon_checked" viewBox="0 0 24 24"><path d="M9 20l-7-7 3-3 4 4L19 4l3 3z"></path></svg>
+    </{{ html }}>
+  {%- endif -%}
+{%- endcapture -%}
+
+{%- capture icon_Html -%}
+  {%- if buttonIcon == "plane" -%}
+      <svg class="t4s-plane-svg" viewBox="0 0 511.999 511.999"><path d="M493.469,0.481c-0.14,0.034-0.281,0.062-0.421,0.1L26.362,127.859c-11.729,3.199-14.956,18.333-5.591,26.049L166.019,273.57l-26.743,80.228c-3.898,11.696,7.26,22.877,18.974,18.974l80.228-26.743L358.14,491.277c7.748,9.403,22.855,6.115,26.049-5.591L511.466,18.999c0.04-0.147,0.07-0.296,0.105-0.444C514.204,7.56,504.277-2.128,493.469,0.481z M62.21,149.178L431.982,48.331L183.593,249.179L62.21,149.178z M234.599,315.698l-57.376,19.126l19.126-57.376L396.206,115.84L234.599,315.698z M362.868,449.836L262.866,328.453l200.85-248.39L362.868,449.836z"/><path d="M46.805,465.313c-5.861-5.856-15.359-5.851-21.214,0.01L4.388,486.546c-5.855,5.86-5.851,15.358,0.01,21.213c5.594,5.589,15.625,5.584,21.213-0.01l21.204-21.223C52.67,480.666,52.666,471.168,46.805,465.313z"/><path d="M110.413,401.645c-5.861-5.855-15.357-5.851-21.213,0.01l-21.203,21.223c-5.322,5.327-5.317,15.891,0.01,21.213c5.059,5.054,16.156,5.051,21.213-0.01l21.203-21.223C116.278,416.998,116.274,407.5,110.413,401.645z"/></svg>
+  {%- elsif buttonIcon == "arrow" -%}
+    <svg class="t4s-arrow-svg" viewBox="0 0 32 32">
+      <path d="M18.901 3.541c-0.283 0.075-0.709 0.352-0.928 0.597-0.091 0.107-0.224 0.325-0.299 0.491-0.112 0.256-0.133 0.384-0.133 0.816 0 0.571 0.059 0.747 0.368 1.168 0.144 0.197 2.037 2.165 3.664 3.808 1.205 1.216 3.499 3.616 3.483 3.637-0.016 0.011-5.291 0.027-11.728 0.037l-11.701 0.011-0.336 0.181c-0.395 0.213-0.688 0.517-0.891 0.917-0.133 0.261-0.149 0.341-0.149 0.848 0 0.533 0.011 0.576 0.176 0.896 0.208 0.389 0.501 0.677 0.912 0.896l0.288 0.155 11.701 0.016c6.437 0.005 11.712 0.021 11.728 0.032 0.016 0.021-2.251 2.384-3.563 3.717-1.696 1.723-3.44 3.536-3.584 3.728-0.304 0.411-0.373 0.624-0.373 1.184 0 0.464 0.016 0.539 0.171 0.848 0.197 0.4 0.352 0.576 0.72 0.816 0.597 0.384 1.323 0.395 1.947 0.021 0.245-0.144 0.507-0.405 3.653-3.637 0.997-1.024 1.984-2.032 2.187-2.24 0.208-0.208 1.093-1.12 1.973-2.032 0.88-0.907 1.941-2 2.363-2.427 0.965-0.987 1.093-1.216 1.093-1.973 0-0.747-0.133-0.992-1.040-1.92-0.384-0.395-1.077-1.104-1.536-1.573-1.947-2.005-4.48-4.603-4.827-4.955-0.203-0.208-1.104-1.131-1.995-2.048-0.955-0.981-1.723-1.728-1.867-1.813-0.448-0.261-0.987-0.336-1.477-0.203z"></path></svg>
+   {%- elsif buttonIcon == "long-arrow" -%}
+    <svg class="t4s-long-arrow-svg" viewBox="0 0 476.213 476.213"><g><polygon xmlns="http://www.w3.org/2000/svg" points="345.606,107.5 324.394,128.713 418.787,223.107 0,223.107 0,253.107 418.787,253.107 324.394,347.5   345.606,368.713 476.213,238.106 " fill="currentColor" data-original="currentColor"></polygon><g xmlns="http://www.w3.org/2000/svg"></g></svg>
+  {%- else -%}
+    <svg class="t4s-email-svg" viewBox="0 0 479.058 479.058">
+      <path d="m434.146 59.882h-389.234c-24.766 0-44.912 20.146-44.912 44.912v269.47c0 24.766 20.146 44.912 44.912 44.912h389.234c24.766 0 44.912-20.146 44.912-44.912v-269.47c0-24.766-20.146-44.912-44.912-44.912zm0 29.941c2.034 0 3.969.422 5.738 1.159l-200.355 173.649-200.356-173.649c1.769-.736 3.704-1.159 5.738-1.159zm0 299.411h-389.234c-8.26 0-14.971-6.71-14.971-14.971v-251.648l199.778 173.141c2.822 2.441 6.316 3.655 9.81 3.655s6.988-1.213 9.81-3.655l199.778-173.141v251.649c-.001 8.26-6.711 14.97-14.971 14.97z"/></svg>
+  {%- endif -%}
+{%- endcapture -%}
+{%- assign btn_content = 'sections.newsletter_form.submit' | t -%}
+{%- if source_btn != "text" -%}
+  {%- capture aria_label_btn %}aria-label="{{btn_content | escape }}"{% endcapture -%}
+  {%- assign btn_content = icon_Html -%}
+{%- endif -%}
+
+{%- case settings.platform_email -%}
+  {%- when '3' -%}
+      <form data-t4s-klaviyo-form data-form-mail-agree id="t4s-form-{{ form_id }}" class="t4s-pr t4s-z-100 t4s-newsletter__form is--klaviyo" action="//manage.kmail-lists.com/subscriptions/subscribe" data-ajax-submit="//manage.kmail-lists.com/ajax/subscriptions/subscribe" method="GET"{% if settings.ajax_klaviyo and settings.klaviyo_list_id != blank %} data-t4s-klaviyo-ajax{% endif %}>
+        <input type="hidden" name="g" value="{{ settings.klaviyo_list_id }}">
+        <div class="t4s-newsletter__fields">
+           <div class="t4s-newsletter__inner t4s-row t4s-g-0 t4s-pr t4s-oh {{ class }}">
+              <div class="{{ class_email }} t4s-col-item is--col-email"><input type="email" name="email" placeholder="{{ 'sections.newsletter_form.email_placeholder' | t }}"  value="{% if customer %}{{ customer.email }}{% endif %}" class="{{ class_ip }} t4s-newsletter__email" required="required"></div>
+              <div class="{{ class_btn }} t4s-col-item is--col-btn">
+                <button {{aria_label_btn}} data-t4s-klaviyo-submit data-agreeMail-btn type="submit" class="t4s-w-100 t4s-newsletter__submit t4s-truncate t4s-btn-loading__svg">
+                  <span class="t4s-newsletter__text">{{ btn_content }}</span>
+                  <span class="t4s-loading__spinner t4s-dn">
+                    <svg width="16" height="16" aria-hidden="true" focusable="false" role="presentation" class="t4s-svg__spinner" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg"><circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle></svg>
+                  </span>
+                </button>
+              </div>
+           </div>
+           {{-conditions_mail-}}
+        </div>
+       <div class="t4s-newsletter__response klaviyo_messages">
+         <div class="t4s-newsletter__success success_message t4s-dn"><svg width="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M443.3 100.7C449.6 106.9 449.6 117.1 443.3 123.3L171.3 395.3C165.1 401.6 154.9 401.6 148.7 395.3L4.686 251.3C-1.562 245.1-1.562 234.9 4.686 228.7C10.93 222.4 21.06 222.4 27.31 228.7L160 361.4L420.7 100.7C426.9 94.44 437.1 94.44 443.3 100.7H443.3z"/></svg>{{ 'sections.newsletter_form.confirmation' | t }}</div>
+         <div class="t4s-newsletter__error error_message t4s-dn"></div>
+       </div>
+      </form>
+
+  {%- when '4' -%}
+     <form id="t4s-form-{{ form_id }}" data-form-mail-agree role="form" action="{%- if settings.ajax_mailChimp -%}{{ settings.action_mailchimp | replace: '/post?u', '/post-json?u' }}{%- else -%}{{ settings.action_mailchimp }}{%- endif -%}" class="t4s-pr t4s-z-100 t4s-newsletter__form is--mailChimp" method="post"{%- if settings.ajax_mailChimp and settings.action_mailchimp != blank %} data-t4s-mailChimp-ajax{%- endif -%}>
+        <div class="t4s-newsletter__fields">
+           <div class="t4s-newsletter__inner t4s-row t4s-g-0 t4s-pr t4s-oh {{ class }}">
+              <div class="{{ class_email }} t4s-col-item is--col-email"><input type="email" name="EMAIL" placeholder="{{ 'sections.newsletter_form.email_placeholder' | t }}"  value="{% if customer %}{{ customer.email }}{% endif %}" class="{{ class_ip }} t4s-newsletter__email" required="required"></div>
+              <div class="{{ class_btn }} t4s-col-item is--col-btn">
+                <button {{aria_label_btn}} data-t4s-mailChimp-submit data-agreeMail-btn type="submit" class="t4s-w-100 t4s-newsletter__submit t4s-truncate t4s-btn-loading__svg">
+                <span class="t4s-newsletter__text">{{ btn_content }}</span>
+                <span class="t4s-loading__spinner t4s-dn">
+                  <svg width="16" height="16" aria-hidden="true" focusable="false" role="presentation" class="t4s-svg__spinner" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg"><circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle></svg>
+                </span>
+              </button>
+            </div>
+           </div>
+           {{-conditions_mail-}}
+        </div>
+        <div data-new-response-form class="t4s-newsletter__response">
+          <div data-new-response-success class="t4s-newsletter__success t4s-dn"><svg width="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M443.3 100.7C449.6 106.9 449.6 117.1 443.3 123.3L171.3 395.3C165.1 401.6 154.9 401.6 148.7 395.3L4.686 251.3C-1.562 245.1-1.562 234.9 4.686 228.7C10.93 222.4 21.06 222.4 27.31 228.7L160 361.4L420.7 100.7C426.9 94.44 437.1 94.44 443.3 100.7H443.3z"/></svg>{{ 'sections.newsletter_form.confirmation' | t }}</div>
+          <div data-new-response-error class="t4s-newsletter__error t4s-dn"></div>
+        </div>
+     </form>
+
+  {%- else -%}
+
+     {%- assign form_id = 't4s-form-' | append: form_id -%}
+     {%- form 'customer', class: 't4s-pr t4s-z-100 t4s-newsletter__form', id: form_id, data-form-mail-agree: '' -%}
+        <input type="hidden" name="contact[tags]" value="newsletter">
+        <div class="t4s-newsletter__fields">
+           <div class="t4s-newsletter__inner t4s-row t4s-g-0 t4s-pr t4s-oh {{ class }}">
+              <div class="{{ class_email }} t4s-col-item is--col-email"><input type="email" name="contact[email]" placeholder="{{ 'sections.newsletter_form.email_placeholder' | t }}"  value="{% if customer %}{{ customer.email }}{% endif %}" class="{{ class_ip }} t4s-newsletter__email" required="required"></div>
+              <div class="{{ class_btn }} t4s-col-item is--col-btn">
+                <button {{aria_label_btn}} data-agreeMail-btn type="submit" class="t4s-w-100 t4s-newsletter__submit t4s-truncate t4s-btn-loading__svg">
+                  <span class="t4s-newsletter__text">{{ btn_content }}</span>
+                  <span class="t4s-loading__spinner t4s-dn">
+                    <svg width="16" height="16" aria-hidden="true" focusable="false" role="presentation" class="t4s-svg__spinner" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg"><circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle></svg>
+                  </span>
+                </button>
+              </div>
+           </div>
+           {{-conditions_mail-}}
+        </div>
+         <div data-t4s-response-form data-new-response-form class="t4s-newsletter__response">
+            {%- if form.posted_successfully? -%}
+            <div class="t4s-newsletter__success"><svg width="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M443.3 100.7C449.6 106.9 449.6 117.1 443.3 123.3L171.3 395.3C165.1 401.6 154.9 401.6 148.7 395.3L4.686 251.3C-1.562 245.1-1.562 234.9 4.686 228.7C10.93 222.4 21.06 222.4 27.31 228.7L160 361.4L420.7 100.7C426.9 94.44 437.1 94.44 443.3 100.7H443.3z"/></svg>{{ 'sections.newsletter_form.confirmation' | t }}</div>
+            {%- elsif form.errors -%}
+            <div class="t4s-newsletter__error">{{ form.errors | default_errors }}</div>{%- endif -%}
+         </div>
+     {%- endform -%}
+
+{%- endcase -%}

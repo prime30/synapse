@@ -1,0 +1,164 @@
+{%- liquid
+  assign se_stts = section.settings
+  assign show_bar = se_stts.show_bar
+  assign bg_color = se_stts.bg_color
+  assign text_color = se_stts.text_color
+  assign text_content = se_stts.text
+  assign link_url = se_stts.link_url
+  assign dismissible = se_stts.dismissible
+-%}
+
+{%- if show_bar -%}
+  {%- style -%}
+    #t4s-simple-announcement-{{ section.id }} {
+      background-color: {{ bg_color }};
+      color: {{ text_color }};
+      padding: 10px 20px;
+      text-align: center;
+      font-size: {{ se_stts.font_size }}px;
+      position: relative;
+      z-index: 10;
+    }
+    #t4s-simple-announcement-{{ section.id }} a {
+      color: {{ text_color }};
+      text-decoration: underline;
+    }
+    #t4s-simple-announcement-{{ section.id }} a:hover {
+      opacity: 0.8;
+    }
+    #t4s-simple-announcement-{{ section.id }} .t4s-simple-ann__close {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: {{ text_color }};
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      transition: opacity 0.2s;
+    }
+    #t4s-simple-announcement-{{ section.id }} .t4s-simple-ann__close:hover {
+      opacity: 0.7;
+    }
+    #t4s-simple-announcement-{{ section.id }} .t4s-simple-ann__close svg {
+      width: 12px;
+      height: 12px;
+    }
+    #t4s-simple-announcement-{{ section.id }}.t4s-hidden {
+      display: none;
+    }
+  {%- endstyle -%}
+
+  <div id="t4s-simple-announcement-{{ section.id }}" aria-label="Announcement" role="region">
+    <div class="t4s-container" style="position:relative;">
+      {%- if link_url != blank -%}
+        <a href="{{ link_url }}">{{ text_content }}</a>
+      {%- else -%}
+        <span>{{ text_content }}</span>
+      {%- endif -%}
+
+      {%- if dismissible -%}
+        <button
+          class="t4s-simple-ann__close"
+          aria-label="{{ 'sections.announcement.close' | t | default: 'Close announcement' }}"
+          data-dismiss-announcement="{{ section.id }}"
+        >
+          <svg viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M15 0L1 14m14 0L1 0"></path>
+          </svg>
+        </button>
+      {%- endif -%}
+    </div>
+  </div>
+
+  {%- if dismissible -%}
+    <script>
+      (function() {
+        var sectionId = {{ section.id | json }};
+        var storageKey = 't4s_simple_ann_dismissed_' + sectionId;
+        var el = document.getElementById('t4s-simple-announcement-' + sectionId);
+        if (!el) return;
+
+        if (localStorage.getItem(storageKey) === 'true') {
+          el.classList.add('t4s-hidden');
+          el.setAttribute('aria-hidden', 'true');
+          return;
+        }
+
+        var btn = el.querySelector('[data-dismiss-announcement]');
+        if (btn) {
+          btn.addEventListener('click', function() {
+            el.classList.add('t4s-hidden');
+            el.setAttribute('aria-hidden', 'true');
+            localStorage.setItem(storageKey, 'true');
+          });
+        }
+      })();
+    </script>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Simple announcement bar",
+  "tag": "section",
+  "class": "t4s-section t4s-section-simple-announcement-bar",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_bar",
+      "label": "Show announcement bar",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "text",
+      "label": "Announcement text",
+      "default": "Free shipping on orders over $50!"
+    },
+    {
+      "type": "url",
+      "id": "link_url",
+      "label": "Link URL",
+      "info": "Optional. Wraps the text in a clickable link."
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Background color",
+      "default": "#1a1a1a"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "font_size",
+      "label": "Font size",
+      "default": 13,
+      "min": 10,
+      "max": 20,
+      "step": 1,
+      "unit": "px"
+    },
+    {
+      "type": "checkbox",
+      "id": "dismissible",
+      "label": "Allow visitors to dismiss",
+      "info": "Adds a close button. Dismissed state is remembered via local storage.",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Simple announcement bar",
+      "category": "group8"
+    }
+  ]
+}
+{% endschema %}

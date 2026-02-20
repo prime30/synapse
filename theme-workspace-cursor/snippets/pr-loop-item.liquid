@@ -1,0 +1,27 @@
+{%- liquid
+    assign pr_url = product.url
+	assign image = product.featured_media | default: settings.placeholder_img
+ -%}
+<div class="t4s-row t4s-space-item-inner t4s-widget__pr">
+	<div class="t4s-col-item t4s-widget_img_pr">
+		{%- if image != blank -%}
+			<a class="t4s-d-block t4s-pr t4s-oh t4s_ratio" href="{{ pr_url }}"style="{{ imgatt }}--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
+				<img data-main-img-change class="lazyloadt4s" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+				<span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>
+			</a>
+		{%- endif -%} 
+	</div>
+	<div class="t4s-col-item t4s-col t4s-widget_if_pr">
+		{% if rating_pos == "1" %}
+          {%- render 'product-rating', product: product, app_review: app_review -%}
+        {% endif %}
+		<a href="{{ pr_url }}" class="t4s-d-block t4s-widget__pr-title">{{ product.title }}</a>
+		{% if customer %}{%- render 'product-price', class_price: 't4s-widget__pr-price', product: product, price_varies_style: price_varies_style, type: 'card', isGrouped: false -%}
+         {% else customer %}
+              <div><p style="font-weight: normal;display: block;white-space: normal;font-size: 13px;color: rgb(0, 0, 0);"><strong><a class="wp-login-link" onclick="rememberPage(event)" style="color: #000000" href="/account/login">Login</a></strong> to see price</p></div>
+            {% endif customer %}
+		{% if rating_pos == "2" %}
+          {%- render 'product-rating', product: product, app_review: app_review -%}
+        {% endif %}
+	</div>
+</div>

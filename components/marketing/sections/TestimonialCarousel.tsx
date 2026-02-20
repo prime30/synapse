@@ -138,7 +138,7 @@ export function TestimonialCarousel() {
                 style={{ transform: `translateX(-${activeIndex * 100}%)` }}
               >
                 {CARDS.map((card, i) => (
-                  <div key={i} className="w-full flex-shrink-0 px-1">
+                  <div key={i} className="w-full flex-shrink-0 px-2 sm:px-1">
                     <Card card={card} />
                   </div>
                 ))}

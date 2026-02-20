@@ -41,7 +41,7 @@ export function GlassCard({
   const glassClass = theme === 'light' ? 'glass-light glass-hover' : 'glass-dark glass-hover';
   const variantClasses = {
     default: glassClass,
-    accent: 'gradient-accent text-white border border-sky-600/30 shadow-[0_0_24px_rgba(14,165,233,0.3)]',
+    accent: 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_rgba(40,205,86,0.25)]',
     'code-texture': glassClass,
   };
 
@@ -65,7 +65,7 @@ export function GlassCard({
     >
       {variant === 'code-texture' && (
         <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-[0.04] pointer-events-none font-mono text-[8px] leading-[10px] text-sky-500 overflow-hidden whitespace-pre transition-opacity duration-500"
+          className="absolute inset-0 opacity-0 group-hover:opacity-[0.04] pointer-events-none font-mono text-[8px] leading-[10px] text-stone-500 dark:text-stone-400 overflow-hidden whitespace-pre transition-opacity duration-500"
           aria-hidden="true"
         >
           {`{% schema %}

@@ -1,0 +1,31 @@
+{
+  "phase": "1f",
+  "name": "Feature Flag Consistency",
+  "timestamp": "2026-02-17T23:33:23.969Z",
+  "envFlagCount": 16,
+  "codeFlagCount": 12,
+  "matched": [
+    "ENABLE_ADAPTIVE_THINKING",
+    "ENABLE_BATCH_PROCESSING",
+    "ENABLE_CITATIONS",
+    "ENABLE_CONDITIONAL_SUMMARY",
+    "ENABLE_CONTEXT_EDITING",
+    "ENABLE_PM_EXPLORATION_TOOLS",
+    "ENABLE_PROMPT_CACHING",
+    "ENABLE_PTC",
+    "ENABLE_STREAMING_TOOL_USE",
+    "ENABLE_STRUCTURED_OUTPUTS",
+    "ENABLE_V"
+  ],
+  "inEnvOnly": [
+    "ENABLE_OBSERVABILITY",
+    "ENABLE_VECTOR_SEARCH",
+    "NEXT_PUBLIC_ENABLE_LOCAL_SYNC",
+    "NEXT_PUBLIC_ENABLE_MEDIA_GENERATION",
+    "NEXT_PUBLIC_ENABLE_V"
+  ],
+  "inCodeOnly": [
+    "PROMPT_CACHE_TTL"
+  ],
+  "result": "WARN"
+}

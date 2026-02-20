@@ -1,0 +1,31 @@
+app = "synapse-w9lyrw"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[http_service.concurrency]
+  type = "requests"
+  hard_limit = 250
+  soft_limit = 200
+
+[checks.health]
+  port = 3000
+  type = "http"
+  interval = "30s"
+  timeout = "5s"
+  path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
+
+[[mounts]]
+  source = "synapse_themes"
+  destination = "/app/.synapse-themes"

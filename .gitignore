@@ -18,7 +18,15 @@
 /out/
 
 # production
-/build
+/dist
+
+# electron desktop builds
+/electron/dist/
+/electron/node_modules/
+/build/icons/
+
+# keep the source SVG icon
+!build/icon.svg
 
 # misc
 .DS_Store
@@ -33,6 +41,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.test.example
 
 # vercel
 .vercel
@@ -46,3 +55,6 @@ components/marketing/dev/
 
 # Local theme file sync (dev-only mirror of Supabase files)
 .synapse-themes/
+
+# Local file cache (theme files cached on disk for zero-latency agent reads)
+.cache/

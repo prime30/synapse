@@ -1,6 +1,5 @@
 import type { AIMessage } from '@/lib/ai/types';
 import type { AgentResult, CodeChange, ReviewResult, AgentError } from '@/lib/types/agent';
-import { trimHistory } from '@/lib/ai/history-window';
 import { estimateTokens } from '@/lib/ai/token-counter';
 
 /** Conversation turn from the frontend (user or assistant). */
@@ -90,8 +89,10 @@ export function buildSummaryMessages(
     { role: 'system', content: systemPrompt },
   ];
 
-  // Trim history to prevent context overflow
-  const { messages: trimmedHistory, summary: historySummary } = trimHistory(history);
+  // History is already trimmed by the frontend (trimHistory in AgentPromptPanel).
+  // Pass through directly to avoid double-trimming.
+  const trimmedHistory = history;
+  const historySummary = '';
 
   // Add trimmed conversation history as prior turns
   for (const msg of trimmedHistory) {
@@ -117,6 +118,53 @@ export function buildSummaryMessages(
       '--- End Result ---',
       '',
       'Now explain to the user what happened in a conversational way. Follow the guidelines in your system prompt.',
+    ].join('\n'),
+  });
+
+  return messages;
+}
+
+/**
+ * Build a thin summary prompt that only formats code changes into tool calls.
+ * Used when the PM already explored the codebase (user saw reasoning + tool events)
+ * and only the specialist changes need formatting.
+ */
+export function buildThinSummaryMessages(
+  userRequest: string,
+  result: AgentResult,
+  history: HistoryMessage[] = [],
+): AIMessage[] {
+  const thinPrompt = `
+You are an AI coding assistant in a Shopify theme IDE called Synapse.
+The user has already seen your analysis. Now you only need to present the code changes.
+
+Rules:
+- Be very brief — the user already understands the context.
+- For each file change, use the propose_code_edit tool.
+- Add 1-2 sentences of summary, no more.
+- Do NOT re-explain the analysis — the user saw it in real-time.
+`.trim();
+
+  const messages: AIMessage[] = [
+    { role: 'system', content: thinPrompt },
+  ];
+
+  for (const msg of history) {
+    messages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
+  }
+
+  const changesBlock = result.changes && result.changes.length > 0
+    ? formatChanges(result.changes)
+    : 'No file changes.';
+
+  messages.push({
+    role: 'user',
+    content: [
+      `User asked: "${userRequest}"`,
+      '',
+      changesBlock,
+      '',
+      'Present these changes to the user using the propose_code_edit tool for each file.',
     ].join('\n'),
   });
 

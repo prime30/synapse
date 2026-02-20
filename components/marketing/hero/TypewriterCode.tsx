@@ -90,8 +90,8 @@ export function TypewriterCode({ onComplete, className = '' }: TypewriterCodePro
   return (
     <div className={`h-full flex flex-col p-4 font-mono text-sm ${className}`}>
       <div className="flex items-center gap-2 mb-3 text-white/30 text-xs">
-        <span className="px-2 py-0.5 bg-white/5 rounded text-sky-500/60">hero-section.liquid</span>
-        <span className="ml-auto px-2 py-0.5 bg-sky-500/10 rounded text-sky-500 text-[10px]">AI Writing...</span>
+        <span className="px-2 py-0.5 bg-white/5 rounded text-stone-500/60">hero-section.liquid</span>
+        <span className="ml-auto px-2 py-0.5 bg-accent/10 rounded text-accent text-[10px]">AI Writing...</span>
       </div>
       <div className="flex-1 text-[13px] leading-6 flex flex-col">
         <div className="flex flex-wrap">
@@ -100,7 +100,7 @@ export function TypewriterCode({ onComplete, className = '' }: TypewriterCodePro
               {seg.text}
             </span>
           ))}
-          {!isComplete && <span className="inline-block w-[2px] h-[18px] bg-sky-500 animate-pulse ml-0.5 align-middle" />}
+          {!isComplete && <span className="inline-block w-[2px] h-[18px] bg-accent animate-pulse ml-0.5 align-middle" />}
         </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
@@ -119,3 +119,5 @@ export function TypewriterCode({ onComplete, className = '' }: TypewriterCodePro
     </div>
   );
 }
+
+

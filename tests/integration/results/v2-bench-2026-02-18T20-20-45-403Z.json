@@ -1,0 +1,670 @@
+{
+  "timestamp": "2026-02-18T20:20:45.403Z",
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse v2 (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "generic-assistant"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse v2 (Opus 4.6)",
+      "runner": "v2",
+      "model": "claude-opus-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Opus 4.6)",
+      "runner": "baseline",
+      "model": "claude-opus-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor (Opus 4.6)",
+      "runner": "cursor",
+      "model": "claude-opus-4-6",
+      "features": [
+        "generic-assistant"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse v2 (Sonnet 4.6)",
+      "runner": "v2",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Sonnet 4.6)",
+      "runner": "baseline",
+      "model": "claude-sonnet-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor (Sonnet 4.6)",
+      "runner": "cursor",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "generic-assistant"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2600,
+          "firstChunkMs": 1015,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 0,
+          "outputTokens": 284,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.001136,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 102151,
+          "firstChunkMs": 2194,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 96519,
+          "outputTokens": 13288,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.1303672,
+          "toolCalls": 10,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "propose_code_edit",
+            "create_file",
+            "grep_content"
+          ],
+          "changes": 4,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 74020,
+          "firstChunkMs": 2574,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 72500,
+          "outputTokens": 9328,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.095312,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "create_file",
+            "glob_files",
+            "read_file",
+            "propose_code_edit"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "simple-ask": {
+      "name": "Simple: Accessibility audit",
+      "intentMode": "ask",
+      "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? Give specific WCAG violations and fixes.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "snippets/product-img.liquid"
+      ],
+      "expectedTier": "SIMPLE",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 12986,
+          "firstChunkMs": 2404,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 1394,
+          "cacheRead": 0,
+          "cacheWrite": 6256,
+          "costUSD": 0.0118344,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 16432,
+          "firstChunkMs": 1482,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 8171,
+          "outputTokens": 2091,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.014900799999999999,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "read_file"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 16686,
+          "firstChunkMs": 1518,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 8185,
+          "outputTokens": 1986,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.014492,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "read_file"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "complex-section": {
+      "name": "Complex: Build announcement bar section",
+      "intentMode": "code",
+      "prompt": "Add a new section for an announcement bar with a background color picker, text content, a link URL, and a dismissible toggle. Follow existing section patterns in the theme.",
+      "files": [
+        "sections/announcement-bar.liquid",
+        "layout/theme.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 95058,
+          "firstChunkMs": 2061,
+          "model": "claude-opus-4-6",
+          "tier": "COMPLEX",
+          "inputTokens": 1506,
+          "outputTokens": 2234,
+          "cacheRead": 12422,
+          "cacheWrite": 0,
+          "costUSD": 0.208773,
+          "toolCalls": 3,
+          "toolsUsed": [
+            "create_file",
+            "run_review",
+            "search_replace"
+          ],
+          "changes": 2,
+          "thinkingN": 60,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "reviewTimeMs": 29131,
+          "thinkingTimeMs": 92997
+        },
+        "baseline": {
+          "name": "Baseline (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 160424,
+          "firstChunkMs": 4249,
+          "model": "claude-opus-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 337435,
+          "outputTokens": 14260,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 6.131025,
+          "toolCalls": 10,
+          "toolsUsed": [
+            "glob_files",
+            "search_files",
+            "read_file",
+            "list_files",
+            "grep_content",
+            "create_file",
+            "propose_code_edit",
+            "run_specialist"
+          ],
+          "changes": 2,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 141945,
+          "firstChunkMs": 4792,
+          "model": "claude-opus-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 328911,
+          "outputTokens": 12976,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 5.906865,
+          "toolCalls": 12,
+          "toolsUsed": [
+            "glob_files",
+            "search_files",
+            "grep_content",
+            "list_files",
+            "read_file",
+            "create_file",
+            "propose_code_edit",
+            "run_specialist"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "arch-rebuild": {
+      "name": "Architectural: Rebuild product template",
+      "intentMode": "code",
+      "prompt": "Rebuild the entire product page template to use a modular section-based architecture with separate blocks for gallery, description, variants, and add-to-cart. Restructure the existing monolithic template.",
+      "files": [
+        "templates/product.json",
+        "sections/main-product.liquid"
+      ],
+      "expectedTier": "ARCHITECTURAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 76100,
+          "firstChunkMs": 2532,
+          "model": "claude-sonnet-4-6",
+          "tier": "ARCHITECTURAL",
+          "inputTokens": 0,
+          "outputTokens": 4356,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.06534,
+          "toolCalls": 2,
+          "toolsUsed": [
+            "ptc:bash_code_execution"
+          ],
+          "changes": 0,
+          "thinkingN": 336,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "thinkingTimeMs": 74977
+        },
+        "baseline": {
+          "name": "Baseline (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 142897,
+          "firstChunkMs": 3499,
+          "model": "claude-sonnet-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 732863,
+          "outputTokens": 7538,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 2.311659,
+          "toolCalls": 13,
+          "toolsUsed": [
+            "list_files",
+            "semantic_search",
+            "glob_files",
+            "propose_plan",
+            "create_file",
+            "propose_code_edit",
+            "run_specialist",
+            "search_replace",
+            "grep_content"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 236709,
+          "firstChunkMs": 3222,
+          "model": "claude-sonnet-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 709410,
+          "outputTokens": 14873,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 2.351325,
+          "toolCalls": 13,
+          "toolsUsed": [
+            "list_files",
+            "semantic_search",
+            "glob_files",
+            "propose_plan",
+            "create_file",
+            "propose_code_edit",
+            "search_replace",
+            "run_specialist",
+            "grep_content"
+          ],
+          "changes": 3,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "compound-quickview": {
+      "name": "Compound: Multi-Turn Quick-View Workflow",
+      "intentMode": "code",
+      "prompt": "Now make the modal responsive for mobile with a slide-up animation, and add a loading spinner while product data loads.",
+      "files": [
+        "sections/main-collection.liquid",
+        "snippets/product-thumbnail.liquid",
+        "layout/theme.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 24371,
+          "firstChunkMs": 3319,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 4197,
+          "cacheRead": 5186,
+          "cacheWrite": 2576,
+          "costUSD": 0.019781280000000002,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "read_file"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "baseline": {
+          "name": "Baseline (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 144917,
+          "firstChunkMs": 5340,
+          "model": "claude-opus-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 478124,
+          "outputTokens": 9551,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 7.888185,
+          "toolCalls": 17,
+          "toolsUsed": [
+            "glob_files",
+            "grep_content",
+            "semantic_search",
+            "search_files",
+            "list_files",
+            "propose_plan",
+            "create_file"
+          ],
+          "changes": 2,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 47862,
+          "firstChunkMs": 4536,
+          "model": "claude-opus-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 476729,
+          "outputTokens": 1621,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 7.27251,
+          "toolCalls": 17,
+          "toolsUsed": [
+            "glob_files",
+            "search_files",
+            "grep_content",
+            "list_files",
+            "semantic_search",
+            "propose_plan"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    },
+    "crossfile-consistency": {
+      "name": "Cross-File: Sale Badge Consistency",
+      "intentMode": "code",
+      "prompt": "Add a sale badge to product cards that shows the discount percentage. Make sure it appears consistently across collection pages, search results, and featured product sections. Follow existing badge patterns in the theme.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "sections/main-collection.liquid",
+        "sections/featured-product.liquid",
+        "sections/main-search.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse v2 (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 6357,
+          "firstChunkMs": 3014,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "SIMPLE",
+          "inputTokens": 0,
+          "outputTokens": 383,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.001532,
+          "toolCalls": 6,
+          "toolsUsed": [
+            "search_files",
+            "read_file",
+            "glob_files",
+            "grep_content"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "baseline": {
+          "name": "Baseline (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 58385,
+          "firstChunkMs": 6042,
+          "model": "claude-opus-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 1068903,
+          "outputTokens": 1648,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 16.157145,
+          "toolCalls": 19,
+          "toolsUsed": [
+            "search_files",
+            "grep_content",
+            "glob_files",
+            "list_files",
+            "semantic_search"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 50289,
+          "firstChunkMs": 5591,
+          "model": "claude-opus-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 1067651,
+          "outputTokens": 1287,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 16.11129,
+          "toolCalls": 17,
+          "toolsUsed": [
+            "search_files",
+            "grep_content",
+            "glob_files",
+            "list_files",
+            "semantic_search"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

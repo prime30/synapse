@@ -9,6 +9,30 @@ cp .env.example .env.local
 npm run dev
 ```
 
+## BrainGrid CLI (optional)
+
+If you use [BrainGrid](https://app.braingrid.ai) for requirements and tasks, use the CLI instead of the MCP server for lower token usage and the full spec-to-ship workflow. This repo’s workflow rule (`.cursor/rules/braingrid-workflow.mdc`) is written for the CLI.
+
+**Windows 11 (PowerShell or Command Prompt):**
+
+1. Install and log in (one-time):
+   ```bash
+   npm install -g @braingrid/cli
+   braingrid login
+   ```
+
+2. In this repo, link your BrainGrid project:
+   ```bash
+   braingrid init
+   ```
+
+3. Optional — Cursor slash commands and task hooks:
+   ```bash
+   braingrid setup cursor
+   ```
+
+If you have the BrainGrid MCP server enabled in Cursor (user settings), disable it after the CLI is working so the agent doesn’t load MCP tool definitions on every request. See [BrainGrid CLI docs](https://www.npmjs.com/package/@braingrid/cli) for more.
+
 ## Workflow (REQ-77 Multi-Agent Coordination)
 
 ### Branch Strategy

@@ -47,7 +47,7 @@ function AnchorHeading({
     <Tag id={id} className={`group relative ${className}`}>
       <a
         href={`#${id}`}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-stone-300 dark:text-white/20 hover:text-sky-500 dark:hover:text-sky-400 no-underline"
+        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-stone-300 dark:text-white/20 hover:text-accent dark:hover:text-accent no-underline"
         aria-label={`Link to ${text}`}
       >
         #
@@ -139,7 +139,7 @@ const components: Components = {
     return (
       <a
         href={href}
-        className="text-sky-600 dark:text-sky-400 hover:underline underline-offset-2"
+        className="text-accent dark:text-accent hover:underline underline-offset-2"
         {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {children}
@@ -212,7 +212,7 @@ const components: Components = {
   // ── Blockquotes ────────────────────────────────────────────────────
   blockquote({ children }) {
     return (
-      <blockquote className="border-l-4 border-sky-500 bg-sky-50 dark:bg-sky-500/10 pl-4 py-2 rounded-r-lg my-4 [&>p]:mb-0 [&>p]:text-sky-900 dark:[&>p]:text-sky-200">
+      <blockquote className="border-l-4 border-accent bg-accent/5 dark:bg-accent/10 pl-4 py-2 rounded-r-lg my-4 [&>p]:mb-0 [&>p]:text-stone-900 dark:[&>p]:text-stone-200">
         {children}
       </blockquote>
     );
@@ -255,3 +255,8 @@ export function DocRenderer({ content }: DocRendererProps) {
     </div>
   );
 }
+
+
+
+
+

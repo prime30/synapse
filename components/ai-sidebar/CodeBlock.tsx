@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -34,6 +34,8 @@ interface CodeBlockProps {
   previousContent?: string;
   /** Called to undo the apply (restore previous content) */
   onUndoApply?: (fileId: string, previousContent: string) => void;
+  /** When true, code is still being streamed — use compact height + auto-scroll to bottom. */
+  streaming?: boolean;
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
@@ -57,11 +59,39 @@ export function CodeBlock({
   onSave,
   previousContent,
   onUndoApply,
+  streaming,
 }: CodeBlockProps) {
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [showDiffPreview, setShowDiffPreview] = useState(false);
   const [showUndoToast, setShowUndoToast] = useState(false);
+  const codeScrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledRef = useRef(false);
+
+  // Auto-scroll to bottom while streaming.
+  // useLayoutEffect fires BEFORE paint, preventing the top↔bottom strobe
+  // that occurs when SyntaxHighlighter replaces DOM (resets scroll to 0)
+  // and a post-paint useEffect snaps it back to bottom on the next frame.
+  useLayoutEffect(() => {
+    if (streaming && codeScrollRef.current && !userScrolledRef.current) {
+      codeScrollRef.current.scrollTop = codeScrollRef.current.scrollHeight;
+    }
+  }, [streaming, code]);
+
+  // Let the user scroll up during streaming without fighting auto-scroll
+  const handleCodeScroll = useCallback(() => {
+    if (!streaming || !codeScrollRef.current) return;
+    const el = codeScrollRef.current;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    userScrolledRef.current = !isNearBottom;
+  }, [streaming]);
+
+  // Reset scroll override when streaming ends
+  useEffect(() => {
+    if (!streaming) {
+      userScrolledRef.current = false;
+    }
+  }, [streaming]);
 
   const highlightLanguage = mapLanguage(language);
   const canApply = Boolean(fileId && fileName && onApply);
@@ -181,7 +211,7 @@ export function CodeBlock({
       </div>
 
       {/* ── Syntax-highlighted code ─────────────────────────────────────── */}
-      <div className="relative overflow-auto max-h-[400px]">
+      <div ref={codeScrollRef} onScroll={handleCodeScroll} className={`relative overflow-auto ${streaming ? 'max-h-[200px]' : 'max-h-[400px]'}`}>
         <SyntaxHighlighter
           language={highlightLanguage}
           style={isDark ? vscDarkPlus : oneLight}

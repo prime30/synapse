@@ -7,6 +7,7 @@ import { loader as monacoLoader } from '@monaco-editor/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginTransition } from '@/components/features/auth/LoginTransition';
 import { FileTabs } from '@/components/features/file-management/FileTabs';
+import { RecentlyEditedBar } from '@/components/features/file-management/RecentlyEditedBar';
 import { FileList } from '@/components/features/file-management/FileList';
 import { SearchPanel } from '@/components/features/file-management/SearchPanel';
 
@@ -184,6 +185,7 @@ export default function ProjectPage() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [activeFileContent, setActiveFileContent] = useState('');
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number } | null>(null);
 
   // Tool card: preview path override (cleared when user navigates manually)
   const [previewPathOverride, setPreviewPathOverride] = useState<string | null>(null);
@@ -265,6 +267,7 @@ export default function ProjectPage() {
   const devReport = useDevReport(projectId);
   const gitSync = useGitSync(projectId);
   const connected = !!activeStore.connection || shopify.connected;
+  const storeStatusReady = !activeStore.isLoading && !shopify.isLoading;
   const connection = activeStore.connection
     ? {
         id: activeStore.connection.id,
@@ -625,6 +628,11 @@ export default function ProjectPage() {
     message: string;
     archivedIds: string[];
   } | null>(null);
+  const [applyUndoToast, setApplyUndoToast] = useState<{
+    message: string;
+    fileId: string;
+    previousContent: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!connected || isLoadingProjects || reconcileTriggeredRef.current) return;
@@ -749,6 +757,22 @@ export default function ProjectPage() {
     queryClient.invalidateQueries({ queryKey: ['project-files', projectId] });
   }, [projectId, queryClient]);
 
+  // Handle undo of code apply (restore previous content)
+  const handleUndoApply = useCallback(async () => {
+    if (!applyUndoToast) return;
+    try {
+      await fetch(`/api/files/${applyUndoToast.fileId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: applyUndoToast.previousContent }),
+      });
+      refreshFiles();
+    } catch {
+      // Undo failure is non-critical
+    }
+    setApplyUndoToast(null);
+  }, [applyUndoToast, refreshFiles]);
+
   // ── Smart file opening: related files map ──────────────────────────────
   const relatedFilesMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -816,8 +840,11 @@ export default function ProjectPage() {
 
   const handleMarkDirty = useCallback(
     (dirty: boolean) => {
-      const { activeFileId, markUnsaved } = tabs;
-      if (activeFileId) markUnsaved(activeFileId, dirty);
+      const { activeFileId, markUnsaved, recordEdit } = tabs;
+      if (activeFileId) {
+        markUnsaved(activeFileId, dirty);
+        if (!dirty) recordEdit(activeFileId);
+      }
     },
     [tabs]
   );
@@ -1000,6 +1027,16 @@ export default function ProjectPage() {
     handleOpenFile(filePath);
   }, [handleOpenFile]);
 
+  /** Build selected plan steps by sending them as a message to the agent. */
+  const handleBuildPlan = useCallback((checkedSteps: Set<number>) => {
+    if (checkedSteps.size === 0) return;
+    const steps = Array.from(checkedSteps).sort((a, b) => a - b);
+    const prompt = steps.length === 1
+      ? `Build step ${steps[0]} from the plan.`
+      : `Build steps ${steps.join(', ')} from the plan.`;
+    sendMessageRef.current?.(prompt);
+  }, []);
+
   /** Navigate the preview panel to a specific path (from navigate_preview tool). */
   const handleNavigatePreview = useCallback((path: string) => {
     setPreviewPathOverride(path);
@@ -1037,7 +1074,7 @@ export default function ProjectPage() {
   }, [projectId, refreshFiles, tabs]);
 
   // Handle applying code from AI response to an existing file
-  const handleApplyCode = useCallback(async (code: string, fileId: string, _fileName: string) => {
+  const handleApplyCode = useCallback(async (code: string, fileId: string, fileName: string) => {
     try {
       // 1. Fetch current file content for diff
       const getRes = await fetch(`/api/files/${fileId}`);
@@ -1054,8 +1091,9 @@ export default function ProjectPage() {
         return;
       }
 
-      // 3. Refresh files
+      // 3. Refresh files + record edit
       refreshFiles();
+      tabs.recordEdit(fileId);
 
       // 4. Compute diff and report stats (non-blocking)
       const diff = analyzeDiff(oldContent, code);
@@ -1063,6 +1101,13 @@ export default function ProjectPage() {
         linesAdded: diff.added + diff.modified,
         linesDeleted: diff.removed + diff.modified,
         filesAffected: 1,
+      });
+
+      // 5. Show undo toast
+      setApplyUndoToast({
+        message: `Applied changes to ${fileName}`,
+        fileId,
+        previousContent: oldContent,
       });
     } catch (err) {
       console.error('[handleApplyCode] Error:', err);
@@ -1255,7 +1300,7 @@ export default function ProjectPage() {
       </Suspense>
 
       {/* ── Connection status banner (authenticated IDE) ─────────────────── */}
-      {!connected && (
+      {storeStatusReady && !connected && (
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 ide-surface-panel border-b ide-border ide-text-2 text-xs">
           <span className="font-medium">No store connected</span>
           <span className="ide-text-3">&mdash;</span>
@@ -1650,9 +1695,20 @@ export default function ProjectPage() {
             />
           )}
 
+          {/* Recently edited files (persisted across sessions) */}
+          {viewMode === 'editor' && tabs.recentlyEdited.length > 0 && (
+            <RecentlyEditedBar
+              recentEdits={tabs.recentlyEdited}
+              fileMetaMap={fileMetaMap}
+              activeFileId={tabs.activeFileId}
+              openTabs={tabs.openTabs}
+              onOpenFile={tabs.openTab}
+            />
+          )}
+
           {/* File tabs (editor view only) */}
           {viewMode === 'editor' && (
-            <div className="flex items-center border-b ide-border-subtle ide-surface-panel">
+            <div className="flex items-center">
               <div className="flex-1 min-w-0">
                 <FileTabs
                   openTabs={tabs.openTabs}
@@ -1783,6 +1839,13 @@ export default function ProjectPage() {
                   <FileBreadcrumb
                     filePath={activeFile?.path ?? null}
                     content={activeFileContent}
+                    onNavigate={(segmentPath) => {
+                      // Navigate to the file matching this path segment
+                      const match = rawFiles.find((f) => f.path === segmentPath || f.path?.startsWith(segmentPath + '/'));
+                      if (match) {
+                        tabs.openTab(match.id);
+                      }
+                    }}
                   />
 
                   {/* Editor area with relative positioning for QuickActionsToolbar overlay */}
@@ -1802,6 +1865,7 @@ export default function ProjectPage() {
                       onSelectionPosition={handleSelectionPosition}
                       onContentChange={handleContentChange}
                       onFixWithAI={handleFixWithAI}
+                      onCursorPositionChange={setCursorPosition}
                       collaborative={collaborativeMode}
                       projectId={projectId}
                       collaborationUser={collaborationUser}
@@ -1895,6 +1959,7 @@ export default function ProjectPage() {
                     language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
                     filePath={activeFile?.path ?? null}
                     tokenUsage={tokenUsage}
+                    cursorPosition={cursorPosition}
                     activeMemoryCount={memory.activeConventionCount}
                     cacheBackend={process.env.NEXT_PUBLIC_CACHE_BACKEND as 'redis' | 'memory' | undefined ?? undefined}
                   >
@@ -1957,8 +2022,13 @@ export default function ProjectPage() {
                   setViewMode('editor');
                 }}
                 onCanvasChat={(message, contextFileIds) => {
-                  // Send message to agent with only canvas-selected file context
-                  console.log('[Canvas chat]', message, contextFileIds);
+                  const fileNames = contextFileIds
+                    .map((id) => rawFiles.find((f) => f.id === id)?.name)
+                    .filter(Boolean);
+                  const context = fileNames.length > 0
+                    ? `\n\n[Context files: ${fileNames.join(', ')}]`
+                    : '';
+                  sendMessageRef.current?.(message + context);
                 }}
               />
             </Suspense>
@@ -2133,6 +2203,7 @@ export default function ProjectPage() {
               sendMessageRef={sendMessageRef}
               onApplyStatsRef={onApplyStatsRef}
               onOpenPlanFile={handleOpenPlanFile}
+              onBuildPlan={handleBuildPlan}
               onNavigatePreview={handleNavigatePreview}
               onConfirmFileCreate={handleConfirmFileCreate}
               captureBeforeSnapshot={captureBeforeSnapshot}
@@ -2249,6 +2320,16 @@ export default function ProjectPage() {
           duration={10000}
           onUndo={handleUndoArchive}
           onDismiss={() => setUndoToast(null)}
+        />
+      )}
+
+      {/* Code apply UndoToast */}
+      {applyUndoToast && (
+        <UndoToast
+          message={applyUndoToast.message}
+          duration={8000}
+          onUndo={handleUndoApply}
+          onDismiss={() => setApplyUndoToast(null)}
         />
       )}
 

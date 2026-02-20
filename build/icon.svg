@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f0f0f"/>
+      <stop offset="100%" stop-color="#1a1a1a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="300" y1="200" x2="724" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34E868"/>
+      <stop offset="100%" stop-color="#28CD56"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="512" y1="200" x2="512" y2="700" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#28CD56" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#28CD56" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <ellipse cx="512" cy="420" rx="320" ry="280" fill="url(#glow)"/>
+  <path d="M512 220 L340 760 L410 760 L480 560 L544 560 L614 760 L684 760 L512 220Z" fill="url(#accent)"/>
+  <circle cx="280" cy="380" r="12" fill="#28CD56" opacity="0.5"/>
+  <circle cx="744" cy="380" r="12" fill="#28CD56" opacity="0.5"/>
+  <circle cx="340" cy="760" r="8" fill="#28CD56" opacity="0.3"/>
+  <circle cx="684" cy="760" r="8" fill="#28CD56" opacity="0.3"/>
+  <circle cx="512" cy="220" r="10" fill="#28CD56" opacity="0.6"/>
+  <line x1="280" y1="380" x2="400" y2="500" stroke="#28CD56" stroke-width="2" opacity="0.2"/>
+  <line x1="744" y1="380" x2="624" y2="500" stroke="#28CD56" stroke-width="2" opacity="0.2"/>
+</svg>

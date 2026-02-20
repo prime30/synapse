@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-18T22:11:44.572Z",
+  "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?",
+  "scores": [
+    {
+      "pipeline": "executeSolo (v1 legacy)",
+      "success": true,
+      "totalTimeMs": 14490,
+      "timeToFirstChunkMs": 14490,
+      "responseLength": 3030,
+      "changesProduced": 0,
+      "toolCallCount": 0,
+      "toolsUsed": [],
+      "inputTokens": 6170,
+      "outputTokens": 1110,
+      "estimatedCostUSD": 0.009376,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "pipeline": "streamAgentLoop (v1 streaming)",
+      "success": true,
+      "totalTimeMs": 19753,
+      "timeToFirstChunkMs": 674,
+      "responseLength": 5438,
+      "changesProduced": 0,
+      "toolCallCount": 2,
+      "toolsUsed": [
+        "read_file"
+      ],
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "estimatedCostUSD": 0,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "pipeline": "streamV2 (v2 architecture)",
+      "success": true,
+      "totalTimeMs": 12628,
+      "timeToFirstChunkMs": 1081,
+      "responseLength": 4380,
+      "changesProduced": 0,
+      "toolCallCount": 0,
+      "toolsUsed": [],
+      "inputTokens": 3,
+      "outputTokens": 1170,
+      "estimatedCostUSD": 0.0046824,
+      "tier": "SIMPLE",
+      "model": "claude-haiku-4-5-20251001"
+    }
+  ]
+}

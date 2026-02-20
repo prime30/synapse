@@ -31,6 +31,19 @@ function adminClient(): ReturnType<typeof createServiceClient> {
 const VALID_TYPES = new Set<MemoryType>(['convention', 'decision', 'preference']);
 const VALID_FEEDBACK = new Set<MemoryFeedback | 'null'>(['correct', 'wrong', 'null']);
 
+function isMemoryUnavailableError(error: { code?: string; message?: string }): boolean {
+  const msg = (error.message ?? '').toLowerCase();
+  return (
+    error.code === '42P01' || // relation does not exist
+    error.code === 'PGRST205' || // table not found in schema cache
+    error.code === 'PGRST204' || // column not found in schema cache
+    msg.includes('relation') ||
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    msg.includes('developer_memory')
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  GET — List memories for a project                                  */
 /* ------------------------------------------------------------------ */
@@ -81,11 +94,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { data, error, count } = await query;
 
     if (error) {
-      // Table might not exist yet — return empty gracefully
-      const msg = (error.message ?? '').toLowerCase();
-      if (msg.includes('relation') || msg.includes('does not exist') || error.code === '42P01') {
-        return successResponse({ memories: [], total: 0 });
-      }
+      // Table/schema may not exist in some environments — degrade gracefully.
+      if (isMemoryUnavailableError(error)) return successResponse({ memories: [], total: 0 });
       throw APIError.internal(error.message);
     }
 
@@ -154,14 +164,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) {
-      const msg = (error.message ?? '').toLowerCase();
-      if (
-        msg.includes('relation') ||
-        msg.includes('does not exist') ||
-        error.code === '42P01' ||
-        msg.includes('column') ||
-        msg.includes('violates')
-      ) {
+      if (isMemoryUnavailableError(error)) {
         return successResponse(
           { message: 'Developer memory not available' },
           503
@@ -238,6 +241,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) {
+      if (isMemoryUnavailableError(error)) {
+        return successResponse({ message: 'Developer memory not available' }, 503);
+      }
       if (error.code === 'PGRST116') {
         throw APIError.notFound('Memory entry not found');
       }
@@ -281,6 +287,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('project_id', projectId);
 
     if (error) {
+      if (isMemoryUnavailableError(error)) {
+        return successResponse({ deleted: true });
+      }
       throw APIError.internal(error.message);
     }
 

@@ -11,8 +11,8 @@ interface PixelAccentProps {
 }
 
 /**
- * PixelAccent — accent word in Geist Pixel Square font with a smooth fade-in.
- * Stays in the dot pixel font permanently. No flickering or font cycling.
+ * PixelAccent — accent word in Geist dot (circle) pixel font, smaller density via letter-spacing.
+ * Smooth fade-in.
  */
 export function PixelAccent({
   children,
@@ -34,3 +34,5 @@ export function PixelAccent({
     </motion.span>
   );
 }
+
+

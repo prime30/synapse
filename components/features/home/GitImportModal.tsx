@@ -101,7 +101,7 @@ export function GitImportModal({ isOpen, onClose, onImportSuccess }: GitImportMo
           </div>
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-gray-800 ide-text-muted hover:ide-text transition-colors"
+            className="p-1 rounded ide-hover ide-text-muted hover:ide-text transition-colors"
             aria-label="Close"
           >
             <X size={16} />

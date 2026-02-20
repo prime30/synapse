@@ -1,0 +1,89 @@
+[t4splitlz]
+{%- liquid
+    assign product = product
+    assign pr_sid = product.id 
+
+    assign isProductDefault   = product.has_only_default_variant
+    assign current_variant = product.first_available_variant 
+    assign isProductAvailable = product.available
+    if isProductAvailable and settings.variant_remove == '2'
+       assign remove_soldout = true 
+    else 
+       assign remove_soldout = false  
+    endif 
+    assign pr_variants   = product.variants
+    assign variants_size = pr_variants.size 
+    assign date_in = settings.date_in
+    assign class_frm = 't4s-form__product has--form__swatch is-form-t4spritem'
+    if settings.sticky_atc and type == 'main'
+        assign class_frm =  class_frm | append: ' is--main-sticky'
+    else if settings.sticky_atc and type == 'main_sticky'
+        assign class_frm =  class_frm | append: ' is--atc-sticky'
+    endif
+    assign color_swatch    = 'disabled-'
+    assign color_mode      = bk_stts.color_mode
+    assign selector_mode   = bk_stts.selector_mode
+    assign stt_color_ck    = settings.color_ck | default: ';'
+    assign color_ck        = stt_color_ck | append: ',color,colors,couleur,colour' | remove: ';,'
+    assign get_color       = color_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+    assign color_mode_list = 'color, color is-sw-cl__round, color is-sw-cl__round is-sw-cl__label, variant_image, variant_image is-sw-cl__round' | split: ', '
+    if color_mode_list contains color_mode
+        assign color_swatch  = 'is-sw__color '
+    endif
+    assign color_swatch  = 'is-sw__color '  
+    assign ntsoldout  = false
+    assign unvariants = false
+    assign ck_so_un   = false
+    if isProductDefault == false and variants_size > 1
+      assign unavailable_prs = pr_variants | where: "available", false 
+      assign options_size = product.options.size
+      assign vls0 = product.options_with_values[0].values.size | default: 1
+      assign vls1 = product.options_with_values[1].values.size | default: 1
+      assign vls2 = product.options_with_values[2].values.size | default: 1
+      assign ntvariants_size = vls0 | times: vls1 | times: vls2 | minus: pr_variants.size
+      if unavailable_prs.size > 0 or product.available == false
+        assign ntsoldout = true
+      endif
+      if ntvariants_size > 0
+        assign unvariants = true
+      endif
+      if ntsoldout or unvariants
+        assign ck_so_un = true
+      endif
+    endif
+    assign product_media  = product.media
+    assign variant_images = product.images | where: 'attached_to_variant?', true | map: 'src'
+    assign media_size     = product_media.size
+    assign meta_theme     = product.metafields.theme
+    assign cus_qty        = meta_theme.cus_qty | default:1  
+    assign custom_badge   = meta_theme.custom_badge
+    if custom_badge != blank
+       assign arr_badge = custom_badge | replace: '  ', '' | replace: ' ;', ';' | replace: '; ', ';' | split: ';' | join: 'nt-t4s' | escape | split: 'nt-t4s'
+       assign arr_badge_handle = arr_badge | join: 'nt-t4s' | handle | split: 'nt-t4s'
+    endif
+    assign inventory_quantity   = current_variant.inventory_quantity
+    assign inventory_management = current_variant.inventory_management
+    if inventory_quantity <= 0  and inventory_management == 'shopify' and current_variant.available
+      assign isPreoder = true
+    else 
+      assign isPreoder = false
+    endif
+ -%}
+
+{%- form 'product', product, id: nil, data-productid: product.id, class: class_frm, novalidate: 'novalidate', data-type: 'add-to-cart-form', data-disable-swatch: true -%}
+    <select name="id" class="t4s-product__select t4s-d-none" data-product-featured='{"unQuickShopInline":false, "cus_qty": {{cus_qty}}, "id": "{{ product.id }}","isMainProduct": true, "disableSwatch": false, "media": {% if media_size > 1 %}true{% else %}false{% endif %},"enableHistoryState": false, "removeSoldout": {{ remove_soldout }}, "changeVariantByImg": false, "isNoPick": true,"hasSoldoutUnavailable": {{ ck_so_un }},"enable_zoom_click_mb": false, "main_click": "none","canMediaGroup": false,"isGrouped": false,"hasIsotope":false,"available": {{ product.available }}, "customBadge": {{ arr_badge | json }}, "customBadgeHandle": {{ arr_badge_handle | json }},"dateStart": {{ product.created_at | date: "%s" }}, "compare_at_price": {{ current_variant.compare_at_price | json }},"price": {{ current_variant.price | json }}, "isPreoder": {{ isPreoder }}, "showFirstMedia": true, "isSticky": false, "isStickyMB": false }'>
+        {%- for variant in pr_variants -%}
+            {%- if variant.available -%}
+                <option value="{{ variant.id }}" data-mdid="{{ variant.featured_media.id | json }}" data-incoming="{{ variant.incoming }}" data-inventoryQuantity="{{ variant.inventory_quantity | json }}" data-nextIncomingDate="{{ variant.next_incoming_date | date: date_in }}"{% if variant.id == current_variant.id %} selected="selected"{% endif %}>{{ variant.title | escape }}</option>
+            {%- else -%}
+                <option value="{{ variant.id }}" data-mdid="{{ variant.featured_media.id | json }}" data-incoming="{{ variant.incoming }}" data-inventoryQuantity="{{ variant.inventory_quantity | json }}" data-nextIncomingDate="{{ variant.next_incoming_date | date: date_in }}"{% if remove_soldout %} disabled="disabled"{% endif %} class="is--sold-out">{{ variant.title | escape }}</option>
+            {%- endif -%}
+        {%- endfor -%}
+    </select>
+    
+    {%- render 'swatch_inline', product: product, get_color: get_color, only_run_First: false -%}
+
+    <script type="application/json" class="pr_variants_json">{{ product.variants | json }}</script>
+    <script type="application/json" class="pr_options_json">{{ product.options_with_values | json }}</script>
+{%- endform -%}
+[t4splitlz]

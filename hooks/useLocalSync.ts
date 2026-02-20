@@ -9,10 +9,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * pull all theme files to .synapse-themes/{slug}/. Exposes sync status
  * so the UI can show a LocalSyncIndicator.
  *
+ * Also provides pushToDevTheme() to push pending local changes to the
+ * Shopify development theme.
+ *
  * Only active when NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1'.
  */
 
-export type LocalSyncStatus = 'disabled' | 'idle' | 'pulling' | 'error';
+export type LocalSyncStatus = 'disabled' | 'idle' | 'pulling' | 'pushing' | 'error';
 
 interface UseLocalSyncReturn {
   /** Current sync status */
@@ -25,6 +28,10 @@ interface UseLocalSyncReturn {
   fileCount: number;
   /** Whether local sync is enabled via env var */
   enabled: boolean;
+  /** Push pending local changes to Shopify dev theme */
+  pushToDevTheme: () => Promise<void>;
+  /** Result of last push (null if never pushed) */
+  lastPush: { pushed: number; errors: string[] } | null;
 }
 
 const SYNC_CACHE_KEY = 'synapse-local-sync-done';
@@ -37,6 +44,7 @@ export function useLocalSync(projectId: string | null): UseLocalSyncReturn {
   const [localPath, setLocalPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileCount, setFileCount] = useState(0);
+  const [lastPush, setLastPush] = useState<{ pushed: number; errors: string[] } | null>(null);
   const didSync = useRef(false);
 
   const syncToDisk = useCallback(async () => {
@@ -97,6 +105,31 @@ export function useLocalSync(projectId: string | null): UseLocalSyncReturn {
     }
   }, [projectId, isEnabled]);
 
+  const pushToDevTheme = useCallback(async () => {
+    if (!projectId || !isEnabled) return;
+
+    setStatus('pushing');
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sync-dev-theme`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Push failed (${res.status})`);
+      }
+
+      const { data } = await res.json();
+      setLastPush({ pushed: data.pushed ?? 0, errors: data.errors ?? [] });
+      setStatus('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Push to dev theme failed');
+      setStatus('error');
+    }
+  }, [projectId, isEnabled]);
+
   useEffect(() => {
     if (didSync.current || !isEnabled || !projectId) return;
     didSync.current = true;
@@ -109,5 +142,7 @@ export function useLocalSync(projectId: string | null): UseLocalSyncReturn {
     error,
     fileCount,
     enabled: isEnabled,
+    pushToDevTheme,
+    lastPush,
   };
 }

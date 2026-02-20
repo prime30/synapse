@@ -1,0 +1,229 @@
+{%- comment -%}
+  Product Variants Block
+  Renders variant selectors (swatches, dropdowns, radio buttons).
+  Must be rendered INSIDE a {% form 'product' %} block.
+
+  Delegates to product-form-dynamic for the full variant selection UI
+  including color swatches, option selectors, and variant data JSON.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings (from form block)
+  - pr_sid: {String} Product + section ID
+  - isProductDefault: {Boolean} Has only default variant
+  - isProductAvailable: {Boolean} Product is available
+  - current_variant: {Object} Currently selected variant
+  - remove_soldout: {Boolean} Remove sold-out variants
+  - PR_no_pick: {Boolean} No variant picked yet
+  - is_fit_ratio_img: {Boolean} Fit ratio to first swatch image
+  - first_ratio_img: {Number} Aspect ratio of first swatch image
+  - name_sizeg: {String} Size guide option name
+  - html_sizeg: {String} Size guide HTML
+  - pos_sizeg: {String} Size guide position
+  - advance_pr_type: {Array} Advanced product type list
+  - advance_label: {String} Advanced label
+  - se_stts: {Object} Section settings
+  - shsd_product_variants: {Array} Variants collection
+  - shsd_product_options_with_values: {Array} Options with values
+  - shopify_attributes: {String} Block shopify_attributes
+{%- endcomment -%}
+
+{%- liquid
+  assign pr_variants = shsd_product_variants
+  assign choose_an_option = 'products.product.choose_an_option' | t
+  assign date_in = settings.date_in
+
+  assign color_swatch = 'disabled-'
+  assign color_mode = bk_stts.color_mode
+  assign selector_mode = bk_stts.selector_mode
+  assign stt_color_ck = settings.color_ck | default: ';'
+  assign color_ck = stt_color_ck | append: ',color,colors,couleur,colour' | remove: ';,'
+  assign get_color = color_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+  assign color_mode_list = 'color, color is-sw-cl__round, color is-sw-cl__round is-sw-cl__label, variant_image, variant_image is-sw-cl__round, variant_image is-sw-cl__round is-sw-cl__label' | split: ', '
+  if color_mode_list contains color_mode
+    assign color_swatch = 'is-sw__color '
+  endif
+
+  if color_mode contains 'color' or color_mode contains 'variant'
+    assign show_tooltip = ''
+  else
+    assign show_tooltip = '-off'
+  endif
+-%}
+
+{%- if color_mode == 'dropdown' or selector_mode == 'dropdown' -%}
+  <link rel="stylesheet" href="{{ 'base_drop.min.css' | asset_url }}" media="all">
+{%- endif -%}
+
+{%- if isProductDefault -%}
+  <input name="id" value="{{ pr_variants.first.id }}" type="hidden">
+  {%- if advance_pr_type != blank -%}
+    {%- render 'choose_style', advance_pr_type: advance_pr_type, title: advance_label, pid: product.id -%}
+  {%- endif -%}
+{%- else -%}
+  {{ 'swatch.css' | asset_url | stylesheet_tag }}
+
+  <select name="id" id="product-select-{{ pr_sid }}" class="t4s-product__select t4s-d-none">
+    {%- for variant in pr_variants -%}
+      <option
+        data-option1="{{ variant.option1 }}"
+        data-option2="{{ variant.option2 }}"
+        value="{{ variant.id }}"
+        data-mdid="{{ variant.featured_media.id | json }}"
+        data-incoming="{{ variant.incoming }}"
+        data-inventoryQuantity="{{ variant.inventory_quantity | json }}"
+        data-inventoryPolicy="{{ variant.inventory_policy | json }}"
+        data-nextIncomingDate="{{ variant.next_incoming_date | date: date_in }}"
+        {% if variant.id == current_variant.id %}selected="selected"{% endif %}
+        {% unless variant.available %}
+          {% if remove_soldout %}disabled="disabled"{% endif %}
+          class="is--sold-out"
+        {% endunless %}
+      >
+        {{ variant.title | escape }}
+      </option>
+    {%- endfor -%}
+  </select>
+
+  <div class="t4s-swatch t4s-color-mode__{{ color_mode }} t4s-color-size__{{ bk_stts.color_size }} t4s-selector-mode__{{ selector_mode }}">
+    {%- if advance_pr_type != blank -%}
+      {%- render 'choose_style', advance_pr_type: advance_pr_type, title: advance_label, pid: product.id -%}
+    {%- endif -%}
+
+    {%- for option in shsd_product_options_with_values -%}
+      {%- liquid
+        assign option_index = 'option' | append: forloop.index
+        assign selected_value = product.selected_or_first_available_variant[option_index]
+        assign option_name = option.name
+        assign name_downcase = option_name | downcase
+      -%}
+
+      {%- if get_color contains name_downcase -%}
+        <div
+          data-swatch-option
+          data-id="{{ forloop.index0 }}"
+          class="t4s-swatch__option is-t4s-style__color is-t4s-name__{{ option_name | handle }} {% cycle 'is--first-color', '', '' %}"
+        >
+          <h4 class="t4s-swatch__title">
+            <span>
+              {{- option_name }}:
+              <span data-current-value class="t4s-swatch__current t4s-dib">
+                {{- selected_value | default: choose_an_option -}}
+              </span>
+            </span>
+            {%- if name_sizeg == name_downcase -%}{{- html_sizeg -}}{%- endif %}
+          </h4>
+          <div data-swatch-list class="t4s-swatch__list">
+            {%- if color_mode != 'dropdown' -%}
+              {%- if color_mode contains 'is-sw-cl__label' -%}
+                {%- for value in option.values -%}
+                  <div
+                    data-swatch-item
+                    class="t4s-swatch__btn-wrap{% if selected_value == value %} is--selected{% endif %}"
+                    data-value="{{ value | escape }}"
+                  >
+                    <div data-img-el class="t4s-swatch__item {{ color_swatch }}bg_color_{{ value | handle }} lazyloadt4s"></div>
+                    <span class="t4s-swatch__label">{{- value -}}</span>
+                  </div>
+                {%- endfor -%}
+              {%- else -%}
+                {%- for value in option.values -%}
+                  <div
+                    data-swatch-item
+                    data-tooltip{{ show_tooltip }}="top"
+                    title="{{ value | escape }}"
+                    class="t4s-swatch__item {{ color_swatch }}bg_color_{{ value | handle }} lazyloadt4s{% if selected_value == value %} is--selected{% endif %}"
+                    data-value="{{ value | escape }}"
+                  >
+                    {{ value }}
+                  </div>
+                {%- endfor -%}
+              {%- endif -%}
+            {%- else -%}
+              <button type="button" data-dropdown-open data-position="bottom-end" data-id="t4s_nt_{{ pr_sid }}{{ forloop.index }}">
+                <span data-current-value>{{- selected_value | default: choose_an_option -}}</span>
+                <svg class="t4s-icon-select-arrow" role="presentation" viewBox="0 0 19 12"><use xlink:href="#t4s-select-arrow"></use></svg>
+              </button>
+              <div data-dropdown-wrapper class="t4s-dropdown__wrapper t4s-current-scrollbar" id="t4s_nt_{{ pr_sid }}{{ forloop.index }}">
+                <div class="t4s-drop-arrow"></div>
+                <div class="t4s-dropdown__header">
+                  <span data-current-value class="t4s-dropdown__title">{{- selected_value | default: choose_an_option -}}</span>
+                  <button data-dropdown-close aria-label="{{ 'general.aria.close' | t }}">
+                    <svg role="presentation" class="t4s-iconsvg-close" viewBox="0 0 16 14"><path d="M15 0L1 14m14 0L1 0" stroke="currentColor" fill="none" fill-rule="evenodd"></path></svg>
+                  </button>
+                </div>
+                <div class="t4s-dropdown__content">
+                  {%- for value in option.values -%}
+                    <div
+                      data-swatch-item
+                      data-dropdown-off
+                      class="t4s-swatch__item t4s-truncate {{ color_swatch }}bg_color_{{ value | handle }} lazyloadt4s{% if selected_value == value %} is--selected{% endif %}"
+                      data-value="{{ value | escape }}"
+                    >{{ value }}</div>
+                  {%- endfor -%}
+                </div>
+              </div>
+            {%- endif -%}
+          </div>
+        </div>
+
+      {%- else -%}
+        <div
+          data-swatch-option
+          data-id="{{ forloop.index0 }}"
+          class="t4s-swatch__option is-t4s-name__{{ option_name | handle }}"
+        >
+          <h4 class="t4s-swatch__title">
+            <span>
+              {{- option_name }}:
+              <span data-current-value class="t4s-dib">
+                {{- selected_value | default: choose_an_option -}}
+              </span>
+            </span>
+            {%- if name_sizeg == name_downcase -%}{{- html_sizeg -}}{%- endif %}
+          </h4>
+          <div class="t4s-swatch__list">
+            {%- if selector_mode != 'dropdown' -%}
+              {%- for value in option.values -%}
+                <div
+                  data-swatch-item
+                  class="t4s-swatch__item{% if selected_value == value %} is--selected{% endif %}"
+                  data-value="{{ value | escape }}"
+                >{{ value }}</div>
+              {%- endfor -%}
+            {%- else -%}
+              <button type="button" data-dropdown-open data-position="bottom-end" data-id="t4s_nt_{{ pr_sid }}{{ forloop.index }}">
+                <span data-current-value>{{- selected_value | default: choose_an_option -}}</span>
+                <svg class="t4s-icon-select-arrow" role="presentation" viewBox="0 0 19 12"><use xlink:href="#t4s-select-arrow"></use></svg>
+              </button>
+              <div data-dropdown-wrapper class="t4s-dropdown__wrapper t4s-current-scrollbar" id="t4s_nt_{{ pr_sid }}{{ forloop.index }}">
+                <div class="t4s-drop-arrow"></div>
+                <div class="t4s-dropdown__header">
+                  <span data-current-value class="t4s-dropdown__title">{{- selected_value | default: choose_an_option -}}</span>
+                  <button data-dropdown-close aria-label="{{ 'general.aria.close' | t }}">
+                    <svg role="presentation" class="t4s-iconsvg-close" viewBox="0 0 16 14"><path d="M15 0L1 14m14 0L1 0" stroke="currentColor" fill="none" fill-rule="evenodd"></path></svg>
+                  </button>
+                </div>
+                <div class="t4s-dropdown__content">
+                  {%- for value in option.values -%}
+                    <div
+                      data-swatch-item
+                      data-dropdown-off
+                      class="t4s-swatch__item t4s-truncate{% if selected_value == value %} is--selected{% endif %}"
+                      data-value="{{ value | escape }}"
+                    >{{ value }}</div>
+                  {%- endfor -%}
+                </div>
+              </div>
+            {%- endif -%}
+          </div>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+{%- endif -%}
+
+{%- unless isProductDefault -%}
+  <script type="application/json" class="pr_variants_json">{{ shsd_product_variants | json }}</script>
+  <script type="application/json" class="pr_options_json">{{ shsd_product_options_with_values | json }}</script>
+{%- endunless -%}

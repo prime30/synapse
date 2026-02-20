@@ -1,0 +1,10 @@
+{
+  "scenario": "debug",
+  "prompt": "The hero banner image is not showing on the homepage. The section is hero-banner.liquid. Find the root cause and fix it.",
+  "capturedAt": "2026-02-17T13:37:37.463Z",
+  "cursorModel": "claude-4.6-opus",
+  "responseText": "Root cause: The hero-banner.liquid section does not exist in the theme, and index.json does not reference any hero-banner section. The homepage uses a single EComposer section (ecom-home-2-home). The closest file is sections/hero-image.liquid but it is not included in index.json either. Fix: Add hero-banner to index.json order, or check if hero content lives inside ecom-home-2-home section.",
+  "totalTimeMs": 22244,
+  "toolsObserved": ["read_file", "read_file", "glob_files", "grep_content"],
+  "notes": "Cursor agent read index.json and theme.liquid, then searched for hero-banner files. Identified root cause: missing section reference."
+}

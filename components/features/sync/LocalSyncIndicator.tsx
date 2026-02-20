@@ -14,12 +14,21 @@ interface LocalSyncIndicatorProps {
  *
  * States:
  *   - disabled: hidden
- *   - idle: green dot + "Local sync" (hover shows path)
+ *   - idle: green dot + "Local sync" (hover shows path) + push button
  *   - pulling: yellow pulsing dot + "Syncing..."
+ *   - pushing: sky pulsing dot + "Pushing..."
  *   - error: red dot + error on hover
  */
 export function LocalSyncIndicator({ projectId }: LocalSyncIndicatorProps) {
-  const { status, localPath, error, fileCount, enabled } = useLocalSync(projectId);
+  const {
+    status,
+    localPath,
+    error,
+    fileCount,
+    enabled,
+    pushToDevTheme,
+    lastPush,
+  } = useLocalSync(projectId);
   const [copied, setCopied] = useState(false);
 
   const handleCopyPath = useCallback(() => {
@@ -30,29 +39,49 @@ export function LocalSyncIndicator({ projectId }: LocalSyncIndicatorProps) {
     }).catch(() => {});
   }, [localPath]);
 
+  const handlePush = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    pushToDevTheme();
+  }, [pushToDevTheme]);
+
   if (!enabled || status === 'disabled') return null;
 
   const dotColor = statusDotColor(status);
-  const label = statusLabel(status, fileCount);
+  const label = statusLabel(status, fileCount, lastPush);
   const tooltip = statusTooltip(status, localPath, error, copied);
 
   return (
     <AnimatePresence>
-      <motion.button
-        type="button"
+      <motion.div
         key="local-sync"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0, transition: { duration: 0.3 } }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        onClick={handleCopyPath}
-        title={tooltip}
-        aria-label={`Local sync: ${label}. ${tooltip}`}
-        className="inline-flex items-center gap-1.5 text-[11px] ide-text-muted hover:ide-text-2 transition-colors cursor-default select-none"
+        className="inline-flex items-center gap-1.5"
       >
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-        <span className="tabular-nums">{label}</span>
-      </motion.button>
+        <button
+          type="button"
+          onClick={handleCopyPath}
+          title={tooltip}
+          aria-label={`Local sync: ${label}. ${tooltip}`}
+          className="inline-flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-default select-none"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+          <span className="tabular-nums">{label}</span>
+        </button>
+
+        {status === 'idle' && (
+          <button
+            type="button"
+            onClick={handlePush}
+            title="Push local changes to Shopify dev theme"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-white/10 hover:text-stone-800 dark:hover:text-white transition-colors"
+          >
+            Push to Dev
+          </button>
+        )}
+      </motion.div>
     </AnimatePresence>
   );
 }
@@ -63,6 +92,8 @@ function statusDotColor(status: LocalSyncStatus): string {
       return 'bg-green-500';
     case 'pulling':
       return 'bg-yellow-500 animate-pulse';
+    case 'pushing':
+      return 'bg-sky-500 animate-pulse';
     case 'error':
       return 'bg-red-500';
     default:
@@ -70,12 +101,21 @@ function statusDotColor(status: LocalSyncStatus): string {
   }
 }
 
-function statusLabel(status: LocalSyncStatus, fileCount: number): string {
+function statusLabel(
+  status: LocalSyncStatus,
+  fileCount: number,
+  lastPush: { pushed: number; errors: string[] } | null,
+): string {
   switch (status) {
     case 'idle':
+      if (lastPush && lastPush.pushed > 0) {
+        return `Pushed ${lastPush.pushed} files`;
+      }
       return fileCount > 0 ? `Local (${fileCount})` : 'Local sync';
     case 'pulling':
       return 'Syncing...';
+    case 'pushing':
+      return 'Pushing to dev...';
     case 'error':
       return 'Sync error';
     default:
@@ -92,6 +132,7 @@ function statusTooltip(
   if (copied) return 'Path copied!';
   if (status === 'error' && error) return `Error: ${error}`;
   if (status === 'pulling') return 'Pulling files to local disk...';
+  if (status === 'pushing') return 'Pushing changes to Shopify dev theme...';
   if (localPath) return `Click to copy: ${localPath}`;
   return 'Local file sync active';
 }

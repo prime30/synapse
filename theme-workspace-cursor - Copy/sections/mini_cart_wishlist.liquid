@@ -1,0 +1,36 @@
+{%- liquid
+  assign results_count  = search.results_count 
+  assign price_varies_style = settings.price_varies_style
+  assign app_review = settings.app_review
+-%}
+
+{%- if results_count > 0 -%}
+     {%- for product in search.results -%}
+     	{%- liquid
+		    assign pr_url = product.url
+		    assign placeholder_img = settings.placeholder_img
+			assign image = product.featured_media | default: placeholder_img
+		 -%}
+     	<div class="t4s-row t4s-space-item-inner t4s-widget__pr">
+			<div class="t4s-col-item t4s-col t4s-widget_img_pr">
+				{%- if image != blank -%}
+					<a class="t4s-d-block t4s-pr t4s-oh t4s_ratio" href="{{ pr_url }}"style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
+						<img class="lazyloadt4s" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+						<span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>
+					</a>
+				{%- endif -%} 
+			</div>
+			<div class="t4s-col-item t4s-col t4s-widget_if_pr t4s-pr">
+				{%- render 'product-rating', product: product, app_review: app_review -%}
+				<a href="{{ pr_url }}" class="t4s-d-block t4s-widget__pr-title">{{ product.title }}</a>
+				{%- render 'product-price', class_price: 't4s-widget__pr-price', product: product, price_varies_style: price_varies_style, type: 'card', isGrouped: false -%}
+				<a href="{{ pr_url }}" rel="nofollow" class="t4s-pr-item-btn t4s-pr-wishlist" data-remove-wishlist data-id="{{ product.id }}" data-handle="{{ product.handle }}">
+					
+					<svg class="t4s-svg-wishlist-added" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+					<svg  class="t4s-svg-remove" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+				</a>
+			</div>
+		</div>
+     {%- endfor -%}
+{%- endif -%}
+

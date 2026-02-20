@@ -1,0 +1,44 @@
+{%- if recommendations.products_count > 0 -%}
+{%- liquid
+	assign price_varies_style = settings.price_varies_style
+  	assign app_review = settings.app_review
+-%}
+{{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+{{ 'pre_flickityt4s.min.css' | asset_url | stylesheet_tag }}
+	<div class="t4s-minicart-recommendations t4s_bk_flickity">
+		<div class="t4s-top-head t4s-text-center">
+			<h3 class="t4s-title">{{ 'cart.mini_cart.title_recommendations' | t }}</h3>
+		</div>
+		<div class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s_ratioadapt t4s_position_8 t4s_cover t4s-slider-btn__in-content t4s-slider-btn-style-simple t4s-slider-btn-small t4s-gx-lg-0 t4s-gx-md-0 t4s-gx-0 t4s-slider-btn-cl-dark t4s-slider-btn-vi-always t4s-slider-btn-hidden-mobile-false t4s-dots-style-outline t4s-dots-cl-dark t4s-dots-round-true t4s-dots-hidden-mobile-false t4s-row t4s-row-cols-1 t4s-gx-md-0 t4s-gy-0 flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "2","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": true,"prevNextButtons": true,"percentPosition": 1,"pageDots": true, "autoPlay" : 0, "pauseAutoPlayOnHover" : true }' style="--space-dots: 8px;--btn-distance: 20px;">
+		    {%- for product in recommendations.products -%}
+		    	{%- liquid
+				    assign pr_url = product.url
+				    assign placeholder_img = settings.placeholder_img
+					assign image = product.featured_media | default: placeholder_img
+				-%}
+		       	<div class="t4s-minicart-recommendations__item t4s-col-item">
+		       		<div class="t4s-row t4s-g-0 t4s-space-item-inner t4s-widget__pr">
+						<div class="t4s-col-item t4s-col-auto t4s-widget_img_pr">
+							{%- if image != blank -%}
+								<a class="t4s-d-block t4s-pr t4s-oh t4s_ratio" href="{{ pr_url }}"style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
+									<img class="lazyloadt4s" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+									<span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>
+								</a>
+							{%- endif -%} 
+						</div>
+						<div class="t4s-col-item t4s-col t4s-pr t4s-oh t4s-widget_if_pr{% if settings.enable_quickview %} t4s-has-quickview{% endif %}">
+							{%- render 'product-rating', product: product, app_review: app_review -%}
+							<a href="{{ pr_url }}" class="t4s-d-block t4s-widget__pr-title t4s-truncate">{{ product.title }}</a>
+							{%- render 'product-price', class_price: 't4s-widget__pr-price', product: product, price_varies_style: price_varies_style, type: 'card', isGrouped: false -%}
+						</div>
+						{%- if settings.enable_quickview %}
+							<div class="t4s-col-item t4s-col-auto">
+								<a href="{{ pr_url }}" data-id="{{ product.id }}" data-tooltip="top" title="{{ 'products.product_card.quick_view' | t | escape }}" rel="nofollow" class="t4s-pr-item-btn t4s-pr-quickview" data-action-quickview><svg viewBox="0 0 24 24"><use xlink:href="#t4s-icon-qv"></use></svg></a>
+							</div>
+						{%- endif -%}
+					</div>
+                </div>
+		    {%- endfor -%}
+	    </div>
+    </div>
+{%- endif -%} 

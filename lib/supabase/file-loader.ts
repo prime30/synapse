@@ -1,5 +1,76 @@
 import { createClient } from '@/lib/supabase/server';
+import { createNamespacedCache } from '@/lib/cache/cache-adapter';
+
+/** Lazy load local-file-cache (uses Node `fs`) so bundlers don't try to resolve it in Edge/client. */
+async function getLocalFileCache() {
+  const { hasLocalCache, readCachedFilesByIds } = await import('@/lib/cache/local-file-cache');
+  return { hasLocalCache, readCachedFilesByIds };
+}
 import type { FileContext } from '@/lib/types/agent';
+
+// ── Lazy per-file content cache ─────────────────────────────────────
+//
+// Metadata (stubs): Cached in the adapter (Redis or Memory), keyed by projectId.
+//   Invalidated on file create/delete/rename. NOT invalidated on content edits.
+//
+// Content: Cached per-file in process memory, keyed by fileId.
+//   Invalidated only for the specific file that changed.
+//   Loaded on-demand via async loadContent().
+
+const METADATA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CONTENT_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface FileContentEntry {
+  content: string;
+  cachedAt: number;
+}
+
+/** Per-file content cache (process memory). */
+const fileContentCache = new Map<string, FileContentEntry>();
+
+/** Adapter-level metadata cache (small stubs, shareable across instances). */
+const metadataCache = createNamespacedCache('project-files');
+
+/**
+ * Invalidate metadata cache for a project. Call from createFile/deleteFile.
+ * Content cache entries are NOT affected (file list changed, content didn't).
+ */
+export async function invalidateProjectFilesCache(projectId: string): Promise<void> {
+  try {
+    await metadataCache.delete(projectId);
+  } catch {
+    // fail-open
+  }
+}
+
+/**
+ * Invalidate a single file's content cache entry.
+ * Call from updateFile (content changed, file list didn't).
+ */
+export function invalidateFileContent(fileId: string): void {
+  fileContentCache.delete(fileId);
+}
+
+/**
+ * Invalidate ALL caches for a project (metadata + all per-file content).
+ * Call from bulk operations like pullTheme/pushTheme.
+ */
+export async function invalidateAllProjectCaches(projectId: string, fileIds: string[]): Promise<void> {
+  await invalidateProjectFilesCache(projectId);
+  for (const id of fileIds) {
+    fileContentCache.delete(id);
+  }
+}
+
+/** Evict stale entries from the per-file content cache. */
+function sweepFileContentCache(): void {
+  const now = Date.now();
+  for (const [fid, entry] of fileContentCache) {
+    if (now - entry.cachedAt > CONTENT_CACHE_TTL_MS) {
+      fileContentCache.delete(fid);
+    }
+  }
+}
 
 /**
  * Metadata-only file representation (no content loaded).
@@ -49,10 +120,14 @@ export async function loadFileMetadata(projectId: string): Promise<FileMetadataR
  * Load full content for a specific set of files by ID.
  * This is the "Phase 2" targeted query (~200KB for 10 files).
  */
-export async function loadFileContent(fileIds: string[]): Promise<Map<string, string>> {
+export async function loadFileContent(
+  fileIds: string[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseClient?: any,
+): Promise<Map<string, string>> {
   if (fileIds.length === 0) return new Map();
 
-  const supabase = await createClient();
+  const supabase = supabaseClient ?? await createClient();
   const { data } = await supabase
     .from('files')
     .select('id, content')
@@ -94,31 +169,32 @@ export function hydrateFileContexts(
 }
 
 /**
- * Synchronous content hydrator function type.
- * Returns FileContext[] with real content for the requested IDs.
- * Files not found in the content map are returned with stub content.
+ * Async content hydrator function type.
+ * Given file IDs, fetches content on-demand (with per-file caching)
+ * and returns hydrated FileContext[] with real content.
+ * Files not found are returned with stub content.
  */
-export type LoadContentFn = (fileIds: string[]) => FileContext[];
+export type LoadContentFn = (fileIds: string[]) => Promise<FileContext[]>;
 
 /**
  * Convenience helper: hydrate ALL files with real content via `loadContent`.
  * Used by search tools (grep) that need to scan every file's content.
  */
-export function loadAllContent(
+export async function loadAllContent(
   files: FileContext[],
   loadContent: LoadContentFn,
-): FileContext[] {
+): Promise<FileContext[]> {
   const allFileIds = files.map(f => f.fileId);
   return loadContent(allFileIds);
 }
 
 /**
- * Full loader: fetches all files from Supabase, stores content in an in-memory Map,
- * and returns stubs (no content) for downstream consumers. Content is only provided
- * on-demand via the `loadContent` hydrator function.
+ * Lazy loader: fetches file metadata (no content) from Supabase, returns stubs
+ * and an async `loadContent` function that fetches content on-demand with
+ * per-file caching. Content is never bulk-loaded — only requested files are fetched.
  *
- * This ensures no downstream code path accidentally receives all 602 files with
- * full content — they must explicitly request content for specific file IDs.
+ * Metadata cache: adapter-level, 5-minute TTL. Invalidated on create/delete.
+ * Content cache: per-file process memory, 10-minute TTL. Invalidated per-file on edit.
  */
 export async function loadProjectFiles(
   projectId: string,
@@ -130,52 +206,139 @@ export async function loadProjectFiles(
   allFiles: FileContext[];
   loadContent: LoadContentFn;
 }> {
+  // ── Check metadata cache ──────────────────────────────────────────
+  try {
+    const cachedStubs = await metadataCache.get<FileContext[]>(projectId);
+    if (cachedStubs) {
+      console.log(`[file-loader] Metadata cache hit for ${projectId}: ${cachedStubs.length} files`);
+      return {
+        allFiles: cachedStubs,
+        loadContent: buildAsyncLoadContent(projectId, cachedStubs, supabaseClient),
+      };
+    }
+  } catch {
+    // fail-open
+  }
+
+  // ── Cache miss — metadata-only query (no content column) ──────────
   const supabase = supabaseClient ?? await createClient();
 
   const { data: files } = await supabase
     .from('files')
-    .select('id, name, path, file_type, content')
+    .select('id, name, path, file_type, size_bytes')
     .eq('project_id', projectId);
 
-  // Build in-memory content map (kept in closure, never exposed directly)
-  const contentMap = new Map<string, string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allFiles: FileContext[] = (files ?? []).map((f: any) => {
-    const content = f.content ?? '';
-    contentMap.set(f.id, content);
-    return {
-      fileId: f.id,
-      fileName: f.name,
-      fileType: f.file_type as 'liquid' | 'javascript' | 'css' | 'other',
-      content: `[${content.length} chars]`, // STUB — no real content
-      path: f.path ?? undefined,
-    };
-  });
+  const allFiles: FileContext[] = (files ?? []).map((f: any) => ({
+    fileId: f.id,
+    fileName: f.name,
+    fileType: f.file_type as 'liquid' | 'javascript' | 'css' | 'other',
+    content: `[${f.size_bytes ?? 0} chars]`, // STUB — size from DB column
+    path: f.path ?? undefined,
+  }));
 
-  /**
-   * Hydrate specific files with real content from the in-memory map.
-   * Files whose IDs are not found get a warning log and keep stub content.
-   */
-  const loadContent: LoadContentFn = (fileIds: string[]): FileContext[] => {
+  // ── Cache metadata stubs ──────────────────────────────────────────
+  try {
+    await metadataCache.set(projectId, allFiles, METADATA_CACHE_TTL_MS);
+  } catch {
+    // fail-open
+  }
+
+  // Periodic sweep of stale per-file content entries
+  if (fileContentCache.size > 500) {
+    sweepFileContentCache();
+  }
+
+  console.log(`[file-loader] Loaded metadata for ${allFiles.length} files in ${projectId}`);
+
+  return {
+    allFiles,
+    loadContent: buildAsyncLoadContent(projectId, allFiles, supabaseClient),
+  };
+}
+
+/**
+ * Build an async loadContent closure that fetches content on-demand
+ * with per-file caching. Batch-fetches uncached files via loadFileContent().
+ */
+function buildAsyncLoadContent(
+  projectId: string,
+  allFiles: FileContext[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseClient?: any,
+): LoadContentFn {
+  return async (fileIds: string[]): Promise<FileContext[]> => {
     const idSet = new Set(fileIds);
-    const result: FileContext[] = [];
+    const stubs = allFiles.filter(f => idSet.has(f.fileId));
 
-    for (const stub of allFiles) {
-      if (!idSet.has(stub.fileId)) continue;
-      const realContent = contentMap.get(stub.fileId);
-      if (realContent !== undefined) {
-        result.push({ ...stub, content: realContent });
+    // Separate cached vs uncached
+    const cached = new Map<string, string>();
+    const uncachedIds: string[] = [];
+    const now = Date.now();
+
+    for (const id of fileIds) {
+      const entry = fileContentCache.get(id);
+      if (entry && now - entry.cachedAt < CONTENT_CACHE_TTL_MS) {
+        cached.set(id, entry.content);
       } else {
-        console.warn(`[file-loader] loadContent: ID ${stub.fileId} not in content map`);
+        uncachedIds.push(id);
+      }
+    }
+
+    // Check local file cache before hitting Supabase (dynamic import avoids bundling `fs` in Edge)
+    let localHits = 0;
+    if (uncachedIds.length > 0) {
+      const { hasLocalCache, readCachedFilesByIds } = await getLocalFileCache();
+      if (hasLocalCache(projectId)) {
+        const localContent = readCachedFilesByIds(projectId, uncachedIds);
+        const stillUncached: string[] = [];
+      for (const id of uncachedIds) {
+        const localVal = localContent.get(id);
+        if (localVal !== undefined) {
+          cached.set(id, localVal);
+          fileContentCache.set(id, { content: localVal, cachedAt: now });
+          localHits++;
+        } else {
+          stillUncached.push(id);
+        }
+      }
+      uncachedIds.length = 0;
+      uncachedIds.push(...stillUncached);
+      if (localHits > 0) {
+        console.log(`[file-loader] Local cache hit: ${localHits} files from disk`);
+      }
+    }
+    }
+
+    // Batch-fetch uncached files from DB
+    if (uncachedIds.length > 0) {
+      try {
+        const fetched = await loadFileContent(uncachedIds, supabaseClient);
+        for (const [id, content] of fetched) {
+          cached.set(id, content);
+          fileContentCache.set(id, { content, cachedAt: now });
+        }
+      } catch (err) {
+        console.warn(`[file-loader] loadContent failed for ${uncachedIds.length} files:`, err);
+        // fail-open: cached files + stubs for failed files
+      }
+    }
+
+    // Build result: hydrate stubs with real content where available
+    const result: FileContext[] = [];
+    for (const stub of stubs) {
+      const content = cached.get(stub.fileId);
+      if (content !== undefined) {
+        result.push({ ...stub, content });
+      } else {
         result.push(stub);
       }
     }
 
-    const hydratedChars = result.reduce((s, f) => s + f.content.length, 0);
-    console.log(`[file-loader] loadContent: hydrated ${result.length}/${fileIds.length} files (${hydratedChars} chars)`);
+    const hydratedCount = result.filter(f => !f.content.startsWith('[')).length;
+    console.log(`[file-loader] loadContent: hydrated ${hydratedCount}/${fileIds.length} files (${cached.size} cached, ${uncachedIds.length} fetched)`);
 
     return result;
   };
-
-  return { allFiles, loadContent };
 }
+

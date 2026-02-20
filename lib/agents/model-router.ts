@@ -22,14 +22,16 @@ export type AIAction =
   | 'plan'              // Multi-step plan generation
   | 'chat'              // General conversational response
   | 'classify'          // Request complexity classification (Haiku)
-  | 'classify_trivial'; // Trivial-tier PM execution (Haiku)
+  | 'classify_trivial'  // Trivial-tier PM execution (Haiku)
+  | 'ask'               // Ask-mode informational questions (Haiku fast path)
+  | 'debug';            // Debug mode: Codex (GPT-4o) for investigation/diagnostics
 
 // ── Model identifiers ───────────────────────────────────────────────────────
 
 export const MODELS = {
   // Anthropic
   CLAUDE_OPUS: 'claude-opus-4-6',
-  CLAUDE_SONNET: 'claude-sonnet-4-5-20250929',
+  CLAUDE_SONNET: 'claude-sonnet-4-6',
   CLAUDE_HAIKU: 'claude-haiku-4-5-20251001',
 
   // OpenAI
@@ -38,6 +40,7 @@ export const MODELS = {
 
   // Google -- Gemini 3
   GEMINI_3_FLASH: 'gemini-3-flash-preview',
+  GEMINI_3_PRO: 'gemini-3-pro-preview',       // Text/reasoning; orchestration fallback
   GEMINI_3_PRO_IMAGE: 'gemini-3-pro-image-preview',
 
   // Google -- Gemini 2 (legacy)
@@ -54,18 +57,20 @@ export type ModelId = (typeof MODELS)[keyof typeof MODELS];
  * These can be overridden by user preferences.
  */
 export const MODEL_MAP: Record<AIAction, ModelId> = {
-  analyze:          MODELS.CLAUDE_OPUS,      // PM needs deep reasoning
-  generate:         MODELS.CLAUDE_SONNET,    // Specialists use Sonnet for speed/quality
+  analyze:          MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6 for rate-limit headroom)
+  generate:         MODELS.CLAUDE_OPUS,      // Specialists (Liquid/JS/CSS): Opus for best code quality
   review:           MODELS.GPT_4O,           // Review uses GPT-4o
   summary:          MODELS.CLAUDE_HAIKU,     // Summaries use Haiku (fast + cheap)
-  fix:              MODELS.CLAUDE_SONNET,    // Quick fixes use Sonnet
+  fix:              MODELS.CLAUDE_OPUS,      // Specialists: Opus for multi-step fixes
   explain:          MODELS.CLAUDE_SONNET,    // Explanations use Sonnet
-  refactor:         MODELS.CLAUDE_SONNET,    // Refactoring uses Sonnet
+  refactor:         MODELS.CLAUDE_OPUS,     // Specialists: Opus for refactoring
   document:         MODELS.CLAUDE_SONNET,    // Documentation uses Sonnet
-  plan:             MODELS.CLAUDE_OPUS,      // Plans need deep reasoning
+  plan:             MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6)
   chat:             MODELS.CLAUDE_SONNET,    // General chat uses Sonnet
   classify:         MODELS.CLAUDE_HAIKU,     // Request classification (fast + cheap)
   classify_trivial: MODELS.CLAUDE_HAIKU,     // Trivial-tier PM execution (Haiku)
+  ask:              MODELS.CLAUDE_HAIKU,     // Ask-mode fast path (3-5x faster)
+  debug:            MODELS.GPT_4O,           // Debug: Codex (GPT-4o) for diagnostics
 };
 
 // ── Agent defaults ──────────────────────────────────────────────────────────
@@ -74,10 +79,10 @@ export type AgentRole = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'r
 
 /** Default model for each agent role (used when no action override exists). */
 export const AGENT_DEFAULTS: Record<AgentRole, ModelId> = {
-  project_manager: MODELS.CLAUDE_OPUS,
-  liquid:          MODELS.CLAUDE_SONNET,
-  javascript:      MODELS.CLAUDE_SONNET,
-  css:             MODELS.CLAUDE_SONNET,
+  project_manager: MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6 for rate-limit headroom)
+  liquid:          MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
+  javascript:      MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
+  css:             MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
   review:          MODELS.GPT_4O,
   summary:         MODELS.CLAUDE_HAIKU,
 };
@@ -98,6 +103,8 @@ export const ACTION_EFFORT: Record<AIAction, 'low' | 'medium' | 'high' | 'max'> 
   chat:             'medium',
   classify:         'low',
   classify_trivial: 'low',
+  ask:              'low',
+  debug:            'high',
 };
 
 /** Actions that benefit from adaptive thinking (deep reasoning). */
@@ -139,6 +146,8 @@ export function getProviderForModel(model: string): ProviderName {
 export interface ResolveModelOptions {
   /** The AI action being performed (highest priority override). */
   action?: AIAction;
+  /** Forced model that bypasses ALL routing (used by benchmarks/tests). */
+  forcedModel?: string;
   /** User's preferred model from settings (second priority). */
   userOverride?: string;
   /** The agent role making the request (third priority). */
@@ -151,27 +160,55 @@ export interface ResolveModelOptions {
  * Resolve which model to use for a given request.
  *
  * Priority chain:
+ *   0. Forced model     -> forcedModel (benchmark/test override, bypasses everything)
  *   1. Action override  -> MODEL_MAP[action]
  *   2. User preference  -> userOverride (if provided and non-empty)
  *   3. Agent default    -> AGENT_DEFAULTS[agentRole]
  *   4. System default   -> SYSTEM_DEFAULT_MODEL
  *
- * The `action` override is highest because certain actions (e.g. summary)
- * MUST use specific models regardless of user preference.
+ * The `action` override is highest in normal operation because certain
+ * actions (e.g. summary) MUST use specific models regardless of user
+ * preference. `forcedModel` exists for benchmarks that need to bypass
+ * all routing to test specific model behavior.
  */
 export function resolveModel(options: ResolveModelOptions = {}): string {
-  const { action, userOverride, agentRole, tier } = options;
+  const { action, forcedModel, userOverride, agentRole, tier } = options;
 
-  // 0. ARCHITECTURAL tier escalation (EPIC V5): PM uses Opus for all work,
-  //    specialists use Sonnet (which is already the default). This overrides
-  //    action-level mappings for ARCHITECTURAL tasks to ensure deep reasoning.
+  // 0. Forced model — bypasses all routing (benchmark/test use only)
+  if (forcedModel && forcedModel.trim()) {
+    return forcedModel;
+  }
+
+  // 0. TRIVIAL / SIMPLE tier: use Haiku for fast, cheap execution (asks and simple edits).
+  if (tier === 'TRIVIAL' || tier === 'SIMPLE') {
+    if (
+      action === 'ask' ||
+      action === 'classify_trivial' ||
+      action === 'analyze' ||
+      action === 'plan' ||
+      action === 'generate' ||
+      action === 'fix' ||
+      action === 'refactor' ||
+      action === 'explain' ||
+      action === 'chat'
+    ) {
+      return MODELS.CLAUDE_HAIKU;
+    }
+  }
+
+  // 0. Review by tier: Codex (GPT-4o) for SIMPLE/TRIVIAL, Opus for COMPLEX/ARCHITECTURAL
+  if (action === 'review' && tier) {
+    if (tier === 'TRIVIAL' || tier === 'SIMPLE') return MODELS.GPT_4O;   // Codex: fast, consistent
+    if (tier === 'COMPLEX' || tier === 'ARCHITECTURAL') return MODELS.CLAUDE_OPUS; // Opus: deeper review
+  }
+
+  // 0. ARCHITECTURAL tier: Opus for generation/fix/refactor (including PM in solo mode).
+  //    Only pure analysis/planning stays on Sonnet for speed.
   if (tier === 'ARCHITECTURAL') {
-    // PM and analysis actions get Opus for the extended context window
-    if (agentRole === 'project_manager' || action === 'analyze' || action === 'plan') {
+    if (action === 'generate' || action === 'fix' || action === 'refactor') {
       return MODELS.CLAUDE_OPUS;
     }
-    // Specialists keep Sonnet (already the default for generate/fix)
-    if (action === 'generate' || action === 'fix' || action === 'refactor') {
+    if (action === 'analyze' || action === 'plan') {
       return MODELS.CLAUDE_SONNET;
     }
   }

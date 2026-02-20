@@ -31,13 +31,18 @@ export const DEFAULT_BUDGET: BudgetConfig = {
   reserve: 24_000,  // Safety margin for response tokens
 };
 
-export const AGENT_BUDGETS: Record<AgentType, Partial<BudgetConfig>> = {
+export const AGENT_BUDGETS: Partial<Record<AgentType, Partial<BudgetConfig>>> = {
   'project_manager': { system: 15_000, files: 80_000 },
   'liquid':          { system: 8_000,  files: 40_000 },
   'css':             { system: 8_000,  files: 40_000 },
   'javascript':      { system: 8_000,  files: 40_000 },
   'json':            { system: 6_000,  files: 30_000 },
   'review':          { system: 6_000,  files: 20_000, user: 30_000 },
+  'general':         { system: 8_000,  files: 40_000 },
+  'general_1':       { system: 8_000,  files: 40_000 },
+  'general_2':       { system: 8_000,  files: 40_000 },
+  'general_3':       { system: 8_000,  files: 40_000 },
+  'general_4':       { system: 8_000,  files: 40_000 },
 };
 
 /** Get the effective budget config for a specific agent type. */

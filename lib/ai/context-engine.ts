@@ -11,6 +11,7 @@ import type { FileContext } from '@/lib/types/agent';
 import { estimateTokens } from './token-counter';
 import type { MemoryEntry } from './developer-memory';
 import { filterActiveMemories, formatMemoryForPrompt } from './developer-memory';
+import type { LoadedTermMapping } from './term-mapping-learner';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -395,6 +396,10 @@ export class ContextEngine {
   private memories: MemoryEntry[] = [];
   private memoryMinConfidence = 0.6;
 
+  /** Learned term-to-file mappings for fuzzyMatch boosting. */
+  private termMappings: LoadedTermMapping[] = [];
+  private termMappingIndex = new Map<string, string[]>();
+
   constructor(maxTokens = 16_000) {
     this.maxTokens = maxTokens;
   }
@@ -436,28 +441,92 @@ export class ContextEngine {
     );
   }
 
+  // ── Layer 9: Learned Term Mappings ─────────────────────────────────
+
+  /**
+   * Load learned term-to-file mappings for fuzzyMatch boosting.
+   * Call once per session; results are cached in-memory.
+   */
+  loadTermMappingsData(mappings: LoadedTermMapping[]): void {
+    this.termMappings = mappings;
+    this.termMappingIndex.clear();
+    for (const m of mappings) {
+      for (const fp of m.filePaths) {
+        const existing = this.termMappingIndex.get(m.term);
+        if (existing) {
+          if (!existing.includes(fp)) existing.push(fp);
+        } else {
+          this.termMappingIndex.set(m.term, [fp]);
+        }
+      }
+    }
+  }
+
+  /** Get the count of loaded term mappings. */
+  getTermMappingCount(): number {
+    return this.termMappings.length;
+  }
+
+  /** Get all loaded term mappings (for UI display). */
+  getTermMappings(): LoadedTermMapping[] {
+    return this.termMappings;
+  }
+
   // ── Indexing ──────────────────────────────────────────────────────
 
   /**
    * Index all project files – computes metadata, token estimates, and
    * detects outgoing references for each file.
+   * When yieldOpts is provided, yields to the event loop every N files so
+   * timers (e.g. heartbeat) can run during long runs.
    */
-  indexFiles(files: FileContext[]): void {
+  indexFiles(
+    files: FileContext[],
+    yieldOpts?: { every: number; yieldFn: () => Promise<void> },
+  ): void | Promise<void> {
     this.index.clear();
     this.fileContents.clear();
     this.depCache.clear();
 
+    const run = async () => {
+      for (let i = 0; i < files.length; i++) {
+        if (yieldOpts && i > 0 && i % yieldOpts.every === 0) {
+          await yieldOpts.yieldFn();
+        }
+        const file = files[i];
+        const path = file.path ?? file.fileName;
+        const tokens = estimateTokens(file.content);
+
+        // Skip reference detection for stub content (e.g. "[5000 chars]")
+        const isStub = file.content.startsWith('[') && /^\[\d+\s+chars/.test(file.content);
+        const references = isStub
+          ? []
+          : detectReferences(file.fileType, file.content, file.fileName);
+
+        const meta: FileMetadata = {
+          fileId: file.fileId,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          path,
+          sizeBytes: isStub ? 0 : new TextEncoder().encode(file.content).byteLength,
+          tokenEstimate: tokens,
+          updatedAt: new Date(),
+          references,
+        };
+
+        this.index.set(file.fileId, meta);
+        this.fileContents.set(file.fileId, file.content);
+      }
+    };
+
+    if (yieldOpts) return run();
     for (const file of files) {
       const path = file.path ?? file.fileName;
       const tokens = estimateTokens(file.content);
-
-      // Skip reference detection for stub content (e.g. "[5000 chars]")
-      // Stubs contain no real code, so regex reference extraction would produce false matches
       const isStub = file.content.startsWith('[') && /^\[\d+\s+chars/.test(file.content);
       const references = isStub
         ? []
         : detectReferences(file.fileType, file.content, file.fileName);
-
       const meta: FileMetadata = {
         fileId: file.fileId,
         fileName: file.fileName,
@@ -468,7 +537,6 @@ export class ContextEngine {
         updatedAt: new Date(),
         references,
       };
-
       this.index.set(file.fileId, meta);
       this.fileContents.set(file.fileId, file.content);
     }
@@ -527,6 +595,24 @@ export class ContextEngine {
           if (matchGlobPattern(pattern, meta.path) || matchGlobPattern(pattern, meta.fileName)) {
             score += topic.boost;
             break; // One match per topic is enough
+          }
+        }
+      }
+
+      // Learned term mapping boost (+6)
+      if (this.termMappingIndex.size > 0) {
+        let termBoostApplied = false;
+        for (const word of queryWords) {
+          if (termBoostApplied) break;
+          const mappedPaths = this.termMappingIndex.get(word);
+          if (mappedPaths) {
+            for (const fp of mappedPaths) {
+              if (meta.path === fp || meta.fileName === fp || meta.path.endsWith(fp)) {
+                score += 6;
+                termBoostApplied = true;
+                break;
+              }
+            }
           }
         }
       }

@@ -13,10 +13,17 @@ export function checkCrossFileConsistency(
 ): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
 
-  // Extract class names from Liquid changes
-  const liquidChanges = changes.filter((c) => c.agentType === 'liquid');
-  const cssChanges = changes.filter((c) => c.agentType === 'css');
-  const jsChanges = changes.filter((c) => c.agentType === 'javascript');
+  // Extract class names from Liquid changes (includes general subagents changing Liquid files)
+  const isLiquidFile = (c: { agentType: string; fileName: string }) =>
+    c.agentType === 'liquid' || (c.agentType.startsWith('general') && c.fileName.endsWith('.liquid'));
+  const isCssFile = (c: { agentType: string; fileName: string }) =>
+    c.agentType === 'css' || (c.agentType.startsWith('general') && /\.(css|scss)$/.test(c.fileName));
+  const isJsFile = (c: { agentType: string; fileName: string }) =>
+    c.agentType === 'javascript' || (c.agentType.startsWith('general') && /\.(js|ts)$/.test(c.fileName));
+
+  const liquidChanges = changes.filter(isLiquidFile);
+  const cssChanges = changes.filter(isCssFile);
+  const jsChanges = changes.filter(isJsFile);
 
   // Check: new classes in Liquid should have CSS selectors
   for (const liquidChange of liquidChanges) {

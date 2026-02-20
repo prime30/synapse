@@ -1,0 +1,16 @@
+{%- if se_stts.top_heading != blank or  se_stts.top_subheading != blank -%}
+	{{ 'top-head.css' | asset_url | stylesheet_tag }}
+	<div class="t4s-top-heading t4s_des_title_{{ se_stts.design_heading }} {% if se_stts.heading_center %}t4s-text-center{% endif %} {%- if se_stts.top_subheading != blank -%} t4s-has-section-des{% endif %}" {% if get_height %}data-get-height{% endif %} style="--tophead-mb: {{ se_stts.tophead_mb }}px;--tophead-mb-tb: {{ se_stts.tophead_mb_tb }}px;--tophead-mb-mb: {{ se_stts.tophead_mb_mb }}px;">
+		{%- if heading_image != blank -%} <div class="t4s-heading-image"> <img class="lazyloadt4s t4s-lz--fadeIn" data-src="{{ heading_image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ heading_image.width }}" height="{{ heading_image.height }}" alt="{{ heading_image.alt | escape }}">
+        </div>{%- endif -%}
+		{%- if se_stts.top_heading != blank -%}<h3 class="t4s-section-title t4s-title"><span>{{ se_stts.top_heading | replace:"[", "<span class='t4s-heading-highlight'>" | replace:"]", "</span>" }}</span></h3>{%- endif -%}
+		{%- if se_stts.design_heading == "3" -%}
+			<div class="t4s-heading-char t4s-d-flex {% if se_stts.heading_center %}t4s-justify-content-center{% endif %}">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="118 82.1 385.5 42">
+					<path class="st0" d="M483.1,100.9c-4.1,8.2-7,13.2-11.7,13.2c-4.6,0-7.5-5-11.7-13.3c-4.2-8.3-9.5-18.7-20.6-18.7  c-11.1,0-16.4,10.4-20.6,18.8c-4.1,8.2-7,13.2-11.6,13.2s-7.5-5-11.6-13.2c-4.2-8.4-9.4-18.8-20.5-18.8c-11.1,0-16.4,10.4-20.6,18.8  c-4.1,8.2-7,13.2-11.6,13.2s-7.5-5-11.6-13.2c-4.2-8.4-9.4-18.8-20.5-18.8c-11.1,0-16.3,10.4-20.5,18.8c-4.1,8.2-7,13.2-11.6,13.2  c-4.6,0-7.5-5-11.6-13.2c-4.2-8.4-9.4-18.8-20.5-18.8c-11.1,0-16.3,10.4-20.5,18.8c-4.1,8.2-7,13.2-11.5,13.2  c-4.6,0-7.4-5-11.6-13.2c-4.2-8.4-9.4-18.8-20.5-18.8c-11.1,0-16.3,10.4-20.5,18.8c-4.1,8.2-7,13.2-11.6,13.2  c-4.6,0-7.5-5-11.6-13.2c-4.2-8.4-9.4-18.8-20.5-18.8v10c4.6,0,7.5,5,11.6,13.2c4.2,8.4,9.4,18.8,20.5,18.8  c11.1,0,16.3-10.4,20.5-18.8c4.1-8.2,7-13.2,11.6-13.2c4.6,0,7.4,5,11.5,13.2c4.2,8.4,9.4,18.8,20.5,18.8  c11.1,0,16.3-10.4,20.5-18.8c4.1-8.2,7-13.2,11.5-13.2c4.6,0,7.5,5,11.6,13.2c4.2,8.4,9.4,18.8,20.5,18.8  c11.1,0,16.3-10.4,20.5-18.8c4.1-8.2,7-13.2,11.6-13.2c4.6,0,7.4,5,11.6,13.2c4.2,8.3,9.4,18.8,20.5,18.8  c11.1,0,16.4-10.4,20.6-18.8c4.1-8.2,7-13.2,11.6-13.2c4.6,0,7.4,5,11.6,13.2c4.2,8.3,9.4,18.8,20.5,18.8s16.3-10.4,20.6-18.8  c4.1-8.2,7-13.2,11.6-13.2c4.6,0,7.5,5,11.6,13.2c4.2,8.4,9.5,18.8,20.6,18.8c11.2,0,16.4-10.4,20.6-18.8c4.1-8.2,7-13.2,11.7-13.2  v-10C492.5,82.1,487.3,92.5,483.1,100.9z"/>
+				</svg>
+			</div>
+		{%- endif -%}
+		{%- if se_stts.top_subheading != blank -%}<span class="t4s-section-des t4s-subtitle t4s-rte">{{ se_stts.top_subheading | replace:"[", "<span class='t4s-heading-highlight'>" | replace:"]", "</span>" }}</span>{%- endif -%}
+	</div>
+{%- endif -%}

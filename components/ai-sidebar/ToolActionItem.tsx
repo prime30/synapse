@@ -1,0 +1,314 @@
+'use client';
+
+import React, { useState, useCallback } from 'react';
+import { ChevronDown, Check, X, Loader2, FileText, Code, HelpCircle, FilePlus, Eye, Pencil, Trash2, ArrowRightLeft, Upload, Download, List, Image as ImageIcon, LayoutGrid, FileSearch, Search, ShieldCheck, GitBranch } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { safeTransition } from '@/lib/accessibility';
+import type { ContentBlock } from './ChatInterface';
+import type { PlanStep } from './PlanApprovalModal';
+
+// Lazy-loaded card components to avoid circular deps
+import { PlanCard } from './PlanCard';
+import { ClarificationCard } from './ClarificationCard';
+import { FileCreateCard } from './FileCreateCard';
+import { FileOperationToast } from './FileOperationToast';
+import { ShopifyOperationCard } from './ShopifyOperationCard';
+import { ScreenshotCard } from './ScreenshotCard';
+import { CodeEditCard } from './CodeEditCard';
+import { ChangePreviewCard } from './ChangePreviewCard';
+
+type ToolActionBlock = Extract<ContentBlock, { type: 'tool_action' }>;
+
+interface ToolActionItemProps {
+  block: ToolActionBlock;
+  onApplyCode?: (code: string, fileId: string, fileName: string) => void;
+  onOpenFile?: (filePath: string) => void;
+  resolveFileId?: (path: string) => string | null;
+  onOpenPlanFile?: (filePath: string) => void;
+  onBuildPlan?: (checkedSteps: Set<number>) => void;
+  onSend?: (content: string) => void;
+  onConfirmFileCreate?: (fileName: string, content: string) => void;
+  onChangeApproved?: (appliedCount: number) => void;
+  onChangeRejected?: () => void;
+  isBuilding?: boolean;
+}
+
+function getToolIcon(toolName: string, status: string) {
+  if (status === 'error') return <X className="h-4 w-4 text-red-500 dark:text-red-400" aria-hidden />;
+
+  const iconClass = 'h-4 w-4';
+  switch (toolName) {
+    case 'propose_plan':
+      return <LayoutGrid className={iconClass} aria-hidden />;
+    case 'propose_code_edit':
+      return <Code className={iconClass} aria-hidden />;
+    case 'ask_clarification':
+      return <HelpCircle className={iconClass} aria-hidden />;
+    case 'create_file':
+      return <FilePlus className={iconClass} aria-hidden />;
+    case 'navigate_preview':
+      return <Eye className={iconClass} aria-hidden />;
+    case 'write_file':
+      return <Pencil className={iconClass} aria-hidden />;
+    case 'delete_file':
+      return <Trash2 className={iconClass} aria-hidden />;
+    case 'rename_file':
+      return <ArrowRightLeft className={iconClass} aria-hidden />;
+    case 'push_to_shopify':
+      return <Upload className={iconClass} aria-hidden />;
+    case 'pull_from_shopify':
+      return <Download className={iconClass} aria-hidden />;
+    case 'list_themes':
+    case 'list_resources':
+      return <List className={iconClass} aria-hidden />;
+    case 'get_asset':
+      return <Download className={iconClass} aria-hidden />;
+    case 'screenshot_preview':
+    case 'compare_screenshots':
+      return <ImageIcon className={iconClass} aria-hidden />;
+    // PM exploration tools
+    case 'read_file':
+      return <FileSearch className={iconClass} aria-hidden />;
+    case 'search_files':
+    case 'grep_content':
+      return <Search className={iconClass} aria-hidden />;
+    case 'check_lint':
+      return <ShieldCheck className={iconClass} aria-hidden />;
+    case 'list_files':
+      return <List className={iconClass} aria-hidden />;
+    case 'get_dependency_graph':
+      return <GitBranch className={iconClass} aria-hidden />;
+    default:
+      return <FileText className={iconClass} aria-hidden />;
+  }
+}
+
+function StatusIcon({ status, toolName }: { status: string; toolName: string }) {
+  if (status === 'loading') {
+    return (
+      <div className="shrink-0 h-4 w-4 flex items-center justify-center">
+        <Loader2 className="h-4 w-4 motion-safe:animate-spin text-sky-500 dark:text-sky-400" aria-hidden />
+      </div>
+    );
+  }
+  if (status === 'done') {
+    return (
+      <div className="shrink-0 h-4 w-4 flex items-center justify-center">
+        <Check className="h-4 w-4 text-[#28CD56]" aria-hidden />
+      </div>
+    );
+  }
+  // error
+  return (
+    <div className="shrink-0 h-4 w-4 flex items-center justify-center">
+      {getToolIcon(toolName, status)}
+    </div>
+  );
+}
+
+function shouldAutoExpand(block: ToolActionBlock): boolean {
+  if (block.status === 'error') return true;
+  if (block.cardType === 'clarification') return true;
+  if (block.cardType === 'change_preview') return true;
+  return false;
+}
+
+export function ToolActionItem({
+  block,
+  onApplyCode,
+  onOpenFile,
+  resolveFileId,
+  onOpenPlanFile,
+  onBuildPlan,
+  onSend,
+  onConfirmFileCreate,
+  onChangeApproved,
+  onChangeRejected,
+  isBuilding,
+}: ToolActionItemProps) {
+  const autoExpand = shouldAutoExpand(block);
+  const [expanded, setExpanded] = useState(autoExpand);
+  const hasExpandableContent = block.cardType && block.cardData;
+
+  const toggle = useCallback(() => {
+    if (!hasExpandableContent && block.status !== 'error') return;
+    setExpanded(prev => !prev);
+  }, [hasExpandableContent, block.status]);
+
+  // Auto-expand for clarification and errors
+  const blockStatus = block.status;
+  const blockCardType = block.cardType;
+  React.useEffect(() => {
+    if (blockStatus === 'error' || blockCardType === 'clarification') setExpanded(true);
+  }, [blockStatus, blockCardType]);
+
+  return (
+    <div className="group flex flex-col rounded-md border ide-border-subtle overflow-hidden my-1" role="group">
+      {/* Compact header row */}
+      <button
+        type="button"
+        onClick={toggle}
+        role="button"
+        aria-expanded={hasExpandableContent ? expanded : undefined}
+        className="flex items-center gap-2 px-2.5 py-1.5 text-left ide-hover cursor-pointer transition-colors"
+      >
+        <StatusIcon status={block.status} toolName={block.toolName} />
+
+        <div className="flex-1 min-w-0">
+          <span className="text-xs ide-text-2 font-medium truncate block">
+            {block.label}
+          </span>
+          {block.subtitle && block.status === 'done' && (
+            <span className="text-[10px] ide-text-3 truncate block mt-0.5">
+              {block.subtitle}
+            </span>
+          )}
+          {block.error && block.status === 'error' && (
+            <span className="text-[10px] text-red-500 dark:text-red-400 truncate block mt-0.5">
+              {block.error}
+            </span>
+          )}
+        </div>
+
+        {/* Chevron */}
+        {(hasExpandableContent || block.status === 'error') && (
+          <ChevronDown
+            className={`h-3 w-3 ide-text-3 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        )}
+      </button>
+
+      {/* Expanded card content */}
+      {(hasExpandableContent || block.status === 'error') && (
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={safeTransition(0.15)}
+              className="overflow-hidden"
+            >
+              <div className="border-t ide-border-subtle">
+                {renderCardContent(block, {
+                  onApplyCode,
+                  onOpenFile,
+                  resolveFileId,
+                  onOpenPlanFile,
+                  onBuildPlan,
+                  onSend,
+                  onConfirmFileCreate,
+                  onChangeApproved,
+                  onChangeRejected,
+                  isBuilding,
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+    </div>
+  );
+}
+
+interface CardHandlers {
+  onApplyCode?: (code: string, fileId: string, fileName: string) => void;
+  onOpenFile?: (filePath: string) => void;
+  resolveFileId?: (path: string) => string | null;
+  onOpenPlanFile?: (filePath: string) => void;
+  onBuildPlan?: (checkedSteps: Set<number>) => void;
+  onSend?: (content: string) => void;
+  onConfirmFileCreate?: (fileName: string, content: string) => void;
+  onChangeApproved?: (appliedCount: number) => void;
+  onChangeRejected?: () => void;
+  isBuilding?: boolean;
+}
+
+function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): React.ReactNode {
+  const data = block.cardData;
+  if (!data && block.status !== 'error') return null;
+
+  switch (block.cardType) {
+    case 'plan': {
+      const planData = data as { title: string; description: string; steps: PlanStep[]; filePath?: string };
+      return (
+        <PlanCard
+          planData={planData}
+          onOpenPlanFile={handlers.onOpenPlanFile}
+          onBuildPlan={handlers.onBuildPlan}
+          isBuilding={handlers.isBuilding}
+        />
+      );
+    }
+    case 'code_edit': {
+      const edit = data as { filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' };
+      return (
+        <CodeEditCard
+          filePath={edit.filePath}
+          reasoning={edit.reasoning}
+          newContent={edit.newContent}
+          originalContent={edit.originalContent}
+          status={edit.status}
+          onApplyCode={handlers.onApplyCode}
+          resolveFileId={handlers.resolveFileId}
+          onOpenFile={handlers.onOpenFile}
+        />
+      );
+    }
+    case 'clarification': {
+      const clar = data as { question: string; options: Array<{ id: string; label: string; recommended?: boolean }>; allowMultiple?: boolean };
+      return (
+        <ClarificationCard
+          question={clar.question}
+          options={clar.options}
+          allowMultiple={clar.allowMultiple}
+          onSend={handlers.onSend}
+        />
+      );
+    }
+    case 'file_create': {
+      const fc = data as { fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' };
+      return (
+        <FileCreateCard
+          fileName={fc.fileName}
+          content={fc.content}
+          reasoning={fc.reasoning}
+          status={fc.status}
+          onConfirm={handlers.onConfirmFileCreate}
+        />
+      );
+    }
+    case 'file_op': {
+      const ops = (Array.isArray(data) ? data : [data]) as Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }>;
+      return <FileOperationToast operations={ops} />;
+    }
+    case 'shopify_op': {
+      const ops = (Array.isArray(data) ? data : [data]) as Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }>;
+      return <ShopifyOperationCard operations={ops} />;
+    }
+    case 'screenshot': {
+      const screenshots = (Array.isArray(data) ? data : [data]) as Array<{ url: string; storeDomain?: string; themeId?: string; path?: string; error?: string }>;
+      return <ScreenshotCard screenshots={screenshots} />;
+    }
+    case 'screenshot_comparison': {
+      const comp = data as { beforeUrl: string; afterUrl: string; diffPercentage?: number; threshold?: number; passed?: boolean };
+      return <ScreenshotCard comparison={comp} />;
+    }
+    case 'change_preview': {
+      const preview = data as { executionId: string; projectId: string; changes: Array<{ fileId: string; fileName: string; originalContent: string; proposedContent: string; reasoning: string }> };
+      return (
+        <ChangePreviewCard
+          executionId={preview.executionId}
+          projectId={preview.projectId}
+          changes={preview.changes}
+          onApproved={handlers.onChangeApproved}
+          onRejected={handlers.onChangeRejected}
+        />
+      );
+    }
+    case 'preview_nav':
+    default:
+      return null;
+  }
+}

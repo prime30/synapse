@@ -57,7 +57,7 @@ export function SocialProofSection() {
                   {testimonial.quote}&rdquo;
                 </p>
                 <footer className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 font-medium text-sm">
+                  <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent font-medium text-sm">
                     {testimonial.author[0]}
                   </div>
                   <div>
@@ -75,7 +75,7 @@ export function SocialProofSection() {
           <MagneticElement strength={6} radius={120}>
             <a
               href="/signup"
-              className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+              className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
             >
               Start Free
             </a>
@@ -86,3 +86,4 @@ export function SocialProofSection() {
     </motion.section>
   );
 }
+

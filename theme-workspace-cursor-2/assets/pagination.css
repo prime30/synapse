@@ -1,0 +1,69 @@
+.t4s-pagination-wrapper {
+    margin-bottom: 60px;
+}
+.t4s-has-btn-load-more .t4s-pagination-wrapper,
+.t4s-has-btn-infinite .t4s-pagination-wrapper {
+    padding-top: 40px; 
+}
+.t4s-pagination-wrapper .t4s-pagination__list {
+    display: inline-block;
+    vertical-align: top;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.t4s-pagination-wrapper .t4s-pagination__list li {
+    float: left;
+    margin: 0 5px;
+    color: var(--t4s-dark-color);
+    display: inline-block;
+    vertical-align: top;
+}
+.t4s-pagination__item {
+    min-width: 38px;
+    height: 38px;
+    line-height: 38px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: rgba(var(--text-color-rgb),0.35);
+    text-align: center;
+    color: var(--text-color);
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+    vertical-align: top;
+    border-radius: var(--other-radius);
+    background-color: transparent;
+}
+.t4s-pagination__list .pagination__item--current {
+    color: var(--t4s-light-color);
+    background-color: var(--t4s-dark-color);
+    border-color: var(--t4s-dark-color);
+}
+.t4s-pagination-wrapper > a,
+.t4s-pagination-wrapper > .t4s-pagination {
+    margin-top: 40px;
+}
+.t4s-pagination-wrapper .t4s-lm-bar + a {
+    margin-top: 0;
+}
+.t4s-pagination__item svg {
+    width: 10px;
+    height: 10px;
+    fill: currentColor;
+}
+.t4s-pagination-wrapper .t4s-btn-rounded-false {
+    border-radius: 0 !important;
+}
+@media (max-width: 767px) {
+    .t4s-pagination-wrapper {
+        margin-bottom: 40px;
+        margin-top: 20px;
+    }
+}
+@media (-moz-touch-enabled: 0), (hover: hover) and (min-width: 1025px) {  
+    .t4s-pagination__list li a:hover {
+        color: var(--t4s-dark-color);
+        border-color: var(--t4s-dark-color);
+    }
+}

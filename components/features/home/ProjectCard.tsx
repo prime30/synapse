@@ -10,7 +10,7 @@ const ROLE_BADGE: Record<string, { label: string; cls: string }> = {
   demo: { label: 'Demo', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
   unpublished: {
     label: 'Unpublished',
-    cls: 'bg-stone-500/20 text-gray-400 border-stone-500/40',
+    cls: 'bg-stone-500/20 ide-text-muted border-stone-500/40',
   },
 };
 
@@ -91,17 +91,17 @@ export const ProjectCard = React.memo(function ProjectCard({
 
   return (
     <div
-      className={`group relative rounded-lg overflow-hidden border transition-all cursor-pointer bg-gray-900/80 hover:scale-[1.02] ${
+      className={`group relative rounded-lg overflow-hidden border transition-all cursor-pointer ide-surface-panel hover:scale-[1.02] ${
         isActive
           ? 'ring-2 ring-sky-500/60 border-sky-500/40'
-          : 'border-gray-800 hover:border-sky-500/40'
+          : 'ide-border hover:border-sky-500/40'
       }`}
       onClick={() => !isRenaming && onSelect(project.id)}
     >
       {/* Thumbnail */}
-      <div className="aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-800 to-gray-700">
+      <div className="aspect-[16/10] overflow-hidden bg-gradient-to-br from-stone-800 to-stone-700">
         {isGeneratingThumbnail ? (
-          <div className="w-full h-full animate-pulse bg-gray-800" />
+          <div className="w-full h-full animate-pulse ide-surface-inset" />
         ) : thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -111,7 +111,7 @@ export const ProjectCard = React.memo(function ProjectCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <span className="text-2xl font-bold text-gray-500 select-none">
+            <span className="text-2xl font-bold ide-text-3 select-none">
               {getInitials(project.name)}
             </span>
           </div>
@@ -134,19 +134,19 @@ export const ProjectCard = React.memo(function ProjectCard({
               }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full text-sm font-medium text-gray-200 bg-transparent border-b border-sky-500 outline-none"
+            className="w-full text-sm font-medium ide-text bg-transparent border-b border-sky-500 outline-none"
           />
         ) : (
-          <p className="text-sm font-medium text-gray-200 truncate">{project.name}</p>
+          <p className="text-sm font-medium ide-text truncate">{project.name}</p>
         )}
         <div className="flex items-center gap-1.5 mt-0.5">
           {project.shopify_theme_name && (
-            <span className="text-xs text-gray-500 truncate">
+            <span className="text-xs ide-text-3 truncate">
               {project.shopify_theme_name}
             </span>
           )}
-          {project.shopify_theme_name && <span className="text-xs text-gray-600">&middot;</span>}
-          <span className="text-xs text-gray-500 shrink-0">
+          {project.shopify_theme_name && <span className="text-xs ide-text-3">&middot;</span>}
+          <span className="text-xs ide-text-3 shrink-0">
             {relativeTime(project.updated_at)}
           </span>
         </div>
@@ -160,14 +160,14 @@ export const ProjectCard = React.memo(function ProjectCard({
             setMenuOpen(!menuOpen);
             setConfirmDelete(false);
           }}
-          className="p-1.5 rounded-md bg-black/60 opacity-0 group-hover:opacity-100 hover:bg-black/80 text-gray-300 hover:text-white transition-all"
+          className="p-1.5 rounded-md bg-black/60 opacity-0 group-hover:opacity-100 hover:bg-black/80 ide-text-2 hover:text-white transition-all"
           aria-label="Project menu"
         >
           <MoreVertical size={14} />
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-8 w-48 py-1 rounded-lg bg-gray-900 border border-gray-700 shadow-xl z-10">
+          <div className="absolute right-0 top-8 w-48 py-1 rounded-lg ide-surface-panel border ide-border shadow-xl z-10">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -175,7 +175,7 @@ export const ProjectCard = React.memo(function ProjectCard({
                 setIsRenaming(true);
                 setRenameValue(project.name);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm ide-text-2 ide-hover hover:text-white transition-colors"
             >
               <Pencil size={14} /> Rename
             </button>
@@ -185,7 +185,7 @@ export const ProjectCard = React.memo(function ProjectCard({
                 setMenuOpen(false);
                 onArchive(project.id);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm ide-text-2 ide-hover hover:text-white transition-colors"
             >
               <Archive size={14} /> Archive
             </button>
@@ -195,11 +195,11 @@ export const ProjectCard = React.memo(function ProjectCard({
                 onRegenerateThumbnail(project.id);
                 setMenuOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm ide-text-2 ide-hover hover:text-white transition-colors"
             >
               <RefreshCw size={14} /> Regenerate Thumbnail
             </button>
-            <div className="my-1 border-t border-gray-700" />
+            <div className="my-1 border-t ide-border" />
             {confirmDelete ? (
               <div className="px-3 py-2 space-y-2">
                 <p className="text-xs text-red-400">Are you sure? This cannot be undone.</p>
@@ -220,7 +220,7 @@ export const ProjectCard = React.memo(function ProjectCard({
                       e.stopPropagation();
                       setConfirmDelete(false);
                     }}
-                    className="flex-1 px-2 py-1 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                    className="flex-1 px-2 py-1 text-xs rounded ide-surface-inset ide-text-2 ide-hover transition-colors"
                   >
                     Cancel
                   </button>
@@ -232,7 +232,7 @@ export const ProjectCard = React.memo(function ProjectCard({
                   e.stopPropagation();
                   setConfirmDelete(true);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 ide-hover hover:text-red-300 transition-colors"
               >
                 <Trash2 size={14} /> Delete
               </button>
@@ -256,13 +256,13 @@ export function NewProjectCard({ onClick }: NewProjectCardProps) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border-2 border-dashed border-gray-600 hover:border-sky-500/40 bg-gray-900/40 flex flex-col items-center justify-center gap-2 aspect-[16/10] cursor-pointer transition-all hover:scale-[1.02] group min-h-[180px]"
+      className="rounded-lg border-2 border-dashed ide-border-subtle hover:border-sky-500/40 bg-stone-900/40 flex flex-col items-center justify-center gap-2 aspect-[16/10] cursor-pointer transition-all hover:scale-[1.02] group min-h-[180px]"
     >
       <Plus
         size={32}
-        className="text-gray-500 group-hover:text-sky-400 transition-colors"
+        className="ide-text-3 group-hover:text-sky-400 transition-colors"
       />
-      <span className="text-sm text-gray-500 group-hover:text-gray-300 transition-colors">
+      <span className="text-sm ide-text-3 group-hover:text-stone-300 transition-colors">
         New Project
       </span>
     </button>

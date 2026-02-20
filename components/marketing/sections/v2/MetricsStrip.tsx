@@ -74,7 +74,7 @@ function MetricCard({ metric, index, inView }: { metric: Metric; index: number; 
       <span className="text-3xl font-semibold text-accent tabular-nums">
         {displayValue}
       </span>
-      <span className="text-sm text-stone-500 dark:text-white/50 mt-2 max-w-[200px] leading-snug">
+      <span className="text-sm text-stone-500 dark:text-white/50 mt-2 max-w-[160px] sm:max-w-[200px] leading-snug">
         {metric.label}
       </span>
     </motion.div>

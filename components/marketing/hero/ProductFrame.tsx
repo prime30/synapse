@@ -83,7 +83,7 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
             <div className="w-3 h-3 rounded-full bg-white/10" />
           </div>
           <div className="flex-1 text-center">
-            <span className="text-[11px] text-sky-500/80 font-mono">synapse.shop</span>
+            <span className="text-[11px] text-stone-500/80 dark:text-stone-400/80 font-mono">synapse.shop</span>
           </div>
         </div>
 
@@ -95,3 +95,5 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
     </motion.div>
   );
 }
+
+

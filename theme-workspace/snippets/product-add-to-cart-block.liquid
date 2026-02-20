@@ -1,0 +1,161 @@
+{%- comment -%}
+  Product Add to Cart Block
+  Renders the quantity selector, ATC button, dynamic checkout button,
+  notify-me button, and wishlist/compare buttons.
+  Must be rendered INSIDE a {% form 'product' %} block.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings (from form block)
+  - current_variant: {Object} Currently selected variant
+  - isProductAvailable: {Boolean} Product is available
+  - isExternal: {Boolean} Product has external link
+  - external_title: {String} External link title
+  - external_link: {String} External link URL
+  - isPreoder: {Boolean} Product is pre-order
+  - cus_qty: {Number} Custom minimum quantity
+  - PR_buy_pr: {Boolean} Show dynamic checkout button
+  - type: {String} Form type ('main' or 'main_sticky')
+  - payment_button_html: {String} Pre-rendered payment button HTML
+{%- endcomment -%}
+
+{%- liquid
+  assign current_variant_available = current_variant.available
+  assign current_inventory_quantity = current_variant.inventory_quantity
+  if current_variant.inventory_management != null and current_inventory_quantity > 0 and current_variant.inventory_policy != 'continue'
+    assign max_qty = current_inventory_quantity
+  else
+    assign max_qty = 9999
+  endif
+-%}
+
+{{ 'button-style.css' | asset_url | stylesheet_tag }}
+<link href="{{ 'custom-effect.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+
+<div
+  class="t4s-product-form__buttons"
+  style="--pr-btn-round: {{ bk_stts.pr_btn_round }}px;--wis-cp-btn-round: {{ bk_stts.wis_cp_btn_round }}px;"
+>
+  <div class="t4s-pr__qty_cart t4s-d-flex t4s-flex-wrap">
+    {%- if isExternal -%}
+      <a
+        href="{{ external_link }}"
+        rel="nofollow"
+        target="_blank"
+        class="t4s-product-form__submit t4s-btn t4s-btn-base t4s-btn-style-{{ bk_stts.button_style }} t4s-btn-color-{{ bk_stts.button_color }} t4s-w-100 t4s-justify-content-center {% if bk_stts.button_style == 'default' or bk_stts.button_style == 'outline' %} t4s-btn-effect-{{ bk_stts.button_effect }}{% endif %} t4s-truncate is--btn-external t4s-btn-loading__svg"
+      >
+        {%- if bk_stts.btn_icon -%}
+          <svg class="t4s-btn-icon" viewBox="0 0 24 24"><use xlink:href="#t4s-icon-atc"></use></svg>
+        {%- endif -%}
+        <span class="t4s-btn-atc_text">{{- external_title -}}</span>
+        <span class="t4s-loading__spinner" hidden>
+          <svg width="16" height="16" hidden class="t4s-svg-spinner" focusable="false" role="presentation" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+            <circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle>
+          </svg>
+        </span>
+      </a>
+
+    {%- else -%}
+      {%- if bk_stts.show_qty and isProductAvailable -%}
+        <div data-quantity-wrapper class="t4s-quantity-wrapper t4s-product-form__qty">
+          <button data-quantity-selector data-decrease-qty type="button" class="t4s-quantity-selector is--minus"></button>
+          <input
+            data-quantity-value
+            type="number"
+            class="t4s-quantity-input"
+            step="1"
+            min="{{ cus_qty }}"
+            max="{{ max_qty }}"
+            name="quantity"
+            value="{{ cus_qty }}"
+            size="4"
+            pattern="[0-9]*"
+            inputmode="numeric"
+          >
+          <button data-quantity-selector data-increase-qty type="button" class="t4s-quantity-selector is--plus"></button>
+        </div>
+      {%- else -%}
+        <input type="hidden" name="quantity" value="1">
+      {%- endif -%}
+
+      {% if customer %}
+        <button
+          data-animation-atc='{ "ani": "{{ bk_stts.ani }}","time": {{ bk_stts.time }}000 }'
+          type="submit"
+          name="add"
+          data-atc-form
+          class="t4s-product-form__submit t4s-btn t4s-btn-base t4s-btn-style-{{ bk_stts.button_style }} t4s-btn-color-{{ bk_stts.button_color }} t4s-w-100 t4s-justify-content-center {% if bk_stts.button_style == 'default' or bk_stts.button_style == 'outline' %} t4s-btn-effect-{{ bk_stts.button_effect }}{% endif %} t4s-btn-loading__svg"
+          {% unless current_variant_available %}aria-disabled="true"{% endunless %}
+          {% unless isProductAvailable %}disabled="disabled"{% endunless %}
+        >
+          {%- if bk_stts.btn_icon -%}
+            <svg class="t4s-btn-icon" viewBox="0 0 24 24"><use xlink:href="#t4s-icon-atc"></use></svg>
+          {%- endif -%}
+          <span class="t4s-btn-atc_text">
+            {%- if current_variant_available == false or isProductAvailable == false -%}
+              {{- 'products.product.sold_out' | t -}}
+            {%- elsif isPreoder -%}
+              {{- 'products.product.pre_order' | t }}
+            {%- else -%}
+              {{ 'products.product.add_to_cart' | t }}
+            {%- endif -%}
+          </span>
+          <span class="t4s-loading__spinner" hidden>
+            <svg width="16" height="16" hidden class="t4s-svg-spinner" focusable="false" role="presentation" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+              <circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle>
+            </svg>
+          </span>
+        </button>
+      {% else %}
+        <a
+          href="/account/login"
+          onclick="rememberPage(event)"
+          data-drawer-delay-
+          data-drawer-options='{ "id": "#t4s-login-sidebar" }'
+          class="atc-btn t4s-btn t4s-btn-base t4s-btn-style-default t4s-btn-color-dark t4s-w-100 t4s-justify-content-center t4s-btn-effect-sweep-to-right t4s-btn-loading__svg"
+        >
+          <svg class="t4s-btn-icon" viewBox="0 0 24 24" style="margin-right:4px"><use xlink:href="#t4s-icon-atc"></use></svg>
+          <span class="t4s-btn-atc_text">Login to Shop</span>
+          <span class="t4s-loading__spinner" hidden="">
+            <svg width="16" height="16" hidden="" class="t4s-svg-spinner" focusable="false" role="presentation" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+              <circle class="t4s-path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle>
+            </svg>
+          </span>
+        </a>
+      {% endif %}
+    {%- endif -%}
+  </div>
+
+  {%- if PR_buy_pr and type != 'main_sticky' -%}
+    {{ payment_button_html }}
+  {%- endif -%}
+
+  {%- if settings.use_notify_me -%}
+    {% if customer -%}
+      <button
+        data-class="t4s-mfp-btn-close-inline"
+        data-id="t4s-pr-popup__notify-stock"
+        data-storageid="notify-stock{{ current_variant.id }}"
+        data-mfp-src
+        data-open-mfp-ajax
+        class="t4s-pr__notify-stock{% if current_variant_available or current_variant == blank %} t4s-d-none{% endif %}"
+        type="button"
+        data-notify-stock-btn
+        data-variant-id="{{ current_variant.id }}"
+        data-root-url="{{ routes.root_url }}"
+      >
+        {{ 'products.notify_stock.trigger' | t }}
+      </button>
+    {%- endif %}
+  {%- endif -%}
+
+  {%- if bk_stts.enable_wishlist or bk_stts.enable_compare -%}
+    <div class="t4s-pr__wis_cp">
+      {%- render 't4s_wis_cp', product: product, bk_stts: bk_stts, disableTooltip: true -%}
+    </div>
+  {%- endif -%}
+</div>
+
+{%- if bk_stts.ani != 'none' -%}
+  <link href="{{ 'ani-atc.min.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- endif -%}

@@ -26,9 +26,10 @@ import { JavaScriptAgent } from './specialists/javascript';
 import { CSSAgent } from './specialists/css';
 import { JSONAgent } from './specialists/json';
 import { ReviewAgent } from './review';
-import type { AgentExecuteOptions, AgentUsage } from './base';
+import { isToolProvider, type AgentExecuteOptions, type AgentUsage } from './base';
 import type { AIAction } from './model-router';
-import { getProviderForModel } from './model-router';
+import { getProviderForModel, resolveModel } from './model-router';
+import { getAIProvider } from '@/lib/ai/get-provider';
 import {
   classifyRequest,
   escalateTier,
@@ -37,7 +38,8 @@ import {
   type ClassificationResult,
 } from './classifier';
 import { AIProviderError } from '@/lib/ai/errors';
-import { DependencyDetector, ContextCache } from '@/lib/context';
+import { DependencyDetector, ContextCache, CodexContextPackager } from '@/lib/context';
+import type { ProposedChange } from '@/lib/context/packager';
 import type {
   FileContext as ContextFileContext,
   ProjectContext,
@@ -47,7 +49,6 @@ import { DesignSystemContextProvider } from '@/lib/design-tokens/agent-integrati
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
 import { ContextEngine } from '@/lib/ai/context-engine';
 import { validateChangeSet } from './validation/change-set-validator';
-import { checkLiquid, checkCSS, checkJavaScript, type SyntaxError as AgentSyntaxError } from './validation/syntax-checker';
 import { runDiagnostics, formatDiagnostics } from './tools/diagnostics-tool';
 import { createTwoFilesPatch } from 'diff';
 import { estimateTokens } from '@/lib/ai/token-counter';
@@ -57,12 +58,33 @@ import {
   parseClarificationFromAnalysis,
   formatClarificationForPrompt,
   MAX_CLARIFICATION_ROUNDS,
-  type ClarificationRequest,
 } from './clarification';
-import { verifyChanges, type VerificationResult } from './verification';
+import { verifyChanges } from './verification';
 import { saveAfterPM, saveAfterSpecialist, saveAfterReview, clearCheckpoint } from './checkpoint';
 import { compareSnapshots, type DOMSnapshot as VerifierDOMSnapshot, type PreviewVerificationResult } from './preview-verifier';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
+import type { AIMessage, AIToolCompletionResult, ToolStreamEvent, ToolStreamResult, ToolDefinition, ToolResult, ToolCall as AIToolCall } from '@/lib/ai/types';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
+import {
+  PM_EXPLORATION_TOOLS,
+  PROPOSE_CODE_EDIT_TOOL,
+  SEARCH_REPLACE_TOOL,
+  PROPOSE_PLAN_TOOL,
+  CREATE_FILE_TOOL,
+  ASK_CLARIFICATION_TOOL,
+  NAVIGATE_PREVIEW_TOOL,
+  AGENT_TOOLS,
+  CHECK_LINT_TOOL,
+} from './tools/definitions';
+import { executeToolCall, type ToolExecutorContext } from './tools/tool-executor';
+import {
+  ASK_DIRECT_PROMPT,
+  AGENT_BASE_PROMPT,
+  AGENT_CODE_OVERLAY,
+  AGENT_PLAN_OVERLAY,
+  AGENT_DEBUG_OVERLAY,
+} from './prompts';
+import { enforceRequestBudget } from '@/lib/ai/request-budget';
 
 // ── Cross-file context helpers (REQ-5) ────────────────────────────────
 
@@ -258,11 +280,11 @@ export function findFilesFromElementHint(hint: ElementHint, files: FileContext[]
  * 4. Hydrates selected files via loadContent
  * 5. Returns the hydrated selection + remaining stubs for manifest
  */
-function selectPMFiles(
+async function selectPMFiles(
   files: FileContext[],
   userRequest: string,
   options?: CoordinatorExecuteOptions,
-): FileContext[] {
+): Promise<FileContext[]> {
   contextEngine.indexFiles(files);
 
   const openTabIds = options?.openTabs ?? [];
@@ -330,7 +352,7 @@ function selectPMFiles(
 
   // Hydrate selected files via loadContent (if available)
   if (loadContent && pmSelectedIds.size > 0) {
-    const hydratedFiles = loadContent([...pmSelectedIds]);
+    const hydratedFiles = await loadContent([...pmSelectedIds]);
     const hydratedMap = new Map(hydratedFiles.map(f => [f.fileId, f]));
 
     const result = files.map(f => hydratedMap.get(f.fileId) ?? f);
@@ -347,15 +369,329 @@ function selectPMFiles(
   );
 }
 
+// ── Signal-based file context (Cursor-like architecture) ─────────────────
+
+export interface SignalContext {
+  /** Files with full content pre-loaded into the system prompt. */
+  preloaded: FileContext[];
+  /** Compact manifest of all other files (name, type, size) for tool-based loading. */
+  manifest: string;
+  /** All files (for tool executor context). */
+  allFiles: FileContext[];
+}
+
+// ── Stream fallback helpers ─────────────────────────────────────────
+
+/** Timeout (ms) for the first byte of a streamWithTools() response. 0 = disabled. */
+function getStreamFirstByteTimeout(): number {
+  return Number(process.env.STREAM_FIRST_BYTE_TIMEOUT_MS ?? 30_000);
+}
+
+/**
+ * Persistent stream health flag: once streaming fails in this process,
+ * skip the 30s race for subsequent requests until the TTL expires.
+ * Prevents paying the timeout penalty on every request.
+ */
+const STREAM_HEALTH_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let streamHealthBroken = false;
+let streamHealthBrokenAt = 0;
+
+function isStreamingBroken(): boolean {
+  if (!streamHealthBroken) return false;
+  if (Date.now() - streamHealthBrokenAt > STREAM_HEALTH_TTL_MS) {
+    streamHealthBroken = false;
+    streamHealthBrokenAt = 0;
+    console.log('[StreamHealth] TTL expired — will retry streaming');
+    return false;
+  }
+  return true;
+}
+
+function markStreamingBroken(): void {
+  streamHealthBroken = true;
+  streamHealthBrokenAt = Date.now();
+  console.warn('[StreamHealth] Streaming marked broken (TTL=5m)');
+}
+
+/**
+ * Race streamWithTools() against a first-byte timeout. If no ToolStreamEvent
+ * arrives within `timeoutMs`, abort and return null so the caller can fall back
+ * to completeWithTools().
+ */
+async function raceFirstByte(
+  streamResult: ToolStreamResult,
+  timeoutMs: number,
+): Promise<ToolStreamResult | null> {
+  if (timeoutMs <= 0) return streamResult; // disabled
+
+  const reader = streamResult.stream.getReader();
+  let firstEvent: ToolStreamEvent | null = null;
+
+  const readPromise = reader.read().then(({ done, value }) => {
+    if (done) return null;
+    return value ?? null;
+  });
+
+  const timeoutPromise = new Promise<'timeout'>((resolve) =>
+    setTimeout(() => resolve('timeout'), timeoutMs),
+  );
+
+  const winner = await Promise.race([readPromise, timeoutPromise]);
+
+  if (winner === 'timeout') {
+    try { reader.cancel(); } catch { /* ignore */ }
+    reader.releaseLock();
+    return null;
+  }
+
+  firstEvent = winner as ToolStreamEvent | null;
+  reader.releaseLock();
+
+  if (!firstEvent) return streamResult; // stream closed immediately (empty)
+
+  // Build a new stream that emits the first event, then pipes the rest
+  const originalStream = streamResult.stream;
+  const prependedStream = new ReadableStream<ToolStreamEvent>({
+    async start(controller) {
+      controller.enqueue(firstEvent!);
+      const innerReader = originalStream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await innerReader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        innerReader.releaseLock();
+        controller.close();
+      }
+    },
+  });
+
+  return {
+    stream: prependedStream,
+    getUsage: streamResult.getUsage,
+    getStopReason: streamResult.getStopReason,
+    getRawContentBlocks: streamResult.getRawContentBlocks,
+  };
+}
+
+/**
+ * Convert a completeWithTools() batch result into a synthetic ToolStreamResult.
+ * This lets the agent loop consume the result identically to a real stream.
+ */
+function synthesizeToolStream(
+  result: AIToolCompletionResult & { __rawContentBlocks?: unknown[] },
+): ToolStreamResult {
+  const events: ToolStreamEvent[] = [];
+
+  // Emit text content as chunked text_delta events (~100 chars each)
+  if (result.content) {
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < result.content.length; i += CHUNK_SIZE) {
+      events.push({ type: 'text_delta', text: result.content.slice(i, i + CHUNK_SIZE) });
+    }
+  }
+
+  // Emit tool calls as tool_start + tool_end pairs
+  if (result.toolCalls) {
+    for (const tc of result.toolCalls) {
+      events.push({ type: 'tool_start', id: tc.id, name: tc.name });
+      events.push({ type: 'tool_end', id: tc.id, name: tc.name, input: tc.input });
+    }
+  }
+
+  const stream = new ReadableStream<ToolStreamEvent>({
+    start(controller) {
+      for (const e of events) controller.enqueue(e);
+      controller.close();
+    },
+  });
+
+  const stopReason = result.stopReason ?? 'end_turn';
+  const rawBlocks = result.__rawContentBlocks ?? [];
+  const usage = { inputTokens: result.inputTokens ?? 0, outputTokens: result.outputTokens ?? 0 };
+
+  return {
+    stream,
+    getUsage: async () => usage,
+    getStopReason: async () => stopReason,
+    getRawContentBlocks: async () => rawBlocks,
+  };
+}
+
+/**
+ * Build signal-based file context for the streaming agent loop.
+ * Pre-loads only high-confidence files (active, pinned, open tabs, element hint + deps).
+ * Everything else goes into a compact manifest the LLM can search/read via tools.
+ */
+/**
+ * Compress tool results from old iterations to save tokens.
+ * Keeps the last `keepRecent` iterations' tool results intact;
+ * older results are truncated to a short summary line.
+ */
+function compressOldToolResults(messages: AIMessage[], keepRecent: number = 2): void {
+  // Walk backwards to find tool-result messages; keep the last `keepRecent` fresh
+  let recentToolMsgCount = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as unknown as Record<string, unknown>;
+    if (!msg.__toolResults) continue;
+    recentToolMsgCount++;
+    if (recentToolMsgCount <= keepRecent) continue;
+
+    // Old iteration — compress each tool result's content
+    const results = msg.__toolResults as Array<{ type: string; tool_use_id: string; content: string; is_error?: boolean }>;
+    for (const result of results) {
+      if (!result.content || result.content.length <= 200) continue;
+      const firstLine = result.content.split('\n')[0].slice(0, 120);
+      const lineCount = result.content.split('\n').length;
+      result.content = `${firstLine}... [${lineCount} lines, ${result.content.length} chars — re-call tool for full output]`;
+    }
+  }
+}
+
+/**
+ * Truncate large files for pre-loading to save tokens.
+ * Keeps head (80 lines), optional cursor region (+/- 30 lines), and tail (30 lines).
+ * Files under MAX_PRELOAD_LINES are returned unchanged.
+ */
+const MAX_PRELOAD_LINES = 200;
+
+function truncateForPreload(content: string, cursorLine?: number): string {
+  const lines = content.split('\n');
+  if (lines.length <= MAX_PRELOAD_LINES) return content;
+
+  const HEAD = 80;
+  const TAIL = 30;
+  const CURSOR_RADIUS = 30;
+  const head = lines.slice(0, HEAD);
+  const tail = lines.slice(-TAIL);
+
+  if (cursorLine && cursorLine > HEAD && cursorLine < lines.length - TAIL) {
+    const cursorStart = Math.max(HEAD, cursorLine - CURSOR_RADIUS);
+    const cursorEnd = Math.min(lines.length - TAIL, cursorLine + CURSOR_RADIUS);
+    const cursorSection = lines.slice(cursorStart, cursorEnd);
+    const omitted1 = cursorStart - HEAD;
+    const omitted2 = (lines.length - TAIL) - cursorEnd;
+    return [
+      ...head,
+      `\n[... ${omitted1} lines omitted — use read_file for full content ...]\n`,
+      ...cursorSection,
+      `\n[... ${omitted2} lines omitted ...]\n`,
+      ...tail,
+    ].join('\n');
+  }
+
+  const omitted = lines.length - HEAD - TAIL;
+  return [
+    ...head,
+    `\n[... ${omitted} lines omitted — use read_file for full content ...]\n`,
+    ...tail,
+  ].join('\n');
+}
+
+export async function buildSignalContext(
+  files: FileContext[],
+  options?: CoordinatorExecuteOptions,
+): Promise<SignalContext> {
+  const preloadIds = new Set<string>();
+
+  // Signal 1: Active file (highest priority)
+  if (options?.activeFilePath) {
+    const active = files.find(
+      f => f.path === options.activeFilePath || f.fileName === options.activeFilePath
+    );
+    if (active) preloadIds.add(active.fileId);
+  }
+
+  // Signal 2: Explicit/pinned files (user-dragged into chat)
+  for (const path of options?.explicitFiles ?? []) {
+    const match = files.find(f => f.path === path || f.path === '/' + path || f.fileName === path);
+    if (match) preloadIds.add(match.fileId);
+  }
+
+  // Signal 3: Open editor tabs
+  for (const tabId of options?.openTabs ?? []) {
+    preloadIds.add(tabId);
+  }
+
+  // Signal 4: Element hint files (preview selection)
+  if (options?.elementHint) {
+    const elementIds = findFilesFromElementHint(options.elementHint, files);
+    for (const id of elementIds) preloadIds.add(id);
+  }
+
+  // Signal 5: Resolve direct dependencies for all signal files
+  if (preloadIds.size > 0) {
+    contextEngine.indexFiles(files);
+    const withDeps = contextEngine.resolveWithDependencies([...preloadIds]);
+    for (const depId of withDeps) preloadIds.add(depId);
+  }
+
+  // Cap at 8 pre-loaded files to keep initial context manageable
+  const MAX_PRELOAD = 8;
+  const preloadArray = [...preloadIds].slice(0, MAX_PRELOAD);
+
+  // Hydrate pre-loaded files via loadContent
+  let preloaded: FileContext[];
+  if (options?.loadContent && preloadArray.length > 0) {
+    const hydrated = await options.loadContent(preloadArray);
+    const hydratedMap = new Map(hydrated.map(f => [f.fileId, f]));
+    preloaded = preloadArray
+      .map(id => hydratedMap.get(id) ?? files.find(f => f.fileId === id))
+      .filter((f): f is FileContext => !!f);
+  } else {
+    preloaded = preloadArray
+      .map(id => files.find(f => f.fileId === id))
+      .filter((f): f is FileContext => !!f);
+  }
+
+  // Truncate large pre-loaded files to save tokens (agent can read_file for full content)
+  const activeFilePath = options?.activeFilePath;
+  for (const f of preloaded) {
+    if (f.content) {
+      // If this is the active file, try to preserve cursor region (no cursor line available here)
+      f.content = truncateForPreload(f.content, f.path === activeFilePath ? undefined : undefined);
+    }
+  }
+
+  // Build compact manifest for remaining files
+  const preloadSet = new Set(preloaded.map(f => f.fileId));
+  const manifestFiles = files.filter(f => !preloadSet.has(f.fileId));
+  const manifestLines = manifestFiles
+    .sort((a, b) => a.fileName.localeCompare(b.fileName))
+    .map(f => {
+      // Parse actual size from stub format "[N chars]" instead of using stub string length
+      const stubMatch = f.content?.match(/^\[(\d+)\s+chars\]$/);
+      const sizeBytes = stubMatch ? parseInt(stubMatch[1], 10) : (f.content?.length ?? 0);
+      const size = `${(sizeBytes / 1024).toFixed(1)}KB`;
+      return `- ${f.fileName} (${f.fileType}, ${size})`;
+    });
+
+  const manifest = [
+    `## Theme Files (${files.length} total, ${preloaded.length} pre-loaded)`,
+    '',
+    ...manifestLines,
+    '',
+    'Use `read_file` to load any file. Use `grep_content` to search across all files.',
+  ].join('\n');
+
+  return { preloaded, manifest, allFiles: files };
+}
+
 // ── p0 Architectural Principles ──────────────────────────────────────────
 
 /**
  * File Context Rule: Reject code changes to files that aren't loaded in context.
  * This prevents agents from hallucinating changes to files they haven't seen.
+ * The optional `readFiles` set allows dynamically read files (via read_file tool) to also pass.
  */
 function enforceFileContextRule(
   changes: CodeChange[],
   contextFiles: FileContext[],
+  readFiles?: Set<string>,
 ): { allowed: CodeChange[]; rejected: CodeChange[] } {
   const contextFileNames = new Set(contextFiles.map((f) => f.fileName));
   const contextFileIds = new Set(contextFiles.map((f) => f.fileId));
@@ -364,7 +700,10 @@ function enforceFileContextRule(
   const rejected: CodeChange[] = [];
 
   for (const change of changes) {
-    if (contextFileNames.has(change.fileName) || contextFileIds.has(change.fileId)) {
+    const isNewFile = change.fileId.startsWith('new_');
+    const inContext = contextFileNames.has(change.fileName) || contextFileIds.has(change.fileId);
+    const wasRead = readFiles?.has(change.fileName) || readFiles?.has(change.fileId);
+    if (isNewFile || inContext || wasRead) {
       allowed.push(change);
     } else {
       rejected.push(change);
@@ -372,14 +711,6 @@ function enforceFileContextRule(
   }
 
   return { allowed, rejected };
-}
-
-/** Route syntax validation to the correct checker based on file type. */
-function validateSyntaxByType(fileName: string, content: string): AgentSyntaxError[] {
-  if (fileName.endsWith('.liquid')) return checkLiquid(content);
-  if (fileName.endsWith('.css')) return checkCSS(content);
-  if (fileName.endsWith('.js')) return checkJavaScript(content);
-  return [];
 }
 
 /** Format changes for the review agent using patches or unified diffs. */
@@ -436,6 +767,8 @@ export interface ThinkingEvent {
   agent?: string;
   analysis?: string;
   summary?: string;
+  /** Granular sub-phase within the rail phase (e.g. 'analyzing_files', 'specialist_liquid'). */
+  subPhase?: import('@/lib/agents/phase-mapping').SubPhase;
   metadata?: Record<string, unknown>;
   /** Diagnostics event fields (type: 'diagnostics') */
   file?: string;
@@ -455,8 +788,10 @@ export interface CoordinatorExecuteOptions {
   action?: AIAction;
   /** User's preferred model override (from useAgentSettings). */
   model?: string;
-  /** Execution mode: orchestrated (multi-agent) or solo (PM only). */
+  /** @deprecated Use subagentMode instead. */
   mode?: 'orchestrated' | 'solo';
+  /** Subagent dispatch mode: 'specialist' uses domain agents (Liquid/CSS/JS/JSON), 'general' uses general-purpose subagents. */
+  subagentMode?: 'specialist' | 'general';
   /** DOM context from preview bridge. */
   domContext?: string;
   /** Developer memory context (formatted string). */
@@ -467,6 +802,8 @@ export interface CoordinatorExecuteOptions {
   onProgress?: ProgressCallback;
   /** If true, return after PM analysis without delegating to specialists. */
   planOnly?: boolean;
+  /** Intent mode from the UI — shapes agent behavior (preference, not capability gate). */
+  intentMode?: 'code' | 'ask' | 'plan' | 'debug';
   /** Active file path from the editor. */
   activeFilePath?: string;
   /** Open tab file IDs for priority context selection. */
@@ -497,6 +834,27 @@ export interface CoordinatorExecuteOptions {
   explicitFiles?: string[];
   /** Phase 8a: Maximum number of specialist agents to run in parallel. */
   maxAgents?: number;
+  /**
+   * When provided, LLM output is streamed token-by-token via this callback.
+   * Each call includes the agent name and the text chunk.
+   */
+  onReasoningChunk?: (agent: string, chunk: string) => void;
+  /** Stream content tokens directly to the client (for conversational fast paths like Ask mode). */
+  onContentChunk?: (chunk: string) => void;
+  /** Stream tool lifecycle events to the client (tool_start, tool_call with results). */
+  onToolEvent?: (event: AgentToolEvent) => void;
+}
+
+/** Tool event emitted from the streaming agent loop to the client via SSE. */
+export interface AgentToolEvent {
+  type: 'tool_start' | 'tool_call';
+  name: string;
+  id?: string;
+  input?: Record<string, unknown>;
+  /** Included for server-executed tools (the LLM used the result; client renders a card). */
+  result?: unknown;
+  /** True if the tool execution failed. */
+  isError?: boolean;
 }
 
 // ── Usage tracking types ────────────────────────────────────────────────
@@ -531,6 +889,10 @@ export class AgentCoordinator {
   private pm: ProjectManagerAgent;
   private specialists: Record<string, LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent>;
   private reviewer: ReviewAgent;
+  /** Pool of PM instances for general subagent mode. Lazily initialized. */
+  private generalSubagents: ProjectManagerAgent[] = [];
+  /** Maps fileName -> general subagent index for re-invocation during verification/diagnostics. */
+  private subagentAssignments = new Map<string, number>();
 
   constructor() {
     this.pm = new ProjectManagerAgent();
@@ -538,6 +900,7 @@ export class AgentCoordinator {
     // EPIC C: Try registry first, fall back to hardcoded specialists
     let registrySpecialists: Record<string, LiquidAgent | JavaScriptAgent | CSSAgent | JSONAgent> | null = null;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic require for optional registry
       const { getAgentRegistry } = require('./registry');
       const registry = getAgentRegistry();
       const allAgents = registry.getEnabled();
@@ -558,6 +921,265 @@ export class AgentCoordinator {
       json: new JSONAgent(),
     };
     this.reviewer = new ReviewAgent();
+  }
+
+  /**
+   * Initialize the general subagent pool for Cursor-style parallel execution.
+   * Each subagent is a PM instance that uses the general subagent prompt.
+   */
+  private initGeneralSubagents(count: number): void {
+    this.generalSubagents = [];
+    this.subagentAssignments.clear();
+    for (let i = 0; i < count; i++) {
+      this.generalSubagents.push(new ProjectManagerAgent());
+    }
+  }
+
+  /**
+   * Resolve the agent responsible for a file change, supporting both specialist
+   * and general subagent modes. Used for verification and diagnostics re-invocation.
+   */
+  private resolveAgentForChange(change: { agentType: string; fileName: string }): {
+    agent: { execute: (task: AgentTask, opts?: AgentExecuteOptions) => Promise<AgentResult> };
+    id: string;
+    isGeneral: boolean;
+  } | null {
+    if (change.agentType.startsWith('general')) {
+      const idx = this.subagentAssignments.get(change.fileName);
+      if (idx !== undefined && this.generalSubagents[idx]) {
+        return { agent: this.generalSubagents[idx], id: `general_${idx + 1}`, isGeneral: true };
+      }
+      return this.generalSubagents[0] ? { agent: this.generalSubagents[0], id: 'general_1', isGeneral: true } : null;
+    }
+    const specialist = this.specialists[change.agentType];
+    return specialist ? { agent: specialist, id: change.agentType, isGeneral: false } : null;
+  }
+
+  /**
+   * Execute a fix task using the correct prompt for the agent type.
+   * General subagents use executeDirectPrompt with the general subagent system prompt;
+   * specialists use the standard execute() method.
+   */
+  private async executeFixTask(
+    resolved: { agent: { execute: (task: AgentTask, opts?: AgentExecuteOptions) => Promise<AgentResult> }; id: string; isGeneral: boolean },
+    task: AgentTask,
+    options: AgentExecuteOptions,
+  ): Promise<AgentResult> {
+    if (resolved.isGeneral) {
+      const pmInstance = resolved.agent as ProjectManagerAgent;
+      const prompt = pmInstance.formatGeneralSubagentPrompt(task);
+      const systemPrompt = pmInstance.getGeneralSubagentSystemPrompt();
+      const raw = await pmInstance.executeDirectPrompt(prompt, systemPrompt, options);
+      const result = pmInstance.parseResponse(raw, task);
+      if (result.changes) {
+        for (const c of result.changes) {
+          c.agentType = resolved.id as AgentType;
+        }
+      }
+      result.agentType = resolved.id as AgentType;
+      return result;
+    }
+    return resolved.agent.execute(task, options);
+  }
+
+  /**
+   * Run the PM exploration phase: the PM uses read-only tools (read_file,
+   * search_files, grep_content, check_lint) to gather additional context
+   * before making its JSON decision. Returns a context string with tool
+   * results that gets injected into the PM's decision prompt.
+   *
+   * Feature-gated by AI_FEATURES.pmExplorationTools.
+   */
+  private async runPMExploration(
+    files: FileContext[],
+    userRequest: string,
+    options: {
+      projectId: string;
+      userId: string;
+      loadContent?: LoadContentFn;
+      onProgress?: (event: ThinkingEvent) => void;
+      onReasoningChunk?: (agent: string, chunk: string) => void;
+      model?: string;
+      tier?: RoutingTier;
+      action?: AIAction;
+    },
+  ): Promise<{ explorationContext: string; usedTools: boolean }> {
+    console.log('[PM-Exploration] Feature flag:', AI_FEATURES.pmExplorationTools);
+    if (!AI_FEATURES.pmExplorationTools) {
+      console.log('[PM-Exploration] Skipped — feature flag disabled');
+      return { explorationContext: '', usedTools: false };
+    }
+
+    console.log('[PM-Exploration] Starting — files:', files.length, 'request:', userRequest.slice(0, 80));
+    const EXPLORATION_TIMEOUT_MS = 30_000;
+    const MAX_EXPLORATION_ITERATIONS = 5;
+
+    const toolCtx: ToolExecutorContext = {
+      files,
+      contextEngine,
+      projectId: options.projectId,
+      userId: options.userId,
+      loadContent: options.loadContent,
+    };
+
+    const explorationPrompt = [
+      `You are a Shopify theme expert. The user wants: "${userRequest}"`,
+      '',
+      'Before making any decisions, explore the codebase to understand the current state.',
+      'Use tools to read files, search for patterns, and check syntax as needed.',
+      'When you have gathered enough context, respond with a summary of what you found.',
+      '',
+      'Available files in context:',
+      files.slice(0, 30).map(f => `- ${f.fileName} (${f.fileType})`).join('\n'),
+      files.length > 30 ? `... and ${files.length - 30} more files` : '',
+    ].join('\n');
+
+    const explorationSystemPrompt = [
+      'You are in exploration mode. Your ONLY job is to gather context.',
+      'Use the provided tools to read files and search the codebase.',
+      'Do NOT propose any code changes. Just explore and summarize.',
+      'Be efficient — only read files that are directly relevant.',
+      'When done, provide a concise summary of your findings.',
+    ].join('\n');
+
+    options.onProgress?.({
+      type: 'thinking',
+      phase: 'analyzing',
+      subPhase: 'exploring',
+      label: 'Exploring codebase',
+      detail: 'Reading relevant files before making decisions',
+    });
+
+    const toolResults: string[] = [];
+    let usedTools = false;
+
+    try {
+      const model = resolveModel({
+        action: options.action,
+        userOverride: options.model,
+        agentRole: 'project_manager',
+        tier: options.tier,
+      });
+      const providerName = getProviderForModel(model);
+      const provider = getAIProvider(providerName as Parameters<typeof getAIProvider>[0]);
+
+      if (!isToolProvider(provider)) {
+        console.log('[PM-Exploration] Provider does not support tools, skipping');
+        return { explorationContext: '', usedTools: false };
+      }
+
+      console.log('[PM-Exploration] Using model:', model, 'provider:', providerName);
+
+      const messages: AIMessage[] = [
+        { role: 'system', content: explorationSystemPrompt },
+        { role: 'user', content: explorationPrompt },
+      ];
+
+      const timeoutAt = Date.now() + EXPLORATION_TIMEOUT_MS;
+
+      for (let i = 0; i < MAX_EXPLORATION_ITERATIONS; i++) {
+        if (Date.now() > timeoutAt) {
+          console.log('[PM-Exploration] Timeout reached at iteration', i);
+          toolResults.push('[Exploration timeout — proceeding with gathered context]');
+          break;
+        }
+
+        const result = await provider.completeWithTools(
+          messages,
+          PM_EXPLORATION_TOOLS,
+          { model, maxTokens: 2048 },
+        );
+
+        console.log('[PM-Exploration] Iteration', i, '— stopReason:', result.stopReason, 'toolCalls:', result.toolCalls?.length ?? 0);
+
+        if (result.stopReason === 'end_turn' || !result.toolCalls?.length) {
+          if (result.content) {
+            console.log('[PM-Exploration] Final summary received (%d chars)', result.content.length);
+            toolResults.push(result.content);
+          }
+          break;
+        }
+
+        usedTools = true;
+
+        for (const tc of result.toolCalls) {
+          console.log('[PM-Exploration] Tool call:', tc.name, JSON.stringify(tc.input).slice(0, 120));
+          options.onProgress?.({
+            type: 'thinking',
+            phase: 'analyzing',
+            subPhase: 'exploring',
+            label: `Exploring: ${tc.name}`,
+            detail: tc.name === 'read_file'
+              ? `Reading ${String(tc.input.fileId ?? '')}`
+              : tc.name === 'grep_content'
+                ? `Searching for "${String(tc.input.pattern ?? '')}"`
+                : tc.name === 'check_lint'
+                  ? `Checking ${String(tc.input.fileName ?? '')}`
+                  : String(tc.input.query ?? tc.input.fileId ?? ''),
+          });
+
+          options.onReasoningChunk?.('project_manager', `\n[tool: ${tc.name}] `);
+
+          const toolResult = await Promise.resolve(executeToolCall(tc, toolCtx));
+          const truncatedContent = toolResult.content.length > 8000
+            ? toolResult.content.slice(0, 8000) + `\n\n... [truncated — showing 8000 of ${toolResult.content.length} chars]`
+            : toolResult.content;
+          toolResults.push(`[${tc.name}] ${truncatedContent}`);
+        }
+
+        // Append assistant + tool results for next iteration
+        messages.push({
+          role: 'assistant',
+          content: result.content || '',
+          __toolCalls: (result as AIToolCompletionResult & { __rawContentBlocks?: unknown }).__rawContentBlocks,
+        } as AIMessage & { __toolCalls: unknown });
+
+        messages.push({
+          role: 'user',
+          content: '',
+          __toolResults: result.toolCalls.map((tc, idx) => ({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            content: toolResults[toolResults.length - result.toolCalls!.length + idx] ?? '',
+            is_error: false,
+          })),
+        } as AIMessage & { __toolResults: unknown });
+      }
+    } catch (err) {
+      console.warn('[Coordinator] PM exploration failed, proceeding without:', err);
+      options.onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        subPhase: 'exploring',
+        label: 'Exploration skipped',
+        detail: 'Proceeding with pre-loaded context',
+      });
+      return { explorationContext: '', usedTools: false };
+    }
+
+    if (toolResults.length === 0) {
+      console.log('[PM-Exploration] No results gathered, skipping injection');
+      return { explorationContext: '', usedTools: false };
+    }
+
+    const explorationContext = [
+      '## Exploration Results',
+      'The following information was gathered by exploring the codebase:',
+      '',
+      ...toolResults,
+    ].join('\n');
+
+    console.log('[PM-Exploration] Done — usedTools:', usedTools, 'results:', toolResults.length, 'contextLen:', explorationContext.length);
+
+    options.onProgress?.({
+      type: 'thinking',
+      phase: 'analyzing',
+      subPhase: 'exploring',
+      label: usedTools ? 'Exploration complete' : 'Context gathered',
+      detail: `Gathered ${toolResults.length} piece(s) of additional context`,
+    });
+
+    return { explorationContext, usedTools };
   }
 
   /**
@@ -583,6 +1205,10 @@ export class AgentCoordinator {
 
     for (const [name, agent] of Object.entries(this.specialists)) {
       collect(name, agent.getLastUsage());
+    }
+
+    for (let i = 0; i < this.generalSubagents.length; i++) {
+      collect(`general_${i + 1}`, this.generalSubagents[i].getLastUsage());
     }
 
     collect('review', this.reviewer.getLastUsage());
@@ -680,6 +1306,7 @@ export class AgentCoordinator {
     onProgress?.({
       type: 'thinking',
       phase: 'analyzing',
+      subPhase: 'building_context',
       label: `${currentTier} request — using ${tierModelName}`,
       detail: userRequest.slice(0, 120),
       metadata: {
@@ -701,17 +1328,19 @@ export class AgentCoordinator {
       });
     }
 
+    const onReasoning = options?.onReasoningChunk;
     const agentOptions: AgentExecuteOptions = {
       action: 'analyze' as AIAction,
       model: options?.model,
       tier: currentTier,
+      onReasoningChunk: onReasoning ? (chunk: string) => onReasoning('project_manager', chunk) : undefined,
     };
 
     // ── Parallel context building (p0: Parallel over Sequential) ──────
     // Build all context layers simultaneously instead of sequentially.
     // NOTE: buildDependencyContext and buildFileGroupContext need files with real content
     // for accurate reference detection. We hydrate PM-selected files first.
-    const pmFiles = selectPMFiles(files, userRequest, { ...options, tier: currentTier });
+    const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: currentTier });
     const hydratedForDeps = pmFiles.filter(f => !f.content.startsWith('['));
     const [dependencyContext, designContext, fileGroupContext] = await Promise.all([
       Promise.resolve(buildDependencyContext(hydratedForDeps, projectId)),
@@ -744,10 +1373,24 @@ export class AgentCoordinator {
     };
 
     try {
+      // ── PM Exploration Phase (feature-gated) ─────────────────────────
+      const { explorationContext: orchExplorationCtx, usedTools: orchPmUsedTools } =
+        await this.runPMExploration(pmFiles, userRequest, {
+          projectId,
+          userId,
+          loadContent: options?.loadContent,
+          onProgress,
+          onReasoningChunk: options?.onReasoningChunk,
+          model: options?.model,
+          tier: currentTier,
+          action: 'analyze' as AIAction,
+        });
+
       // Step 1: Project Manager analyzes and delegates
       onProgress?.({
         type: 'thinking',
         phase: 'analyzing',
+        subPhase: 'analyzing_files',
         label: 'Reviewing your request',
         detail: userRequest.slice(0, 120),
       });
@@ -764,6 +1407,11 @@ export class AgentCoordinator {
             response: { value: h.answer, isFreeform: true },
           })),
         );
+      }
+
+      // Inject exploration results into the PM prompt if available
+      if (orchExplorationCtx) {
+        enrichedRequest = `${enrichedRequest}\n\n${orchExplorationCtx}`;
       }
 
       const pmTask: AgentTask = {
@@ -792,6 +1440,7 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'analyzing',
+          subPhase: 'reasoning',
           label: `Upgrading to ${newTier} analysis`,
           detail: 'PM assessed higher complexity than initial classification',
           metadata: { routingTier: newTier, tierUpgrade: true, fromTier: currentTier },
@@ -826,11 +1475,15 @@ export class AgentCoordinator {
       onProgress?.({
         type: 'thinking',
         phase: 'planning',
+        subPhase: 'creating_delegations',
         label: 'Planning changes',
         analysis: pmResult.analysis,
         detail: pmResult.delegations?.length
           ? `Delegating to ${pmResult.delegations.length} specialist(s)`
           : 'Analyzing results',
+        summary: pmResult.delegations?.length
+          ? `Delegated to ${pmResult.delegations.map(d => d.agent).join(' + ')}`
+          : undefined,
       });
 
       // ── p0: Scope Assessment Gate (enhanced with EPIC V4 multi-round) ──
@@ -878,8 +1531,11 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'complete',
+          subPhase: 'finalizing',
           label: 'Analysis complete',
-          summary: pmResult.analysis,
+          summary: pmResult.delegations?.length
+            ? `Plan: ${pmResult.delegations.length} delegation${pmResult.delegations.length !== 1 ? 's' : ''}`
+            : 'Analysis complete',
         });
         updateExecutionStatus(executionId, 'completed');
         await persistExecution(executionId);
@@ -897,12 +1553,12 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'complete',
+          subPhase: 'finalizing',
           label: 'Changes ready',
-          summary: pmResult.analysis,
+          summary: `${allChanges.length} file${allChanges.length !== 1 ? 's' : ''} changed directly`,
           metadata: { routingTier: currentTier, directChanges: allChanges.length },
         });
-        updateExecutionStatus(executionId, 'completed');
-        await persistExecution(executionId);
+        updateExecutionStatus(executionId, 'awaiting_approval');
         return {
           ...pmResult,
           changes: allChanges,
@@ -929,7 +1585,7 @@ export class AgentCoordinator {
       // Hydrate specialist files via loadContent (bounded to expanded set only)
       const loadContent = options?.loadContent;
       const specialistHydratedFiles = loadContent
-        ? loadContent([...new Set([...affectedFileIds, ...expandedIds])])
+        ? await loadContent([...new Set([...affectedFileIds, ...expandedIds])])
         : files.filter(f => expandedIds.includes(f.fileId) || affectedFileIds.includes(f.fileId));
 
       // Step 2: Specialists execute in dependency-ordered waves
@@ -990,31 +1646,54 @@ export class AgentCoordinator {
         if (wave.length > 0) waves.push(wave);
       }
 
+      // Determine subagent mode for this execution
+      const useGeneralSubagents = options?.subagentMode === 'general';
+
+      // Initialize general subagent pool if needed
+      if (useGeneralSubagents) {
+        this.initGeneralSubagents(options?.maxAgents ?? delegations.length);
+      }
+
       // Execute wave helper: runs a single delegation
-      const executeDelegation = async (delegation: typeof delegations[0]) => {
-        const agent = this.specialists[delegation.agent];
+      const executeDelegation = async (delegation: typeof delegations[0], delegationIndex: number) => {
+        // Resolve which agent handles this delegation
+        const isGeneral = useGeneralSubagents || delegation.agent === 'general';
+        const subagentIdx = isGeneral ? (delegationIndex % this.generalSubagents.length) : -1;
+        const agentId = (isGeneral ? `general_${subagentIdx + 1}` : delegation.agent) as AgentType;
+        const agent = isGeneral
+          ? this.generalSubagents[subagentIdx]
+          : this.specialists[delegation.agent];
         if (!agent) return null;
+
+        // Track assignment for re-invocation during verification/diagnostics
+        if (isGeneral) {
+          for (const f of delegation.affectedFiles) {
+            this.subagentAssignments.set(f, subagentIdx);
+          }
+        }
+
+        const agentLabel = isGeneral ? `Subagent ${subagentIdx + 1}` : `${delegation.agent} agent`;
 
         onProgress?.({
           type: 'thinking',
           phase: 'executing',
-          label: `${delegation.agent} agent`,
+          subPhase: (isGeneral ? 'general_subagent' : `specialist_${delegation.agent}`) as import('@/lib/agents/phase-mapping').SubPhase,
+          label: agentLabel,
           detail: delegation.task.slice(0, 120),
-          agent: delegation.agent,
+          agent: agentId,
           metadata: {
-            agentType: delegation.agent,
+            agentType: agentId,
             affectedFiles: delegation.affectedFiles,
           },
         });
 
-        setAgentActive(executionId, delegation.agent);
+        setAgentActive(executionId, agentId);
 
-        this.logMessage(executionId, 'coordinator', delegation.agent, 'task', {
+        this.logMessage(executionId, 'coordinator', agentId, 'task', {
           instruction: delegation.task,
         });
 
-        // Build specialist-scoped context: hydrate only affected + dependency files
-        // EPIC V5: Use tier-scaled budget for specialist context window
+        // Build scoped context: hydrate only affected + dependency files
         const specialistBudget = getTierAgentBudget(currentTier, 'specialist');
         const specialistContextEngine = new ContextEngine(specialistBudget);
         specialistContextEngine.indexFiles(specialistHydratedFiles);
@@ -1030,45 +1709,70 @@ export class AgentCoordinator {
         const specialistFiles = specialistCtx.files.length > 0
           ? specialistCtx.files
           : (loadContent
-            ? loadContent([...delegationFileIds])
+            ? await loadContent([...delegationFileIds])
             : specialistHydratedFiles.filter(f => delegationFileIds.has(f.fileId)));
 
-        const specialistTask: AgentTask = {
+        const delegationTask: AgentTask = {
           executionId,
           instruction: delegation.task,
           context: {
             ...context,
             files: specialistFiles,
-            userRequest: delegation.task,
+            // General subagents get the original user request for context awareness;
+            // specialists get the delegation task as their scoped request.
+            userRequest: isGeneral ? context.userRequest : delegation.task,
           },
         };
 
-        const result = await agent.execute(specialistTask, {
-          ...agentOptions,
-          action: 'generate',
-        });
-        setAgentCompleted(executionId, delegation.agent);
-        await saveAfterSpecialist(executionId, delegation.agent, result);
-        console.log(`[Coordinator] ${delegation.agent} specialist: ${specialistFiles.length} files, ~${estimateTokens(JSON.stringify(specialistTask.context.files.map(f => f.content)).slice(0, 200_000))} tokens`);
+        let result: AgentResult;
+        if (isGeneral) {
+          // General subagent: use PM instance with general subagent prompt
+          const pmInstance = agent as ProjectManagerAgent;
+          const prompt = pmInstance.formatGeneralSubagentPrompt(delegationTask);
+          const systemPrompt = pmInstance.getGeneralSubagentSystemPrompt();
+          const raw = await pmInstance.executeDirectPrompt(prompt, systemPrompt, {
+            ...agentOptions,
+            action: 'generate',
+            onReasoningChunk: onReasoning ? (chunk: string) => onReasoning(agentId, chunk) : undefined,
+          });
+          result = pmInstance.parseResponse(raw, delegationTask);
+          // Tag result and changes with general agent type
+          result.agentType = agentId;
+          if (result.changes) {
+            for (const c of result.changes) {
+              c.agentType = agentId;
+            }
+          }
+        } else {
+          result = await agent.execute(delegationTask, {
+            ...agentOptions,
+            action: 'generate',
+            onReasoningChunk: onReasoning ? (chunk: string) => onReasoning(agentId, chunk) : undefined,
+          });
+        }
+        setAgentCompleted(executionId, agentId);
+        await saveAfterSpecialist(executionId, agentId, result);
+        console.log(`[Coordinator] ${agentId}: ${specialistFiles.length} files, ~${estimateTokens(JSON.stringify(delegationTask.context.files.map(f => f.content)).slice(0, 200_000))} tokens`);
 
         if (result.changes?.length) {
-          storeChanges(executionId, delegation.agent, result.changes);
+          storeChanges(executionId, agentId, result.changes);
 
-          // C3: Stream partial results — notify frontend as each specialist completes
           onProgress?.({
             type: 'thinking',
             phase: 'change_ready',
-            label: `${result.agentType} completed`,
+            subPhase: 'change_ready',
+            label: `${agentLabel} completed`,
             detail: `${result.changes.length} change(s) ready for preview`,
+            summary: `${result.changes.length} file${result.changes.length !== 1 ? 's' : ''} modified`,
             metadata: {
-              agentType: result.agentType,
+              agentType: agentId,
               changeCount: result.changes.length,
               affectedFiles: delegation.affectedFiles,
             },
           });
         }
 
-        this.logMessage(executionId, delegation.agent, 'coordinator', 'result', {
+        this.logMessage(executionId, agentId, 'coordinator', 'result', {
           changes: result.changes,
         });
 
@@ -1082,16 +1786,28 @@ export class AgentCoordinator {
 
       for (let waveIdx = 0; waveIdx < waves.length; waveIdx++) {
         const waveIndices = waves[waveIdx];
-        const waveNames = waveIndices.map(i => delegations[i].agent);
+        const waveNames = waveIndices.map(i => {
+          if (useGeneralSubagents || delegations[i].agent === 'general') {
+            return `Subagent ${(i % (this.generalSubagents.length || 1)) + 1}`;
+          }
+          return delegations[i].agent;
+        });
 
         if (waves.length > 1) {
           const waveAffectedFiles = waveIndices.flatMap(i => delegations[i].affectedFiles);
+          const waveAgentTypes = waveIndices.map(i => {
+            const isGen = useGeneralSubagents || delegations[i].agent === 'general';
+            return isGen ? `general_${(i % (this.generalSubagents.length || 1)) + 1}` : delegations[i].agent;
+          });
           onProgress?.({
             type: 'thinking',
             phase: 'executing',
-            label: `Wave ${waveIdx + 1}/${waves.length}: ${waveNames.join(' + ')} specialist${waveNames.length > 1 ? 's' : ''} in parallel`,
+            subPhase: 'coordinating_changes',
+            label: `Wave ${waveIdx + 1}/${waves.length}: ${waveNames.join(' + ')} in parallel`,
             metadata: {
               affectedFiles: waveAffectedFiles,
+              agentType: waveAgentTypes[0],
+              agentTypes: waveAgentTypes,
             },
           });
         }
@@ -1100,33 +1816,39 @@ export class AgentCoordinator {
         for (let chunkStart = 0; chunkStart < waveIndices.length; chunkStart += maxConcurrent) {
           const chunk = waveIndices.slice(chunkStart, chunkStart + maxConcurrent);
 
-          // Phase 8a: Emit worker_progress start for each specialist in this chunk
+          // Emit worker_progress start for each agent in this chunk
           for (const idx of chunk) {
+            const isGen = useGeneralSubagents || delegations[idx].agent === 'general';
+            const wkId = isGen ? `general_${(idx % (this.generalSubagents.length || 1)) + 1}` : delegations[idx].agent;
+            const wkLabel = isGen ? `Subagent ${(idx % (this.generalSubagents.length || 1)) + 1}` : delegations[idx].agent + ' specialist';
             onProgress?.({
               type: 'worker_progress',
-              workerId: delegations[idx].agent,
-              label: delegations[idx].agent + ' specialist',
+              workerId: wkId,
+              label: wkLabel,
               status: 'running',
               metadata: {
-                agentType: delegations[idx].agent,
+                agentType: wkId,
                 affectedFiles: delegations[idx].affectedFiles,
               },
             } as ThinkingEvent);
           }
 
           const chunkResults = await Promise.all(
-            chunk.map(i => executeDelegation(delegations[i]))
+            chunk.map(i => executeDelegation(delegations[i], i))
           );
 
-          // Phase 8a: Emit worker_progress complete for each specialist
+          // Emit worker_progress complete for each agent
           for (const idx of chunk) {
+            const isGen = useGeneralSubagents || delegations[idx].agent === 'general';
+            const wkId = isGen ? `general_${(idx % (this.generalSubagents.length || 1)) + 1}` : delegations[idx].agent;
+            const wkLabel = isGen ? `Subagent ${(idx % (this.generalSubagents.length || 1)) + 1}` : delegations[idx].agent + ' specialist';
             onProgress?.({
               type: 'worker_progress',
-              workerId: delegations[idx].agent,
-              label: delegations[idx].agent + ' specialist',
+              workerId: wkId,
+              label: wkLabel,
               status: 'complete',
               metadata: {
-                agentType: delegations[idx].agent,
+                agentType: wkId,
                 affectedFiles: delegations[idx].affectedFiles,
               },
             } as ThinkingEvent);
@@ -1142,21 +1864,29 @@ export class AgentCoordinator {
       // Build a proposal summary so agents can see each other's changes
       const proposalSummary = this.buildProposalSummary(specialistResults);
       if (proposalSummary && specialistResults.length > 1) {
+        const coordinatingFiles = specialistResults
+          .flatMap(r => (r.changes ?? []).map(c => c.fileName))
+          .filter(Boolean);
         onProgress?.({
           type: 'thinking',
           phase: 'executing',
+          subPhase: 'coordinating_changes',
           label: 'Coordinating changes',
           detail: 'Cross-checking specialist proposals for consistency',
+          metadata: {
+            agentType: 'coordinator',
+            affectedFiles: [...new Set(coordinatingFiles)],
+          },
         });
 
-        // Second-pass: Let specialists see each other's proposals and adjust
+        // Second-pass: Let agents see each other's proposals and adjust
         const refinementPromises = specialistResults
           .filter(r => r.changes && r.changes.length > 0)
           .map(async (result) => {
-            const agent = this.specialists[result.agentType];
-            if (!agent) return null;
+            const resolved = this.resolveAgentForChange({ agentType: result.agentType, fileName: result.changes?.[0]?.fileName ?? '' });
+            if (!resolved) return null;
 
-            // Build cross-context: what other specialists proposed
+            // Build cross-context: what other agents proposed
             const otherProposals = specialistResults
               .filter(other => other.agentType !== result.agentType && other.changes?.length)
               .map(other => {
@@ -1189,7 +1919,7 @@ export class AgentCoordinator {
             };
 
             try {
-              const refined = await agent.execute(refinementTask, { ...agentOptions, action: 'fix' });
+              const refined = await this.executeFixTask(resolved, refinementTask, { ...agentOptions, action: 'fix' });
               return refined.success ? refined : null;
             } catch {
               return null; // Keep original on failure
@@ -1251,6 +1981,7 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'validating',
+          subPhase: 'validating_syntax',
           label: 'Verifying changes (syntax, types, schema, references)...',
         });
 
@@ -1260,6 +1991,7 @@ export class AgentCoordinator {
           onProgress?.({
             type: 'thinking',
             phase: 'validating',
+            subPhase: 'checking_consistency',
             label: `Found ${verification.errorCount} error(s), ${verification.warningCount} warning(s) — attempting self-correction`,
             detail: verification.formatted.slice(0, 300),
           });
@@ -1272,13 +2004,13 @@ export class AgentCoordinator {
             issuesByFile.set(issue.file, existing);
           }
 
-          // Re-invoke responsible specialists with verification diagnostics
+          // Re-invoke responsible agents with verification diagnostics
           const verifyFixPromises: Promise<AgentResult | null>[] = [];
           for (const [fileName, fileIssues] of issuesByFile) {
             const originalChange = allChanges.find(c => c.fileName === fileName);
             if (!originalChange) continue;
-            const agent = this.specialists[originalChange.agentType];
-            if (!agent) continue;
+            const resolved = this.resolveAgentForChange(originalChange);
+            if (!resolved) continue;
 
             const issueReport = fileIssues
               .map(i => `- [${i.category}] Line ${i.line}: ${i.message} (${i.severity})`)
@@ -1287,13 +2019,14 @@ export class AgentCoordinator {
             onProgress?.({
               type: 'thinking',
               phase: 'fixing',
+              subPhase: 'fixing_errors',
               label: `Self-correcting ${fileName}...`,
               agent: originalChange.agentType,
             });
 
             const fixFileId = files.find(f => f.fileName === fileName)?.fileId;
             const fixContextFiles = fixFileId && loadContent
-              ? loadContent([fixFileId])
+              ? await loadContent([fixFileId])
               : files.filter(f => f.fileName === fileName);
 
             const verifyFixTask: AgentTask = {
@@ -1316,7 +2049,7 @@ export class AgentCoordinator {
             };
 
             verifyFixPromises.push(
-              agent.execute(verifyFixTask, { ...agentOptions, action: 'fix' }).catch(() => null)
+              this.executeFixTask(resolved, verifyFixTask, { ...agentOptions, action: 'fix' }).catch(() => null)
             );
           }
 
@@ -1337,14 +2070,18 @@ export class AgentCoordinator {
             onProgress?.({
               type: 'thinking',
               phase: 'validating',
+              subPhase: 'validating_syntax',
               label: `Self-corrected ${fixedChanges.length} file(s)`,
+              summary: `Fixed ${fixedChanges.length} file${fixedChanges.length !== 1 ? 's' : ''}`,
             });
           }
         } else {
           onProgress?.({
             type: 'thinking',
             phase: 'validating',
+            subPhase: 'validating_syntax',
             label: 'Verification passed — no syntax, type, or schema errors',
+            summary: 'All checks passed',
           });
         }
       }
@@ -1356,6 +2093,7 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'validating',
+          subPhase: 'validating_syntax',
           label: `Running diagnostics on ${allChanges.length} file(s)...`,
         });
 
@@ -1381,17 +2119,19 @@ export class AgentCoordinator {
             onProgress?.({
               type: 'thinking',
               phase: 'validating',
+              subPhase: 'checking_consistency',
               label: `Found ${errorCount} error(s), ${warningCount} warning(s) in ${change.fileName}`,
               detail: diagnostics
                 .filter(d => d.severity === 'error')
                 .map(e => `Line ${e.line}: ${e.message}`).join('; '),
             });
 
-            const specialist = this.specialists[change.agentType];
-            if (specialist) {
+            const resolvedFix = this.resolveAgentForChange(change);
+            if (resolvedFix) {
               onProgress?.({
                 type: 'thinking',
                 phase: 'fixing',
+                subPhase: 'fixing_errors',
                 label: `Fixing ${errorCount} error(s) in ${change.fileName}...`,
               });
 
@@ -1420,7 +2160,7 @@ export class AgentCoordinator {
               };
 
               try {
-                const fixResult = await specialist.execute(fixTask, { ...agentOptions, action: 'fix' });
+                const fixResult = await this.executeFixTask(resolvedFix, fixTask, { ...agentOptions, action: 'fix' });
                 if (fixResult.success && fixResult.changes?.[0]) {
                   change.proposedContent = fixResult.changes[0].proposedContent;
                 } else {
@@ -1453,46 +2193,118 @@ export class AgentCoordinator {
         validationContext = `\n\n## Pre-Review Validation Issues\n${issueLines.join('\n')}`;
       }
 
-      // ── p0: Verification First-Class ────────────────────────────────
-      // Review agent is mandatory in orchestrated mode.
-      onProgress?.({
-        type: 'thinking',
-        phase: 'reviewing',
-        label: 'Reviewing changes',
-        detail: `Checking ${allChanges.length} proposed change(s)`,
-      });
+      // ── p0: Verification First-Class (with fast-path for simple edits) ──
+      // Skip review for simple edits: single file, <50 lines changed, no dangerous ops.
+      const uniqueFilesChanged = new Set(allChanges.map(c => c.fileName)).size;
+      const totalLinesChanged = allChanges.reduce((sum, c) => {
+        return sum + Math.abs(
+          (c.proposedContent ?? '').split('\n').length - (c.originalContent ?? '').split('\n').length
+        );
+      }, 0);
+      const hasDangerousOps = allChanges.some(c =>
+        !c.proposedContent || c.proposedContent.trim() === ''
+      );
+      const skipReview = uniqueFilesChanged <= 1
+        && totalLinesChanged < 50
+        && !hasDangerousOps
+        && validationResult.issues.filter(i => i.severity === 'error').length === 0;
 
-      setAgentActive(executionId, 'review');
+      let reviewResult: AgentResult;
 
-      this.logMessage(executionId, 'coordinator', 'review', 'task', {
-        instruction: 'Review all proposed changes',
-        changes: allChanges,
-      });
+      if (skipReview) {
+        // Fast-path: skip review for simple edits
+        onProgress?.({
+          type: 'thinking',
+          phase: 'reviewing',
+          subPhase: 'running_review',
+          label: 'Review skipped (simple edit)',
+          detail: `${uniqueFilesChanged} file, ${totalLinesChanged} lines changed`,
+        });
+        reviewResult = {
+          agentType: 'review',
+          success: true,
+          changes: [],
+          reviewResult: {
+            approved: true,
+            summary: `Simple edit (${uniqueFilesChanged} file, ${totalLinesChanged} lines) — review skipped.`,
+            issues: [],
+          },
+        };
+        setAgentCompleted(executionId, 'review');
+      } else {
+        // Full review path
+        onProgress?.({
+          type: 'thinking',
+          phase: 'reviewing',
+          subPhase: 'running_review',
+          label: 'Reviewing changes',
+          detail: `Checking ${allChanges.length} proposed change(s)`,
+        });
 
-      // Build review context: hydrate only the changed files (bounded)
-      const changedFileIds = files
-        .filter(f => allChanges.some(c => c.fileName === f.fileName))
-        .map(f => f.fileId);
-      const reviewFiles = loadContent
-        ? loadContent(changedFileIds)
-        : files.filter(f => changedFileIds.includes(f.fileId));
+        setAgentActive(executionId, 'review');
 
-      const reviewTask: AgentTask = {
-        executionId,
-        instruction: `Review the following ${allChanges.length} proposed changes for: ${userRequest}${validationContext}${proposalSummary ? `\n\n${proposalSummary}` : ''}`,
-        context: {
-          ...context,
-          files: reviewFiles,
-          userRequest: allChanges.map(formatChangesForReview).join('\n\n'),
-        },
-      };
+        this.logMessage(executionId, 'coordinator', 'review', 'task', {
+          instruction: 'Review all proposed changes',
+          changes: allChanges,
+        });
 
-      const reviewResult = await this.reviewer.execute(reviewTask, {
-        ...agentOptions,
-        action: 'review',
-      });
-      setAgentCompleted(executionId, 'review');
-      await saveAfterReview(executionId);
+        // Build review context: hydrate only the changed files (bounded)
+        const changedFileIds = files
+          .filter(f => allChanges.some(c => c.fileName === f.fileName))
+          .map(f => f.fileId);
+        const reviewFiles = loadContent
+          ? await loadContent(changedFileIds)
+          : files.filter(f => changedFileIds.includes(f.fileId));
+
+        // Use Codex packager for review (same packaging as GPT Codex workflow)
+        const codexPackager = new CodexContextPackager();
+        let projectContext: ProjectContext | null = await contextCache.get(projectId);
+        if (!projectContext) {
+          const contextFiles: ContextFileContext[] = reviewFiles.map((f) => ({
+            fileId: f.fileId,
+            fileName: f.fileName,
+            fileType: f.fileType,
+            content: f.content,
+            sizeBytes: f.content.length,
+            lastModified: new Date(),
+            dependencies: { imports: [], exports: [], usedBy: [] },
+          }));
+          const dependencies = dependencyDetector.detectDependencies(contextFiles);
+          projectContext = {
+            projectId,
+            files: contextFiles,
+            dependencies,
+            loadedAt: new Date(),
+            totalSizeBytes: contextFiles.reduce((sum, f) => sum + f.sizeBytes, 0),
+          };
+        }
+        const proposedChanges: ProposedChange[] = allChanges.map((c) => ({
+          fileId: c.fileId,
+          fileName: c.fileName,
+          originalContent: c.originalContent,
+          proposedContent: c.proposedContent ?? '',
+          agentType: c.agentType,
+        }));
+        const codexReviewContent = codexPackager.packageForReview(projectContext, proposedChanges);
+
+        const reviewTask: AgentTask = {
+          executionId,
+          instruction: `Review the following proposed changes for: ${userRequest}${validationContext}${proposalSummary ? `\n\n${proposalSummary}` : ''}\n\n${codexReviewContent}`,
+          context: {
+            ...context,
+            files: reviewFiles,
+            userRequest: allChanges.map(formatChangesForReview).join('\n\n'),
+          },
+        };
+
+        reviewResult = await this.reviewer.execute(reviewTask, {
+          ...agentOptions,
+          action: 'review',
+          onReasoningChunk: onReasoning ? (chunk: string) => onReasoning('review', chunk) : undefined,
+        });
+        setAgentCompleted(executionId, 'review');
+        await saveAfterReview(executionId);
+      }
 
       if (reviewResult.reviewResult) {
         setReviewResult(executionId, reviewResult.reviewResult);
@@ -1509,11 +2321,17 @@ export class AgentCoordinator {
           (i) => i.severity === 'error'
         );
         if (criticalIssues.length > 0) {
+          const fixingFiles = [...new Set(criticalIssues.map(i => i.file).filter(Boolean))];
           onProgress?.({
             type: 'thinking',
             phase: 'executing',
+            subPhase: 'fixing_errors',
             label: 'Fixing critical issues',
             detail: `${criticalIssues.length} critical issue(s) found`,
+            metadata: {
+              agentType: 'review',
+              affectedFiles: fixingFiles,
+            },
           });
 
           // Group issues by file to identify responsible specialists
@@ -1524,14 +2342,13 @@ export class AgentCoordinator {
             issuesByFile.set(issue.file, existing);
           }
 
-          // Re-invoke specialists for files with critical issues
+          // Re-invoke responsible agents for files with critical issues
           const refinementPromises: Promise<AgentResult | null>[] = [];
           for (const [fileName, issues] of issuesByFile) {
-            // Find which specialist originally changed this file
             const originalChange = allChanges.find(c => c.fileName === fileName);
             if (!originalChange) continue;
-            const agent = this.specialists[originalChange.agentType];
-            if (!agent) continue;
+            const resolvedAgent = this.resolveAgentForChange(originalChange);
+            if (!resolvedAgent) continue;
 
             const issueDescriptions = issues.map(i =>
               `- [${i.severity}] ${i.description}${i.suggestion ? ` (Suggestion: ${i.suggestion})` : ''}`
@@ -1540,7 +2357,7 @@ export class AgentCoordinator {
             // Hydrate only the specific file being refined (bounded)
             const refinementFileId = files.find(f => f.fileName === fileName)?.fileId;
             const refinementContextFiles = refinementFileId && loadContent
-              ? loadContent([refinementFileId])
+              ? await loadContent([refinementFileId])
               : files.filter(f => f.fileName === fileName);
 
             const refinementTask: AgentTask = {
@@ -1554,7 +2371,7 @@ export class AgentCoordinator {
             };
 
             refinementPromises.push(
-              agent.execute(refinementTask, { ...agentOptions, action: 'fix' }).catch(() => null)
+              this.executeFixTask(resolvedAgent, refinementTask, { ...agentOptions, action: 'fix' }).catch(() => null)
             );
           }
 
@@ -1591,6 +2408,7 @@ export class AgentCoordinator {
           onProgress?.({
             type: 'thinking',
             phase: 'validating',
+            subPhase: 'checking_consistency',
             label: 'Checking preview for visual regressions...',
           });
 
@@ -1636,8 +2454,9 @@ export class AgentCoordinator {
       onProgress?.({
         type: 'thinking',
         phase: 'complete',
+        subPhase: 'finalizing',
         label: 'Ready',
-        summary: reviewResult.reviewResult?.summary ?? 'Changes complete',
+        summary: reviewResult.reviewResult?.summary ?? `${allChanges.length} file${allChanges.length !== 1 ? 's' : ''} changed`,
       });
 
       // Emit cost event for the UI
@@ -1657,9 +2476,14 @@ export class AgentCoordinator {
         });
       }
 
-      updateExecutionStatus(executionId, 'completed');
       await clearCheckpoint(executionId);
-      await persistExecution(executionId);
+
+      if (allChanges.length > 0) {
+        updateExecutionStatus(executionId, 'awaiting_approval');
+      } else {
+        updateExecutionStatus(executionId, 'completed');
+        await persistExecution(executionId);
+      }
 
       return {
         agentType: 'project_manager',
@@ -1667,8 +2491,8 @@ export class AgentCoordinator {
         changes: allChanges,
         reviewResult: reviewResult.reviewResult,
         analysis: pmResult.analysis,
-        // p0: Testing Always First — signal to frontend to inject "Verify this works" chip
         suggestVerification: allChanges.length > 0,
+        pmUsedTools: orchPmUsedTools,
       };
     } catch (error) {
       updateExecutionStatus(executionId, 'failed');
@@ -1708,6 +2532,11 @@ export class AgentCoordinator {
     userPreferences: UserPreference[],
     options?: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
+    // ── Ask mode fast path: single conversational LLM call ──────────
+    if (options?.intentMode === 'ask' && options?.onContentChunk) {
+      return this.executeAskFastPath(executionId, projectId, userId, userRequest, files, userPreferences, options);
+    }
+
     createExecution(executionId, projectId, userId, userRequest);
     updateExecutionStatus(executionId, 'in_progress');
 
@@ -1721,6 +2550,7 @@ export class AgentCoordinator {
       onProgress?.({
         type: 'thinking',
         phase: 'analyzing',
+        subPhase: 'building_context',
         label: 'Classifying request...',
         detail: 'Determining complexity to pick the right model',
       });
@@ -1738,6 +2568,7 @@ export class AgentCoordinator {
       onProgress?.({
         type: 'thinking',
         phase: 'analyzing',
+        subPhase: 'building_context',
         label: `${currentTier} request — using ${modelName}`,
         metadata: {
           routingTier: currentTier,
@@ -1754,7 +2585,7 @@ export class AgentCoordinator {
       : (options?.action ?? 'generate') as AIAction;
 
     // Build PM-scoped context with tier-aware file selection
-    const pmFiles = selectPMFiles(files, userRequest, { ...options, tier: currentTier });
+    const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: currentTier });
 
     // Build dependency context using hydrated files only (not stubs)
     const hydratedForDeps = pmFiles.filter(f => !f.content.startsWith('['));
@@ -1790,42 +2621,76 @@ export class AgentCoordinator {
     };
 
     try {
+      // ── PM Exploration Phase (feature-gated) ─────────────────────────
+      // Before the PM makes its JSON decision, let it explore the codebase
+      // using read-only tools. Skip for TRIVIAL tier (not worth the cost).
+      let explorationContext = '';
+      let pmUsedTools = false;
+      if (currentTier !== 'TRIVIAL') {
+        const exploration = await this.runPMExploration(pmFiles, userRequest, {
+          projectId,
+          userId,
+          loadContent: options?.loadContent,
+          onProgress,
+          onReasoningChunk: options?.onReasoningChunk,
+          model: options?.model,
+          tier: currentTier,
+          action: soloAction,
+        });
+        explorationContext = exploration.explorationContext;
+        pmUsedTools = exploration.usedTools;
+      }
+
       onProgress?.({
         type: 'thinking',
         phase: 'analyzing',
+        subPhase: 'analyzing_files',
         label: currentTier === 'TRIVIAL'
           ? 'Quick edit — generating changes'
-          : 'Solo mode — generating changes directly',
+          : 'Single agent — generating changes directly',
         detail: userRequest.slice(0, 120),
       });
 
       setAgentActive(executionId, 'project_manager');
 
+      // Enrich the instruction with exploration results if available
+      const enrichedInstruction = explorationContext
+        ? `${userRequest}\n\n${explorationContext}`
+        : userRequest;
+
       const pmTask: AgentTask = {
         executionId,
-        instruction: userRequest,
-        context,
+        instruction: enrichedInstruction,
+        context: {
+          ...context,
+          userRequest: enrichedInstruction,
+        },
       };
 
       this.logMessage(executionId, 'coordinator', 'project_manager', 'task', {
         instruction: userRequest,
       });
 
-      // Select prompt based on tier
-      const useLightweight = currentTier === 'TRIVIAL';
+      // Select prompt based on tier and intent mode
+      const useLightweight = currentTier === 'TRIVIAL' && options?.intentMode !== 'ask';
+      const isAskMode = options?.intentMode === 'ask';
       const prompt = useLightweight
         ? this.pm.formatLightweightPrompt(pmTask)
         : this.pm.formatSoloPrompt(pmTask);
       const systemPrompt = useLightweight
         ? this.pm.getLightweightSystemPrompt()
-        : this.pm.getSoloSystemPrompt();
+        : isAskMode
+          ? this.pm.getAskSystemPrompt()
+          : this.pm.getSoloSystemPrompt();
 
       // Solo execution: call PM's executeDirectPrompt which handles model
       // resolution, budget enforcement, usage tracking, and validation.
-      const agentOptions = {
+      const soloOnReasoning = options?.onReasoningChunk;
+      const agentOptions: AgentExecuteOptions = {
         action: soloAction,
         model: options?.model,
         tier: currentTier,
+        onReasoningChunk: soloOnReasoning ? (chunk: string) => soloOnReasoning('project_manager', chunk) : undefined,
       };
 
       // Heartbeat every 25s so the client doesn't show "Taking longer than expected" (60s stall)
@@ -1859,8 +2724,11 @@ export class AgentCoordinator {
       });
 
       // ── Tier escalation on failure ─────────────────────────────────
+      // A response with substantive analysis (>100 chars) is a valid result
+      // even without code changes — e.g. Ask mode or informational requests.
+      const hasSubstantiveAnalysis = result.analysis && result.analysis.length > 100;
       const shouldEscalate = !result.success
-        || (!result.changes?.length && !result.delegations?.length && !result.needsClarification);
+        || (!result.changes?.length && !result.delegations?.length && !result.needsClarification && !hasSubstantiveAnalysis);
 
       if (shouldEscalate && currentTier !== 'COMPLEX') {
         const nextTier = escalateTier(currentTier);
@@ -1868,6 +2736,7 @@ export class AgentCoordinator {
           onProgress?.({
             type: 'thinking',
             phase: 'analyzing',
+            subPhase: 'reasoning',
             label: `Upgrading to ${nextTier} analysis`,
             detail: 'Initial attempt produced no results — retrying with stronger model',
             metadata: { routingTier: nextTier, tierUpgrade: true, fromTier: currentTier },
@@ -1905,10 +2774,75 @@ export class AgentCoordinator {
         };
       }
 
-      updateExecutionStatus(executionId, result.success ? 'completed' : 'failed');
-      await persistExecution(executionId);
+      if (result.success && result.changes && result.changes.length > 0) {
+        storeChanges(executionId, 'project_manager', result.changes);
+        updateExecutionStatus(executionId, 'awaiting_approval');
+      } else {
+        updateExecutionStatus(executionId, result.success ? 'completed' : 'failed');
+        await persistExecution(executionId);
+      }
 
-      return result;
+      // Post-solo review: run GPT Codex review when solo mode produced changes
+      if (result.changes && result.changes.length > 0) {
+        try {
+          onProgress?.({
+            type: 'thinking',
+            phase: 'reviewing',
+            subPhase: 'running_review',
+            label: 'Reviewing changes (solo)',
+            detail: `${result.changes.length} change(s)`,
+          });
+          const allChanges = result.changes;
+          const changedFileIds = files.filter((f) => allChanges.some((c) => c.fileName === f.fileName)).map((f) => f.fileId);
+          const reviewFiles = files.filter((f) => changedFileIds.includes(f.fileId));
+          const codexPackager = new CodexContextPackager();
+          let projectContext: ProjectContext | null = await contextCache.get(projectId);
+          if (!projectContext) {
+            const contextFiles: ContextFileContext[] = reviewFiles.map((f) => ({
+              fileId: f.fileId,
+              fileName: f.fileName,
+              fileType: f.fileType,
+              content: f.content,
+              sizeBytes: f.content.length,
+              lastModified: new Date(),
+              dependencies: { imports: [], exports: [], usedBy: [] },
+            }));
+            const dependencies = dependencyDetector.detectDependencies(contextFiles);
+            projectContext = {
+              projectId,
+              files: contextFiles,
+              dependencies,
+              loadedAt: new Date(),
+              totalSizeBytes: contextFiles.reduce((s, f) => s + f.sizeBytes, 0),
+            };
+          }
+          const proposedChanges: ProposedChange[] = allChanges.map((c) => ({
+            fileId: c.fileId,
+            fileName: c.fileName,
+            originalContent: c.originalContent,
+            proposedContent: c.proposedContent ?? '',
+            agentType: c.agentType,
+          }));
+          const codexReviewContent = codexPackager.packageForReview(projectContext, proposedChanges);
+          const reviewTask: AgentTask = {
+            executionId,
+            instruction: `Review the following proposed changes for: ${userRequest}\n\n${codexReviewContent}`,
+            context: {
+              ...context,
+              files: reviewFiles,
+              userRequest: allChanges.map(formatChangesForReview).join('\n\n'),
+            },
+          };
+          const reviewAgentResult = await this.reviewer.execute(reviewTask, { action: 'review' as AIAction, tier: currentTier });
+          setAgentCompleted(executionId, 'review');
+          if (reviewAgentResult.reviewResult) setReviewResult(executionId, reviewAgentResult.reviewResult);
+          return { ...result, pmUsedTools, reviewResult: reviewAgentResult.reviewResult };
+        } catch (reviewErr) {
+          console.warn('[AgentCoordinator] Post-solo review failed:', reviewErr);
+        }
+      }
+
+      return { ...result, pmUsedTools };
     } catch (error) {
       // ── Error-based tier escalation ────────────────────────────────
       const nextTier = escalateTier(currentTier);
@@ -1916,6 +2850,7 @@ export class AgentCoordinator {
         onProgress?.({
           type: 'thinking',
           phase: 'analyzing',
+          subPhase: 'reasoning',
           label: `Upgrading to ${nextTier} analysis`,
           detail: `Error occurred — retrying with stronger model`,
           metadata: { routingTier: nextTier, tierUpgrade: true, fromTier: currentTier },
@@ -1950,6 +2885,770 @@ export class AgentCoordinator {
           recoverable: isProviderErr ? error.retryable : false,
         },
       };
+    }
+  }
+
+  // ── Server-executed tools (results feed back into the LLM) ──────────
+  private static SERVER_TOOLS = new Set([
+    'read_file', 'search_files', 'grep_content', 'glob_files', 'semantic_search',
+    'list_files', 'get_dependency_graph', 'validate_syntax', 'run_diagnostics',
+    'check_lint', 'theme_check', 'screenshot_preview', 'compare_screenshots',
+    'inspect_element', 'get_page_snapshot', 'query_selector', 'inject_css',
+    'inject_html', 'fetch_url', 'web_search', 'spawn_workers',
+    'push_to_shopify', 'pull_from_shopify', 'list_themes',
+    'list_store_resources', 'get_shopify_asset', 'generate_placeholder',
+  ]);
+
+  // ── Client-rendered tools (streamed to user, synthetic result to LLM) ──
+  private static CLIENT_TOOLS = new Set([
+    'propose_code_edit', 'search_replace', 'create_file', 'propose_plan',
+    'ask_clarification', 'navigate_preview',
+    'write_file', 'delete_file', 'rename_file',
+  ]);
+
+  /**
+   * Select tools for the streaming agent loop based on intent mode.
+   * Search/read tools always available; mutation tools guided by mode.
+   */
+  private selectAgentLoopTools(intentMode: string, hasPreview: boolean): ToolDefinition[] {
+    // Read-only tools always available
+    const tools: ToolDefinition[] = [
+      ...AGENT_TOOLS.filter(t =>
+        t.name === 'read_file' || t.name === 'search_files' ||
+        t.name === 'grep_content' || t.name === 'glob_files' ||
+        t.name === 'semantic_search' || t.name === 'list_files' ||
+        t.name === 'get_dependency_graph' || t.name === 'run_diagnostics'
+      ),
+      CHECK_LINT_TOOL,
+    ];
+
+    // Ask mode: no mutation tools
+    if (intentMode === 'ask') return tools;
+
+    // All other modes get mutation tools
+    tools.push(PROPOSE_CODE_EDIT_TOOL);
+    tools.push(SEARCH_REPLACE_TOOL);
+    tools.push(CREATE_FILE_TOOL);
+    tools.push(PROPOSE_PLAN_TOOL);
+    tools.push(ASK_CLARIFICATION_TOOL);
+
+    if (hasPreview) {
+      tools.push(NAVIGATE_PREVIEW_TOOL);
+    }
+
+    // Debug mode gets additional diagnostic tools
+    if (intentMode === 'debug') {
+      const themeCheck = AGENT_TOOLS.find(t => t.name === 'theme_check');
+      if (themeCheck) tools.push(themeCheck);
+    }
+
+    return tools;
+  }
+
+  /**
+   * Streaming agent loop: unified execution path for all solo modes.
+   * Replaces executeAskFastPath and the serial pipeline for non-specialist requests.
+   *
+   * Architecture: multi-iteration wrapper around streamWithTools.
+   * Text is streamed between tool executions. Server tools are executed and
+   * their results fed back to the LLM. Client tools (propose_code_edit, etc.)
+   * are forwarded to the UI with a synthetic result fed back to the LLM.
+   */
+  async streamAgentLoop(
+    executionId: string,
+    projectId: string,
+    userId: string,
+    userRequest: string,
+    files: FileContext[],
+    userPreferences: UserPreference[],
+    options: CoordinatorExecuteOptions,
+  ): Promise<AgentResult> {
+    createExecution(executionId, projectId, userId, userRequest);
+    updateExecutionStatus(executionId, 'in_progress');
+
+    const onProgress = options.onProgress;
+    const onContentChunk = options.onContentChunk;
+    const onToolEvent = options.onToolEvent;
+    const intentMode = options.intentMode ?? 'code';
+
+    console.log(`[AgentLoop] Starting for execution ${executionId}, mode=${intentMode}`);
+
+    onProgress?.({
+      type: 'thinking',
+      phase: 'analyzing',
+      subPhase: 'building_context',
+      label: 'Building context...',
+    });
+
+    try {
+      // ── Build signal-based file context ──────────────────────────────
+      const signalCtx = await buildSignalContext(files, options);
+      const { preloaded, manifest } = signalCtx;
+
+      // Format pre-loaded files
+      const fileContents = preloaded
+        .filter(f => f.content && !f.content.startsWith('['))
+        .map(f => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``)
+        .join('\n\n');
+
+      // ── Build system prompt (base + mode overlay) ─────────────────────
+      let systemPrompt = AGENT_BASE_PROMPT;
+      if (intentMode === 'code') systemPrompt += '\n\n' + AGENT_CODE_OVERLAY;
+      else if (intentMode === 'plan') systemPrompt += '\n\n' + AGENT_PLAN_OVERLAY;
+      else if (intentMode === 'debug') systemPrompt += '\n\n' + AGENT_DEBUG_OVERLAY;
+
+      // ── Build initial messages ──────────────────────────────────────
+      const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
+      if (AI_FEATURES.promptCaching) {
+        systemMsg.cacheControl = { type: 'ephemeral' };
+      }
+      const messages: AIMessage[] = [systemMsg];
+
+      // Conversation history
+      if (options.recentMessages?.length) {
+        for (let i = 0; i < options.recentMessages.length; i++) {
+          const role = i % 2 === 0 ? 'user' : 'assistant';
+          messages.push({ role: role as 'user' | 'assistant', content: options.recentMessages[i] });
+        }
+      }
+
+      // Detect plan approval in recent messages and inject execution-forcing instruction
+      const hasPlanApproval = (options.recentMessages ?? []).some((m) =>
+        /approved plan|execute these \d+ steps|implement (this|the plan|it)/i.test(m)
+      );
+      if (hasPlanApproval && intentMode !== 'ask' && intentMode !== 'plan') {
+        messages.push({
+          role: 'user' as const,
+          content: '[SYSTEM] The user has approved the plan. You must now implement the changes directly using propose_code_edit or search_replace. Do NOT call propose_plan again.',
+        });
+      }
+
+      // User message with file context
+      const userMessageParts = [
+        userRequest,
+        '',
+        ...(options.memoryContext ? [options.memoryContext, ''] : []),
+        ...(options.domContext ? [options.domContext, ''] : []),
+        '## PRE-LOADED FILES:',
+        preloaded.length > 0 ? fileContents : '(none)',
+        '',
+        '## FILE MANIFEST:',
+        manifest,
+      ];
+      messages.push({ role: 'user', content: userMessageParts.join('\n') });
+
+      // ── Select tools ──────────────────────────────────────────────────
+      const hasPreview = !!options.domContext;
+      const tools = this.selectAgentLoopTools(intentMode, hasPreview);
+
+      // ── Resolve model ─────────────────────────────────────────────────
+      const actionForModel: AIAction =
+        intentMode === 'ask' ? 'ask' : intentMode === 'debug' ? 'debug' : 'generate';
+      const model = resolveModel({
+        action: actionForModel,
+        userOverride: options.model,
+        agentRole: 'project_manager',
+        tier: options.tier ?? 'SIMPLE',
+      });
+      const providerName = getProviderForModel(model);
+      const provider = getAIProvider(providerName as Parameters<typeof getAIProvider>[0]);
+
+      if (!isToolProvider(provider)) {
+        throw new AIProviderError('UNKNOWN', 'Provider does not support tool streaming', 'coordinator');
+      }
+
+      // ── Iteration state ────────────────────────────────────────────────
+      const MAX_ITERATIONS = intentMode === 'ask' ? 3 : intentMode === 'code' ? 12 : 8;
+      const TOTAL_TIMEOUT_MS = 240_000;
+      const startTime = Date.now();
+      let iteration = 0;
+      let fullText = '';
+      const accumulatedChanges: CodeChange[] = [];
+      const readFiles = new Set<string>();
+      let needsClarification = false;
+      let planProposalCount = 0;
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        subPhase: 'building_context',
+        label: `Using ${model.split('/').pop() ?? model}`,
+      });
+
+      // ── Tool executor context ──────────────────────────────────────────
+      const toolCtx: ToolExecutorContext = {
+        files: signalCtx.allFiles,
+        contextEngine,
+        projectId,
+        userId,
+        loadContent: options.loadContent,
+      };
+
+      // Set of file IDs/names that are already pre-loaded in the user message.
+      // read_file calls for these are short-circuited to avoid wasting an iteration.
+      const preloadedMap = new Map<string, FileContext>();
+      for (const f of preloaded.filter(p => p.content && !p.content.startsWith('['))) {
+        preloadedMap.set(f.fileId, f);
+        preloadedMap.set(f.fileName, f);
+        if (f.path) preloadedMap.set(f.path, f);
+      }
+
+      // ── Agent loop ─────────────────────────────────────────────────────
+      let loopStreamingDisabled = isStreamingBroken(); // inherit persistent health state
+      while (iteration < MAX_ITERATIONS) {
+        if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
+          console.warn(`[AgentLoop] Timeout after ${iteration} iterations`);
+          break;
+        }
+
+        // Apply token budget before each iteration
+        const budgeted = enforceRequestBudget(messages);
+
+        console.log(`[AgentLoop] Iteration ${iteration}, messages=${budgeted.messages.length}, truncated=${budgeted.truncated}`);
+
+        // Stream with first-byte timeout fallback to completeWithTools()
+        let streamResult: ToolStreamResult;
+        const completionOpts = { model, maxTokens: intentMode === 'ask' ? 2048 : 4096 };
+
+        const firstByteTimeout = getStreamFirstByteTimeout();
+        if (firstByteTimeout > 0 && !loopStreamingDisabled) {
+          // Race BOTH stream creation AND first-byte against the timeout.
+          // In some environments, streamWithTools() itself hangs (HTTP-level buffering).
+          let raced: ToolStreamResult | null = null;
+          try {
+            const streamCreationAndFirstByte = (async () => {
+              const rawStream = await provider.streamWithTools(budgeted.messages, tools, completionOpts);
+              return raceFirstByte(rawStream, firstByteTimeout);
+            })();
+
+            const timeoutRace = new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), firstByteTimeout),
+            );
+
+            raced = await Promise.race([streamCreationAndFirstByte, timeoutRace]);
+          } catch (err) {
+            console.warn(`[AgentLoop] Stream creation failed:`, err);
+            raced = null;
+          }
+
+          if (raced) {
+            streamResult = raced;
+          } else {
+            // Stream hung — disable for this loop AND persist across requests
+            loopStreamingDisabled = true;
+            markStreamingBroken();
+            console.warn(`[AgentLoop] Stream timeout (${firstByteTimeout}ms), falling back to completeWithTools (persistent)`);
+            onProgress?.({
+              type: 'thinking',
+              phase: 'analyzing',
+              label: 'Stream unavailable — using batch mode',
+            });
+            const batchResult = await provider.completeWithTools(budgeted.messages, tools, completionOpts);
+            streamResult = synthesizeToolStream(
+              batchResult as AIToolCompletionResult & { __rawContentBlocks?: unknown[] },
+            );
+          }
+        } else if (loopStreamingDisabled) {
+          // Streaming known broken — go directly to completeWithTools
+          const batchResult = await provider.completeWithTools(budgeted.messages, tools, completionOpts);
+          streamResult = synthesizeToolStream(
+            batchResult as AIToolCompletionResult & { __rawContentBlocks?: unknown[] },
+          );
+        } else {
+          streamResult = await provider.streamWithTools(budgeted.messages, tools, completionOpts);
+        }
+
+        // Cache tool results during streaming (keyed by tool_use_id)
+        const iterToolResults = new Map<string, { content: string; is_error?: boolean }>();
+        const pendingServerTools: Extract<ToolStreamEvent, { type: 'tool_end' }>[] = [];
+        const reader = streamResult.stream.getReader();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const event = value as ToolStreamEvent;
+
+            if (event.type === 'text_delta') {
+              fullText += event.text;
+              onContentChunk?.(event.text);
+            }
+
+            if (event.type === 'tool_start') {
+              onToolEvent?.({
+                type: 'tool_start',
+                name: event.name,
+                id: event.id,
+              });
+            }
+
+            if (event.type === 'tool_end') {
+              const isServerTool = AgentCoordinator.SERVER_TOOLS.has(event.name);
+
+              if (isServerTool) {
+                // Collect server tools for parallel execution after stream completes
+                pendingServerTools.push(event);
+              } else {
+                // Client-rendered tool — forward to UI
+                onToolEvent?.({
+                  type: 'tool_call',
+                  name: event.name,
+                  id: event.id,
+                  input: event.input,
+                });
+
+                // ── Accumulate code changes + update in-memory state ──────────
+                // After each edit tool, update files array + preloadedMap so
+                // subsequent read_file calls return post-edit content (read-after-write freshness).
+                let syntheticMsg: string;
+
+                if (event.name === 'propose_code_edit') {
+                  const filePath = event.input?.filePath as string;
+                  const newContent = event.input?.newContent as string;
+                  const reasoning = event.input?.reasoning as string;
+                  const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+                  accumulatedChanges.push({
+                    fileId: matchedFile?.fileId ?? '',
+                    fileName: filePath ?? '',
+                    originalContent: matchedFile?.content ?? '',
+                    proposedContent: newContent ?? '',
+                    reasoning: reasoning ?? '',
+                    agentType: 'project_manager',
+                  });
+                  // Read-after-write: update in-memory state for subsequent iterations
+                  if (matchedFile) {
+                    matchedFile.content = newContent ?? '';
+                    preloadedMap.set(filePath, matchedFile);
+                    if (matchedFile.fileId) preloadedMap.set(matchedFile.fileId, matchedFile);
+                    if (matchedFile.path && matchedFile.path !== filePath) preloadedMap.set(matchedFile.path, matchedFile);
+                  }
+                  const lineCount = (newContent ?? '').split('\n').length;
+                  syntheticMsg = `Full rewrite applied to ${filePath} (${lineCount} lines). The file is updated in your context.`;
+
+                } else if (event.name === 'search_replace') {
+                  const filePath = event.input?.filePath as string;
+                  const oldText = event.input?.old_text as string;
+                  const newText = event.input?.new_text as string;
+                  const reasoning = event.input?.reasoning as string;
+                  const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+                  const currentContent = matchedFile?.content ?? '';
+                  const replaceIdx = currentContent.indexOf(oldText);
+                  const proposedContent = replaceIdx !== -1
+                    ? currentContent.slice(0, replaceIdx) + newText + currentContent.slice(replaceIdx + oldText.length)
+                    : currentContent;
+                  accumulatedChanges.push({
+                    fileId: matchedFile?.fileId ?? '',
+                    fileName: filePath ?? '',
+                    originalContent: currentContent,
+                    proposedContent,
+                    reasoning: reasoning ?? '',
+                    agentType: 'project_manager',
+                  });
+                  // Read-after-write: update in-memory state for subsequent iterations
+                  if (matchedFile && replaceIdx !== -1) {
+                    matchedFile.content = proposedContent;
+                    preloadedMap.set(filePath, matchedFile);
+                    if (matchedFile.fileId) preloadedMap.set(matchedFile.fileId, matchedFile);
+                    if (matchedFile.path && matchedFile.path !== filePath) preloadedMap.set(matchedFile.path, matchedFile);
+                  }
+                  const oldLines = (oldText ?? '').split('\n').length;
+                  const newLines = (newText ?? '').split('\n').length;
+                  if (replaceIdx !== -1) {
+                    syntheticMsg = `Edit applied to ${filePath}: replaced ${oldLines} line(s) with ${newLines} line(s). The file is updated in your context.`;
+                  } else {
+                    syntheticMsg = `Edit failed for ${filePath}: old_text not found in the current file content. Re-read the file with read_file to see its current content before retrying.`;
+                  }
+
+                } else if (event.name === 'create_file') {
+                  const newFileName = (event.input?.fileName as string) ?? '';
+                  const newFileContent = (event.input?.content as string) ?? '';
+                  accumulatedChanges.push({
+                    fileId: '',
+                    fileName: newFileName,
+                    originalContent: '',
+                    proposedContent: newFileContent,
+                    reasoning: (event.input?.reasoning as string) ?? '',
+                    agentType: 'project_manager',
+                  });
+                  // Read-after-write: add new file so read_file can find it
+                  const newFileCtx: FileContext = {
+                    fileId: `new_${newFileName}`,
+                    fileName: newFileName,
+                    fileType: newFileName.endsWith('.liquid') ? 'liquid'
+                      : newFileName.endsWith('.js') ? 'javascript'
+                      : newFileName.endsWith('.css') ? 'css'
+                      : 'other',
+                    content: newFileContent,
+                    path: newFileName,
+                  };
+                  files.push(newFileCtx);
+                  preloadedMap.set(newFileName, newFileCtx);
+                  preloadedMap.set(newFileCtx.fileId, newFileCtx);
+                  const createLines = newFileContent.split('\n').length;
+                  syntheticMsg = `File ${newFileName} created (${createLines} lines). Available via read_file.`;
+
+                } else if (event.name === 'write_file') {
+                  const filePath = (event.input?.filePath as string) ?? (event.input?.fileName as string) ?? '';
+                  const newContent = (event.input?.content as string) ?? (event.input?.newContent as string) ?? '';
+                  const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+                  accumulatedChanges.push({
+                    fileId: matchedFile?.fileId ?? '',
+                    fileName: filePath,
+                    originalContent: matchedFile?.content ?? '',
+                    proposedContent: newContent,
+                    reasoning: (event.input?.reasoning as string) ?? '',
+                    agentType: 'project_manager',
+                  });
+                  if (matchedFile) {
+                    matchedFile.content = newContent;
+                    preloadedMap.set(filePath, matchedFile);
+                    if (matchedFile.fileId) preloadedMap.set(matchedFile.fileId, matchedFile);
+                    if (matchedFile.path && matchedFile.path !== filePath) preloadedMap.set(matchedFile.path, matchedFile);
+                  }
+                  const writeLines = newContent.split('\n').length;
+                  syntheticMsg = `File ${filePath} written (${writeLines} lines). The file is updated in your context.`;
+
+                } else if (event.name === 'delete_file') {
+                  const filePath = (event.input?.filePath as string) ?? (event.input?.fileName as string) ?? '';
+                  const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+                  // Remove from preloadedMap so read_file won't find it
+                  if (matchedFile) {
+                    preloadedMap.delete(filePath);
+                    if (matchedFile.fileId) preloadedMap.delete(matchedFile.fileId);
+                    if (matchedFile.fileName) preloadedMap.delete(matchedFile.fileName);
+                    if (matchedFile.path) preloadedMap.delete(matchedFile.path);
+                    const idx = files.indexOf(matchedFile);
+                    if (idx !== -1) files.splice(idx, 1);
+                  }
+                  syntheticMsg = `File ${filePath} deleted.`;
+
+                } else if (event.name === 'rename_file') {
+                  const oldPath = (event.input?.oldPath as string) ?? (event.input?.filePath as string) ?? '';
+                  const newPath = (event.input?.newPath as string) ?? (event.input?.newName as string) ?? '';
+                  const matchedFile = files.find(f => f.fileName === oldPath || f.path === oldPath);
+                  if (matchedFile) {
+                    // Remove old keys
+                    preloadedMap.delete(oldPath);
+                    if (matchedFile.fileId) preloadedMap.delete(matchedFile.fileId);
+                    if (matchedFile.fileName) preloadedMap.delete(matchedFile.fileName);
+                    if (matchedFile.path) preloadedMap.delete(matchedFile.path);
+                    // Update file metadata
+                    matchedFile.fileName = newPath;
+                    matchedFile.path = newPath;
+                    // Re-add with new keys
+                    preloadedMap.set(newPath, matchedFile);
+                    if (matchedFile.fileId) preloadedMap.set(matchedFile.fileId, matchedFile);
+                  }
+                  syntheticMsg = `File renamed from ${oldPath} to ${newPath}.`;
+
+                } else if (event.name === 'propose_plan') {
+                  planProposalCount++;
+                  syntheticMsg = 'Plan proposed. Waiting for user review.';
+
+                } else if (event.name === 'ask_clarification') {
+                  needsClarification = true;
+                  syntheticMsg = 'Clarification question sent. Waiting for user response.';
+
+                } else {
+                  syntheticMsg = `Tool ${event.name} call forwarded to client.`;
+                }
+
+                iterToolResults.set(event.id, { content: syntheticMsg });
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        // ── Execute pending server tools in parallel ──────────────────────
+        if (pendingServerTools.length > 0) {
+          const executeServerTool = async (evt: Extract<ToolStreamEvent, { type: 'tool_end' }>): Promise<void> => {
+            const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
+            let toolResult: ToolResult;
+
+            const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
+            const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
+
+            if (preloadedFile) {
+              toolResult = {
+                tool_use_id: evt.id,
+                content: preloadedFile.content,
+              };
+              console.log(`[AgentLoop] read_file short-circuited: ${preloadedFile.fileName} (already pre-loaded)`);
+            } else {
+              try {
+                const result = executeToolCall(toolCall, toolCtx);
+                toolResult = result instanceof Promise ? await result : result;
+              } catch (err) {
+                toolResult = {
+                  tool_use_id: evt.id,
+                  content: `Tool execution failed: ${String(err)}`,
+                  is_error: true,
+                };
+              }
+            }
+
+            // Track read files for context rule expansion
+            if (evt.name === 'read_file' && !toolResult.is_error) {
+              const fileId = evt.input?.fileId as string;
+              if (fileId) readFiles.add(fileId);
+              const matchedFile = files.find(f => f.fileId === fileId || f.fileName === fileId);
+              if (matchedFile) readFiles.add(matchedFile.fileName);
+            }
+
+            // Truncate large results (8000 chars balances context vs token budget)
+            const MAX_TOOL_RESULT_CHARS = 8000;
+            const truncatedContent = toolResult.content.length > MAX_TOOL_RESULT_CHARS
+              ? toolResult.content.slice(0, MAX_TOOL_RESULT_CHARS)
+                + `\n\n... [truncated — showing ${MAX_TOOL_RESULT_CHARS} of ${toolResult.content.length} chars]`
+              : toolResult.content;
+
+            iterToolResults.set(evt.id, { content: truncatedContent, is_error: toolResult.is_error });
+
+            onToolEvent?.({
+              type: 'tool_call',
+              name: evt.name,
+              id: evt.id,
+              input: evt.input,
+              result: truncatedContent,
+              isError: toolResult.is_error,
+            });
+          };
+
+          if (pendingServerTools.length > 1) {
+            console.log(`[AgentLoop] Executing ${pendingServerTools.length} server tools in parallel`);
+          }
+          await Promise.all(pendingServerTools.map(executeServerTool));
+        }
+
+        // Check stop reason
+        const sr = await streamResult.getStopReason();
+        const rawBlocks = await streamResult.getRawContentBlocks();
+
+        if (sr !== 'tool_use' || iteration >= MAX_ITERATIONS - 1 || planProposalCount >= 2) {
+          break;
+        }
+
+        // Multi-turn: append assistant message (raw content blocks) + tool results
+        const assistantMsg = {
+          role: 'assistant',
+          content: '',
+          __toolCalls: rawBlocks,
+        } as unknown as AIMessage;
+        messages.push(assistantMsg);
+
+        // Build tool result blocks from cached results (no re-execution)
+        const toolResultBlocks: unknown[] = [];
+        for (const block of rawBlocks) {
+          const b = block as { type: string; id?: string };
+          if (b.type === 'tool_use' && b.id) {
+            const cached = iterToolResults.get(b.id);
+            if (cached) {
+              toolResultBlocks.push({
+                type: 'tool_result',
+                tool_use_id: b.id,
+                content: cached.content,
+                ...(cached.is_error ? { is_error: true } : {}),
+              });
+            }
+          }
+        }
+
+        if (toolResultBlocks.length > 0) {
+          const toolResultMsg = {
+            role: 'user',
+            content: '',
+            __toolResults: toolResultBlocks,
+          } as unknown as AIMessage;
+          messages.push(toolResultMsg);
+        }
+
+        // Compress old tool results to save tokens in later iterations
+        compressOldToolResults(messages);
+
+        iteration++;
+      }
+
+      // Track usage
+      const usage = await Promise.resolve().then(() => ({
+        inputTokens: 0,
+        outputTokens: 0,
+      }));
+      this.pm['_lastUsage'] = {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        model,
+      };
+
+      console.log(`[AgentLoop] Complete after ${iteration + 1} iterations, ${fullText.length} chars, ${accumulatedChanges.length} changes`);
+
+      const hasChanges = accumulatedChanges.length > 0;
+
+      if (hasChanges) {
+        storeChanges(executionId, 'project_manager', accumulatedChanges);
+        updateExecutionStatus(executionId, 'awaiting_approval');
+      } else {
+        updateExecutionStatus(executionId, 'completed');
+        await persistExecution(executionId);
+      }
+
+      return {
+        agentType: 'project_manager',
+        success: true,
+        analysis: fullText,
+        changes: hasChanges ? accumulatedChanges : undefined,
+        needsClarification,
+        directStreamed: true,
+      };
+    } catch (error) {
+      console.error('[AgentLoop] Error, falling back to standard pipeline:', error);
+
+      // Fall back to standard executeSolo (without the fast path flag)
+      const fallbackOptions = { ...options, onContentChunk: undefined, onToolEvent: undefined };
+      return this.executeSolo(executionId + '-fb', projectId, userId, userRequest, files, userPreferences, fallbackOptions);
+    }
+  }
+
+  /**
+   * Ask mode fast path: single conversational LLM call with direct token streaming.
+   * Bypasses exploration, JSON decision, and summary — tokens go straight to the client.
+   * @deprecated Use streamAgentLoop instead. Kept for backward compatibility.
+   */
+  private async executeAskFastPath(
+    executionId: string,
+    projectId: string,
+    userId: string,
+    userRequest: string,
+    files: FileContext[],
+    userPreferences: UserPreference[],
+    options: CoordinatorExecuteOptions,
+  ): Promise<AgentResult> {
+    createExecution(executionId, projectId, userId, userRequest);
+    updateExecutionStatus(executionId, 'in_progress');
+
+    const onProgress = options.onProgress;
+    const onContentChunk = options.onContentChunk!;
+
+    console.log(`[Ask-FastPath] Starting for execution ${executionId}`);
+
+    // Send a brief thinking event so the UI shows activity
+    onProgress?.({
+      type: 'thinking',
+      phase: 'analyzing',
+      subPhase: 'building_context',
+      label: 'Answering...',
+    });
+
+    try {
+      // Build PM-scoped context (same file selection as regular solo)
+      const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: 'SIMPLE' });
+
+      // Format selected files for context
+      const selectedFiles = pmFiles.filter(f => !f.content.startsWith('['));
+      const stubCount = pmFiles.length - selectedFiles.length;
+      const fileList = [
+        `Selected files (${selectedFiles.length}):`,
+        ...selectedFiles.map(f => `- ${f.fileName} (${f.fileType}, ${f.content.length} chars)`),
+        '',
+        stubCount > 0
+          ? `${stubCount} other theme files available (not loaded).`
+          : '',
+      ].filter(Boolean).join('\n');
+
+      const fileContents = selectedFiles
+        .map(f => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``)
+        .join('\n\n');
+
+      // Build user message with file context
+      const userMessage = [
+        `User Question: ${userRequest}`,
+        '',
+        '## Project Files:',
+        fileList,
+        '',
+        ...(options.memoryContext ? [options.memoryContext, ''] : []),
+        ...(options.domContext ? [options.domContext, ''] : []),
+        '## Full File Contents (selected files):',
+        fileContents,
+      ].join('\n');
+
+      // Build conversation messages
+      const messages: AIMessage[] = [
+        { role: 'system' as const, content: ASK_DIRECT_PROMPT },
+      ];
+
+      // Include conversation history for multi-turn context
+      if (options.recentMessages?.length) {
+        for (let i = 0; i < options.recentMessages.length; i++) {
+          const role = i % 2 === 0 ? 'user' : 'assistant';
+          messages.push({ role: role as 'user' | 'assistant', content: options.recentMessages[i] });
+        }
+      }
+
+      messages.push({ role: 'user', content: userMessage });
+
+      // Apply token budget
+      const budgeted = enforceRequestBudget(messages);
+
+      // Resolve model (respects user override)
+      const model = resolveModel({
+        action: 'generate' as AIAction,
+        userOverride: options.model,
+        agentRole: 'project_manager',
+        tier: 'SIMPLE',
+      });
+      const providerName = getProviderForModel(model);
+      const provider = getAIProvider(providerName as Parameters<typeof getAIProvider>[0]);
+
+      console.log(`[Ask-FastPath] Using model: ${model}, provider: ${providerName}, messages: ${budgeted.messages.length}, truncated: ${budgeted.truncated}`);
+
+      // Stream directly — each token goes to the client
+      const streamResult = await provider.stream(budgeted.messages, {
+        model,
+        maxTokens: 4096,
+      });
+
+      let fullText = '';
+      const reader = streamResult.stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += value;
+          onContentChunk(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      // Track usage
+      const usage = await streamResult.getUsage();
+      console.log(`[Ask-FastPath] Complete. ${fullText.length} chars, ${usage.inputTokens}in/${usage.outputTokens}out tokens`);
+
+      // Store usage on PM agent for accumulation
+      this.pm['_lastUsage'] = {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        model,
+      };
+
+      updateExecutionStatus(executionId, 'completed');
+      await persistExecution(executionId);
+
+      return {
+        agentType: 'project_manager',
+        success: true,
+        analysis: fullText,
+        directStreamed: true,
+      };
+    } catch (error) {
+      console.error('[Ask-FastPath] Error, falling back to standard pipeline:', error);
+
+      // Fall back to standard executeSolo (without the fast path flag)
+      const fallbackOptions = { ...options, onContentChunk: undefined };
+      return this.executeSolo(executionId + '-fb', projectId, userId, userRequest, files, userPreferences, fallbackOptions);
     }
   }
 

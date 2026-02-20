@@ -8,7 +8,8 @@ interface GlowTextProps {
   as?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span';
   className?: string;
   animate?: boolean;
-  color?: 'sky' | 'white' | 'warm-gray';
+  /** Accent = green + Geist circle pixel font (default). Use 'white' or 'warm-gray' for non-accent. */
+  color?: 'accent' | 'white' | 'warm-gray';
 }
 
 // Pre-build motion components outside render to avoid React Compiler static-component error
@@ -22,23 +23,29 @@ const MOTION_TAGS = {
 };
 
 const colorMap = {
-  sky: 'text-sky-400',
+  accent: 'text-accent font-pixel-circle',
   white: 'text-white',
   'warm-gray': 'text-stone-500',
 };
 
 const glowColorMap = {
-  sky: 'drop-shadow-[0_0_20px_rgba(14,165,233,0.4)]',
+  accent: 'drop-shadow-[0_0_20px_rgba(40,205,86,0.35)]',
   white: 'drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]',
   'warm-gray': 'drop-shadow-[0_0_15px_rgba(120,113,108,0.2)]',
 };
+
+const accentGlowKeyframes = [
+  'drop-shadow(0 0 20px rgba(40,205,86,0.25))',
+  'drop-shadow(0 0 36px rgba(40,205,86,0.5))',
+  'drop-shadow(0 0 20px rgba(40,205,86,0.25))',
+];
 
 export function GlowText({
   children,
   as: Tag = 'span',
   className = '',
   animate = true,
-  color = 'sky',
+  color = 'accent',
 }: GlowTextProps) {
   const MotionTag = MOTION_TAGS[Tag];
 
@@ -46,18 +53,12 @@ export function GlowText({
     <MotionTag
       className={`${colorMap[color]} ${glowColorMap[color]} ${className}`}
       animate={
-        animate
-          ? {
-              filter: [
-                'drop-shadow(0 0 20px rgba(14,165,233,0.2))',
-                'drop-shadow(0 0 40px rgba(14,165,233,0.5))',
-                'drop-shadow(0 0 20px rgba(14,165,233,0.2))',
-              ],
-            }
+        animate && color === 'accent'
+          ? { filter: accentGlowKeyframes }
           : undefined
       }
       transition={
-        animate
+        animate && color === 'accent'
           ? { duration: 3, repeat: Infinity, ease: 'easeInOut' }
           : undefined
       }
@@ -66,3 +67,5 @@ export function GlowText({
     </MotionTag>
   );
 }
+
+

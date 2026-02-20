@@ -191,16 +191,16 @@ export function HomeModal({
         isFullPage
           ? 'min-h-screen p-6'
           : 'w-[95vw] max-w-7xl h-[90vh] mx-auto my-[5vh]'
-      } bg-gray-950 rounded-xl border border-gray-800 overflow-hidden`}
+      } ide-surface-panel rounded-xl border ide-border overflow-hidden`}
     >
       {/* Feature Banner */}
       <FeatureBanner />
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800 shrink-0">
+      <div className="flex items-center gap-3 px-6 py-4 border-b ide-border shrink-0">
         <h1 className="text-xl font-semibold text-white">Projects</h1>
         {activeProjects.length > 0 && (
-          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-800 text-gray-400">
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full ide-surface-inset ide-text-muted">
             {activeProjects.length}
           </span>
         )}
@@ -210,7 +210,7 @@ export function HomeModal({
           <div className="relative">
             <Search
               size={14}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 ide-text-3"
             />
             <input
               ref={searchRef}
@@ -218,7 +218,7 @@ export function HomeModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search projects..."
-              className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md bg-gray-900 border border-gray-700 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500/50"
+              className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md ide-input focus:outline-none focus:border-sky-500/50"
             />
           </div>
         </div>
@@ -227,13 +227,13 @@ export function HomeModal({
         <div ref={sortRef} className="relative">
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md ide-text-muted hover:text-white ide-hover transition-colors"
           >
             <SortAsc size={14} />
             {sort === 'recent' ? 'Recent' : sort === 'name' ? 'Name' : 'Created'}
           </button>
           {showSortMenu && (
-            <div className="absolute right-0 top-full mt-1 w-36 py-1 rounded-lg bg-gray-900 border border-gray-700 shadow-xl z-20">
+            <div className="absolute right-0 top-full mt-1 w-36 py-1 rounded-lg ide-surface-panel border ide-border shadow-xl z-20">
               {(['recent', 'name', 'created'] as SortMode[]).map((s) => (
                 <button
                   key={s}
@@ -244,7 +244,7 @@ export function HomeModal({
                   className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
                     sort === s
                       ? 'text-sky-400 bg-sky-500/10'
-                      : 'text-gray-300 hover:bg-gray-800'
+                      : 'ide-text-2 ide-hover'
                   }`}
                 >
                   {s === 'recent'
@@ -262,7 +262,7 @@ export function HomeModal({
         {!isFullPage && (
           <button
             onClick={handleClose}
-            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors ml-2"
+            className="p-1.5 rounded-md ide-hover ide-text-muted hover:text-white transition-colors ml-2"
             aria-label="Close"
           >
             <X size={18} />
@@ -277,12 +277,12 @@ export function HomeModal({
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-lg bg-gray-900 border border-gray-800 overflow-hidden"
+                className="rounded-lg ide-surface-panel border ide-border overflow-hidden"
               >
-                <div className="aspect-[16/10] bg-gray-800 animate-pulse" />
+                <div className="aspect-[16/10] ide-surface-inset animate-pulse" />
                 <div className="p-3 space-y-2">
-                  <div className="h-4 bg-gray-800 rounded animate-pulse w-3/4" />
-                  <div className="h-3 bg-gray-800 rounded animate-pulse w-1/2" />
+                  <div className="h-4 ide-surface-inset rounded animate-pulse w-3/4" />
+                  <div className="h-3 ide-surface-inset rounded animate-pulse w-1/2" />
                 </div>
               </div>
             ))}
@@ -292,44 +292,44 @@ export function HomeModal({
           <div className="flex flex-col items-center justify-center py-20 space-y-8">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-semibold text-white">Welcome to Synapse</h2>
-              <p className="text-gray-400">Import a Shopify theme to get started</p>
+              <p className="ide-text-muted">Import a Shopify theme to get started</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
               <button
                 onClick={() => (connection ? setShowImportTheme(true) : undefined)}
                 disabled={!connection}
-                className="flex flex-col items-center gap-3 p-6 rounded-xl border border-gray-700 hover:border-sky-500/40 bg-gray-900/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+                className="flex flex-col items-center gap-3 p-6 rounded-xl border ide-border hover:border-sky-500/40 bg-stone-900/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
               >
                 <ShoppingBag
                   size={32}
                   className="text-green-400 group-hover:scale-110 transition-transform"
                 />
-                <span className="text-sm font-medium text-gray-200">
+                <span className="text-sm font-medium ide-text">
                   Import from Shopify
                 </span>
                 {!connection && (
-                  <span className="text-xs text-gray-500">Connect a store first</span>
+                  <span className="text-xs ide-text-3">Connect a store first</span>
                 )}
               </button>
               <button
                 onClick={() => setShowGitImport(true)}
-                className="flex flex-col items-center gap-3 p-6 rounded-xl border border-gray-700 hover:border-sky-500/40 bg-gray-900/50 transition-all group"
+                className="flex flex-col items-center gap-3 p-6 rounded-xl border ide-border hover:border-sky-500/40 bg-stone-900/50 transition-all group"
               >
                 <GitBranch
                   size={32}
                   className="text-sky-400 group-hover:scale-110 transition-transform"
                 />
-                <span className="text-sm font-medium text-gray-200">Clone from Git</span>
+                <span className="text-sm font-medium ide-text">Clone from Git</span>
               </button>
               <button
                 onClick={() => setShowFolderImport(true)}
-                className="flex flex-col items-center gap-3 p-6 rounded-xl border border-gray-700 hover:border-sky-500/40 bg-gray-900/50 transition-all group"
+                className="flex flex-col items-center gap-3 p-6 rounded-xl border ide-border hover:border-sky-500/40 bg-stone-900/50 transition-all group"
               >
                 <FolderOpen
                   size={32}
                   className="text-amber-400 group-hover:scale-110 transition-transform"
                 />
-                <span className="text-sm font-medium text-gray-200">
+                <span className="text-sm font-medium ide-text">
                   Open Local Folder
                 </span>
               </button>
@@ -364,7 +364,7 @@ export function HomeModal({
 
             {/* No search results */}
             {filteredProjects.length === 0 && search.trim() && (
-              <p className="text-center text-gray-500 py-8">
+              <p className="text-center ide-text-3 py-8">
                 No projects matching &ldquo;{search}&rdquo;
               </p>
             )}
@@ -374,7 +374,7 @@ export function HomeModal({
               <div className="mt-8">
                 <button
                   onClick={() => setShowArchived(!showArchived)}
-                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-3"
+                  className="flex items-center gap-2 text-sm ide-text-muted hover:text-white transition-colors mb-3"
                 >
                   {showArchived ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   Archived ({archivedProjects.length})
@@ -422,11 +422,11 @@ export function HomeModal({
 
       {/* Bottom import bar */}
       {hasProjects && (
-        <div className="shrink-0 px-6 py-3 border-t border-gray-800 flex items-center gap-2">
+        <div className="shrink-0 px-6 py-3 border-t ide-border flex items-center gap-2">
           <button
             onClick={() => (connection ? setShowImportTheme(true) : undefined)}
             disabled={!connection}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md ide-text-2 hover:text-white ide-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={!connection ? 'Connect a Shopify store first' : 'Import from Shopify'}
           >
             <ShoppingBag size={14} />
@@ -434,14 +434,14 @@ export function HomeModal({
           </button>
           <button
             onClick={() => setShowGitImport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md ide-text-2 hover:text-white ide-hover transition-colors"
           >
             <GitBranch size={14} />
             Clone from Git
           </button>
           <button
             onClick={() => setShowFolderImport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md ide-text-2 hover:text-white ide-hover transition-colors"
           >
             <FolderOpen size={14} />
             Open Local Folder

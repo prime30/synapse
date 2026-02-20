@@ -156,19 +156,18 @@ function buildFibers(canvasW: number, canvasH: number): Fiber[] {
     // Line width: thinner far, thicker near
     const lineWidth = 0.8 + depth * 2.0;
 
-    // Ambient drift per control point
-    // Slow, floaty drift — like strands suspended in air
+    // Ambient drift per control point — slow, aquatic sway
     const drift1Phase = seededRandom(i + 1000) * Math.PI * 2;
-    const drift1Freq = 0.015 + seededRandom(i + 1100) * 0.025;
-    const drift1Amp = 12 + seededRandom(i + 1200) * 18;
+    const drift1Freq = 0.008 + seededRandom(i + 1100) * 0.015;
+    const drift1Amp = 18 + seededRandom(i + 1200) * 28;
 
     const drift2Phase = seededRandom(i + 1300) * Math.PI * 2;
-    const drift2Freq = 0.012 + seededRandom(i + 1400) * 0.020;
-    const drift2Amp = 18 + seededRandom(i + 1500) * 25;
+    const drift2Freq = 0.006 + seededRandom(i + 1400) * 0.012;
+    const drift2Amp = 28 + seededRandom(i + 1500) * 40;
 
     const drift3Phase = seededRandom(i + 1600) * Math.PI * 2;
-    const drift3Freq = 0.010 + seededRandom(i + 1700) * 0.018;
-    const drift3Amp = 22 + seededRandom(i + 1800) * 30;
+    const drift3Freq = 0.005 + seededRandom(i + 1700) * 0.010;
+    const drift3Amp = 35 + seededRandom(i + 1800) * 50;
 
     // Pulse — very slow, gentle drift along the fiber
     const pulseSpeed = 0.03 + seededRandom(i + 1900) * 0.05;
@@ -292,7 +291,8 @@ export function FiberField({
     /* ---- Background glow ---- */
     const glowR = Math.min(canvas.width, canvas.height) * 0.5;
     const glow = ctx.createRadialGradient(originX, originY, 0, originX, originY, glowR);
-    const glowAlpha = 0.03 + scrollIntensity * 0.05;
+    const glowBoost = canvas.width < 900 ? 2.5 : 1;
+    const glowAlpha = (0.04 + scrollIntensity * 0.08) * glowBoost;
     glow.addColorStop(0, `rgba(40, 205, 86, ${glowAlpha})`);
     glow.addColorStop(0.4, `rgba(6, 182, 212, ${glowAlpha * 0.5})`);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -389,8 +389,8 @@ export function FiberField({
       fp3x = originX + (fp3x - originX) * retract;
       fp3y = originY + (fp3y - originY) * retract;
 
-      /* ---- Scroll growth: fibers start small, grow to full size ---- */
-      const growth = 0.15 + scrollIntensity * 0.85;
+      /* ---- Scroll growth: fibers drift visibly at rest, grow to full on scroll ---- */
+      const growth = 0.5 + scrollIntensity * 0.5;
       fp1x = originX + (fp1x - originX) * growth;
       fp1y = originY + (fp1y - originY) * growth;
       fp2x = originX + (fp2x - originX) * growth;
@@ -399,9 +399,11 @@ export function FiberField({
       fp3y = originY + (fp3y - originY) * growth;
 
       /* ---- Draw fiber strand ---- */
-      const strandAlpha = (0.08 + fb.depth * 0.28) * (0.4 + scrollIntensity * 0.6) * strandLife;
-      ctx.strokeStyle = fiberColor(fb.positionT, strandAlpha);
-      ctx.lineWidth = fb.lineWidth;
+      const isMobile = canvas.width < 900;
+      const mobileBoost = isMobile ? 2.5 : 1;
+      const strandAlpha = (0.12 + fb.depth * 0.32) * (0.55 + scrollIntensity * 0.45) * strandLife * mobileBoost;
+      ctx.strokeStyle = fiberColor(fb.positionT, Math.min(strandAlpha, 0.9));
+      ctx.lineWidth = fb.lineWidth * (isMobile ? 1.1 : 1);
       ctx.beginPath();
       ctx.moveTo(originX, originY);
       ctx.bezierCurveTo(fp1x, fp1y, fp2x, fp2y, fp3x, fp3y);
@@ -475,10 +477,11 @@ export function FiberField({
         const originY = canvas.height * 0.98;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.lineCap = 'round';
+        const staticBoost = canvas.width < 900 ? 1.8 : 1;
         for (const fb of fibers) {
-          const alpha = 0.08 + fb.depth * 0.22;
-          ctx.strokeStyle = fiberColor(fb.positionT, alpha);
-          ctx.lineWidth = fb.lineWidth;
+          const alpha = (0.08 + fb.depth * 0.22) * staticBoost;
+          ctx.strokeStyle = fiberColor(fb.positionT, Math.min(alpha, 0.85));
+          ctx.lineWidth = fb.lineWidth * (canvas.width < 900 ? 1.1 : 1);
           ctx.beginPath();
           ctx.moveTo(originX, originY);
           ctx.bezierCurveTo(fb.p1x, fb.p1y, fb.p2x, fb.p2y, fb.p3x, fb.p3y);

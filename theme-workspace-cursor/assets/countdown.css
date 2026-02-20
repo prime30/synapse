@@ -1,0 +1,276 @@
+.t4s-countdown-size-small {
+	--size-item:  46px;
+	--size-number: 14px;
+	--size-text: 12px;
+}
+.t4s-countdown-size-medium {
+	--size-item:  50px;
+	--size-number: 16px;
+	--size-text: 14px;
+}
+.t4s-countdown-size-large {
+	--size-item:  64px;
+	--size-number: 26px;
+	--size-text: 16px;
+}
+.t4s-countdown-size-extra_large {
+	--size-item:  75px;
+	--size-number: 28px;
+	--size-text: 18px;
+}
+
+.t4s-countdown-des-3.t4s-countdown-size-small  {
+	--size-number: 16px;
+}
+.t4s-countdown-des-3.t4s-countdown-size-medium {
+	--size-number: 20px;
+}
+.t4s-countdown-des-3.t4s-countdown-size-large {
+	--size-number: 30px;
+}
+.t4s-countdown-des-3.t4s-countdown-size-extra_large {
+	--size-number: 40px;
+}
+.t4s-countdown-des-5.t4s-countdown-size-small  {
+	--size-number: 16px;
+}
+.t4s-countdown-des-5.t4s-countdown-size-medium {
+	--size-number: 22px;
+	--size-item:  56px;
+}
+.t4s-countdown-des-5.t4s-countdown-size-large {
+	--size-number: 32px;
+}
+.t4s-countdown-des-5.t4s-countdown-size-extra_large {
+	--size-number: 42px;
+}
+
+.t4s-countdown {
+	margin-bottom: var(--mgb);
+}
+.t4s-countdown .t4s-time.t4s-countdown-enabled,
+.t4s-countdown .t4s-time,
+.t4s-countdown .t4s-time.t4s-countdown-enabled.expired_cdt4 {
+	display: inline-flex;
+	opacity: 0;
+}
+
+.t4s-countdown .t4s-time.t4s-countdown-enabled,
+.t4s-countdown-enabled .t4s-time,
+.t4s-countdown.t4s-countdown-enabled .t4s-time {
+	opacity: 1;
+}
+.t4s-text-start .t4s-countdown .t4s-time,
+.t4s-countdown.t4s-text-start .t4s-time {
+	justify-content: flex-start;
+}
+.t4s-text-center .t4s-countdown .t4s-time,
+.t4s-countdown.t4s-text-center .t4s-time {
+	justify-content: center;
+} 
+.t4s-text-end .t4s-countdown .t4s-time,
+.t4s-countdown.t4s-text-end .t4s-time {
+	justify-content: flex-end;
+}  
+.t4s-countdown .t4s-time > span {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin: 0 calc(var(--space-item)/2);
+    font-weight: 400;
+    text-align: center;
+}
+.t4s-countdown .t4s-time > span:first-child {
+	margin-left: 0 !important;
+}
+.t4s-countdown .t4s-time > span:last-child {
+	margin-right: 0 !important;
+}
+.t4s-countdown .cd-number {
+	font-size: var(--size-number);
+	color: var(--number-cl);
+	font-weight: 400;
+	line-height: 1;
+}
+.t4s-countdown .cd-text {
+	font-size: var(--size-text);
+	line-height: 1;
+	color: var(--text-cl);
+	border: none;
+	display: block;
+	font-weight: 400;
+}
+
+
+.t4s-countdown-des-1 .t4s-time > span .cd-number,
+.t4s-countdown-des-5 .t4s-time > span .cd-number {
+	display: inline-flex;
+	justify-content: center;
+	align-items: center;
+	border: solid var(--border-cl);
+	border-width: var(--bd-width);
+	min-width: var(--size-item);
+	min-height: var(--size-item);
+	background-color: var(--bg-cl);
+	border-radius: var(--bdr);
+	padding: 0;
+}
+.t4s-countdown-des-1 .t4s-time > span .cd-text {
+	letter-spacing: 1px;
+	margin-top: 13px;
+	text-transform: uppercase;
+	font-weight: 500;
+}
+
+.t4s-countdown-des-2 .t4s-time > span {
+	background-color: var(--bg-cl);
+	border-radius: var(--bdr);
+	border-color: var(--border-cl);
+	border-width: var(--bd-width);
+	border-style: solid;
+	padding: 0;
+	min-width: var(--size-item);
+	min-height: var(--size-item);
+}
+.t4s-countdown-des-2 .t4s-time > span .cd-number {
+	background-color: transparent;
+	border: none;
+	min-width: 1px;
+	min-height: 1px;
+	display: block;
+}
+.t4s-countdown-des-2 .t4s-time > span .cd-text {
+    padding: 0;
+    margin: 0;
+}
+
+.t4s-countdown-des-3 .t4s-time > span {
+	min-width: var(--size-item);
+	min-height: var(--size-item);
+}
+.t4s-countdown-des-3 .t4s-time > span .cd-number {
+	background-color: transparent;
+	min-height: 1px;
+	min-width: 1px;
+	margin: 5px 0;
+}
+.t4s-countdown-des-3 .t4s-time > span .cd-text {
+	text-transform: unset;
+	font-weight: 400;
+}
+
+.t4s-countdown-des-4 .t4s-time > span .cd-number{ 
+	font-weight: 500;
+}
+.t4s-countdown-des-4 .t4s-time > span .cd-text {
+	letter-spacing: 1px;
+	font-weight: 600;
+}
+.t4s-countdown-des-5 .t4s-time {
+	align-items: center;
+}
+.t4s-countdown-des-5 .t4s-time > span {
+	position: relative;
+}
+.t4s-countdown-des-5 .t4s-time > span .cd-number {
+	font-weight: 700;
+}
+.t4s-countdown-des-5 .t4s-time > span .cd-text {
+	display: none;
+}
+.t4s-countdown-des-5 .t4s-time > span:not(:last-child)::after {
+	content: ":";
+    display: inline-flex;
+    position: absolute;
+    left: calc(100% + var(--space-item)/2 - 2px);
+    margin: auto;
+    color: var(--bg-cl);
+    font-size: 20px;
+    font-weight: 700;
+}
+@media(min-width: 768px) and (max-width: 1199px){
+	.t4s-countdown .t4s-time > span {
+     	margin: 0 calc(var(--space-item-tb)/2);
+  	}
+}
+@media(min-width: 768px) {
+
+	.t4s-text-md-start .t4s-countdown .t4s-time {
+		justify-content: flex-start;
+	}
+	.t4s-text-md-center .t4s-countdown .t4s-time {
+		justify-content: center;
+	}
+	.t4s-text-md-end .t4s-countdown .t4s-time {
+		justify-content: flex-end;
+	}
+
+}
+	
+@media(max-width: 1024px) {
+	.t4s-countdown-des-5.t4s-countdown-size-small  {
+		--size-number: 14px;
+	}
+	.t4s-countdown-des-5.t4s-countdown-size-medium {
+		--size-number: 20px;
+		--size-item:  50px;
+	}
+	.t4s-countdown-des-5.t4s-countdown-size-large {
+		--size-number: 30px;
+	}
+	.t4s-countdown-des-5.t4s-countdown-size-extra_large {
+		--size-number: 40px;
+	}
+}
+@media(max-width: 767px) {
+	.t4s-countdown{
+		margin-bottom: var(--mgb-mb);
+	}
+	.t4s-countdown-size-small {
+		--size-item:  36px;
+		--size-number: 13px;
+		--size-text: 11px;
+	}
+	.t4s-countdown-size-medium {
+		--size-item:  40px;
+		--size-number: 16px;
+		--size-text: 12px;
+	}
+	.t4s-countdown-size-large {
+		--size-item:  54px;
+		--size-number: 20px;
+		--size-text: 14px;
+	}
+	.t4s-countdown-size-extra_large {
+		--size-item:  60px;
+		--size-number: 24px;
+		--size-text: 16px;
+	}
+    .t4s-countdown .t4s-time > span {
+     	margin: 0 calc(var(--space-item-mb)/2);
+  	}
+    
+    .t4s-countdown-des-3.t4s-countdown-size-small  {
+		--size-number: 14px;
+	}
+	.t4s-countdown-des-3.t4s-countdown-size-medium {
+		--size-number: 18px;
+	}
+	.t4s-countdown-des-3.t4s-countdown-size-large {
+		--size-number: 26px;
+	}
+	.t4s-countdown-des-3.t4s-countdown-size-extra_large {
+		--size-number: 36px;
+	}
+
+	.t4s-countdown-des-5.t4s-countdown-size-medium {
+		--size-number: 18px;
+		--size-item:  46px;
+	}
+	.t4s-countdown-des-5.t4s-countdown-size-large {
+		--size-number: 28px;
+	}
+	.t4s-countdown-des-5.t4s-countdown-size-extra_large {
+		--size-number: 36px;
+	}
+}

@@ -1,0 +1,2155 @@
+
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'content-position.css' | asset_url | stylesheet_tag }}
+{{ 'slider-banner-packery.css' | asset_url | stylesheet_tag }} 
+{{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+{%- liquid
+  assign sid = section.id
+  assign se_stts = section.settings
+  assign se_blocks = section.blocks
+  assign stt_layout = se_stts.layout
+  assign stt_image_bg = se_stts.image_bg
+  if stt_layout == 't4s-se-container' 
+    assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+  elsif stt_layout == 't4s-container-wrap'
+    assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+  else
+    assign html_layout = '__' | split: '__'
+  endif
+  assign index = 0
+  assign index2 = 1
+  assign arr_item = section.blocks | where: "type", 'bl_col'
+  if se_stts.btn_owl == "outline"
+    assign arrow_icon = 1
+  else
+    assign arrow_icon = 2
+  endif 
+  assign use_animation = false
+ -%} 
+<div class="t4s-section-inner t4s_se_{{ sid }} {{ stt_layout }} {%- if stt_image_bg != blank and stt_layout != 't4s-se-container' -%}  t4s-has-imgbg lazyloadt4s {%- endif -%} "  {%- if stt_image_bg != blank and stt_layout != 't4s-se-container' -%}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {%- endif -%}   {% render 'section_style', se_stts: se_stts %}>
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner {%- if stt_image_bg != blank -%}  t4s-has-imgbg lazyloadt4s {%- endif -%} "  {%- if stt_image_bg != blank -%}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {%- endif -%} > {%- endif -%} 
+      <div class="t4s-row t4s-gx-lg-{{ se_stts.space_h_item }} t4s-gy-lg-{{ se_stts.space_v_item }} t4s-gx-md-{{ se_stts.space_h_item_tb }} t4s-gy-md-{{ se_stts.space_v_item_tb }} t4s-gx-{{ se_stts.space_h_item_mb }} t4s-gy-{{ se_stts.space_v_item_mb }}" > 
+      {%- for bl in arr_item offset: index -%}
+        {%- liquid
+          assign bk_stts = bl.settings 
+          assign index = index | plus: 1  
+          assign pd_item = bk_stts.padding_inner | remove: ' ' | split: ',' 
+          assign pd_item_mb = bk_stts.padding_inner_mb | remove: ' ' | split: ','
+          assign pd_item_tb = bk_stts.padding_inner_tb | remove: ' ' | split: ',' 
+
+          assign sp_dots = bk_stts.dots_spacing | remove: ' ' | split: ',' 
+          assign sp_dots_mb = bk_stts.dots_spacing_mb | remove: ' ' | split: ','
+          assign sp_dots_tb = bk_stts.dots_spacing_tb | remove: ' ' | split: ',' 
+          assign ani_delay = 0   
+          assign percent_delay = bk_stts.animation_delay | divided_by: 100.0
+          assign time_ani_delay = bk_stts.time_animation | times: percent_delay    
+       -%}
+          <div class="t4s-custom-col t4s-col-item t4s-col-lg-{{ bk_stts.col_dk }} t4s-col-md-{{ bk_stts.col_tb }} t4s-col-{{ bk_stts.col_mb }} t4s-wrap-{{ bk_stts.col_layout }}"{% if bk_stts.col_dk == 'custom' or bk_stts.col_tb == 'custom' %} style="--t4s-cus-col-lg:{{ bk_stts.col_dk_w | remove: ' ' }}%;--t4s-cus-col-tb:{{bk_stts.col_dk_w_tb | remove: ' ' }}%;"{% endif %}>
+              <div class="t4s-col-inner t4s-oh" style="--bg-cl: {{ bk_stts.bg_cl }};--pd-top: {{ pd_item[0] | default: 0 }};--pd-right: {{ pd_item[1] | default: 0 }};--pd-bottom: {{ pd_item[2] | default: 0 }};--pd-left: {{ pd_item[3] | default: 0 }};--pd-tb-top: {{ pd_item_tb[0] | default: 0 }};--pd-tb-right: {{ pd_item_tb[1] | default: 0 }};--pd-tb-bottom: {{ pd_item_tb[2] | default: 0 }};--pd-tb-left: {{ pd_item_tb[3] | default: 0 }};--pd-mb-top: {{ pd_item_mb[0] | default: 0 }};--pd-mb-right: {{ pd_item_mb[1] | default: 0 }};--pd-mb-bottom: {{ pd_item_mb[2] | default: 0 }};--pd-mb-left: {{ pd_item_mb[3] | default: 0 }};">
+                <div class="t4s-w-100"> 
+                  <div class="t4s-row {% if bk_stts.col_layout == 'packery' -%}t4s-gy-md-{{ se_stts.space_v_item }} t4s-gy-{{ se_stts.space_v_item_mb }} t4s-gx-md-{{ se_stts.space_h_item }} t4s-gx-{{ se_stts.space_h_item_mb }} {%- else %} t4s-gx-md-0 t4s-gx-0{%- endif -%} {% if bk_stts.nav_btn %}  t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %} t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }} {% endif %} {%- if bk_stts.col_layout == 'packery' -%} isotopet4s {%- endif -%} {% if bk_stts.col_layout == 'slider' %} t4s-flickity-slider flickityt4s dots-ps-{{ bk_stts.dots_position }} {%- endif -%}" {%- if bk_stts.col_layout == 'packery' -%} data-t4s-animate data-isotopet4s-js='{ "itemSelector": ".t4s-sl-bn-wrap", "layoutMode": "packery" }'  {%- endif -%} {%- if bk_stts.col_layout == 'slider' -%} data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--space-dots: {{ bk_stts.dots_space }}px;--ts-gutter-x: 0; --sp-dots: {{ sp_dots[0] | default: 0 }} {{ sp_dots[1] | default: 0 }} {{ sp_dots[2] | default: 0 }} {{ sp_dots[3] | default: 0 }};--sp-dots-tb: {{ sp_dots_tb[0] | default: 0 }} {{ sp_dots_tb[1] | default: 0 }} {{ sp_dots_tb[2] | default: 0 }} {{ sp_dots_tb[3] | default: 0 }};--sp-dots-mb: {{ sp_dots_mb[0] | default: 0 }} {{ sp_dots_mb[1] | default: 0 }} {{ sp_dots_mb[2] | default: 0 }} {{ sp_dots_mb[3] | default: 0 }};" {%- endif -%}>
+                  {%- for block in se_blocks offset: index2 -%} 
+                    {%- assign index2 = index2 | plus: 1 -%}
+                    {%- assign bl_stts = block.settings -%}
+                    {%- if  block.type != "bl_col" -%} {%- else -%} {%- break -%}{%- endif -%}
+                    {%- case block.type -%}
+                      {%- when 'banner' -%}
+                        {%-liquid 
+                          assign banner = true
+                          assign general_block = true
+                          assign pd_content = bl_stts.padding_inner_bn | remove: ' ' | split: ','
+                          assign pd_content_tb = bl_stts.padding_inner_bn_tb | remove: ' ' | split: ','
+                          assign pd_content_mb = bl_stts.padding_inner_bn_mb | remove: ' ' | split: ','
+                          assign image = bl_stts.image_bn
+                          if bl_stts.button_link != blank
+                            assign ARRhtml = 'a,,' | split: ','
+                          else
+                            assign ARRhtml = 'div,data-,data-' | split: ','
+                          endif
+                       -%} 
+                        <div class="t4s-sl-bn-wrap t4s-col-item t4s-pr t4s-d-inline-block t4s-eff-img-{{ bl_stts.img_effect }} {% if bk_stts.col_layout == 'packery' %} t4s-col-lg-{{ bl_stts.col_dk_inner }} t4s-col-md-{{ bl_stts.col_tb_inner }} t4s-col-{{ bl_stts.col_mb_inner }} {% endif %} t4s_position_8 t4s_ratioadapt t4s_cover" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }};--pdbn: {{ pd_content[0] | default: 0 }} {{ pd_content[1] | default: 0 }} {{ pd_content[2] | default: 0 }} {{ pd_content[3] | default: 0 }};--pdbn-tb: {{ pd_content_tb[0] | default: 0 }} {{ pd_content_tb[1] | default: 0 }} {{ pd_content_tb[2] | default: 0 }} {{ pd_content_tb[3] | default: 0 }};--pdbn-mb: {{ pd_content_mb[0] | default: 0 }} {{ pd_content_mb[1] | default: 0 }} {{ pd_content_mb[2] | default: 0 }} {{ pd_content_mb[3] | default: 0 }};">
+                          <div class="t4s-pr t4s-oh t4s_ratio t4s-bg-11"{% if image != blank %} style="background: url({{ image | image_url: width: 1 }});"{% endif %}> 
+                            {%- if image != blank -%}
+                              <img class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+                            {%- else -%}
+                              {{ 'image' | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1 t4s-obj-eff' }} 
+                            {%- endif -%}
+                          <div class="t4s-sl-bn--content t4s-pa t4s-sl-bn-content-{{ bl_stts.bn_layout }} t4s-text-v-{{ bl_stts.content_v_position }} t4s-text-h-{{ bl_stts.content_h_position }} t4s-text-{{ bl_stts.content_bn_align }}" style="--time-animation: {{ bk_stts.time_animation }}s;">
+                            <{{ ARRhtml[0] }} {{ ARRhtml[1] }}href="{{ bl_stts.button_link }}" {{ ARRhtml[2] }}target="{{ bl_stts.target_link }}" class="t4s-link-bn"></{{ ARRhtml[0] }}>
+                            <div class="t4s-bn-inner">
+                              {%- if bl_stts.animation_1 != 'none' or bl_stts.animation_2 != 'none' or bl_stts.animation != 'none' -%}{%- assign use_animation = true -%} {%- endif -%}
+                              {% if bl_stts.subtitle != blank %}
+                                <p class="t4s-bn-subtitle t4s-bl-item t4s-text-bl t4s-hidden-mobile-{{ bl_stts.hidden_mobile_1 }} t4s-fnt-fm-{{ bl_stts.fontf_1 }} t4s-font-size-sub-{{ bl_stts.font_size_sub }} t4s-hidden-br-mb-{{ bl_stts.remove_br_tag }} t4s-animation-{{ bl_stts.animation_1 }}" style="--animation: {{ bl_stts.animation_1 }} ;--delay-animation: {{ ani_delay }}s;--text-lh: 1.4;--text-lh-tb: 1.4;--text-lh-mb: 1.4;">{{ bl_stts.subtitle }}</p>
+                              {% endif %}
+                              {% if bl_stts.title != blank %}
+                                <h3 class="t4s-bn-title t4s-bl-item t4s-text-bl t4s-hidden-mobile-{{ bl_stts.hidden_mobile_2 }} t4s-fnt-fm-{{ bl_stts.fontf_2 }} t4s-font-size-{{ bl_stts.font_size }} t4s-hidden-br-mb-{{ bl_stts.remove_br_tag }} t4s-animation-{{ bl_stts.animation_2 }}" style="--animation: {{ bl_stts.animation_2 }} ;--delay-animation: {{ ani_delay }}s;--text-lh: 1.4;--text-lh-tb: 1.4;--text-lh-mb: 1.4;">{{ bl_stts.title }}</h3>
+                              {% endif %}
+                              {%- if bl_stts.button_link != blank and bl_stts.button_text != blank -%}
+                                {%- assign custom_button = true -%}
+                                {%- assign  button_style = bl_stts.button_style -%}
+                                <a href="{{ bl_stts.button_link }}" target="{{ bl_stts.target_link }}" class="t4s-bl-item t4s-hidden-mobile-{{ bl_stts.hidden_mobile_3 }} t4s-animation-{{ bl_stts.animation }} t4s-btn t4s-btn-custom t4s-pe-auto t4s-fnt-fm-{{ bl_stts.fontf_1 }} t4s-btn-style-{{ button_style }} {% if button_style == 'default' or button_style == 'outline' or button_style == 'highlights_icon' %}t4s-btn-effect-{{ bl_stts.button_effect }}{% endif %}" id="b_{{ block.id }}" {{ block.shopify_attributes }} {%- render 'bk_cus_style', type: 'custom_button', bk_stts: bl_stts, button_ls: button_ls, button_ls_tb: button_ls, button_ls_mb: button_ls, ani_delay: ani_delay -%}>{{ bl_stts.button_text }}
+                                    {%- if bl_stts.button_icon_w > 0 -%}
+                                        {%- if bl_stts.icon_style == "1" -%}
+                                            <svg  class="t4s-btn-icon" viewBox="0 0 14 10"><use xlink:href="#t4s-icon-btn"></use></svg>
+                                        {%- else -%}
+                                            <svg class="t4s-btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><path d="M96 480c-8.188 0-16.38-3.125-22.62-9.375c-12.5-12.5-12.5-32.75 0-45.25L242.8 256L73.38 86.63c-12.5-12.5-12.5-32.75 0-45.25s32.75-12.5 45.25 0l192 192c12.5 12.5 12.5 32.75 0 45.25l-192 192C112.4 476.9 104.2 480 96 480z"/></svg>   
+                                        {%- endif -%}
+                                    {%- endif -%}
+                                </a>
+
+                              {%- endif -%}
+                            </div>
+                          </div>
+                        </div>
+                        </div>
+                    {%- endcase -%}
+                  {%- endfor -%}
+                  </div>  
+                </div>
+              </div>
+            </div>
+      {%- endfor -%}
+    </div>
+    {{- html_layout[1] -}}
+</div>
+{%- if general_block or banner -%}
+  {{ 'general-block.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- if custom_button -%}
+  {{ 'button-style.css' | asset_url | stylesheet_tag }}
+  <link href="{{ 'custom-effect.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- endif -%}
+{%- if use_animation -%}
+    <link href="{{ 't4s-animation.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- endif -%}
+<style type="text/css">
+   .t4s-custom-col {
+    background-color: var(--bg_cl);
+  }
+  .t4s-col-inner {
+    width: 100%;
+  }
+  .t4s-ver-center-true {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+</style>
+{% schema %}
+  {
+    "name": "Slider banner packery",
+    "tag": "section",
+    "class": "t4s-section t4s-section-all t4s_tp_cdt t4s-slider-banner-section t4s_bk_flickity",
+    "settings": [
+      {
+        "type": "header",
+        "content": "1.Content options" 
+      },
+      {
+        "type": "select",
+        "id": "space_h_item",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items",
+        "default": "30"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items",
+        "default": "30"
+      },
+      
+      {
+        "type": "select",
+        "id": "space_h_item_tb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items (Tablet)",
+        "default": "15"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item_tb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items (Tablet)",
+        "default": "15"
+      },
+
+      {
+        "type": "select",
+        "id": "space_h_item_mb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items (Mobile)",
+        "default": "10"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item_mb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items (Mobile)",
+        "default": "10"
+      },
+      {
+        "type": "header",
+        "content": "2. Design options"
+      },
+      {
+        "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+        "options": [
+            { "value": "t4s-se-container", "label": "Container"},
+            { "value": "t4s-container-wrap", "label": "Wrapped container"},
+            { "value": "t4s-container-fluid", "label": "Full width"}
+        ]
+      },
+      {
+        "type": "color",
+        "id": "cl_bg",
+        "label": "Background"
+      },
+      {
+        "type": "color_background",
+        "id": "cl_bg_gradient",
+        "label": "Background gradient"
+      },
+      {
+        "type": "image_picker",
+        "id": "image_bg",
+        "label": "Background image" 
+      },
+      {
+          "type": "text",
+          "id": "mg",
+          "label": "Margin",
+          "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd",
+          "label": "Padding",
+          "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+          "placeholder": "50px,,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design tablet options"
+      },
+      {
+          "type": "text",
+          "id": "mg_tb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_tb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design mobile options"
+      },
+      {
+          "type": "text",
+          "id": "mg_mb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_mb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      }
+      
+    ],
+    "blocks": [
+      {
+        "type": "bl_col",
+        "name": "Col (Parent)", 
+        "settings": [
+          {
+            "type": "select",
+            "id": "col_layout",
+            "label": "Col layout",
+            "default": "slider",
+            "options": [
+              {
+                "value": "slider",
+                "label": "Slider"
+              },
+              {
+                "value": "packery",
+                "label": "Packery"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "col_dk",
+            "label": "Item width (Desktop)",
+            "default": "6",
+            "options": [
+                {
+                    "value": "12",
+                    "label": "100%"
+                },
+                {
+                    "value": "9",
+                    "label": "75%"
+                },
+                {
+                    "value": "81",
+                    "label": "69.53%"
+                },
+                {
+                    "value": "8",
+                    "label": "66.66%"
+                },
+                {
+                    "value": "82",
+                    "label": "60.93%"
+                },
+                {
+                    "value": "7",
+                    "label": "58.33%"
+                },
+                {
+                    "value": "6",
+                    "label": "50%"
+                },
+                {
+                    "value": "5",
+                    "label": "41.66%"
+                },
+                {
+                    "value": "41",
+                    "label": "39.06%"
+                },
+                {
+                    "value": "4",
+                    "label": "33.33%"
+                },
+                {
+                    "value": "42",
+                    "label": "30.46%"
+                },
+                {
+                    "value": "3",
+                    "label": "25%"
+                },
+                {
+                    "value": "2",
+                    "label": "16.67%"
+                },
+                {
+                  "value": "custom",
+                  "label": "Custom"
+                }
+            ]
+          },
+          {
+            "type":"text",
+            "id":"col_dk_w",
+            "label":"Custom item width (Desktop)",
+            "info":"The value of the unit is '%'",
+            "default":"33.33333"
+          },
+          {
+            "type": "select",
+            "id": "col_tb",
+            "label": "Item width (Tablet)",
+            "default": "6",
+            "options": [
+                {
+                    "value": "12",
+                    "label": "100%"
+                },
+                {
+                    "value": "9",
+                    "label": "75%"
+                },
+                {
+                    "value": "81",
+                    "label": "69.53%"
+                },
+                {
+                    "value": "8",
+                    "label": "66.66%"
+                },
+                {
+                    "value": "82",
+                    "label": "60.93%"
+                },
+                {
+                    "value": "7",
+                    "label": "58.33%"
+                },
+                {
+                    "value": "6",
+                    "label": "50%"
+                },
+                {
+                    "value": "5",
+                    "label": "41.66%"
+                },
+                {
+                    "value": "41",
+                    "label": "39.06%"
+                },
+                {
+                    "value": "4",
+                    "label": "33.33%"
+                },
+                {
+                    "value": "42",
+                    "label": "30.46%"
+                },
+                {
+                    "value": "3",
+                    "label": "25%"
+                },
+                {
+                    "value": "2",
+                    "label": "16.67%"
+                },
+                {
+                  "value": "custom",
+                  "label": "Custom"
+                }
+            ]
+          },
+          {
+            "type":"text",
+            "id":"col_dk_w_tb",
+            "label":"Custom item width (Tablet)",
+            "info":"The value of the unit is '%'",
+            "default":"33.33333"
+          },
+          {
+            "type": "select",
+            "id": "col_mb",
+            "label": "Item width (Mobile)",
+            "default": "12",
+            "options": [
+                {
+                    "value": "12",
+                    "label": "100%"
+                },
+                {
+                    "value": "9",
+                    "label": "75%"
+                },
+                {
+                    "value": "8",
+                    "label": "66.66%"
+                },
+                {
+                    "value": "7",
+                    "label": "58.33%"
+                },
+                {
+                    "value": "6",
+                    "label": "50%"
+                },
+                {
+                    "value": "5",
+                    "label": "41.66%"
+                },
+                {
+                    "value": "4",
+                    "label": "33.33%"
+                },
+                {
+                    "value": "3",
+                    "label": "25%"
+                }
+            ]
+          },
+          {
+            "type": "text",
+            "id": "padding_inner",
+            "label": "Padding inner",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "30px,,30px,"
+          },
+          {
+            "type": "text",
+            "id": "padding_inner_tb",
+            "label": "Padding inner (Tablet)",
+            "placeholder": "15px,,15px,"
+          },
+          {
+            "type": "text",
+            "id": "padding_inner_mb",
+            "label": "Padding inner (Mobile)",
+            "placeholder": "15px,,15px,"
+          },
+          {
+            "type": "header",
+            "content": "+ Options for col layout slider"
+          },
+          {
+            "type": "checkbox",
+            "id": "loop",
+            "label": "Enable loop",
+            "info": "At the end of cells, wrap-around to the other end for infinite scrolling",
+            "default": true
+          },
+          {
+            "type": "range",
+            "id": "au_time",
+            "min": 0,
+            "max": 30,
+            "step": 0.5,
+            "label": "Autoplay speed in second.",
+            "info": "Set is '0' to disable autoplay",
+            "unit": "s",
+            "default": 0
+          },
+          {
+            "type": "checkbox",
+            "id": "au_hover",
+            "label": "Pause autoplay on hover",
+            "info": "Auto-playing will pause when the user hovers over the carousel",
+            "default": true
+          },
+          {
+            "type": "paragraph",
+            "content": "—————————————————"
+          },
+          {
+            "type": "paragraph",
+            "content": "Prev next button"
+          },
+          {
+            "type": "checkbox",
+            "id": "nav_btn",
+            "label": "Use prev next button",
+            "info": "Enable previous & next buttons",
+            "default": false
+          },
+          {
+            "type": "select",
+            "id": "btn_vi",
+            "label": "Visible",
+            "default": "hover",
+            "options": [
+              {
+                "value": "always",
+                "label": "Always"
+              },
+              {
+                "value": "hover",
+                "label": "Only hover"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "btn_owl",
+            "label": "Button style",
+            "default": "default",
+            "options": [
+              {
+                "value": "default",
+                "label": "Default"
+              },
+              {
+                "value": "outline",
+                "label": "Outline"
+              },
+              {
+                "value": "simple",
+                "label": "Simple"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "btn_shape",
+            "label": "Button shape",
+            "info": "Not work for 'Simple' button style",
+            "default": "none",
+            "options": [
+              {
+                "value": "none",
+                "label": "Default"
+              },
+              {
+                "value": "round",
+                "label": "Round"
+              },
+              {
+                "value": "rotate",
+                "label": "Rotate"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "btn_cl",
+            "label": "Button color",
+            "default": "dark",
+            "options": [
+                {
+                    "value": "light",
+                    "label": "Light"
+                },
+                {
+                    "value": "dark",
+                    "label": "Dark"
+                },
+                {
+                    "value": "primary",
+                    "label": "Primary"
+                },
+                {
+                    "value": "custom1",
+                    "label": "Custom color 1"
+                },
+                {
+                    "value": "custom2",
+                    "label": "Custom color 2"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "btn_size",
+            "label": "Button size",
+            "default": "small",
+            "options": [
+              {
+                "value": "small",
+                "label": "Small"
+              },
+              {
+                "value": "medium",
+                "label": "Medium"
+              },
+              {
+                "value": "large",
+                "label": "Large"
+              }
+            ]
+          },
+          {
+            "type": "checkbox",
+            "id": "btn_hidden_mobile",
+            "label": "Hidden buttons on mobile ",
+            "default": true
+          },
+          {
+            "type": "paragraph",
+            "content": "—————————————————"
+          },
+          {
+            "type": "paragraph",
+            "content": "Page dots"
+          },
+          {
+            "type": "checkbox",
+            "id": "nav_dot",
+            "label": "Use page dots",
+            "info": "Creates and show page dots",
+            "default": false
+          },
+          {
+            "type": "select",
+            "id": "dot_owl",
+            "label": "Dots style",
+            "default": "default",
+            "options": [
+              {
+                "value": "default",
+                "label": "Default"
+              },
+              {
+                "value": "outline",
+                "label": "Outline"
+              },
+              {
+                "value": "elessi",
+                "label": "Elessi"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "dots_cl",
+            "label": "Dots color",
+            "default": "dark",
+            "options": [
+              {
+                  "value": "light",
+                  "label": "Light (Best on dark background)"
+              },
+              {
+                  "value": "dark",
+                  "label": "Dark"
+              },
+              {
+                  "value": "primary",
+                  "label": "Primary"
+              },
+              {
+                  "value": "custom1",
+                  "label": "Custom color 1"
+              },
+              {
+                  "value": "custom2",
+                  "label": "Custom color 2"
+              }
+            ]
+          },
+          {
+            "type": "checkbox",
+            "id": "dots_round",
+            "label": "Enable round dots",
+            "default": true
+          },
+          {
+            "type": "range",
+            "id": "dots_space",
+            "min": 2,
+            "max": 20,
+            "step": 1,
+            "label": "Dots between horizontal",
+            "unit": "px",
+            "default": 10
+          },
+          {
+            "type": "select",
+            "id": "dots_position",
+            "label": "Dots horizontal position",
+            "default": "center",
+            "options": [
+                {
+                  "label": "Left",
+                  "value": "start"
+                },
+                {
+                  "label": "Center",
+                  "value": "center"
+                },
+                {
+                  "label": "Right",
+                  "value": "end"
+                }
+            ]
+          },
+          {
+            "type": "text",
+            "id": "dots_spacing",
+            "label": "Dots spacing",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          },
+          {
+            "type": "text",
+            "id": "dots_spacing_tb",
+            "label": "Dots spacing tablet",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          },
+          {
+            "type": "text",
+            "id": "dots_spacing_mb",
+            "label": "Dots spacing mobile",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          },
+          {
+            "type": "checkbox",
+            "id": "dots_hidden_mobile",
+            "label": "Hidden dots on mobile ",
+            "default": false
+          },
+          {
+              "type": "header",
+              "content": "--Animation Options--"
+          },
+          {
+              "type": "range",
+              "id": "time_animation",
+              "label": "Duration animation each block",
+              "max": 5,
+              "min": 1,
+              "default": 1,
+              "unit": "s",
+              "step": 0.5
+          },
+          {
+              "type": "range",
+              "id": "animation_delay",
+              "label": "Time animation delay",
+              "max": 110,
+              "min": 10,
+              "step": 10,
+              "unit": "%",
+              "default": 40,
+              "info": "Defines the number of time to wait when the animation previous end, before the animation next will start."
+          }  
+        ]
+      },
+      {
+        "type": "banner",
+        "name": "Banner text",
+        "settings": [
+          {
+            "type": "image_picker",
+            "id": "image_bn",
+            "label": "+ Image"
+          },
+          {
+            "type": "select",
+            "id": "img_effect",
+            "label": "Image effect when hover",
+            "default": "none",
+            "options": [
+              {
+                "value": "none",
+                "label": "None"
+              },
+              {
+                "value": "zoom",
+                "label": "Zoom in"
+              },
+              {
+                "value": "rotate",
+                "label": "Rotate"
+              },
+              {
+                "value": "translateToTop",
+                "label": "Translate to top"
+              },
+              {
+                "value": "translateToRight",
+                "label": "Translate to right"
+              },
+              {
+                "value": "translateToBottom",
+                "label": "Translate to bottom"
+              },
+              {
+                "value": "translateToLeft",
+                "label": "Translate to left"
+              },
+              {
+                "value": "filter",
+                "label": "Filter"
+              },
+              {
+                "value": "bounceIn",
+                "label": "BounceIn"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": "—————————————————"
+          },
+          {
+            "type": "textarea",
+            "id": "subtitle",
+            "label": "+ Text 1",
+            "default": "Text 1",
+            "info": "If you want to line break, please add a <br> tag in the text"
+          },
+          {
+            "type": "checkbox",
+            "id": "remove_br_tag",
+            "label": "Remove <br> tag on tablet & mobile",
+            "default": false
+          },
+          {
+            "type": "select",
+            "id": "font_size_sub",
+            "default": "ex-small",
+            "label": "Font size",
+            "options": [
+              {
+                  "label": "Extra Small",
+                  "value": "ex-small"
+              },
+              {
+                  "label": "Small",
+                  "value": "small"
+              },
+              {
+                  "label": "Medium",
+                  "value": "medium"
+              },
+              {
+                  "label": "Larger",
+                  "value": "larger"
+              },
+              {
+                  "label": "Extra larger",
+                  "value": "ex-larger"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "fontf_1",
+            "default": "inherit",
+            "label": "Font family",
+            "options": [
+                {
+                    "label": "Inherit",
+                    "value": "inherit"
+                },
+                {
+                    "label": "Font family #1",
+                    "value": "1"
+                },
+                {
+                    "label": "Font family #2",
+                    "value": "2"
+                },
+                {
+                    "label": "Font family #3",
+                    "value": "3"
+                }
+            ]
+          },
+          {
+            "type": "checkbox",
+            "id": "hidden_mobile_1",
+            "label": "Hidden on mobile ",
+            "default": false
+          },
+          {
+           "type": "select",
+            "id": "animation_1",
+            "label": "Animation",
+            "default": "none",
+            "options": [
+              {
+                  "label": "None",
+                  "value": "none"
+              },
+              {
+                  "label": "fadeIn",
+                  "value": "fadeIn"
+              },
+              {
+                  "label": "fadeInDown",
+                  "value": "fadeInDown"
+              },
+              {
+                  "label": "fadeInDownBig",
+                  "value": "fadeInDownBig"
+              },
+              {
+                  "label": "fadeInLeft",
+                  "value": "fadeInLeft"
+              },
+              {
+                  "label": "fadeInLeftBig",
+                  "value": "fadeInLeftBig"
+              },
+              {
+                  "label": "fadeInRight",
+                  "value": "fadeInRight"
+              },
+              {
+                  "label": "fadeInRightBig",
+                  "value": "fadeInRightBig"
+              },
+              {
+                  "label": "fadeInUp",
+                  "value": "fadeInUp"
+              },
+              {
+                  "label": "fadeInUpBig",
+                  "value": "fadeInUpBig"
+              },
+              {
+                  "label": "fadeInTopLeft",
+                  "value": "fadeInTopLeft"
+              },
+              {
+                  "label": "fadeInTopRight",
+                  "value": "fadeInTopRight"
+              },
+              {
+                  "label": "fadeInBottomLeft",
+                  "value": "fadeInBottomLeft"
+              },
+              {
+                  "label": "fadeInBottomRight",
+                  "value": "fadeInBottomRight"
+              },
+              {
+                  "label": "bounceIn",
+                  "value": "bounceIn"
+              },
+              {
+                  "label": "bounceInDown",
+                  "value": "bounceInDown"
+              },
+              {
+                  "label": "bounceInLeft",
+                  "value": "bounceInLeft"
+              },
+              {
+                  "label": "bounceInRight",
+                  "value": "bounceInRight"
+              },
+              {
+                  "label": "bounceInUp",
+                  "value": "bounceInUp"
+              },
+              {
+                  "label": "zoomIn",
+                  "value": "zoomIn"
+              },
+              {
+                  "label": "zoomInDown",
+                  "value": "zoomInDown"
+              },
+              {
+                  "label": "zoomInLeft",
+                  "value": "zoomInLeft"
+              },
+              {
+                  "label": "zoomInRight",
+                  "value": "zoomInRight"
+              },
+              {
+                  "label": "zoomInUp",
+                  "value": "zoomInUp"
+              },
+              {
+                  "label": "slideInDown",
+                  "value": "slideInDown"
+              },
+              {
+                  "label": "slideInLeft",
+                  "value": "slideInLeft"
+              },
+              {
+                  "label": "slideInRight",
+                  "value": "slideInRight"
+              },
+              {
+                  "label": "slideInUp",
+                  "value": "slideInUp"
+              },
+              {
+                  "label": "lightSpeedInRight",
+                  "value": "lightSpeedInRight"
+              },
+              {
+                  "label": "lightSpeedInLeft",
+                  "value": "lightSpeedInLeft"
+              },
+              {
+                  "label": "lightSpeedOutRight",
+                  "value": "lightSpeedOutRight"
+              },
+              {
+                  "label": "lightSpeedOutLeft",
+                  "value": "lightSpeedOutLeft"
+              },
+              {
+                  "label": "jello",
+                  "value": "jello"
+              },
+              {
+                  "label": "tada",
+                  "value": "tada"
+              },
+              {
+                  "label": "pulse",
+                  "value": "pulse"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": "—————————————————"
+          },
+          {
+            "type": "textarea",
+            "id": "title",
+            "label": "+ Text 2",
+            "default": "Text 2",
+            "info": "If you want to line break, please add a <br> tag in the text"
+          },
+          {
+            "type": "checkbox",
+            "id": "remove_br_tag_2",
+            "label": "Remove <br> tag on tablet & mobile",
+            "default": false
+          },
+          {
+            "type": "select",
+            "id": "font_size",
+            "default": "medium",
+            "label": "Font size",
+            "options": [
+              {
+                  "label": "Extra Small",
+                  "value": "ex-small"
+              },
+              {
+                  "label": "Small",
+                  "value": "small"
+              },
+              {
+                  "label": "Medium",
+                  "value": "medium"
+              },
+              {
+                  "label": "Larger",
+                  "value": "larger"
+              },
+              {
+                  "label": "Extra larger",
+                  "value": "ex-larger"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "fontf_2",
+            "default": "inherit",
+            "label": "Font family",
+            "options": [
+                {
+                    "label": "Inherit",
+                    "value": "inherit"
+                },
+                {
+                    "label": "Font family #1",
+                    "value": "1"
+                },
+                {
+                    "label": "Font family #2",
+                    "value": "2"
+                },
+                {
+                    "label": "Font family #3",
+                    "value": "3"
+                }
+            ]
+          },
+          {
+            "type": "checkbox",
+            "id": "hidden_mobile_2",
+            "label": "Hidden on mobile ",
+            "default": false
+          },
+          {
+           "type": "select",
+            "id": "animation_2",
+            "label": "Animation",
+            "default": "none",
+            "options": [
+              {
+                  "label": "None",
+                  "value": "none"
+              },
+              {
+                  "label": "fadeIn",
+                  "value": "fadeIn"
+              },
+              {
+                  "label": "fadeInDown",
+                  "value": "fadeInDown"
+              },
+              {
+                  "label": "fadeInDownBig",
+                  "value": "fadeInDownBig"
+              },
+              {
+                  "label": "fadeInLeft",
+                  "value": "fadeInLeft"
+              },
+              {
+                  "label": "fadeInLeftBig",
+                  "value": "fadeInLeftBig"
+              },
+              {
+                  "label": "fadeInRight",
+                  "value": "fadeInRight"
+              },
+              {
+                  "label": "fadeInRightBig",
+                  "value": "fadeInRightBig"
+              },
+              {
+                  "label": "fadeInUp",
+                  "value": "fadeInUp"
+              },
+              {
+                  "label": "fadeInUpBig",
+                  "value": "fadeInUpBig"
+              },
+              {
+                  "label": "fadeInTopLeft",
+                  "value": "fadeInTopLeft"
+              },
+              {
+                  "label": "fadeInTopRight",
+                  "value": "fadeInTopRight"
+              },
+              {
+                  "label": "fadeInBottomLeft",
+                  "value": "fadeInBottomLeft"
+              },
+              {
+                  "label": "fadeInBottomRight",
+                  "value": "fadeInBottomRight"
+              },
+              {
+                  "label": "bounceIn",
+                  "value": "bounceIn"
+              },
+              {
+                  "label": "bounceInDown",
+                  "value": "bounceInDown"
+              },
+              {
+                  "label": "bounceInLeft",
+                  "value": "bounceInLeft"
+              },
+              {
+                  "label": "bounceInRight",
+                  "value": "bounceInRight"
+              },
+              {
+                  "label": "bounceInUp",
+                  "value": "bounceInUp"
+              },
+              {
+                  "label": "zoomIn",
+                  "value": "zoomIn"
+              },
+              {
+                  "label": "zoomInDown",
+                  "value": "zoomInDown"
+              },
+              {
+                  "label": "zoomInLeft",
+                  "value": "zoomInLeft"
+              },
+              {
+                  "label": "zoomInRight",
+                  "value": "zoomInRight"
+              },
+              {
+                  "label": "zoomInUp",
+                  "value": "zoomInUp"
+              },
+              {
+                  "label": "slideInDown",
+                  "value": "slideInDown"
+              },
+              {
+                  "label": "slideInLeft",
+                  "value": "slideInLeft"
+              },
+              {
+                  "label": "slideInRight",
+                  "value": "slideInRight"
+              },
+              {
+                  "label": "slideInUp",
+                  "value": "slideInUp"
+              },
+              {
+                  "label": "lightSpeedInRight",
+                  "value": "lightSpeedInRight"
+              },
+              {
+                  "label": "lightSpeedInLeft",
+                  "value": "lightSpeedInLeft"
+              },
+              {
+                  "label": "lightSpeedOutRight",
+                  "value": "lightSpeedOutRight"
+              },
+              {
+                  "label": "lightSpeedOutLeft",
+                  "value": "lightSpeedOutLeft"
+              },
+              {
+                  "label": "jello",
+                  "value": "jello"
+              },
+              {
+                  "label": "tada",
+                  "value": "tada"
+              },
+              {
+                  "label": "pulse",
+                  "value": "pulse"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": "—————————————————"
+          },
+          {
+            "type": "text",
+            "id": "button_text",
+            "label": "+ Button label",
+            "default": "Button label",
+            "info": "If set blank will not show"
+          },
+          {
+            "type": "url",
+            "id": "button_link",
+            "label": "Button link",
+            "info": "If set blank will not show"
+          },
+          {
+            "type": "select",
+            "id": "target_link",
+            "label": "Open link in",
+            "default": "_self",
+            "options": [
+                {
+                    "value": "_self",
+                    "label": "Current window"
+                },
+                {
+                    "value": "_blank",
+                    "label": "New window"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "button_style",
+            "label": "Button style",
+            "options": [
+                {
+                    "label": "Default",
+                    "value": "default"
+                },
+                {
+                    "label": "Outline",
+                    "value": "outline"
+                },
+                {
+                    "label": "Bordered top",
+                    "value": "bordered_top"
+                },
+                {
+                    "label": "Bordered bottom", 
+                    "value": "bordered"
+                },
+                {
+                    "label": "Link",
+                    "value": "link"
+                },
+                {
+                    "label": "Highlights icon",
+                    "value": "highlights_icon"
+                }
+            ]
+          },
+          {
+              "type": "select",
+              "id": "icon_style",
+              "default": "1",
+              "label": "Icon style",
+              "options": [
+                  {
+                      "label": "Arrow",
+                      "value": "2"
+                  },
+                  {
+                      "label": "Long arrow",
+                      "value": "1"
+                  }
+              ]
+          },
+          {
+              "type": "range",
+              "id": "button_icon_w",
+              "label": "Button icon width",
+              "min": 0,
+              "max": 50,
+              "step": 1,
+              "unit": "px",
+              "default": 0
+          },
+          {
+              "type": "range",
+              "id": "border_w",
+              "label": "Border width",
+              "min": 1,
+              "max": 3,
+              "step": 1,
+              "default": 1,
+              "unit": "px"
+          },
+          {
+            "type": "range",
+            "id": "button_bdr",
+            "label": "Border radius",
+            "min": 0,
+            "max": 40,
+            "step": 1,
+            "unit": "px",
+            "default": 0,
+            "info": "Only working button style default, outline"
+          },
+          {
+              "type": "range",
+              "id": "button_ls",
+              "label": "Letter spacing",
+              "min": 0,
+              "max": 10,
+              "step": 0.1,
+              "unit": "px",
+              "default": 0
+          },
+
+          {
+              "type": "select",
+              "id": "button_effect",
+              "label": "Hover button effect",
+              "default": "default",
+              "info": "Only working button style default, outline, highlights icon",
+              "options": [
+                  {
+                      "label": "Default",
+                      "value": "default"
+                  },
+                  {
+                      "label": "Fade",
+                      "value": "fade"
+                  },
+                  {
+                      "label": "Rectangle out",
+                      "value": "rectangle-out"
+                  },
+                  {
+                      "label": "Sweep to right",
+                      "value": "sweep-to-right"
+                  },
+                  {
+                      "label": "Sweep to left",
+                      "value": "sweep-to-left"
+                  },
+                  {
+                      "label": "Sweep to bottom",
+                      "value": "sweep-to-bottom"
+                  },
+                  {
+                      "label": "Sweep to top",
+                      "value": "sweep-to-top"
+                  },
+                  {
+                      "label": "Shutter out horizontal",
+                      "value": "shutter-out-horizontal"
+                  },
+                  {
+                      "label": "Outline",
+                      "value": "outline"
+                  },
+                  {
+                      "label": "Shadow",
+                      "value": "shadow"
+                  }
+              ]
+          },
+          {
+              "type": "color",
+              "id": "pri_cl",
+              "label": "Primary color",
+              "default": "#222"
+          },
+          {
+              "type": "color",
+              "id": "second_cl",
+              "label": "Secondary color",
+              "default": "#fff",
+              "info": "Only working button style default, highlights icon"
+          },
+          {
+              "type": "color",
+              "id": "pri_cl_hover",
+              "label": "Primary hover color",
+              "default": "#0ec1ae"
+          },
+          {
+              "type": "color",
+              "id": "second_cl_hover",
+              "label": "Secondary hover color",
+              "info": "Only working button style default, outline, highlights icon",
+              "default": "#fff"
+          },
+          {
+            "type": "checkbox",
+            "id": "hidden_mobile_3",
+            "label": "Hidden on mobile ",
+            "default": false
+          },
+          {
+           "type": "select",
+            "id": "animation",
+            "label": "Animation",
+            "default": "none",
+            "options": [
+              {
+                  "label": "None",
+                  "value": "none"
+              },
+              {
+                  "label": "fadeIn",
+                  "value": "fadeIn"
+              },
+              {
+                  "label": "fadeInDown",
+                  "value": "fadeInDown"
+              },
+              {
+                  "label": "fadeInDownBig",
+                  "value": "fadeInDownBig"
+              },
+              {
+                  "label": "fadeInLeft",
+                  "value": "fadeInLeft"
+              },
+              {
+                  "label": "fadeInLeftBig",
+                  "value": "fadeInLeftBig"
+              },
+              {
+                  "label": "fadeInRight",
+                  "value": "fadeInRight"
+              },
+              {
+                  "label": "fadeInRightBig",
+                  "value": "fadeInRightBig"
+              },
+              {
+                  "label": "fadeInUp",
+                  "value": "fadeInUp"
+              },
+              {
+                  "label": "fadeInUpBig",
+                  "value": "fadeInUpBig"
+              },
+              {
+                  "label": "fadeInTopLeft",
+                  "value": "fadeInTopLeft"
+              },
+              {
+                  "label": "fadeInTopRight",
+                  "value": "fadeInTopRight"
+              },
+              {
+                  "label": "fadeInBottomLeft",
+                  "value": "fadeInBottomLeft"
+              },
+              {
+                  "label": "fadeInBottomRight",
+                  "value": "fadeInBottomRight"
+              },
+              {
+                  "label": "bounceIn",
+                  "value": "bounceIn"
+              },
+              {
+                  "label": "bounceInDown",
+                  "value": "bounceInDown"
+              },
+              {
+                  "label": "bounceInLeft",
+                  "value": "bounceInLeft"
+              },
+              {
+                  "label": "bounceInRight",
+                  "value": "bounceInRight"
+              },
+              {
+                  "label": "bounceInUp",
+                  "value": "bounceInUp"
+              },
+              {
+                  "label": "zoomIn",
+                  "value": "zoomIn"
+              },
+              {
+                  "label": "zoomInDown",
+                  "value": "zoomInDown"
+              },
+              {
+                  "label": "zoomInLeft",
+                  "value": "zoomInLeft"
+              },
+              {
+                  "label": "zoomInRight",
+                  "value": "zoomInRight"
+              },
+              {
+                  "label": "zoomInUp",
+                  "value": "zoomInUp"
+              },
+              {
+                  "label": "slideInDown",
+                  "value": "slideInDown"
+              },
+              {
+                  "label": "slideInLeft",
+                  "value": "slideInLeft"
+              },
+              {
+                  "label": "slideInRight",
+                  "value": "slideInRight"
+              },
+              {
+                  "label": "slideInUp",
+                  "value": "slideInUp"
+              },
+              {
+                  "label": "lightSpeedInRight",
+                  "value": "lightSpeedInRight"
+              },
+              {
+                  "label": "lightSpeedInLeft",
+                  "value": "lightSpeedInLeft"
+              },
+              {
+                  "label": "lightSpeedOutRight",
+                  "value": "lightSpeedOutRight"
+              },
+              {
+                  "label": "lightSpeedOutLeft",
+                  "value": "lightSpeedOutLeft"
+              },
+              {
+                  "label": "jello",
+                  "value": "jello"
+              },
+              {
+                  "label": "tada",
+                  "value": "tada"
+              },
+              {
+                  "label": "pulse",
+                  "value": "pulse"
+              }
+            ]
+          },
+          {
+              "type": "header",
+              "content": "===== Banner Design ====="
+          },
+          {
+            "type": "select",
+            "id": "col_dk_inner",
+            "label": "Item width",
+            "default": "6",
+            "options": [
+              {
+                "value": "12",
+                "label": "100%"
+              },
+              {
+                "value": "9",
+                "label": "75%"
+              },
+              {
+                "value": "8",
+                "label": "66.66%"
+              },
+              {
+                "value": "7",
+                "label": "58.33%"
+              },
+              {
+                "value": "6",
+                "label": "50%"
+              },
+              {
+                "value": "5",
+                "label": "41.66%"
+              },
+              {
+                "value": "4",
+                "label": "33.33%"
+              },
+              {
+                "value": "3",
+                "label": "25%"
+              },
+              {
+                "value": "2",
+                "label": "16.67%"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "col_tb_inner",
+            "label": "Item width (Tablet)",
+            "default": "6",
+            "options": [
+              {
+                "value": "12",
+                "label": "100%"
+              },
+              {
+                "value": "9",
+                "label": "75%"
+              },
+              {
+                "value": "8",
+                "label": "66.66%"
+              },
+              {
+                "value": "7",
+                "label": "58.33%"
+              },
+              {
+                "value": "6",
+                "label": "50%"
+              },
+              {
+                "value": "5",
+                "label": "41.66%"
+              },
+              {
+                "value": "4",
+                "label": "33.33%"
+              },
+              {
+                "value": "3",
+                "label": "25%"
+              },
+              {
+                "value": "2",
+                "label": "16.67%"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "col_mb_inner",
+            "label": "Item width (Mobile)",
+            "default": "12",
+            "options": [
+              {
+                "value": "12",
+                "label": "100%"
+              },
+              {
+                "value": "9",
+                "label": "75%"
+              },
+              {
+                "value": "8",
+                "label": "66.66%"
+              },
+              {
+                "value": "7",
+                "label": "58.33%"
+              },
+              {
+                "value": "6",
+                "label": "50%"
+              },
+              {
+                "value": "5",
+                "label": "41.66%"
+              },
+              {
+                "value": "4",
+                "label": "33.33%"
+              },
+              {
+                "value": "3",
+                "label": "25%"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "bn_layout",
+            "default": "bn_dark",
+            "label": "Banner content layout", 
+            "options": [
+              {
+                "value": "bn_dark",
+                "label": "Layout dark" 
+              },
+              {
+                "value": "bn_light",
+                "label": "Layout light"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "content_bn_align",
+            "label": "Content align",
+            "default": "center",
+            "options": [
+                {
+                  "label": "Left",
+                  "value": "start"
+                },
+                {
+                  "label": "Center",
+                  "value": "center"
+                },
+                {
+                  "label": "Right",
+                  "value": "end"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "content_h_position",
+            "label": "Content horizontal position",
+            "default": "center",
+            "options": [
+                {
+                  "label": "Left",
+                  "value": "start"
+                },
+                {
+                  "label": "Center",
+                  "value": "center"
+                },
+                {
+                  "label": "Right",
+                  "value": "end"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "content_v_position",
+            "label": "Content vertical position",
+            "default": "bottom",
+            "options": [
+                {
+                  "label": "Top",
+                  "value": "top"
+                },
+                {
+                  "label": "Middle",
+                  "value": "middle"
+                },
+                {
+                  "label": "Bottom",
+                  "value": "bottom"
+                }
+            ]
+          },
+          {
+            "type": "text",
+            "id": "padding_inner_bn",
+            "label": "Padding content inner",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          },
+          {
+            "type": "text",
+            "id": "padding_inner_bn_tb",
+            "label": "Padding content inner tablet",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          },
+          {
+            "type": "text",
+            "id": "padding_inner_bn_mb",
+            "label": "Padding content inner mobile",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "20px,,20px,",
+            "default": "20px,20px,20px,20px,"
+          }
+        ]
+      }
+    ],
+  "presets": [
+      {
+        "name": "Slider banner packery",
+        "category": "Homepage",
+        "blocks": [
+          { 
+            "type": "bl_col",
+            "settings": {
+             
+            }
+          },{ 
+            "type": "bl_col",
+            "settings": {
+             
+            }
+          }
+        ]
+      }
+    ]
+}
+{% endschema %}

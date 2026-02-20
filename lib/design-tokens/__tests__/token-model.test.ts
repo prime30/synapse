@@ -38,7 +38,7 @@ function createChain(resolvedValue: { data: unknown; error: unknown }) {
 }
 
 let mockResult: { data: unknown; error: unknown };
-let mockFrom: ReturnType<typeof vi.fn>;
+let mockFrom: (...args: unknown[]) => unknown;
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({

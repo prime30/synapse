@@ -246,15 +246,35 @@ export default function SchemaSettingInput({
                 No image selected
               </div>
             )}
-            <button
-              type="button"
-              className="w-full px-3 py-1.5 text-xs font-medium rounded border ide-border ide-text-2 ide-hover transition-colors"
-              onClick={() => {
-                /* placeholder — will open asset picker in V2 */
-              }}
-            >
-              Select image
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 px-3 py-1.5 text-xs font-medium rounded border ide-border ide-text-2 ide-hover transition-colors"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    const url = URL.createObjectURL(file);
+                    onChange(url);
+                  };
+                  input.click();
+                }}
+              >
+                Select image
+              </button>
+              {imgSrc && (
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium rounded border ide-border text-red-400 hover:bg-red-500/10 transition-colors"
+                  onClick={() => onChange(null)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         );
       }

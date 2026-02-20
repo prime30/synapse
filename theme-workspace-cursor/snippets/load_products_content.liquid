@@ -1,0 +1,620 @@
+{%- liquid
+	assign search_types = search.types 
+   assign search_terms = search.terms 
+	assign show_img = settings.show_img
+    assign isGrowaveWishlist = false
+    if settings.wishlist_mode == "3" and shop.customer_accounts_enabled
+        assign isGrowaveWishlist = true
+    endif
+    assign placeholder_img = settings.placeholder_img
+    assign enable_pr_size = settings.enable_pr_size
+    assign pr_size_pos = settings.pr_size_pos
+    assign show_size_type = settings.show_size_type
+    assign size_ck = settings.size_ck | append: ',size,sizes,Größe' 
+    assign get_size = size_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+    assign enable_pr_color = settings.enable_pr_color
+    assign show_cl_type = settings.show_color_type
+    assign color_ck = settings.color_ck | append: ',color,colors,couleur,colour'
+    assign get_color = color_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+    assign price_varies_style = settings.price_varies_style
+    assign app_review = settings.app_review
+    assign enable_rating = settings.enable_rating
+    assign use_link_vendor = settings.use_link_vendor
+ -%}
+
+{%- for block in section.blocks %}
+
+	{%-liquid
+		assign bk_stts = block.settings 
+		assign product_des = bk_stts.product_des
+		if enable_rating
+			assign rating_pos = bk_stts.rating_pos
+		endif
+		assign list_color_pos = bk_stts.list_color_pos
+  		assign list_size_pos = bk_stts.list_size_pos
+		assign layout_des = bk_stts.layout_des
+		assign limit = bk_stts.limit
+		assign image_ratio = bk_stts.image_ratio
+		if image_ratio == "ratioadapt"
+			assign imgatt = ''
+		else 
+			assign imgatt = 'data-'
+		endif 
+		if bk_stts.btn_owl == "outline"
+			assign arrow_icon = 1
+		else
+			assign arrow_icon = 2
+		endif
+		assign nav_dot = bk_stts.nav_dot
+		assign show_vendor = bk_stts.show_vendor
+		assign use_countdown = bk_stts.use_cdt
+	 -%}
+   
+   {%- if block.type == 'recently' -%}
+
+		{%- if products_count >= 0 or search_types contains 'page' or search_terms contains 'vendor' or search_terms contains 'product_type' -%}{% continue %}{% endif -%}
+
+		{%- paginate search.results by limit -%}
+
+				{%- liquid 
+				assign sortby = bk_stts.sortby | plus: 0
+				case sortby
+               when 3 or 4
+                  assign results = search.results | sort: 'title'
+					when 5 or 6
+						assign results = search.results | sort: 'price'
+					when 7 or 8
+						assign results = search.results | sort: 'published_at'
+					else 
+						assign results = search.results
+				endcase
+				assign modu = sortby | modulo: 2
+				unless enable_tab 
+				render 'block_tophead', bk_stts: bk_stts 
+				endunless -%}
+
+				{%- if bk_stts.layout_des == "1" -%} 
+				<div data-contentlm-replace class="t4s_box_pr_grid t4s-products t4s-justify-content-center t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }}">
+				{%- else -%}
+				<div data-t4s-resizeobserver class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} {% if bk_stts.nav_btn %}t4s-slider-btn__{{ bk_stts.btn_pos }}-content t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %}  t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }}{% endif %} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }} flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--btn-distance: {{ bk_stts.btn_distance }}px;--space-dots: {{ bk_stts.dots_space }}px;{% if nav_dot %}--dots-bottom-pos: 36px;{% endif %}">
+				{%- endif -%}
+
+					{%- liquid 
+					if sortby == 1
+
+						assign array = search.terms | remove: 'id:' | split: ' OR '
+						case product_des
+						when '1'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+								render 'pr-grid-item1', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '2'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item2', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '3'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item3', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '4'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item4', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '5'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item5', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '6'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item6', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '7'
+							for i in array
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item7', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						endcase
+
+					elsif sortby == 2
+
+						assign array = search.terms | remove: 'id:' | split: ' OR '
+						case product_des
+						when '1'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+								render 'pr-grid-item1', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '2'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item2', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '3'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item3', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '4'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item4', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '5'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item5', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '6'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item6', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						when '7'
+							for i in array reversed
+								assign j = i | plus: 0
+								assign item = results | where: "id", j
+							   if item == blank
+							   	continue
+							   endif
+							   render 'pr-grid-item7', product: item[0], isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endfor
+						endcase
+
+					else
+
+						if modu == 0
+
+							case product_des
+							when '1'
+								render 'pr-grid-item1' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '2'
+								render 'pr-grid-item2' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '3'
+								render 'pr-grid-item3' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '4'
+								render 'pr-grid-item4' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '5'
+								render 'pr-grid-item5' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '6'
+								render 'pr-grid-item6' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							when '7'
+								render 'pr-grid-item7' for results as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+							endcase
+
+						else
+
+							case product_des
+							when '1'
+								for product in results reversed
+								render 'pr-grid-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '2'
+								for product in results reversed
+								render 'pr-grid-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '3'
+								for product in results reversed
+								render 'pr-grid-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '4'
+								for product in results reversed
+								render 'pr-grid-item4', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '5'
+								for product in results reversed
+								render 'pr-grid-item5', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '6'
+								for product in results reversed
+								render 'pr-grid-item6', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							when '7'
+								for product in results reversed
+								render 'pr-grid-item7', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+								endfor
+							endcase
+
+						endif
+
+					endif -%}
+
+				</div>
+		{%- endpaginate -%}
+
+	{%- else -%}
+
+      {%- liquid
+        assign index = 0 
+		  assign display_type = bk_stts.display_type
+		  if display_type == '3'
+		    assign results_count = products_count
+		    assign index = 1
+
+		  elsif display_type == "1"
+		    if search_terms contains 'cart_related'
+			   assign array_products = bk_stts.product_list
+            assign pid            = 19041994
+				assign data_url       = '-none'
+			   assign results_count  = array_products.size
+		    else
+				assign arr_terms  = search_terms | split: ' '
+				assign collection = collections[arr_terms.last]
+				assign pid        = arr_terms.first | plus: 0
+				assign data_url   = ''
+			   assign array_products = collection.products
+			   assign results_count  = array_products.size | minus: 1
+		    endif
+
+		  elsif display_type == '2'
+			 assign arr_terms     = search_terms | split: ' '
+			 assign pr_link       = linklists[arr_terms.last].links | where: "type", "product_link"
+			 assign pid           = arr_terms.first | plus: 0
+		    assign results_count = pr_link.size
+
+		  else
+		    assign results_count = search.results_count
+		    assign index = 1
+		  endif
+        if search_terms contains '-id:'
+        	assign break_for = false
+        elsif search_terms contains 'id:'
+        	assign break_for = true
+        else
+        	assign break_for = false
+        endif -%}
+
+	   {%- if search_types contains 'product' and break_for or results_count <= 0 -%}{% continue %}{% endif -%}
+	   	
+	   {%- if display_type == "3" and recommendations.products_count > 0 -%}
+
+				{%- liquid
+				unless enable_tab 
+				render 'block_tophead', bk_stts: bk_stts 
+				endunless -%}
+
+				{%- if bk_stts.layout_des == "1" -%} 
+				<div data-contentlm-replace class="t4s_box_pr_grid t4s-products t4s-justify-content-center t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }}">
+				{%- else -%}
+				<div data-t4s-resizeobserver class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} {% if bk_stts.nav_btn %}t4s-slider-btn__{{ bk_stts.btn_pos }}-content t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %}  t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }}{% endif %} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }} flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--btn-distance: {{ bk_stts.btn_distance }}px;--space-dots: {{ bk_stts.dots_space }}px;{% if nav_dot %}--dots-bottom-pos: 36px;{% endif %}">
+				{%- endif -%}
+
+					{%- liquid
+					case product_des
+					when '1'
+					   for product in recommendations.products
+						render 'pr-grid-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+					   endfor
+					when '2'
+					   for product in recommendations.products
+						render 'pr-grid-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '3'
+					   for product in recommendations.products
+						render 'pr-grid-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '4'
+					   for product in recommendations.products
+						render 'pr-grid-item4', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '5'
+					   for product in recommendations.products
+						render 'pr-grid-item5', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '6'
+					   for product in recommendations.products
+						render 'pr-grid-item6', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '7'
+					   for product in recommendations.products
+						render 'pr-grid-item7', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+						
+					endcase -%}
+				</div>
+
+	   {%- elsif display_type == "2" and search_types contains 'page' -%}
+	   
+				{%- liquid
+				unless enable_tab 
+				render 'block_tophead', bk_stts: bk_stts 
+				endunless -%}
+
+				{%- if bk_stts.layout_des == "1" -%} 
+				<div data-contentlm-replace class="t4s_box_pr_grid t4s-products t4s-justify-content-center t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }}">
+				{%- else -%}
+				<div data-t4s-resizeobserver class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} {% if bk_stts.nav_btn %}t4s-slider-btn__{{ bk_stts.btn_pos }}-content t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %}  t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }}{% endif %} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }} flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--btn-distance: {{ bk_stts.btn_distance }}px;--space-dots: {{ bk_stts.dots_space }}px;{% if nav_dot %}--dots-bottom-pos: 36px;{% endif %}">
+				{%- endif -%}
+					{%- liquid
+					case product_des
+					when '1'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item1', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '2'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item2', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '3'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item3', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '4'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item4', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '5'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item5', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '6'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item6', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '7'
+						for link in pr_link
+						if pid == link.object.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item7', product: link.object, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					endcase -%}
+
+				</div>
+
+	   {%- elsif display_type == "1" and search_types contains 'page' -%}
+	   
+				{%- liquid
+				unless enable_tab 
+				render 'block_tophead', bk_stts: bk_stts 
+				endunless -%}
+
+			{%- if bk_stts.layout_des == "1" -%} 
+			<div data-collection-url{{ data_url }}="{{ collection.url }}" data-contentlm-replace class="t4s_box_pr_grid t4s-products t4s-justify-content-center t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }}">
+			{%- else -%}
+			<div data-collection-url{{ data_url }}="{{ collection.url }}" data-t4s-resizeobserver class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} {% if bk_stts.nav_btn %}t4s-slider-btn__{{ bk_stts.btn_pos }}-content t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %}  t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }}{% endif %} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }} flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--btn-distance: {{ bk_stts.btn_distance }}px;--space-dots: {{ bk_stts.dots_space }}px;{% if nav_dot %}--dots-bottom-pos: 36px;{% endif %}">
+			{%- endif -%}
+
+					{%- liquid
+					case product_des
+					when '1'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '2'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '3'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '4'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item4', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '5'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item5', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '6'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item6', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '7'
+						for product in array_products
+						if pid == product.id
+						 continue
+						endif
+						if index == limit
+							break
+						endif
+						assign index = index | plus: 1
+						render 'pr-grid-item7', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					endcase -%}
+
+			</div>
+
+		{%- elsif request.page_type == 'search' -%}
+			   {%- comment -%} display_type 4, 5 {%- endcomment -%}
+	   
+				{%- liquid
+				unless enable_tab 
+				render 'block_tophead', bk_stts: bk_stts 
+				endunless -%}
+
+				{%- if bk_stts.layout_des == "1" -%} 
+				<div data-contentlm-replace class="t4s_box_pr_grid t4s-products t4s-justify-content-center t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }}">
+				{%- else -%}
+				<div data-t4s-resizeobserver class="t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ bk_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ bk_stts.image_position }} t4s_{{ bk_stts.image_size }} {% if bk_stts.nav_btn %}t4s-slider-btn__{{ bk_stts.btn_pos }}-content t4s-slider-btn-style-{{ bk_stts.btn_owl }} t4s-slider-btn-{{ bk_stts.btn_shape }} t4s-slider-btn-{{ bk_stts.btn_size }} t4s-slider-btn-cl-{{ bk_stts.btn_cl }} t4s-slider-btn-vi-{{ bk_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ bk_stts.btn_hidden_mobile }} {% endif %} {% if bk_stts.nav_dot == true %}  t4s-dots-style-{{ bk_stts.dot_owl }} t4s-dots-cl-{{ bk_stts.dots_cl }} t4s-dots-round-{{ bk_stts.dots_round }} t4s-dots-hidden-mobile-{{ bk_stts.dots_hidden_mobile }}{% endif %} t4s-row t4s-row-cols-lg-{{ bk_stts.col_dk }} t4s-row-cols-md-{{ bk_stts.col_tb }} t4s-row-cols-{{ bk_stts.col_mb }} t4s-gx-lg-{{ bk_stts.space_h_item }} t4s-gy-lg-{{ bk_stts.space_v_item }} t4s-gx-md-{{ bk_stts.space_h_item_tb }} t4s-gy-md-{{ bk_stts.space_v_item_tb }} t4s-gx-{{ bk_stts.space_h_item_mb }} t4s-gy-{{ bk_stts.space_v_item_mb }} flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 1, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ bk_stts.loop }},"prevNextButtons": {{ bk_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ bk_stts.nav_dot }}, "autoPlay" : {{ bk_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ bk_stts.au_hover }} }' style="--btn-distance: {{ bk_stts.btn_distance }}px;--space-dots: {{ bk_stts.dots_space }}px;{% if nav_dot %}--dots-bottom-pos: 36px;{% endif %}">
+				{%- endif -%}
+
+					{%- liquid
+					case product_des
+					when '1'
+						for product in search.results limit: limit
+						render 'pr-grid-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '2'
+						for product in search.results limit: limit
+						render 'pr-grid-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '3'
+						for product in search.results limit: limit
+						render 'pr-grid-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '4'
+						for product in search.results limit: limit
+						render 'pr-grid-item4', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '5'
+						for product in search.results limit: limit
+						render 'pr-grid-item5', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '6'
+						for product in search.results limit: limit
+						render 'pr-grid-item6', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					when '7'
+						for product in search.results limit: limit
+						render 'pr-grid-item7', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, rating_pos: rating_pos, list_color_pos: list_color_pos, list_size_pos: list_size_pos, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, use_countdown: use_countdown, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img
+						endfor
+					endcase -%}
+
+				</div>
+
+		{%- endif -%}
+
+	{%- endif -%}
+
+   {%- comment %}{%- if index == 0 and results_count == 0 -%}{%- endif -%}{% endcomment -%}
+
+{%- endfor -%}

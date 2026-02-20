@@ -28,6 +28,7 @@ export type SubPhase =
   | 'analyzing_files'
   | 'building_context'
   | 'reasoning'
+  | 'exploring'
   // Planning
   | 'creating_delegations'
   | 'assessing_scope'
@@ -36,6 +37,7 @@ export type SubPhase =
   | 'specialist_css'
   | 'specialist_javascript'
   | 'specialist_json'
+  | 'general_subagent'
   | 'coordinating_changes'
   | 'fixing_errors'
   | 'change_ready'
@@ -47,7 +49,7 @@ export type SubPhase =
   | 'persisting'
   | 'finalizing';
 
-export type ExecutionMode = 'orchestrated' | 'solo' | 'plan';
+export type ExecutionMode = 'orchestrated' | 'solo' | 'plan' | 'general';
 
 // -- Rail Step --
 
@@ -75,6 +77,7 @@ export const RAIL_PHASE_LABELS: Record<RailPhase, string> = {
 
 const MODE_PHASES: Record<ExecutionMode, RailPhase[]> = {
   orchestrated: ['understanding', 'planning', 'executing', 'reviewing', 'complete'],
+  general: ['understanding', 'planning', 'executing', 'reviewing', 'complete'],
   solo: ['understanding', 'complete'],
   plan: ['understanding', 'planning', 'complete'],
 };
@@ -118,10 +121,15 @@ export function mapCoordinatorPhase(phase: string): RailPhase {
  *
  * Groups steps by their rail phase, determines each phase's status (pending,
  * active, completed, error), and attaches summary text for completed phases.
+ *
+ * Error detection: if the most recent step has error metadata or a budget_warning
+ * phase with an error-like label, the currently active rail phase gets error status.
  */
 export function deriveRailSteps(
   steps: ThinkingStep[],
   mode: ExecutionMode,
+  /** Optional: marks the currently active rail phase as errored with this message. */
+  errorMessage?: string,
 ): RailStep[] {
   const phases = getRailPhases(mode);
 
@@ -144,6 +152,10 @@ export function deriveRailSteps(
   // Check if everything is complete
   const hasComplete = steps.some((s) => s.phase === 'complete');
 
+  // Detect error conditions: external error message or error metadata on steps
+  const hasError = !!errorMessage;
+  const errorPhase = hasError ? activeRailPhase : null;
+
   return phases.map((railPhase): RailStep => {
     const phaseSteps = grouped.get(railPhase) ?? [];
 
@@ -151,8 +163,14 @@ export function deriveRailSteps(
     let summary: string | undefined;
     let startedAt: number | undefined;
     let completedAt: number | undefined;
+    let error: RailStep['error'];
 
-    if (phaseSteps.length === 0) {
+    // Error overlay: if this phase has an external error, show error state
+    if (railPhase === errorPhase && hasError) {
+      status = 'error';
+      error = { message: errorMessage!, recoverable: true };
+      startedAt = phaseSteps[0]?.startedAt;
+    } else if (phaseSteps.length === 0) {
       // No steps emitted for this phase yet
       if (hasComplete && railPhase !== 'complete') {
         status = 'skipped';
@@ -187,6 +205,7 @@ export function deriveRailSteps(
       summary,
       startedAt,
       completedAt,
+      error,
     };
   });
 }

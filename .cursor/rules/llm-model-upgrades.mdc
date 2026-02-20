@@ -1,0 +1,48 @@
+---
+description: "When editing AI/model config, check provider docs for new LLM models and upgrade MODELS and defaults."
+globs: lib/agents/model-router.ts,**/get-provider*.ts,**/providers/*.ts
+alwaysApply: false
+---
+
+# LLM Model Upgrade Rule
+
+## When This Applies
+
+When you are editing or reviewing `lib/agents/model-router.ts` or related AI provider/config files (e.g. `lib/ai/get-provider.ts`, `lib/agents/providers/*.ts`), you MUST check for new models and upgrade the codebase when newer versions exist.
+
+## Procedure
+
+### 1. Identify the source of truth
+
+Model IDs and defaults live in **[lib/agents/model-router.ts](lib/agents/model-router.ts)**:
+
+- `MODELS` — map of constant names to provider model IDs (Anthropic, OpenAI, Google).
+- `MODEL_MAP` — default model per AI action (analyze, generate, review, summary, etc.).
+- `AGENT_DEFAULTS` — default model per agent role (project_manager, liquid, javascript, css, review, summary).
+- `SYSTEM_DEFAULT_MODEL` — fallback when no action/role applies.
+
+### 2. Check for new models
+
+Before or while changing this file:
+
+- **Anthropic:** Look up current Claude model IDs (e.g. [Anthropic docs](https://docs.anthropic.com/en/docs/about-claude/models) or API changelog). Check for newer Opus, Sonnet, Haiku versions than those in `MODELS`.
+- **OpenAI:** Check [OpenAI models](https://platform.openai.com/docs/models) for newer GPT-4o / GPT-4o-mini or successor models.
+- **Google:** Check [Google AI / Vertex](https://ai.google.dev/gemini-api/docs/models) for newer Gemini (e.g. 3.x, 2.x) model IDs.
+
+Use web search or official provider docs; prefer stable, generally-available models over preview-only unless the project explicitly uses previews.
+
+### 3. Upgrade the codebase
+
+- **Add or update entries in `MODELS`** with new model IDs. Keep existing keys if they still map to a valid model; add new keys (e.g. `CLAUDE_SONNET_4_7`) when a newer version replaces an old one.
+- **Update `MODEL_MAP` and `AGENT_DEFAULTS`** to use the new model where it improves quality or cost (e.g. move default from an older Sonnet to a newer one). Preserve intent: summary/classify/ask stay fast/cheap (Haiku or equivalent); plan/analyze stay strong (Opus or equivalent).
+- **Update `SYSTEM_DEFAULT_MODEL`** if the project’s preferred default should change.
+- If a model ID is deprecated or removed, remove or comment it and point usages to the replacement; leave a short comment or doc note for the team.
+
+### 4. Consistency
+
+- Ensure **provider mapping** (e.g. `getProviderForModel` in the same file) still resolves new model IDs to the correct provider.
+- If new providers or model prefixes are added, update any provider-specific config or client code under `lib/agents/providers/` or `lib/ai/` as needed.
+
+## Outcome
+
+After edits, the app should use current, supported model IDs where possible, with no broken references. Prefer backward-compatible additions; document any breaking change in commit message or PR.

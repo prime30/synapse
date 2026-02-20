@@ -5,10 +5,10 @@ import { motion, useInView } from 'framer-motion';
 import { CounterStat } from '@/components/marketing/interactions/CounterStat';
 
 const STATS: { value: number; suffix: string; prefix?: string; label: string }[] = [
-  { value: 5, suffix: '', label: 'AI agents' },
-  { value: 3, suffix: '', label: 'Languages' },
-  { value: 6, suffix: '', label: 'MCP tools' },
-  { value: 40, suffix: '+', label: 'Shopify globals' },
+  { value: 10, suffix: 'x', label: 'Faster theme edits' },
+  { value: 30, suffix: 's', prefix: '<\u2009', label: 'First code change' },
+  { value: 0, suffix: '', label: 'Manual deploys needed' },
+  { value: 100, suffix: '%', label: 'Liquid + CSS + JS' },
 ];
 
 export function SocialProofStrip() {
@@ -45,8 +45,8 @@ export function SocialProofStrip() {
       </div>
 
       {/* Stats content */}
-      <div className="relative max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-20">
-        <div className="relative grid grid-cols-2 gap-8 md:grid-cols-4">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-8 md:px-10 py-16 md:py-20">
+        <div className="relative grid grid-cols-2 gap-4 sm:gap-6 md:gap-8 md:grid-cols-4">
           {STATS.map((stat, index) => (
             <motion.div
               key={stat.label}

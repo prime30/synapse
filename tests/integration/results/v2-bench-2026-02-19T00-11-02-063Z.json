@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-02-19T00:11:02.063Z",
+  "runsPerPrompt": 3,
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "cursor-production"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2555,
+          "firstChunkMs": 1057,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 2,
+          "outputTokens": 285,
+          "cacheRead": 7377,
+          "cacheWrite": 0,
+          "costUSD": 0.0017317333333333334,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 2098,
+          "totalTimeMsHigh": 3357,
+          "firstChunkMsLow": 589,
+          "firstChunkMsHigh": 1872,
+          "costUSDLow": 0.001136,
+          "costUSDHigh": 0.0020356000000000003
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 54449,
+          "firstChunkMs": 2380,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 86594,
+          "outputTokens": 6637,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.09582186666666666,
+          "toolCalls": 9,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "propose_code_edit",
+            "run_specialist",
+            "create_file",
+            "grep_content",
+            "search_files"
+          ],
+          "changes": 2,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 43389,
+          "totalTimeMsHigh": 75234,
+          "firstChunkMsLow": 2339,
+          "firstChunkMsHigh": 2459,
+          "costUSDLow": 0.079276,
+          "costUSDHigh": 0.111644
+        },
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": false,
+          "totalTimeMs": 10,
+          "firstChunkMs": 10,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 7,
+          "totalTimeMsHigh": 15,
+          "firstChunkMsLow": 7,
+          "firstChunkMsHigh": 15,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

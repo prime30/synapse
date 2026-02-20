@@ -730,7 +730,7 @@ export function CodeEditorMockup() {
                     key={f.name}
                     className={`py-1.5 px-2 rounded text-[11px] ${
                       f.active
-                        ? 'bg-blue-50 dark:bg-sky-500/10 text-blue-600 dark:text-sky-400 font-medium'
+                        ? 'bg-accent/10 dark:bg-accent/10 text-accent dark:text-accent font-medium'
                         : 'text-stone-400 dark:text-white/40'
                     }`}
                   >
@@ -979,3 +979,4 @@ function ThinkingCaretIcon() {
     </span>
   );
 }
+

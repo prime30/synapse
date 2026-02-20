@@ -116,7 +116,7 @@ export function CodeTexture({
       style={{ opacity }}
     >
       <div
-        className="font-mono text-[9px] leading-[13px] text-sky-500 whitespace-pre"
+        className="font-mono text-[9px] leading-[13px] text-stone-500 dark:text-stone-400 whitespace-pre"
         style={{
           animation: `code-scroll-up ${duration}s linear infinite`,
         }}
@@ -127,3 +127,4 @@ export function CodeTexture({
     </div>
   );
 }
+

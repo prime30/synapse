@@ -97,6 +97,7 @@ endif -%}
         {% else %}
           <div data-product-badge data-sort="sale,new,soldout,preOrder,custom" class="t4s-product-badge"></div>
         {% endif %}
+        {%- render 'sale-badge', product: product -%}
         <div class="t4s-pr-group-variable">
           {%- if color_count > 0 %}
               <div class="t4s-product-colors" data-color-options='{ "color_count": {{ color_count }}, "color_variants": {{ color_variants | json }}, "color_variants_avai":{{color_variants_avai | join: 'nt-t4s' | escape | split: 'nt-t4s' | json}}, "color_variants_handle": {{ color_variants | join: 'nt-t4s' | handle | split: 'nt-t4s' | json }}, "img_variants": {{ featured_imgs | json }}, "id_variants": {{ img_variants | map: 'id' | json }}, "img_ratios": {{ featured_imgs | map: 'aspect_ratio' | json }}, "img_options": {{ img_variants | map: pr_option_color | json }} }'><span class="t4s-pr-color__item"><span class="t4s-pr-color__value bg_color_ntloading"></span></span><span class="t4s-pr-color__item"><span class="t4s-pr-color__value bg_color_ntloading"></span></span><span class="t4s-pr-color__item"><span class="t4s-pr-color__value bg_color_ntloading"></span></span></div>

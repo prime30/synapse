@@ -5,12 +5,13 @@ import { checkIdempotency } from '@/lib/middleware/idempotency';
 import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
 import { AgentCoordinator, findFilesFromElementHint } from '@/lib/agents/coordinator';
-import type { ThinkingEvent } from '@/lib/agents/coordinator';
+import type { ThinkingEvent, AgentToolEvent } from '@/lib/agents/coordinator';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { loadProjectFiles } from '@/lib/supabase/file-loader';
+import { appendConversation, type ConversationTurn } from '@/lib/cache/conversation-history-cache';
 import { getAIProvider } from '@/lib/ai/get-provider';
-import { buildSummaryMessages } from '@/lib/agents/summary-prompt';
+import { buildSummaryMessages, buildThinSummaryMessages } from '@/lib/agents/summary-prompt';
 import type { SummaryMode } from '@/lib/agents/summary-prompt';
 import { MODELS, getProviderForModel } from '@/lib/agents/model-router';
 import { recordUsage, recordUsageBatch } from '@/lib/billing/usage-recorder';
@@ -23,15 +24,22 @@ import type { AIMessage, AIToolProviderInterface } from '@/lib/ai/types';
 import { formatMemoryForPrompt, filterActiveMemories, rowToMemoryEntry, type MemoryRow } from '@/lib/ai/developer-memory';
 import { ContextEngine } from '@/lib/ai/context-engine';
 import { estimateTokens } from '@/lib/ai/token-counter';
-import type { FileContext, ElementHint } from '@/lib/types/agent';
+import type { FileContext, ElementHint, UserPreference } from '@/lib/types/agent';
 import { trimHistory } from '@/lib/ai/history-window';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { buildDiagnosticContext } from '@/lib/agents/diagnostic-context';
 import { selectToolsForRequest } from '@/lib/agents/tools/definitions';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
+import { isCircuitOpen } from '@/lib/ai/circuit-breaker';
+import { enqueueAgentJob, pollExecutionProgress, triggerDispatch } from '@/lib/tasks/agent-job-queue';
 import { startTrace } from '@/lib/observability/tracer';
 import { incrementCounter, recordHistogram } from '@/lib/observability/metrics';
 import { createModuleLogger } from '@/lib/observability/logger';
+
+/** Yield to the event loop so timers (e.g. prep heartbeat) can run during long sync work. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 const streamSchema = z.object({
   projectId: z.string().uuid(),
@@ -50,7 +58,9 @@ const streamSchema = z.object({
     'explain', 'refactor', 'document', 'plan', 'chat',
   ] as const).optional(),
   model: z.string().optional(),
-  mode: z.enum(['orchestrated', 'solo', 'auto']).optional(),
+  mode: z.enum(['orchestrated', 'solo', 'auto']).optional(), // deprecated, kept for backward compat
+  subagentCount: z.number().int().min(1).max(4).optional().default(1),
+  specialistMode: z.boolean().optional().default(false),
   domContext: z.string().optional(),
   intentMode: z.enum(['code', 'ask', 'plan', 'debug']).optional(),
   activeFilePath: z.string().optional(),
@@ -71,6 +81,8 @@ const streamSchema = z.object({
     question: z.string(),
     answer: z.string(),
   })).optional(),
+  /** Fix 4: If true, enqueue execution as a background job instead of running inline. */
+  async: z.boolean().optional(),
 });
 
 // Allow up to 5 minutes for streaming responses (Vercel Pro default is 60s)
@@ -110,7 +122,79 @@ function toAction(intentMode?: string): AIAction | undefined {
   }
 }
 
-// ── Ask Mode System Prompt ──────────────────────────────────────────────
+// ── Stream Context Loader ───────────────────────────────────────────────
+// Moves heavy setup (file loading, preferences, memory, diagnostics)
+// inside the SSE stream so the user gets thinking events immediately.
+
+interface StreamContext {
+  fileContexts: FileContext[];
+  loadContent: (fileIds: string[]) => Promise<FileContext[]>;
+  preferences: UserPreference[];
+  memoryContext: string;
+  diagnosticContext: string;
+}
+
+async function loadStreamContext(
+  projectId: string,
+  userId: string,
+  emit: (event: ThinkingEvent) => void,
+): Promise<StreamContext> {
+  emit({ type: 'thinking', phase: 'analyzing', label: 'Loading project files…' });
+
+  const supabase = await createClient();
+  const serviceClient = createServiceClient();
+
+  // Start all independent queries in parallel for faster context assembly
+  const filePromise = loadProjectFiles(projectId, serviceClient);
+  const prefPromise = serviceClient
+    .from('user_preferences')
+    .select('id, user_id, category, key, value, file_type, confidence, first_observed, last_reinforced, observation_count, metadata, created_at, updated_at')
+    .eq('user_id', userId)
+    .then((r) => (r.data ?? []) as UserPreference[]);
+  const memoryPromise = (async () => {
+    try {
+      const { data: memoryRows } = await supabase
+        .from('developer_memory')
+        .select('id, project_id, user_id, type, content, confidence, feedback, created_at, updated_at')
+        .eq('project_id', projectId)
+        .eq('user_id', userId);
+      if (memoryRows && memoryRows.length > 0) {
+        const entries = (memoryRows as MemoryRow[]).map(rowToMemoryEntry);
+        return formatMemoryForPrompt(filterActiveMemories(entries));
+      }
+    } catch { /* developer_memory table may not exist yet */ }
+    return '';
+  })();
+
+  // File loading must complete before diagnostic context (depends on fileContexts)
+  const { allFiles: fileContexts, loadContent } = await filePromise;
+
+  emit({
+    type: 'thinking',
+    phase: 'analyzing',
+    label: 'Reading preferences & memory…',
+    detail: `${fileContexts.length} files indexed`,
+  });
+
+  // Preferences + memory may already be resolved; diagnostic context runs immediately
+  const [prefResult, memoryContext] = await Promise.all([prefPromise, memoryPromise]);
+
+  let diagnosticContext = '';
+  try {
+    diagnosticContext = buildDiagnosticContext(fileContexts).formatted;
+  } catch { /* never block agent execution */ }
+
+  emit({
+    type: 'thinking',
+    phase: 'analyzing',
+    label: 'Context ready — starting agent…',
+    detail: `${fileContexts.length} files, ${prefResult.length} prefs`,
+  });
+
+  return { fileContexts, loadContent, preferences: prefResult, memoryContext, diagnosticContext };
+}
+
+// ── Ask Mode System Prompt (DEPRECATED — now handled by ASK_MODE_OVERLAY in prompts.ts) ──
 
 function buildAskSystemPrompt(
   fileContexts: Array<{ fileName: string; fileType: string; path?: string }>
@@ -195,107 +279,178 @@ export async function POST(request: NextRequest) {
     const body = await validateBody(streamSchema)(request);
     const intentMode = body.intentMode ?? 'code';
     const summaryMode = toSummaryMode(intentMode);
-
-    const supabase = await createClient();
-    // Service client bypasses RLS — needed when requests arrive with a
-    // Bearer token (e.g. MCP server) instead of browser cookies.
-    const serviceClient = createServiceClient();
-
-    // Load project files: stubs for all files + loadContent hydrator for on-demand content
-    const { allFiles: fileContexts_, loadContent } = await loadProjectFiles(body.projectId, serviceClient);
-
-    // Load user preferences
-    const { data: preferences } = await serviceClient
-      .from('user_preferences')
-      .select('*')
-      .eq('user_id', userId);
-
-    // Load developer memory (EPIC 14) — fail silently if table doesn't exist
-    let memoryContext = '';
-    try {
-      const { data: memoryRows } = await supabase
-        .from('developer_memory')
-        .select('*')
-        .eq('project_id', body.projectId)
-        .eq('user_id', userId);
-      if (memoryRows && memoryRows.length > 0) {
-        const entries = (memoryRows as MemoryRow[]).map(rowToMemoryEntry);
-        const active = filterActiveMemories(entries);
-        memoryContext = formatMemoryForPrompt(active);
-      }
-    } catch {
-      // developer_memory table may not exist yet — silently skip
-    }
-
-    const fileContexts = fileContexts_;
-
-    // ── Build diagnostic context (EPIC V2) ────────────────────────────
-    // Run Liquid validation pipeline on files with real content to give
-    // agents awareness of existing issues in the codebase.
-    let diagnosticContext = '';
-    try {
-      const diagResult = buildDiagnosticContext(fileContexts);
-      diagnosticContext = diagResult.formatted;
-    } catch {
-      // Diagnostic pipeline should never block agent execution
-    }
-
     const executionId = crypto.randomUUID();
     const orgId = usageCheck.organizationId || null;
 
+    // ── Fast path: ASK mode opens the stream and loads context inside ──
+    // ── Code/Plan/Debug: open stream immediately, load context inside ──
+    // Auth, rate limit, and body validation (above) must return HTTP errors.
+    // Everything below (file loading, prefs, memory) moves INSIDE the stream
+    // so the user sees thinking events instantly instead of staring at nothing.
+
     // ══════════════════════════════════════════════════════════════════
-    // ASK MODE: Direct LLM chat — skip coordinator entirely
+    // ALL MODES: Coordinator pipeline with thinking events.
+    // Intent mode (ask/code/plan/debug) shapes agent behavior as a
+    // prompt-level preference, not a capability gate.
     // ══════════════════════════════════════════════════════════════════
-    if (intentMode === 'ask') {
-      return handleAskMode({
-        body,
-        fileContexts,
-        executionId,
-        userId,
-        orgId,
-        memoryContext,
-        usageCheck,
-        loadContent,
-        elementHint: body.elementHint as ElementHint | undefined,
+
+    // Ask mode forces solo (1x) and skips specialist dispatch — it's conversational
+    const isAskMode = intentMode === 'ask';
+
+    // Resolve subagent count and specialist mode (backward compat with old mode field)
+    // Ask mode always runs solo (1x) — it's conversational, no need for multi-agent
+    const subagentCount = isAskMode ? 1 : (body.subagentCount ?? (body.mode === 'solo' ? 1 : undefined) ?? 1);
+    const specialistMode = isAskMode ? false : (body.specialistMode ?? (body.mode === 'orchestrated'));
+    const isSoloMode = subagentCount === 1;
+    const isAutoMode = body.mode === 'auto' || (!body.mode && !body.subagentCount);
+
+    // ══════════════════════════════════════════════════════════════════
+    // ASYNC MODE (Fix 4): Enqueue job + poll-loop instead of inline
+    // ══════════════════════════════════════════════════════════════════
+    if (body.async) {
+      const asyncStream = new ReadableStream<string>({
+        async start(controller) {
+          try {
+            controller.enqueue(formatSSEThinking({
+              type: 'thinking',
+              phase: 'analyzing',
+              label: 'Queuing execution...',
+            }));
+
+            // Enqueue as a background job
+            await enqueueAgentJob({
+              executionId,
+              projectId: body.projectId,
+              userId,
+              userRequest: body.request,
+              options: {
+                action: body.action,
+                model: body.model,
+                mode: body.mode,
+                intentMode,
+              },
+            });
+
+            // Fire self-dispatch for immediate pickup
+            const baseUrl = request.nextUrl.origin;
+            triggerDispatch(baseUrl);
+
+            controller.enqueue(formatSSEThinking({
+              type: 'thinking',
+              phase: 'executing',
+              label: 'Execution queued — streaming progress...',
+            }));
+
+            // Poll loop: check execution progress every 2s for up to 180s
+            const POLL_INTERVAL_MS = 2_000;
+            const MAX_POLL_MS = 180_000;
+            const pollStart = Date.now();
+            let lastStatus = '';
+
+            while (Date.now() - pollStart < MAX_POLL_MS) {
+              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+              const state = await pollExecutionProgress(executionId);
+              if (!state) continue;
+
+              // Emit status changes
+              if (state.status !== lastStatus) {
+                lastStatus = state.status;
+                controller.enqueue(formatSSEThinking({
+                  type: 'thinking',
+                  phase: state.status === 'in_progress' ? 'executing' : 'complete',
+                  label: state.status === 'completed' ? 'Execution complete'
+                    : state.status === 'failed' ? 'Execution failed'
+                    : `Status: ${state.status}`,
+                }));
+              }
+
+              // Terminal states
+              if (state.status === 'completed' || state.status === 'failed') {
+                controller.enqueue(formatSSEDone());
+                controller.close();
+                return;
+              }
+            }
+
+            // Timeout — execution didn't finish within poll window
+            controller.enqueue(formatSSEThinking({
+              type: 'thinking',
+              phase: 'complete',
+              label: 'Execution is still running in the background. Check back shortly.',
+            }));
+            controller.enqueue(formatSSEDone());
+            controller.close();
+          } catch (error) {
+            const sseError = error instanceof AIProviderError
+              ? error
+              : new AIProviderError('UNKNOWN', String(error), 'server');
+            try {
+              controller.enqueue(formatSSEError(sseError));
+              controller.close();
+            } catch { /* stream closed */ }
+          }
+        },
       });
+
+      return new Response(asyncStream, { headers: SSE_HEADERS });
     }
-
-    // ══════════════════════════════════════════════════════════════════
-    // PLAN / CODE / DEBUG: Coordinator pipeline with thinking events
-    // ══════════════════════════════════════════════════════════════════
-
-    const isAutoMode = body.mode === 'auto' || !body.mode;
-    const isSoloMode = body.mode === 'solo';
 
     // The stream starts immediately so thinking events can be sent in real time.
     const responseStream = new ReadableStream<string>({
       async start(controller) {
         try {
+          const emit = (event: ThinkingEvent) => {
+            try { controller.enqueue(formatSSEThinking(event)); } catch { /* stream closed */ }
+          };
+
+          // ── Load context inside the stream for instant first chunk ──
+          const { fileContexts, loadContent, preferences, memoryContext, diagnosticContext } =
+            await loadStreamContext(body.projectId, userId, emit);
+
           // ── Run coordinator with real-time progress ────────────────
           const coordinator = new AgentCoordinator();
           const action = body.action as AIAction | undefined ?? toAction(intentMode);
 
-          const recentMessages = body.history?.slice(-5).map((m: { content: string }) => m.content) ?? [];
+          const recentMessages = (body.history ?? []).map((m: { content: string }) => m.content);
           // Plan/code/debug: coordinator merges openTabs + explicitFiles into context.
           const coordinatorOptions = {
             action,
             model: body.model,
             mode: body.mode === 'auto' ? undefined : body.mode,
+            subagentMode: specialistMode ? 'specialist' as const : 'general' as const,
+            maxAgents: subagentCount,
             domContext: body.domContext,
             memoryContext,
             diagnosticContext,
             planOnly: intentMode === 'plan',
+            intentMode: intentMode as 'code' | 'ask' | 'plan' | 'debug' | undefined,
             activeFilePath: body.activeFilePath,
             openTabs: body.openTabs,
             recentMessages,
             loadContent,
             elementHint: body.elementHint as ElementHint | undefined,
-            autoRoute: isAutoMode, // enable smart routing for auto/default mode
+            autoRoute: isAutoMode,
             clarificationRound: body.clarificationRound,
             clarificationHistory: body.clarificationHistory,
             explicitFiles: body.explicitFiles,
-            onProgress: (event: ThinkingEvent) => {
-              try { controller.enqueue(formatSSEThinking(event)); } catch { /* stream closed */ }
+            onProgress: emit,
+            onReasoningChunk: (agent: string, chunk: string) => {
+              try {
+                controller.enqueue(`data: ${JSON.stringify({
+                  type: 'reasoning',
+                  agent,
+                  text: chunk,
+                })}\n\n`);
+              } catch { /* stream closed */ }
+            },
+            onContentChunk: (chunk: string) => {
+              try { controller.enqueue(chunk); } catch { /* stream closed */ }
+            },
+            onToolEvent: (event: AgentToolEvent) => {
+              try {
+                controller.enqueue(`data: ${JSON.stringify(event)}\n\n`);
+              } catch { /* stream closed */ }
             },
           };
 
@@ -310,7 +465,12 @@ export async function POST(request: NextRequest) {
           } catch { /* stream closed */ }
 
           // Execute coordinator with model fallback + auto-retry on CONTEXT_TOO_LARGE
+          // Solo non-specialist mode uses the streaming agent loop (Cursor-like architecture)
+          const useAgentLoop = isSoloMode && !specialistMode;
           const executeCoordinator = async (opts: typeof coordinatorOptions) => {
+            if (useAgentLoop) {
+              return coordinator.streamAgentLoop(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts);
+            }
             return isSoloMode
               ? coordinator.executeSolo(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts)
               : coordinator.execute(executionId, body.projectId, userId, body.request, fileContexts, preferences ?? [], opts);
@@ -328,9 +488,33 @@ export async function POST(request: NextRequest) {
             } catch { /* stream closed */ }
           }, HEARTBEAT_INTERVAL_MS);
 
+          // ── Circuit breaker: skip providers whose circuit is open ──────
           const coordUserModel = body.model || MODELS.CLAUDE_SONNET;
-          const coordFallbackChain = [coordUserModel, MODELS.CLAUDE_SONNET, MODELS.CLAUDE_HAIKU]
-            .filter((m, i, arr) => arr.indexOf(m) === i);
+          let coordFallbackChain = [
+            coordUserModel,
+            MODELS.CLAUDE_SONNET,
+            MODELS.CLAUDE_HAIKU,
+            MODELS.GEMINI_3_FLASH,
+            MODELS.GEMINI_3_PRO,
+          ].filter((m, i, arr) => arr.indexOf(m) === i);
+
+          // Filter out models whose provider circuit is open
+          const circuitChecks = await Promise.all(
+            coordFallbackChain.map(async (m) => ({
+              model: m,
+              open: await isCircuitOpen(getProviderForModel(m)),
+            }))
+          );
+          const healthyModels = circuitChecks.filter((c) => !c.open).map((c) => c.model);
+          if (healthyModels.length > 0) {
+            coordFallbackChain = healthyModels;
+          }
+          // If all are open, keep the full chain and let them fail-through naturally
+
+          // Tell the UI which model we're starting with
+          try {
+            controller.enqueue(`data: ${JSON.stringify({ type: 'active_model', model: coordFallbackChain[0] })}\n\n`);
+          } catch { /* stream closed */ }
 
           let result;
           try {
@@ -339,21 +523,35 @@ export async function POST(request: NextRequest) {
             clearInterval(heartbeatId);
           }
 
-          // Model fallback: if MODEL_UNAVAILABLE, try next model in chain
-          if (!result.success && result.error?.code === 'MODEL_UNAVAILABLE') {
+          // Model fallback: if MODEL_UNAVAILABLE or RATE_LIMITED (e.g. Opus 429), try next model in chain
+          const modelFallbackCodes = ['MODEL_UNAVAILABLE', 'RATE_LIMITED'] as const;
+          const fallbackCode = !result.success && result.error?.code && modelFallbackCodes.includes(result.error.code as (typeof modelFallbackCodes)[number])
+            ? (result.error.code as (typeof modelFallbackCodes)[number])
+            : null;
+          if (fallbackCode) {
             for (let fi = 1; fi < coordFallbackChain.length; fi++) {
               const fallbackModel = coordFallbackChain[fi];
+              // Notify UI of rate limit + model switch
+              try {
+                controller.enqueue(`data: ${JSON.stringify({
+                  type: 'rate_limited',
+                  originalModel: coordFallbackChain[0],
+                  fallbackModel,
+                })}\n\n`);
+              } catch { /* stream closed */ }
               controller.enqueue(formatSSEThinking({
                 type: 'thinking',
                 phase: 'analyzing' as const,
-                label: `Model unavailable — trying ${fallbackModel}`,
+                label: fallbackCode === 'RATE_LIMITED'
+                  ? `Rate limited — trying ${fallbackModel}`
+                  : `Model unavailable — trying ${fallbackModel}`,
               }));
               const fallbackCoord = new AgentCoordinator();
               const fallbackOpts = { ...coordinatorOptions, model: fallbackModel };
               result = isSoloMode
                 ? await fallbackCoord.executeSolo(executionId + `-fb${fi}`, body.projectId, userId, body.request, fileContexts, preferences ?? [], fallbackOpts)
                 : await fallbackCoord.execute(executionId + `-fb${fi}`, body.projectId, userId, body.request, fileContexts, preferences ?? [], fallbackOpts);
-              if (result.success || result.error?.code !== 'MODEL_UNAVAILABLE') break;
+              if (result.success || !result.error?.code || !modelFallbackCodes.includes(result.error.code as (typeof modelFallbackCodes)[number])) break;
             }
           }
 
@@ -418,6 +616,27 @@ export async function POST(request: NextRequest) {
             return;
           }
 
+          // ── Emit change_preview if the agent produced code changes ──
+          if (result.changes && result.changes.length > 0) {
+            // Fire-and-forget: capture "before" screenshot while the theme is unchanged
+            captureBeforeScreenshot(executionId, body.projectId).catch(() => {});
+
+            try {
+              controller.enqueue(`data: ${JSON.stringify({
+                type: 'change_preview',
+                executionId,
+                projectId: body.projectId,
+                changes: result.changes.map((c) => ({
+                  fileId: c.fileId,
+                  fileName: c.fileName,
+                  originalContent: c.originalContent,
+                  proposedContent: c.proposedContent,
+                  reasoning: c.reasoning,
+                })),
+              })}\n\n`);
+            } catch { /* stream closed */ }
+          }
+
           // ── Fast-path: Clarification needed — skip summary stream ──
           // The clarification text was already sent to the client via the
           // onProgress -> formatSSEThinking(phase:'clarification') callback.
@@ -428,13 +647,53 @@ export async function POST(request: NextRequest) {
             return;
           }
 
+          // ── Direct-streamed: content was already sent token-by-token. Just close.
+          if (result.directStreamed) {
+            controller.enqueue(formatSSEDone());
+            controller.close();
+            return;
+          }
+
+          // ── Ask mode fast path (legacy): if the coordinator returned analysis
+          // with no code changes AND didn't use exploration tools, emit
+          // the analysis directly — skip the extra summary LLM call.
+          // When exploration tools were used, the analysis is a raw technical
+          // summary; let the summary model format it into a polished response.
+          if (
+            isAskMode &&
+            result.analysis &&
+            (!result.changes || result.changes.length === 0) &&
+            !result.pmUsedTools
+          ) {
+            controller.enqueue(result.analysis);
+            controller.enqueue(formatSSEDone());
+            controller.close();
+            return;
+          }
+
+          // ── Conditional summary skip: non-ask modes where PM already
+          // explored and found no changes needed. The user saw the PM's
+          // reasoning in real-time, so a summary adds little value.
+          if (
+            AI_FEATURES.conditionalSummary &&
+            !isAskMode &&
+            result.pmUsedTools &&
+            result.analysis &&
+            (!result.changes || result.changes.length === 0)
+          ) {
+            controller.enqueue(result.analysis);
+            controller.enqueue(formatSSEDone());
+            controller.close();
+            return;
+          }
+
           // ── Build and stream summary ────────────────────────────────
-          const summaryMessages = buildSummaryMessages(
-            body.request,
-            result,
-            body.history as HistoryMessage[],
-            summaryMode
-          );
+          // Use thin summary when PM already explored (user saw reasoning)
+          // but specialists produced changes that need formatting.
+          const useThinSummary = AI_FEATURES.conditionalSummary && result.pmUsedTools && result.changes && result.changes.length > 0;
+          const summaryMessages = useThinSummary
+            ? buildThinSummaryMessages(body.request, result, body.history as HistoryMessage[])
+            : buildSummaryMessages(body.request, result, body.history as HistoryMessage[], summaryMode);
 
           // Mark system message for prompt caching
           if (AI_FEATURES.promptCaching) {
@@ -650,42 +909,108 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ── Before-screenshot helper (fire-and-forget) ──────────────────────────
+
+async function captureBeforeScreenshot(executionId: string, projectId: string): Promise<void> {
+  try {
+    const { storeScreenshot } = await import('@/lib/agents/execution-store');
+    const supabase = await createServiceClient();
+    const { data: project } = await supabase
+      .from('projects')
+      .select('shopify_connection_id, dev_theme_id')
+      .eq('id', projectId)
+      .maybeSingle();
+    if (!project?.shopify_connection_id) return;
+
+    const { data: connection } = await supabase
+      .from('shopify_connections')
+      .select('id, theme_id, store_domain')
+      .eq('id', project.shopify_connection_id)
+      .maybeSingle();
+    if (!connection?.store_domain || !connection.theme_id) return;
+
+    const themeId = String(project.dev_theme_id ?? connection.theme_id);
+    const { generateThumbnail } = await import('@/lib/thumbnail/generator');
+    const buffer = await generateThumbnail(connection.store_domain, themeId);
+    if (!buffer) return;
+
+    const { createClient: createStorageClient } = await import('@supabase/supabase-js');
+    const storage = createStorageClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const path = `screenshots/${executionId}-before.jpg`;
+    await storage.storage.from('project-files').upload(path, buffer, {
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+    const { data: urlData } = storage.storage.from('project-files').getPublicUrl(path);
+    if (urlData?.publicUrl) {
+      storeScreenshot(executionId, 'beforeUrl', urlData.publicUrl);
+    }
+  } catch (err) {
+    console.warn('[stream] before-screenshot capture failed (non-blocking):', err instanceof Error ? err.message : err);
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════
-// Ask Mode Handler
+// Ask Mode Handler (DEPRECATED — kept for reference)
+// Ask mode now runs through the coordinator like all other modes.
+// This handler is no longer called and can be removed in a future cleanup.
 // ══════════════════════════════════════════════════════════════════════════
 
 interface AskModeParams {
   body: z.infer<typeof streamSchema>;
-  fileContexts: FileContext[];
   executionId: string;
   userId: string;
   orgId: string | null;
   usageCheck: { isByok: boolean; isIncluded: boolean };
-  memoryContext?: string;
-  loadContent: (fileIds: string[]) => FileContext[];
   elementHint?: ElementHint;
 }
 
-function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCheck, memoryContext, loadContent, elementHint }: AskModeParams) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function handleAskMode({ body, executionId, userId, orgId, usageCheck, elementHint }: AskModeParams) {
   const responseStream = new ReadableStream<string>({
     async start(controller) {
       try {
-        // Send a minimal thinking event
+        const emit = (event: ThinkingEvent) => {
+          try { controller.enqueue(formatSSEThinking(event)); } catch { /* stream closed */ }
+        };
+
+        // Load context inside the stream so the user gets events immediately
+        const { fileContexts, loadContent, memoryContext } = await loadStreamContext(
+          body.projectId, userId, emit,
+        );
+
+        // Don't claim "607 files in context" — we select a bounded set first
         controller.enqueue(formatSSEThinking({
           type: 'thinking',
           phase: 'analyzing',
-          label: 'Reading your project files',
-          detail: `${fileContexts.length} files in context`,
+          label: 'Selecting relevant files',
+          detail: 'Matching your question and open files to the project',
         }));
+
+        // Send a heartbeat every 15s during file selection + load so the client doesn't hit 60s "Taking longer than expected"
+        const PREP_HEARTBEAT_MS = 15_000;
+        const prepHeartbeat = setInterval(() => {
+          try {
+            controller.enqueue(formatSSEThinking({
+              type: 'thinking',
+              phase: 'analyzing',
+              label: 'Still preparing…',
+            }));
+          } catch { /* stream closed */ }
+        }, PREP_HEARTBEAT_MS);
+        await yieldToEventLoop();
 
         // Build messages for direct LLM call
         const systemPrompt = buildAskSystemPrompt(fileContexts) + (memoryContext || '');
 
         // Use ContextEngine for smarter file selection within token budget
         const askContextEngine = new ContextEngine(12_000);
-        askContextEngine.indexFiles(fileContexts); // Indexes stubs (skip ref detection)
+        await askContextEngine.indexFiles(fileContexts, { every: 80, yieldFn: yieldToEventLoop });
 
-        // Select relevant files via fuzzy matching, then hydrate with real content
+        // Select relevant files via fuzzy matching (includes activeFilePath, open tabs, explicitFiles)
         const askSelection = askContextEngine.selectRelevantFiles(
           body.request,
           body.history?.slice(-3).map(m => m.content) ?? [],
@@ -693,6 +1018,7 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
           12_000,
         );
         const selectedIds = new Set(askSelection.files.map(f => f.fileId));
+        await yieldToEventLoop();
 
         // Element-driven file selection: prioritize section + related assets
         if (elementHint?.sectionId) {
@@ -716,8 +1042,18 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
 
         // Hydrate selected files via loadContent
         const includedFiles = selectedIds.size > 0
-          ? loadContent([...selectedIds])
-          : loadContent(fileContexts.slice(0, 15).map(f => f.fileId));
+          ? await loadContent([...selectedIds])
+          : await loadContent(fileContexts.slice(0, 15).map(f => f.fileId));
+
+        clearInterval(prepHeartbeat);
+
+        // Now report the actual bounded context (not the full project count)
+        controller.enqueue(formatSSEThinking({
+          type: 'thinking',
+          phase: 'analyzing',
+          label: 'Reading your project files',
+          detail: `${includedFiles.length} files in context${fileContexts.length > includedFiles.length ? ` (from ${fileContexts.length} in project)` : ''}`,
+        }));
 
         // Emit context_stats with actual bounded context for accurate UI meter
         const loadedTokens = includedFiles.reduce(
@@ -822,10 +1158,28 @@ function handleAskMode({ body, fileContexts, executionId, userId, orgId, usageCh
         }
 
         const reader = askStream.getReader();
+        const ASK_HEARTBEAT_MS = 15_000;
         while (true) {
-          const { done, value } = await reader.read();
+          const readPromise = reader.read();
+          const heartbeatPromise = new Promise<'heartbeat'>((resolve) =>
+            setTimeout(() => resolve('heartbeat'), ASK_HEARTBEAT_MS)
+          );
+          const winner = await Promise.race([
+            readPromise.then(() => 'read' as const),
+            heartbeatPromise.then(() => 'heartbeat' as const),
+          ]);
+          if (winner === 'heartbeat') {
+            try {
+              controller.enqueue(formatSSEThinking({
+                type: 'thinking',
+                phase: 'analyzing',
+                label: 'Still generating…',
+              }));
+            } catch { /* stream closed */ }
+          }
+          const { done, value } = await readPromise;
           if (done) break;
-          controller.enqueue(value);
+          if (value) controller.enqueue(value);
         }
 
         // Record usage with the actual model that succeeded

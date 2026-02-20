@@ -53,10 +53,10 @@ export function FeatureBanner() {
           transition={{ duration: 0.25, ease: 'easeInOut' }}
           className="overflow-hidden"
         >
-          <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-gradient-to-r from-sky-600/20 to-indigo-600/20 border-b border-gray-700/50">
+          <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-gradient-to-r from-sky-600/20 to-indigo-600/20 border-b ide-border-subtle">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="text-sm font-medium text-gray-200">{announcement.title}</span>
-              <span className="text-sm text-gray-400 truncate">{announcement.body}</span>
+              <span className="text-sm font-medium ide-text">{announcement.title}</span>
+              <span className="text-sm ide-text-muted truncate">{announcement.body}</span>
               {announcement.link && (
                 <a
                   href={announcement.link}
@@ -69,7 +69,7 @@ export function FeatureBanner() {
             {announcement.dismissible && (
               <button
                 onClick={handleDismiss}
-                className="shrink-0 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors"
+                className="shrink-0 p-1 rounded hover:bg-white/10 ide-text-muted hover:ide-text transition-colors"
                 aria-label="Dismiss"
               >
                 <X size={14} />

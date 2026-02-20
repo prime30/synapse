@@ -63,7 +63,7 @@ export function CaseStudySection() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 py-16 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           {/* Left column — story */}
           <motion.div
@@ -75,7 +75,7 @@ export function CaseStudySection() {
               CASE STUDY
             </span>
 
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight">
               From 3-year roadmap{' '}
               to live in <PixelAccent>60 minutes</PixelAccent>.
             </h2>
@@ -117,7 +117,7 @@ export function CaseStudySection() {
             <div className="relative">
               {/* Bold version — visible initially, fades out + pushes up */}
               <motion.p
-                className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-[-0.03em] leading-none text-stone-900 dark:text-white"
+                className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-[-0.03em] leading-none text-stone-900 dark:text-white"
                 animate={{
                   opacity: isPushed ? 0 : 1,
                   y: isPushed ? -20 : 0,
@@ -131,7 +131,7 @@ export function CaseStudySection() {
 
               {/* Light version — fades in at final position with strikethrough */}
               <motion.p
-                className="absolute top-0 right-0 lg:right-0 text-3xl md:text-4xl font-medium text-stone-300 dark:text-white/15 whitespace-nowrap"
+                className="absolute top-0 right-0 lg:right-0 text-2xl sm:text-3xl md:text-4xl font-medium text-stone-300 dark:text-white/15"
                 initial={{ opacity: 0 }}
                 animate={{
                   opacity: isPushed ? 1 : 0,
@@ -150,7 +150,7 @@ export function CaseStudySection() {
 
             {/* Actual time — countdown from 19 to 1, fades in at strike phase */}
             <motion.p
-              className="text-5xl md:text-6xl lg:text-7xl font-bold text-stone-900 dark:text-white tracking-[-0.03em] mt-1 leading-none whitespace-nowrap"
+              className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-stone-900 dark:text-white tracking-[-0.03em] mt-1 leading-none"
               initial={{ opacity: 0, y: 12 }}
               animate={{
                 opacity: isStrike ? 1 : 0,

@@ -22,7 +22,7 @@ const VALUES = [
 
 const TEAM = [
   { name: 'Alex Chen', role: 'CEO', initials: 'AC', color: 'bg-emerald-500' },
-  { name: 'Sarah Kim', role: 'CTO', initials: 'SK', color: 'bg-sky-500' },
+  { name: 'Sarah Kim', role: 'CTO', initials: 'SK', color: 'bg-accent' },
   { name: 'Marcus Johnson', role: 'Head of AI', initials: 'MJ', color: 'bg-violet-500' },
   { name: 'Elena Rodriguez', role: 'Head of Design', initials: 'ER', color: 'bg-amber-500' },
 ];

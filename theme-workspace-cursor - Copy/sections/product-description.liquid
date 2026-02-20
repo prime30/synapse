@@ -1,0 +1,495 @@
+{% comment %}
+  Product Description Section (Modular)
+  Renders product title, price, reviews badge, and description.
+  Listens for variant changes via product-variant-sync custom events.
+{% endcomment %}
+
+{% assign shsd_product_details = product.metafields.sellersdash.shsdproducts %}
+{% if shsd_product_details.product_type == 'shsd_parent' %}
+  {% assign shsd_product_handles = product.handle %}
+  {% assign shsd_product_handles = shsd_product_handles | concat: shsd_product_details.handles %}
+  {% for shsd_handle in shsd_product_handles %}
+    {% assign shsd_single_product = all_products[shsd_handle] %}
+    {% assign shsd_product_variants = shsd_product_variants | concat: shsd_single_product.variants %}
+  {% endfor %}
+  {% assign shsd_product_options_with_values = shsd_product_details.options_with_values %}
+{% else %}
+  {% assign shsd_product_options_with_values = product.options_with_values %}
+  {% assign shsd_product_variants = product.variants %}
+{% endif %}
+
+{%- liquid
+  assign isProductAvailable = product.available
+  if isProductAvailable and settings.variant_remove == '2'
+    assign remove_soldout = true
+  else
+    assign remove_soldout = false
+  endif
+
+  assign se_stts = section.settings
+  assign sid = section.id
+  assign pr_variants = shsd_product_variants
+  assign variants_size = pr_variants.size
+  assign selected_variant = product.selected_variant
+  assign pr_curent = settings.pr_curent
+
+  if pr_curent == '1' and variants_size > 1
+    assign current_variant = selected_variant
+  elsif pr_curent == '2'
+    assign current_variant = selected_variant | default: pr_variants.first
+    if remove_soldout and current_variant.available == false and isProductAvailable
+      assign current_variant = product.first_available_variant
+    endif
+  else
+    assign current_variant = product.selected_or_first_available_variant
+  endif
+
+  assign PR_no_pick = false
+  if pr_curent == '1' and variants_size > 1 and selected_variant == blank
+    assign PR_no_pick = true
+  endif
+  assign isProductDefault = product.has_only_default_variant
+  assign meta_theme = product.metafields.theme
+  assign pr_metafields = product.metafields
+
+  assign inventory_quantity = current_variant.inventory_quantity
+  assign inventory_management = current_variant.inventory_management
+  if inventory_quantity <= 0 and inventory_management == 'shopify' and current_variant.available
+    assign classdn1 = 't4s-dn'
+    assign classdn2 = ''
+  else
+    assign classdn1 = ''
+    assign classdn2 = 't4s-dn'
+  endif
+-%}
+
+<div
+  class="t4s-product-description-section"
+  data-product-description
+  data-product-id="{{ product.id }}"
+  data-section-id="{{ sid }}"
+>
+  {% comment %} ── Title Block ── {% endcomment %}
+  {% if se_stts.show_title %}
+    {%- liquid
+      if se_stts.title_line_height == 0
+        assign lh_pr = 1
+      else
+        assign lh_pr = se_stts.title_line_height | append: 'px'
+      endif
+    -%}
+    <h1
+      class="t4s-product__title"
+      style="--title-family: var(--font-family-{{ se_stts.title_font | default: '1' }});--title-style: {{ se_stts.title_transform | default: 'uppercase' }};--title-size: {{ se_stts.title_size | default: 26 }}px;--title-weight: {{ se_stts.title_weight | default: 400 }};--title-line-height: {{ lh_pr }};--title-spacing: {{ se_stts.title_spacing | default: 0 }}px;--title-color: {{ se_stts.title_color | default: '#000000' }};"
+    >
+      {{ product.title }}
+    </h1>
+    {% render 'judgeme_widgets',
+      widget_type: 'judgeme_preview_badge',
+      jm_style: '',
+      concierge_install: true,
+      product: product
+    %}
+  {% endif %}
+
+  {% comment %} ── Reviews Badge ── {% endcomment %}
+  {% if se_stts.show_reviews %}
+    <div class="t4s-product__review">
+      {%- assign pid = product.id -%}
+      {%- case settings.app_review -%}
+        {%- when '1' -%}
+          <span class="shopify-product-reviews-badge" data-id="{{ pid }}"></span>
+        {%- when '2' -%}
+          <div class="review-widget">
+            <ryviu-widget-total
+              reviews_data="{{ pr_metafields.ryviu.product_reviews_info | escape }}"
+              product_id="{{ pid }}"
+              handle="{{ product.handle }}"
+            ></ryviu-widget-total>
+          </div>
+        {%- when '3' -%}
+          <div product-id="{{ pid }}" class="alr-display-review-badge"></div>
+        {%- when '4' -%}
+          <div
+            class="loox-rating"
+            data-id="{{ pid }}"
+            data-rating="{{ pr_metafields.loox.avg_rating }}"
+            data-raters="{{ pr_metafields.loox.num_reviews }}"
+          ></div>
+        {%- when '7' -%}
+          {{ product.metafields.judgeme.badge }}
+        {%- else -%}
+          <div class="t4s-pr_rating t4s-review_pr_other"></div>
+      {%- endcase -%}
+    </div>
+  {% endif %}
+
+  {% comment %} ── Price Block ── {% endcomment %}
+  {% if se_stts.show_price %}
+    {% if customer %}
+      <div
+        class="t4s-product__price"
+        data-product-price-container
+        style="--price-size:{{ se_stts.price_size | default: 20 }}px;--price-del-size:{{ se_stts.price_size | default: 20 | times: 0.8 }}px;--price-weight:{{ se_stts.price_weight | default: 400 }};--primary-price-color:{{ se_stts.primary_price_color | default: '#000000' }};--secondary-price-color:{{ se_stts.secondary_price_color | default: '#868686' }};--price-sale-color:{{ se_stts.price_sale_color | default: '#fa0000' }}"
+      >
+        {%- render 'product-price-single',
+          variant: current_variant,
+          product: product,
+          PR_no_pick: PR_no_pick,
+          type_sale: se_stts.type_sale | default: '0',
+          price_varies_style: se_stts.price_varies_style | default: '0'
+        -%}
+      </div>
+    {% else %}
+      <div>
+        <p style="font-weight: normal;display: block;white-space: normal;font-size: 13px;color: rgb(0, 0, 0);">
+          <strong>
+            <a
+              class="wp-login-link"
+              onclick="rememberPage(event)"
+              style="color: #000000"
+              href="/account/login"
+            >Login</a>
+          </strong>
+          to see price
+        </p>
+      </div>
+    {% endif %}
+
+    {%- if se_stts.show_tax_shipping and cart.taxes_included or shop.shipping_policy.body != blank -%}
+      <div class="t4s-product__policies t4s-rte" data-product-policies>
+        {%- if cart.taxes_included -%}
+          {{ 'products.product.include_taxes' | t }}
+        {%- endif -%}
+        {%- if shop.shipping_policy.body != blank -%}
+          {{ 'products.product.shipping_policy_html' | t: link: shop.shipping_policy.url }}
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+  {% endif %}
+
+  {% comment %} ── Description Block ── {% endcomment %}
+  {% if se_stts.show_description %}
+    {%- assign pr_des = product.description -%}
+    {%- assign description_excerpt = meta_theme.description_excerpt | default: se_stts.custom_description -%}
+    {% unless description_excerpt == blank and pr_des == blank %}
+      <div class="t4s-product__description t4s-rte">
+        {%- if se_stts.description_source == '1' -%}
+          {{- pr_des -}}
+        {%- elsif description_excerpt != blank -%}
+          {{- description_excerpt -}}
+          {%- if se_stts.show_read_more -%}
+            <button class="t4s-product__description_readm" data-go-id="#t4s-tab-des{{ sid }}">
+              {{ se_stts.read_more_text | default: 'Read more' }}
+            </button>
+          {%- endif -%}
+        {%- else -%}
+          <p>
+            {{- pr_des | strip_html | truncatewords: se_stts.description_length | default: 30 -}}
+            {%- if se_stts.show_read_more -%}
+              <button class="t4s-product__description_readm" data-go-id="#t4s-tab-des{{ sid }}">
+                {{ se_stts.read_more_text | default: 'Read more' }}
+              </button>
+            {%- endif -%}
+          </p>
+        {%- endif -%}
+      </div>
+    {% endunless %}
+  {% endif %}
+
+  {% comment %} ── Product Meta ── {% endcomment %}
+  {% if se_stts.show_vendor or se_stts.show_sku or se_stts.show_availability %}
+    {%- liquid
+      assign use_link_vendor = settings.use_link_vendor
+      assign pr_vendor = product.vendor
+    -%}
+    <div class="t4s-product__meta">
+      {%- if se_stts.show_vendor and pr_vendor != blank -%}
+        {%- liquid
+          assign pr_vendor_url = pr_vendor | url_for_vendor
+          if use_link_vendor
+            assign pr_vendor_handle = pr_vendor | handle
+            assign collection_vendor = collections[pr_vendor_handle]
+            assign pr_vendor_url = collection_vendor.url | default: pr_vendor_url
+          endif
+        -%}
+        <div class="t4s-vendor-wrapper">
+          {{ 'products.product.product_vendor' | t }}
+          <span class="t4s-productMeta__value t4s-dib t4s-vendor-value t4s-csecondary">
+            <a href="{{ pr_vendor_url }}">{{ pr_vendor }}</a>
+          </span>
+        </div>
+      {%- endif -%}
+
+      {%- if se_stts.show_sku -%}
+        <div class="t4s-sku-wrapper{% if current_variant.sku == blank %} t4s-dn{% endif %}" data-product-sku>
+          {{ 'products.product.product_sku' | t }}
+          <span class="t4s-productMeta__value t4s-dib t4s-sku-value t4s-csecondary" data-product__sku-number>
+            {{ current_variant.sku }}
+          </span>
+        </div>
+      {%- endif -%}
+
+      {%- if se_stts.show_availability -%}
+        <div data-product-available class="t4s-available-wrapper">
+          {{ 'products.product.available' | t }}
+          <span class="t4s-productMeta__value t4s-dib t4s-available-value">
+            <span data-available-status class="t4s-available-status t4s-csecondary{% unless isProductAvailable %} t4s-dn{% endunless %}">
+              <span data-instock-status class="{{ classdn1 }}">{{ 'products.product.in_stock_status' | t }}</span>
+              <span data-preorder-status class="{{ classdn2 }}">{{ 'products.product.pre_oder_status' | t }}</span>
+            </span>
+            <span data-soldout-status class="t4s-soldout-status t4s-csecondary{% if isProductAvailable %} t4s-dn{% endif %}">
+              {{ 'products.product.sold_out_status' | t }}
+            </span>
+          </span>
+        </div>
+      {%- endif -%}
+    </div>
+  {% endif %}
+</div>
+
+{% schema %}
+{
+  "name": "Product description",
+  "tag": "section",
+  "class": "t4s-section t4s-section-product-description",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Title"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_title",
+      "label": "Show product title",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "title_transform",
+      "label": "Title text transform",
+      "default": "uppercase",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "uppercase", "label": "Uppercase" },
+        { "value": "lowercase", "label": "Lowercase" },
+        { "value": "capitalize", "label": "Capitalize" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "title_font",
+      "label": "Title font family",
+      "default": "1",
+      "options": [
+        { "value": "1", "label": "Font 1" },
+        { "value": "2", "label": "Font 2" },
+        { "value": "3", "label": "Font 3" }
+      ]
+    },
+    {
+      "type": "range",
+      "id": "title_size",
+      "min": 14,
+      "max": 50,
+      "step": 1,
+      "label": "Title font size",
+      "unit": "px",
+      "default": 26
+    },
+    {
+      "type": "range",
+      "id": "title_weight",
+      "min": 100,
+      "max": 900,
+      "step": 100,
+      "label": "Title font weight",
+      "default": 400
+    },
+    {
+      "type": "range",
+      "id": "title_line_height",
+      "min": 0,
+      "max": 60,
+      "step": 1,
+      "label": "Title line height (0 = auto)",
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "title_spacing",
+      "min": -5,
+      "max": 10,
+      "step": 1,
+      "label": "Title letter spacing",
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "color",
+      "id": "title_color",
+      "label": "Title color",
+      "default": "#000000"
+    },
+    {
+      "type": "header",
+      "content": "Reviews"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_reviews",
+      "label": "Show reviews badge",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Price"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_price",
+      "label": "Show price",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "price_size",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "label": "Price font size",
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "range",
+      "id": "price_weight",
+      "min": 100,
+      "max": 900,
+      "step": 100,
+      "label": "Price font weight",
+      "default": 400
+    },
+    {
+      "type": "color",
+      "id": "primary_price_color",
+      "label": "Price color",
+      "default": "#000000"
+    },
+    {
+      "type": "color",
+      "id": "secondary_price_color",
+      "label": "Compare-at price color",
+      "default": "#868686"
+    },
+    {
+      "type": "color",
+      "id": "price_sale_color",
+      "label": "Sale price color",
+      "default": "#fa0000"
+    },
+    {
+      "type": "select",
+      "id": "type_sale",
+      "label": "Sale display type",
+      "default": "0",
+      "options": [
+        { "value": "0", "label": "Default" },
+        { "value": "1", "label": "Percentage" },
+        { "value": "2", "label": "Amount saved" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "price_varies_style",
+      "label": "Price varies display",
+      "default": "0",
+      "options": [
+        { "value": "0", "label": "Range" },
+        { "value": "1", "label": "From price" }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "show_tax_shipping",
+      "label": "Show tax & shipping policy",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Description"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_description",
+      "label": "Show description",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "description_source",
+      "label": "Description source",
+      "default": "1",
+      "options": [
+        { "value": "1", "label": "Full description" },
+        { "value": "2", "label": "Custom / excerpt" },
+        { "value": "3", "label": "Truncated" }
+      ]
+    },
+    {
+      "type": "richtext",
+      "id": "custom_description",
+      "label": "Custom description text"
+    },
+    {
+      "type": "range",
+      "id": "description_length",
+      "min": 10,
+      "max": 100,
+      "step": 5,
+      "label": "Truncated word count",
+      "default": 30
+    },
+    {
+      "type": "checkbox",
+      "id": "show_read_more",
+      "label": "Show read more link",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "read_more_text",
+      "label": "Read more text",
+      "default": "Read more"
+    },
+    {
+      "type": "header",
+      "content": "Meta"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_vendor",
+      "label": "Show vendor",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_sku",
+      "label": "Show SKU",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_availability",
+      "label": "Show availability",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product description"
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,41 @@
+{%- comment -%}
+  Product Description Block
+  Renders the product description with support for full description,
+  short description (from metafield or settings), and truncated excerpt.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings
+  - block: {Object} Block Liquid object (for shopify_attributes)
+  - meta_theme: {Object} Product theme metafields
+  - idTabDes: {String} Tab description element ID (for read-more link)
+{%- endcomment -%}
+
+{%- assign pr_des = product.description -%}
+{%- assign description_excerpt = meta_theme.description_excerpt | default: bk_stts.text -%}
+
+{%- if description_excerpt == blank and pr_des == blank -%}
+  {%- break -%}
+{%- endif -%}
+
+{%- capture readm -%}
+  {%- if bk_stts.readm -%}
+    <button class="t4s-product__description_readm" data-go-id="#{{ idTabDes }}">
+      {{ bk_stts.readm_txt }}
+    </button>
+  {%- endif -%}
+{%- endcapture -%}
+
+<div class="t4s-product__description t4s-rte" {{ block.shopify_attributes }}>
+  {%- if bk_stts.des == '1' -%}
+    {{- pr_des -}}
+  {%- elsif description_excerpt != blank -%}
+    {{- description_excerpt -}}
+    {{ readm }}
+  {%- else -%}
+    <p>
+      {{- pr_des | strip_html | truncatewords: bk_stts.length -}}
+      {{ readm }}
+    </p>
+  {%- endif -%}
+</div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ChatMessage } from '@/components/ai-sidebar/ChatInterface';
 import type { ChatSession } from '@/components/ai-sidebar/SessionHistory';
+import { logInteractionEvent } from '@/lib/ai/interaction-client';
 
 // ---------------------------------------------------------------------------
 // Return type
@@ -18,7 +19,7 @@ interface UseAgentChatReturn {
   /** Add a message to local state only -- no DB persist. For streaming placeholders. */
   addLocalMessage: (msg: ChatMessage) => void;
   /** Update a message's content in local state only (for streaming chunks). */
-  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers'>>) => void;
+  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit'>>) => void;
   /** Persist the final content of a streamed message to the DB. */
   finalizeMessage: (id: string) => void;
 
@@ -173,11 +174,36 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
             setActiveSessionId(session?.id ?? null);
             isFirstUserMessageRef.current = msgs.length === 0;
           }
+
         }
       } catch {
         // Silently fail -- start with empty state
       } finally {
         if (!cancelled) setIsLoadingHistory(false);
+      }
+
+      // Auto-create a session if none exist so the sidebar isn't empty.
+      // Runs after loading completes so the UI is immediately usable.
+      if (!cancelled && !activeSessionRef.current) {
+        try {
+          const newRes = await fetch(`/api/projects/${projectId}/agent-chat/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          if (newRes.ok && !cancelled) {
+            const newJson = await newRes.json();
+            const auto: ChatSession = {
+              id: newJson.data.id,
+              title: newJson.data.title,
+              updatedAt: newJson.data.updatedAt ?? new Date().toISOString(),
+              messageCount: 0,
+            };
+            setSessions((prev) => prev.length === 0 ? [auto] : prev);
+            setActiveSessionId(auto.id);
+            isFirstUserMessageRef.current = true;
+          }
+        } catch { /* non-critical */ }
       }
     })();
 
@@ -229,6 +255,21 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
       // Auto-title on first user message
       if (role === 'user') {
         autoTitleSession(content);
+        logInteractionEvent(projectId, {
+          kind: 'user_input',
+          sessionId: activeSessionRef.current,
+          source: 'chat.send',
+          content,
+          metadata: { role },
+        });
+      } else {
+        logInteractionEvent(projectId, {
+          kind: 'assistant_output',
+          sessionId: activeSessionRef.current,
+          source: 'chat.append',
+          content,
+          metadata: { role },
+        });
       }
 
       // Persist in background, targeting the active session
@@ -248,7 +289,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── updateMessage (local only) ──────────────────────────────────────────
 
-  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers'>>) => {
+  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit'>>) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content, ...meta } : m)),
     );
@@ -260,6 +301,13 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     (id: string) => {
       const msg = messagesRef.current.find((m) => m.id === id);
       if (!msg || !msg.content) return;
+
+      logInteractionEvent(projectId, {
+        kind: 'assistant_output',
+        sessionId: activeSessionRef.current,
+        source: 'chat.finalize',
+        content: msg.content,
+      });
 
       const sid = activeSessionRef.current;
       fetch(`/api/projects/${projectId}/agent-chat`, {

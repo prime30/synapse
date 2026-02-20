@@ -1,7 +1,8 @@
 /**
- * Vercel Cron endpoint -- EPIC F
+ * Task scheduler cron endpoint -- EPIC F
  *
- * Called every 5 minutes by Vercel Cron.
+ * Called every 5 minutes by Vercel Cron (vercel.json) or by the
+ * in-process node-cron scheduler on Fly.io (instrumentation.ts).
  * Schedules due tasks and dispatches up to 3 per invocation.
  */
 

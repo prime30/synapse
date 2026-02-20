@@ -6,7 +6,7 @@ export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
   /** Preserved from AIMessage for prompt caching. */
-  cacheControl?: { type: 'ephemeral' };
+  cacheControl?: { type: 'ephemeral'; ttl?: '5m' | '1h' };
 }
 
 export interface TrimResult {

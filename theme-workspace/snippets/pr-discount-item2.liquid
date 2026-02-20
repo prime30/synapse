@@ -86,6 +86,7 @@ endif
       {% else %}
         <div data-product-badge data-sort="sale,new,soldout,preOrder,custom" class="t4s-product-badge"></div>
       {% endif %}
+      {%- render 'sale-badge', product: product -%}
       <div class="t4s-product-info">
         <div class="t4s-product-info__inner">
             {%- if product.vendor.size > 0 and show_vendor -%}{% if use_link_vendor %}{% assign pr_vendor_handle = product.vendor | handle %}{% assign collection_vendor = collections[pr_vendor_handle] %}{% endif %}<div class="t4s-product-vendor"><a href="{% if use_link_vendor and collection_vendor.url != blank %}{{ collection_vendor.url }}{% else %}{{ product.vendor | url_for_vendor }}{% endif %}">{{ product.vendor }}</a></div>{%- endif -%}

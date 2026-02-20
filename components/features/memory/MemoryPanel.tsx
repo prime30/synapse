@@ -9,11 +9,13 @@ import type {
   Decision,
   Preference,
 } from '@/lib/ai/developer-memory';
+import type { LoadedTermMapping } from '@/lib/ai/term-mapping-learner';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
 interface MemoryPanelProps {
   memories: MemoryEntry[];
+  termMappings?: LoadedTermMapping[];
   isLoading: boolean;
   onFeedback: (id: string, feedback: MemoryFeedback) => void;
   onForget: (id: string) => void;
@@ -22,7 +24,7 @@ interface MemoryPanelProps {
   activeConventionCount?: number;
 }
 
-type TabId = 'conventions' | 'decisions' | 'preferences';
+type TabId = 'conventions' | 'decisions' | 'preferences' | 'term-mappings';
 
 // ── Confidence badge ──────────────────────────────────────────────────
 
@@ -274,6 +276,71 @@ function PreferenceItem({
   );
 }
 
+// ── Term mapping item ─────────────────────────────────────────────────
+
+const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
+  schema: { label: 'Schema', color: 'text-sky-400 bg-sky-400/10' },
+  filename: { label: 'Filename', color: 'ide-text-muted bg-stone-200/50 dark:bg-white/10' },
+  synonym: { label: 'Synonym', color: 'text-purple-400 bg-purple-400/10' },
+  execution: { label: 'Learned', color: 'text-green-400 bg-green-400/10' },
+};
+
+function TermMappingItem({
+  mapping,
+  onForget,
+}: {
+  mapping: LoadedTermMapping;
+  onForget: (id: string) => void;
+}) {
+  const sourceInfo = SOURCE_LABELS[mapping.source] ?? SOURCE_LABELS.filename;
+
+  return (
+    <div className="px-3 py-2.5 border-b ide-border last:border-b-0 ide-hover transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm ide-text font-medium">
+              &ldquo;{mapping.term}&rdquo;
+            </span>
+            <ConfidenceBadge confidence={mapping.confidence} />
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${sourceInfo.color}`}>
+              {sourceInfo.label}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {mapping.filePaths.map((fp) => (
+              <code
+                key={fp}
+                className="px-1.5 py-0.5 ide-surface-inset rounded text-[10px] text-sky-600 dark:text-sky-400 font-mono"
+              >
+                {fp}
+              </code>
+            ))}
+          </div>
+          {mapping.usageCount > 0 && (
+            <div className="text-[10px] ide-text-quiet mt-1">
+              Used {mapping.usageCount} {mapping.usageCount === 1 ? 'time' : 'times'}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => onForget(mapping.id)}
+            className="p-1 rounded ide-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            title="Remove this term mapping"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Empty state ───────────────────────────────────────────────────────
 
 function EmptyState({ tab }: { tab: TabId }) {
@@ -292,6 +359,11 @@ function EmptyState({ tab }: { tab: TabId }) {
       icon: '🎯',
       title: 'No preferences learned',
       description: 'As you accept, reject, and edit AI suggestions, Synapse will learn your preferred coding patterns.',
+    },
+    'term-mappings': {
+      icon: '🔗',
+      title: 'No term mappings yet',
+      description: 'Import a theme or run some prompts to start learning. Synapse maps informal terms like "hero" to the actual files they refer to.',
     },
   };
 
@@ -329,14 +401,16 @@ function SkeletonItem() {
 
 // ── Main component ────────────────────────────────────────────────────
 
-const TABS: Array<{ id: TabId; label: string; type: MemoryType }> = [
+const TABS: Array<{ id: TabId; label: string; type?: MemoryType }> = [
   { id: 'conventions', label: 'Conventions', type: 'convention' },
   { id: 'decisions', label: 'Decisions', type: 'decision' },
   { id: 'preferences', label: 'Preferences', type: 'preference' },
+  { id: 'term-mappings', label: 'Terms' },
 ];
 
 export function MemoryPanel({
   memories,
+  termMappings = [],
   isLoading,
   onFeedback,
   onForget,
@@ -345,6 +419,7 @@ export function MemoryPanel({
   const [activeTab, setActiveTab] = useState<TabId>('conventions');
 
   const filteredMemories = useMemo(() => {
+    if (activeTab === 'term-mappings') return [];
     const targetType = TABS.find((t) => t.id === activeTab)?.type;
     return memories.filter((m) => m.type === targetType);
   }, [memories, activeTab]);
@@ -354,6 +429,7 @@ export function MemoryPanel({
       conventions: 0,
       decisions: 0,
       preferences: 0,
+      'term-mappings': termMappings.length,
     };
     for (const m of memories) {
       if (m.type === 'convention') counts.conventions++;
@@ -361,7 +437,7 @@ export function MemoryPanel({
       else if (m.type === 'preference') counts.preferences++;
     }
     return counts;
-  }, [memories]);
+  }, [memories, termMappings.length]);
 
   const handleFeedback = useCallback(
     (id: string, feedback: MemoryFeedback) => {
@@ -399,7 +475,7 @@ export function MemoryPanel({
         </svg>
         <span className="text-sm font-medium ide-text">Developer Memory</span>
         <span className="text-[10px] ide-text-quiet ml-auto">
-          {memories.length} {memories.length === 1 ? 'entry' : 'entries'}
+          {memories.length + termMappings.length} {memories.length + termMappings.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
@@ -437,6 +513,20 @@ export function MemoryPanel({
             <SkeletonItem />
             <SkeletonItem />
           </div>
+        ) : activeTab === 'term-mappings' ? (
+          termMappings.length === 0 ? (
+            <EmptyState tab={activeTab} />
+          ) : (
+            <div>
+              {termMappings.map((mapping) => (
+                <TermMappingItem
+                  key={mapping.id}
+                  mapping={mapping}
+                  onForget={handleForget}
+                />
+              ))}
+            </div>
+          )
         ) : filteredMemories.length === 0 ? (
           <EmptyState tab={activeTab} />
         ) : (

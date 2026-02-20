@@ -1,0 +1,81 @@
+style="
+{%- case type -%}
+ {%- when 'custom_text' -%} 
+ --animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--text-cl:{{ bk_stts.text_cl }};--text-fs:{{ bk_stts.text_fs }}px;--text-fw:{{ bk_stts.text_fw }};--text-lh:{{ bk_stts.text_lh }}px;--text-ls:{{ bk_stts.text_ls }}px;--mgb:{{ bk_stts.mgb }}px;--text-fs-tb:{{ bk_stts.text_fs_tb }}px;--text-lh-tb:{{ bk_stts.text_lh_tb }}px;--text-ls-tb:{{ bk_stts.text_ls_tb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--text-fs-mb:{{ bk_stts.text_fs_mb }}px;--text-lh-mb:{{ bk_stts.text_lh_mb }}px;--text-ls-mb:{{ bk_stts.text_ls_mb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;
+
+ {%- when 'space_html' -%}
+ --animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--color:{{ bk_stts.color }};--width:{{ bk_stts.width }}px;--height:{{ bk_stts.height }}px;--mgb:{{ bk_stts.mgb }}px;--width-tb:{{ bk_stts.width_tb }}px;--height-tb:{{ bk_stts.height_tb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--width-mb:{{ bk_stts.width_mb }}px;--height-mb:{{ bk_stts.height_mb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;
+ 
+{%- when 'html' -%}
+ --animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;
+
+ {%- when 'image' -%}
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--max-width:{{ bk_stts.image_child.width }}px;--width:{{ bk_stts.img_width }}px;--width-tb:{{ bk_stts.img_width_tb }}px;--width-mb:{{ bk_stts.img_width_mb }}px;--mgb:{{ bk_stts.mgb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;
+
+{%- when 'image_gallery' -%}
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--max-width:{{ bk_stts.image_child.width }}%;--width:{{ bk_stts.img_width }}%;--width-tb:{{ bk_stts.img_width }}%;--width-mb:{{ bk_stts.img_width }}%;--mgb:{{ bk_stts.mgb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;
+
+{%- when 'countdown' -%}
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--number-cl:{{ bk_stts.number_cl }};--text-cl:{{ bk_stts.text_cl }};--border-cl:{{ bk_stts.border_cl }};--bg-cl:{{ bk_stts.bg_cl }};--bd-width:{{ bk_stts.bd_width }}px;--bdr:{{ bk_stts.box_bdr }}%;--mgb:{{ bk_stts.mgb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;--space-item:{{ bk_stts.space_item }}px;--space-item-tb:{{ bk_stts.space_item_tb }}px;--space-item-mb:{{ bk_stts.space_item_mb }}px;
+
+{%- when 'custom_button' -%}
+{%-liquid 
+	assign pri_cl_lightness         = bk_stts.pri_cl | color_extract: 'lightness'
+	assign second_cl_lightness         = bk_stts.second_cl | color_extract: 'lightness'
+	assign pri_cl_hover_lightness         = bk_stts.pri_cl_hover | color_extract: 'lightness'
+	assign second_cl_hover_lightness         = bk_stts.second_cl_hover | color_extract: 'lightness'
+
+	if pri_cl_lightness < 85
+		assign pri_cl2 = "#ffffff"
+	else 
+	    assign pri_cl2 = "#000"
+	endif
+	if second_cl_lightness < 85
+		assign second_cl2 = "#ffffff"
+	else 
+	    assign second_cl2 = "#000"
+	endif
+	if pri_cl_hover_lightness < 85
+		assign pri_cl_hover_cl2 = "#ffffff"
+	else 
+	    assign pri_cl_hover_cl2 = "#000"
+	endif
+	if second_cl_hover_lightness < 85
+		assign second_cl_hover_cl2 = "#ffffff"
+	else 
+	    assign second_cl_hover_cl2 = "#000"
+	endif
+ -%}
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--button-icon-w:{{ bk_stts.button_icon_w }}px;--button-icon-w-tb:{{ bk_stts.button_icon_w_tb }}px;--button-icon-w-mb:{{ bk_stts.button_icon_w_mb }}px;--pri-cl:{{ bk_stts.pri_cl }};--second-cl:{{ bk_stts.second_cl }};--pri-cl2:{{ pri_cl2 }};--second-cl2:{{ second_cl2 }};--pri-cl-hover:{{ bk_stts.pri_cl_hover }};--second-cl-hover:{{ bk_stts.second_cl_hover }};--pri-cl-hover2:{{ pri_cl_hover_cl2 }};--second-cl-hover2:{{ second_cl_hover_cl2 }};--button-fs:{{ bk_stts.fsbutton }}px;--button-fw:{{ bk_stts.fwbutton }};--button-pd-lr:{{ bk_stts.button_pd_lr }}px;--button-bdr:{{ bk_stts.button_bdr }}px;--button-ls:{{ bk_stts.button_ls }}px;--button-mh:{{ bk_stts.button_mh }}px;--mgb:{{ bk_stts.mgb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--button-fs-tb:{{ bk_stts.fsbutton_tb }}px;--button-mh-tb:{{ bk_stts.button_mh_tb }}px;--button-pd-lr-tb:{{ bk_stts.button_pd_lr_tb }}px;--button-ls-tb:{{ bk_stts.button_ls_tb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;--button-fs-mb:{{ bk_stts.fsbutton_mb }}px;--button-mh-mb:{{ bk_stts.button_mh_mb }}px;--button-pd-lr-mb:{{ bk_stts.button_pd_lr_mb }}px;--button-ls-mb:{{ bk_stts.button_ls_mb }}px;--border_w:{{ bk_stts.border_w }}px;
+
+{%- when 'newsletter' -%}
+{%-liquid 
+	assign input_cl_lightness         = bk_stts.input_cl | color_extract: 'lightness'
+	assign btn_cl_lightness         = bk_stts.btn_cl | color_extract: 'lightness'
+	assign btn_hover_cl_lightness   = bk_stts.btn_hover_cl | color_extract: 'lightness'
+
+	if input_cl_lightness < 65
+		assign input_cl2 = "#ffffff"
+	else 
+	    assign input_cl2 = "#868686"
+	endif
+	if btn_cl_lightness < 50  
+	    assign btn_cl2 = "#ffffff"
+	elsif btn_cl_lightness < 85
+	    assign btn_cl2 = "#868686"
+	else 
+	    assign btn_cl2 = "#000000"
+	endif 
+	if btn_hover_cl_lightness < 85  
+	    assign btn_hover_cl2 = "#ffffff"
+	else 
+	    assign btn_hover_cl2 = "#000000"
+	endif
+ -%}
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--input-cl:{{ bk_stts.input_cl }};--input-cl2:{{ input_cl2 }};--border-cl:{{ bk_stts.border_cl }};--btn-cl:{{ bk_stts.btn_cl }};--btn-cl2:{{ btn_cl2 }};--btn-hover-cl:{{ bk_stts.btn_hover_cl }};--btn-hover-cl2:{{ btn_hover_cl2 }};--mgb:{{ bk_stts.mgb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;--form-width:{{ bk_stts.form_width }}px;--form-width-tb:{{ bk_stts.form_width_tb }}px;--form-width-mb:{{ bk_stts.form_width_mb }}px;
+{%- when 'heading_text' -%} 
+--text-cl-trans:{{ bk_stts.text_cl_trans }};--text-cl:{{ bk_stts.text_cl }};--text-fs:{{ bk_stts.text_fs }}px;--text-fw:{{ bk_stts.text_fw }};--text-lh:{{ bk_stts.text_lh }}px;--text-ls:{{ bk_stts.text_ls }}px;--mgb:{{ bk_stts.mgb }}px;--text-fs-tb:{{ bk_stts.text_fs_tb }}px;--text-lh-tb:{{ bk_stts.text_lh_tb }}px;--text-ls-tb:{{ bk_stts.text_ls_tb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--text-fs-mb:{{ bk_stts.text_fs_mb }}px;--text-lh-mb:{{ bk_stts.text_lh_mb }}px;--text-ls-mb:{{ bk_stts.text_ls_mb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px;
+{%- when 'custom_text_circle' -%} 
+--animation:{{ bk_stts.animation }};--delay-animation:{{ ani_delay }}s;--box-text-width:{{ bk_stts.box_text_width }}px;--box-text-width-tb:{{ bk_stts.box_text_width_tb }}px;--box-text-width-mb:{{ bk_stts.box_text_width_mb }}px;--time-tx-pin:{{ bk_stts.time_tx_pin }}s;--text-cl:{{ bk_stts.text_cl }};--text-fs:{{ bk_stts.text_fs }}px;--text-fw:{{ bk_stts.text_fw }};--text-ls:{{ bk_stts.text_ls }}px;--mgb:{{ bk_stts.mgb }}px;--text-fs-tb:{{ bk_stts.text_fs_tb }}px;--text-ls-tb:{{ bk_stts.text_ls_tb }}px;--mgb-tb:{{ bk_stts.mgb_tb }}px;--text-fs-mb:{{ bk_stts.text_fs_mb }}px;--text-ls-mb:{{ bk_stts.text_ls_mb }}px;--mgb-mb:{{ bk_stts.mgb_mb }}px
+{%- endcase -%}
+"

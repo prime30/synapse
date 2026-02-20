@@ -1,0 +1,344 @@
+.t4s-carousel--range {
+    bottom: 8px;
+    left: 0;
+    right:0;
+    overflow: hidden;
+    padding: 0 8px;
+    position: absolute;
+    width: 100%;
+    z-index: 2;
+    margin: 0 auto;
+}
+.t4s-carousel--range li {
+    padding: 0px 8px;
+    width: auto;
+}
+.t4s-carousel--bar {
+    cursor: pointer;
+    height: 48px;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    background: transparent !important;
+    border: 0 !important;
+}
+.t4s-carousel--bar:before {
+    background: var(--carousel-range-primary-color);
+    border-radius: 1.5px;
+    content: "";
+    height: 1px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    opacity: 0;
+    top: 23px;
+    transform-origin: 0 0;
+    transform: scaleX(0);
+    transition: transform 0s linear 400ms, opacity 400ms ease 0s;
+    width: 100%;
+}
+.is-selected .t4s-carousel--bar:before {
+    opacity: 1;
+}
+.t4s-carousel--bar:after {
+    background: var(--carousel-range-primary-color);
+    content: "";
+    height: 1px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 24px;
+    width: 100%;
+}
+.t4s-carousel--icon {
+    display: block;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(100% - 9px);
+}
+.t4s-carousel--icon:after {
+    background: var(--carousel-range-primary-color);
+    border-radius: 100%;
+    content: "";
+    width: 9px;
+    height: 9px;
+    left: 0;
+    opacity: 0;
+    position: absolute;
+    top: 20px;
+    
+}
+.is-selected .t4s-carousel--icon:after {
+    opacity: 1;
+    transition: opacity 650ms ease 0s;
+}
+.t4s-carousel-type--range.flickityt4s-enabled.is-fade .flickityt4s-slider>* {
+    opacity: 0;
+    overflow: hidden;
+    transition: opacity 0.4s ease 0s, visibility 0s linear 0.4s;
+    visibility: hidden;
+}
+.t4s-carousel-type--range.flickityt4s-enabled.is-fade .flickityt4s-slider>.is-selected {
+    opacity: 1;
+    transition: opacity 0.4s ease 0s;
+    visibility: visible;
+}
+@keyframes carouselBars{
+  0%{ transform: translate3d(0, 0, 0); }
+  to{ transform: translate3d(100%, 0, 0); }
+  }
+@keyframes carouselBars2{
+  0%{ transform: scaleX(0); }
+  to{ transform: scaleX(1); }
+  }
+.is-selected .t4s-carousel--icon {
+      animation: carouselBars var(--play-carousel-speed) linear forwards;
+}
+.is-selected .t4s-carousel--bar:before{
+      animation: carouselBars2 var(--play-carousel-speed) linear forwards;
+}
+.t4s-carousel-wrapper.is--paused .is-selected .t4s-carousel--icon,
+.t4s-carousel-wrapper.is--paused .is-selected .t4s-carousel--bar:before {
+  animation-play-state: paused;
+}
+.t4s-carousel--text {
+    color: var(--carousel-range-primary-color);
+    display: block;
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1.44;
+    text-align: left;
+    padding-top: 15px;
+}
+.t4s-carousel--button {
+    color: var(--button-pause-play-color);
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    position: absolute;
+    bottom: 50px;
+    right: 24px;
+    width: 36px;
+    height: 36px;
+    z-index: 168;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+}
+.t4s-carousel--button:hover{color: var(--button-pause-play-color);}
+.t4s-carousel--button:before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 1px solid var(--button-pause-play-color);
+    border-radius: 50%;
+}
+svg.t4s-carousel--autoplay-icon {
+    fill: currentColor;
+    width: 15px;
+    height: auto;
+    display: block;
+}
+svg.t4s-carousel--autoplay-icon--play,
+svg.t4s-carousel--autoplay-icon--pause {
+    visibility: hidden;
+    opacity: 0;
+    transform: scale(0);
+    -webkit-transform: scale(0);
+    -ms-transform: scale(0);
+    -webkit-transition: all .25s ease-in-out;
+    transition: all .25s ease-in-out;
+}
+svg.t4s-carousel--autoplay-icon--play {
+  margin-left: 2px;
+}
+.t4s-carousel--button.is--paused svg.t4s-carousel--autoplay-icon--play, 
+.t4s-carousel--button:not(.is--paused) svg.t4s-carousel--autoplay-icon--pause {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+    -webkit-transform: scale(1);
+    -ms-transform: scale(1);
+}
+@media screen and (min-width: 1025px) {
+  .t4s-carousel--range {
+      bottom: 36px;
+  }
+}
+@media screen and (min-width: 768px) and (max-width:1199px) {
+  .t4s-carousel--button {
+      bottom: 85px;
+      right: 15px;
+  }
+}
+@media screen and (min-width:1025px) {
+  .t4s-carousel--button {
+      bottom: 115px;
+  }
+}
+@media screen and (min-width:1550px) {
+  .t4s-btn-nav-width__container .t4s-carousel--button {
+      bottom: 76.5px;
+  }
+}
+@media screen and (min-width: 768px) {
+  .t4s-carousel--bar {
+    height: 62px;
+  }
+  .t4s-carousel--bar:before {
+    top: 4px;
+  }
+  .t4s-carousel--bar:after {
+    top: 4px;
+  }
+  .t4s-carousel--icon:after {
+    top: 0;
+  }
+}
+@media screen and (max-width: 767px) {
+  .t4s-carousel--text {
+      border: 0px;
+      clip: rect(1px, 1px, 1px, 1px);
+      height: 1px;
+      overflow: hidden;
+      padding: 0px;
+      position: absolute;
+      width: 1px;
+  }
+}
+.t4s-carousel--button.is--playing:before {
+      -webkit-animation: carousel-bar-fill linear var(--play-carousel-speed);
+    animation: carousel-bar-fill linear var(--play-carousel-speed);
+}
+.t4s-carousel--button.is--paused:before {
+  animation-play-state: paused;
+}
+@-webkit-keyframes carousel-bar-fill {
+    0% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% 0%,50% 0%,50% 0%,50% 0%,50% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% 0%,50% 0%,50% 0%,50% 0%,50% 0%)
+    }
+
+    12.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,100% 0%,100% 0%,100% 0%,100% 0%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,100% 0%,100% 0%,100% 0%,100% 0%,100% 0%)
+    }
+
+    25% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,120.71% 50%,120.71% 50%,120.71% 50%,120.71% 50%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,120.71% 50%,120.71% 50%,120.71% 50%,120.71% 50%,100% 0%)
+    }
+
+    37.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,100% 100%,100% 100%,100% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,100% 100%,100% 100%,100% 100%,100% 100%,100% 0%)
+    }
+
+    50% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% 120.71%,50% 120.71%,50% 120.71%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% 120.71%,50% 120.71%,50% 120.71%,100% 100%,100% 0%)
+    }
+
+    62.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,0% 100%,0% 100%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,0% 100%,0% 100%,0% 100%,100% 100%,100% 0%)
+    }
+
+    75% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,-20.71% 50%,-20.71% 50%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,-20.71% 50%,-20.71% 50%,0% 100%,100% 100%,100% 0%)
+    }
+
+    87.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,0% 0%,0% 0%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,0% 0%,0% 0%,0% 100%,100% 100%,100% 0%)
+    }
+
+    100% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% -20.71%,0% 0%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% -20.71%,0% 0%,0% 100%,100% 100%,100% 0%)
+    }
+}
+
+@keyframes carousel-bar-fill {
+    0% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% 0%,50% 0%,50% 0%,50% 0%,50% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% 0%,50% 0%,50% 0%,50% 0%,50% 0%)
+    }
+
+    12.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,100% 0%,100% 0%,100% 0%,100% 0%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,100% 0%,100% 0%,100% 0%,100% 0%,100% 0%)
+    }
+
+    25% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,120.71% 50%,120.71% 50%,120.71% 50%,120.71% 50%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,120.71% 50%,120.71% 50%,120.71% 50%,120.71% 50%,100% 0%)
+    }
+
+    37.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,100% 100%,100% 100%,100% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,100% 100%,100% 100%,100% 100%,100% 100%,100% 0%)
+    }
+
+    50% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% 120.71%,50% 120.71%,50% 120.71%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% 120.71%,50% 120.71%,50% 120.71%,100% 100%,100% 0%)
+    }
+
+    62.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,0% 100%,0% 100%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,0% 100%,0% 100%,0% 100%,100% 100%,100% 0%)
+    }
+
+    75% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,-20.71% 50%,-20.71% 50%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,-20.71% 50%,-20.71% 50%,0% 100%,100% 100%,100% 0%)
+    }
+
+    87.5% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,0% 0%,0% 0%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,0% 0%,0% 0%,0% 100%,100% 100%,100% 0%)
+    }
+
+    100% {
+        -webkit-clip-path: polygon(50% -20.71%,50% 50%,50% -20.71%,0% 0%,0% 100%,100% 100%,100% 0%);
+        clip-path: polygon(50% -20.71%,50% 50%,50% -20.71%,0% 0%,0% 100%,100% 100%,100% 0%)
+    }
+}
+
+.t4s-slideshow3 .t4s-btn-nav-width__container .t4s-carousel--range{
+    max-width: 1200px;
+}
+.t4s-wrapper__wide .t4s-slideshow3 .t4s-btn-nav-width__container .t4s-carousel--range{max-width: 1600px;}
+.t4s-wrapper__custom .t4s-slideshow3 .t4s-btn-nav-width__container .t4s-carousel--range{max-width: var(--wrapper-mw);}
+.t4s-wrapper__contentFull .t4s-slideshow3 .t4s-btn-nav-width__container .t4s-carousel--range{max-width:100%;}
+@media(min-width:768px){
+    .t4s-pos-btn-nav__default .t4s-carousel--range{
+        position: static;
+        margin-top: 25px;
+    }
+    .t4s-pos-btn-nav__default .t4s-carousel--button{bottom: 101px;}
+}
+@media(max-width:767px){
+    .t4s-pos-btn-nav-mb__default .t4s-carousel--range{
+        position: static;
+    }
+    .t4s-carousel--button{
+        bottom: 35px;
+        right: 16px;
+    }
+    .t4s-pos-btn-nav-mb__default .t4s-carousel--button{bottom: 52px;}
+
+    .t4s-slideshow3 .t4s-carousel--bar{
+        height:36px;
+    }
+}

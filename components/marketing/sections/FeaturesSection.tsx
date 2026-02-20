@@ -68,7 +68,7 @@ export function FeaturesSection() {
             {/* Mini code editor visual */}
             <div className="mt-4 rounded-lg bg-stone-200/60 p-4 font-mono text-[11px] leading-5 overflow-hidden">
               <div className="text-stone-500 mb-2 text-[9px]">hero-section.liquid</div>
-              <div><span className="text-cyan-600">{'{% assign '}</span><span className="text-sky-600">heading</span> = <span className="text-sky-600">section.settings.heading</span><span className="text-cyan-600">{' %}'}</span></div>
+              <div><span className="text-cyan-600">{'{% assign '}</span><span className="text-accent">heading</span> = <span className="text-accent">section.settings.heading</span><span className="text-cyan-600">{' %}'}</span></div>
               <div className="text-stone-600">{'<section class="hero">'}</div>
               <div className="text-stone-600">{'  <h1>'}
                 <span className="text-cyan-600">{'{{ heading }}'}</span>
@@ -113,7 +113,7 @@ export function FeaturesSection() {
           >
             <div className="mt-3 flex gap-1">
               <div className="flex-1 h-16 rounded bg-stone-200 flex items-center justify-center text-[8px] text-stone-500">Before</div>
-              <div className="flex-1 h-16 rounded bg-sky-100 flex items-center justify-center text-[8px] text-sky-600 gap-1">After <Check size={14} strokeWidth={2} /></div>
+              <div className="flex-1 h-16 rounded bg-accent/10 flex items-center justify-center text-[8px] text-accent gap-1">After <Check size={14} strokeWidth={2} /></div>
             </div>
           </BentoCard>
 
@@ -189,7 +189,7 @@ export function FeaturesSection() {
             <div className="mt-2 font-mono text-[10px] leading-4 flex flex-col gap-1">
               <div className="text-green-600 flex items-center gap-1.5"><Check size={12} strokeWidth={2} /> Valid schema</div>
               <div className="text-green-600 flex items-center gap-1.5"><Check size={12} strokeWidth={2} /> No undefined objects</div>
-              <div className="text-sky-600 flex items-center gap-1.5"><AlertTriangle size={12} strokeWidth={2} /> Unused variable</div>
+              <div className="text-accent flex items-center gap-1.5"><AlertTriangle size={12} strokeWidth={2} /> Unused variable</div>
             </div>
           </BentoCard>
 
@@ -224,3 +224,4 @@ export function FeaturesSection() {
     </motion.section>
   );
 }
+

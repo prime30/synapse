@@ -1,0 +1,90 @@
+{%- comment -%}
+  Product Meta Block
+  Renders product metadata: options, vendor, type, SKU, barcode,
+  availability status, collections, and tags.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings
+  - block: {Object} Block Liquid object (for shopify_attributes)
+  - current_variant: {Object} Currently selected variant
+  - isProductAvailable: {Boolean} Product is available
+  - isPreoder: {Boolean} Pre-order state
+  - classdn1: {String} Display class for in-stock
+  - classdn2: {String} Display class for pre-order
+  - pr_vendor: {String} Product vendor
+  - pr_tags: {Array} Product tags
+  - use_link_vendor: {Boolean} Link vendor to collection
+  - shsd_product_options_with_values: {Array} Options with values
+{%- endcomment -%}
+
+{%- assign ck_meta = false -%}
+{%- capture meta -%}
+  {%- if bk_stts.show_options and product.has_only_default_variant == false -%}{%- assign ck_meta = true -%}
+    {%- for product_option in shsd_product_options_with_values -%}
+      <div class="t4s-option-wrapper">{{ product_option.name | escape }}: <span class="t4s-productMeta__value t4s-dib t4s-option-value t4s-csecondary">{{ product_option.values | join: ', ' }}</span></div>
+    {%- endfor -%}
+  {%- endif -%}
+  {%- if bk_stts.show_vendor and pr_vendor != blank %}{% assign ck_meta = true -%}
+    {%- liquid
+      assign pr_vendor_url = pr_vendor | url_for_vendor
+      if use_link_vendor
+        assign pr_vendor_handle = pr_vendor | handle
+        assign collection_vendor = collections[pr_vendor_handle]
+        assign pr_vendor_url = collection_vendor.url | default: pr_vendor_url
+      endif -%}
+    <div class="t4s-vendor-wrapper">{{ 'products.product.product_vendor' | t }} <span class="t4s-productMeta__value t4s-dib t4s-vendor-value t4s-csecondary"><a href="{{ pr_vendor_url }}">{{ pr_vendor }}</a></span></div>
+  {%- endif -%}
+  {%- if bk_stts.show_type and product.type != blank -%}{%- assign ck_meta = true -%}
+    {%- liquid
+      if settings.use_link_type
+        assign pr_type_handle = product.type | handle
+        assign collection_type = collections[pr_type_handle]
+      endif -%}
+    <div class="t4s-type-wrapper">{{ 'products.product.product_type' | t }} <span class="t4s-productMeta__value t4s-dib t4s-type-value t4s-csecondary"><a href="{% if settings.use_link_type and collection_type.url != blank %}{{ collection_type.url }}{% else %}{{ product.type | url_for_type }}{% endif %}">{{ product.type }}</a></span></div>
+  {%- endif -%}
+  {%- if bk_stts.show_sku -%}{%- assign ck_meta = true -%}
+    <div class="t4s-sku-wrapper{% if current_variant.sku == blank %} t4s-dn{% endif %}" data-product-sku>{{ 'products.product.product_sku' | t }} <span class="t4s-productMeta__value t4s-dib t4s-sku-value t4s-csecondary" data-product__sku-number>{{ current_variant.sku }}</span></div>
+  {%- endif -%}
+  {%- if bk_stts.show_barcode -%}{%- assign ck_meta = true -%}
+    <div class="t4s-barcode-wrapper{% if current_variant.barcode == blank %} t4s-dn{% endif %}" data-product-barcode>{{ 'products.product.product_barcode' | t }} <span class="t4s-productMeta__value t4s-dib t4s-barcode-value t4s-csecondary" data-product__barcode-number>{{ current_variant.barcode }}</span></div>
+  {%- endif -%}
+  {%- if bk_stts.show_available -%}{%- assign ck_meta = true -%}
+    <div data-product-available class="t4s-available-wrapper">{{ 'products.product.available' | t }}
+      <span class="t4s-productMeta__value t4s-dib t4s-available-value">
+        <span data-available-status class="t4s-available-status t4s-csecondary{% unless isProductAvailable %} t4s-dn{% endunless %}">
+          <span data-instock-status class="{{ classdn1 }}">{{ 'products.product.in_stock_status' | t }}</span>
+          <span data-preorder-status class="{{ classdn2 }}">{{ 'products.product.pre_oder_status' | t }}</span>
+        </span>
+        <span data-soldout-status class="t4s-soldout-status t4s-csecondary{% if isProductAvailable %} t4s-dn{% endif %}">{{ 'products.product.sold_out_status' | t }}</span>
+      </span>
+    </div>
+  {%- endif -%}
+  {%- if product.collections.size > 0 and bk_stts.show_category %}{% assign ck_meta = true -%}
+    <div class="t4s-collections-wrapper">{{ 'products.product.product_category' | t }}
+      {% for collection in product.collections -%}{{ collection.title | link_to: collection.url, class: 't4s-dib' }} {% endfor -%}
+    </div>
+  {%- endif -%}
+  {%- if pr_tags.size > 0 and bk_stts.show_tags and product.collections.size > 0 -%}
+    {%- liquid
+      assign ck_meta = true
+      assign t4_pr_tags = pr_tags | where:'t4_'
+      if pr_tags.size == t4_pr_tags.size
+        assign show_tag_final = false
+      else
+        assign show_tag_final = true
+      endif -%}
+    {%- if show_tag_final -%}
+      {%- assign tag_cat_url = collection.url | default: product.collections.first.url -%}
+      <div class="t4s-tags-wrapper">{{ 'products.product.product_tag' | t }}
+        {% for tag in pr_tags -%}
+          {%- if tag contains 't4_' or tag contains 'badge_' %}{% continue %}{% endif -%}
+          <a class="t4s-dib" href="{{ tag_cat_url }}/{{ tag | handle }}">{{ tag | remove: 'type ' | remove: 'Type ' }}</a>
+        {% endfor -%}
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+{%- endcapture -%}
+{%- if ck_meta -%}
+  <div class="t4s-product__meta{% if bk_stts.pr_meta_horizontal %} t4s-product__meta-horizontal{% endif %}" {{ block.shopify_attributes }}>{{- meta -}}</div>
+{%- endif -%}

@@ -1,0 +1,202 @@
+{
+  "timestamp": "2026-02-18T02:48:09.269Z",
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "v2-sonnet",
+      "name": "Synapse v2 (Sonnet 4.6)",
+      "runner": "v2",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "v2-opus",
+      "name": "Synapse v2 (Opus 4.6)",
+      "runner": "v2",
+      "model": "claude-opus-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "base-sonnet",
+      "name": "Baseline (Sonnet 4.6)",
+      "runner": "baseline",
+      "model": "claude-sonnet-4-6",
+      "features": []
+    },
+    {
+      "key": "base-opus",
+      "name": "Baseline (Opus 4.6)",
+      "runner": "baseline",
+      "model": "claude-opus-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor Agent (Opus 4.6)",
+      "runner": "cursor",
+      "model": "claude-opus-4-6",
+      "features": [
+        "generic-assistant"
+      ]
+    }
+  ],
+  "scenarios": {
+    "ask-a11y": {
+      "name": "Ask: Accessibility audit",
+      "intentMode": "ask",
+      "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? Give specific WCAG violations and fixes.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "snippets/product-img.liquid"
+      ],
+      "contenders": {
+        "v2-sonnet": {
+          "name": "Synapse v2 (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 68768,
+          "firstChunkMs": 68767,
+          "model": "claude-sonnet-4-6",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 1829,
+          "cacheRead": 8910,
+          "cacheWrite": 0,
+          "costUSD": 0.030117,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "v2-opus": {
+          "name": "Synapse v2 (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 57829,
+          "firstChunkMs": 57829,
+          "model": "claude-opus-4-6",
+          "tier": "SIMPLE",
+          "inputTokens": 3,
+          "outputTokens": 1260,
+          "cacheRead": 8910,
+          "cacheWrite": 0,
+          "costUSD": 0.03597,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ]
+        },
+        "base-sonnet": {
+          "name": "Baseline (Sonnet 4.6)",
+          "success": true,
+          "totalTimeMs": 54577,
+          "firstChunkMs": 2563,
+          "model": "claude-sonnet-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 42495,
+          "outputTokens": 2978,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.172155,
+          "toolCalls": 11,
+          "toolsUsed": [
+            "read_file",
+            "semantic_search",
+            "grep_content",
+            "list_files",
+            "glob_files"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": []
+        },
+        "base-opus": {
+          "name": "Baseline (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 44770,
+          "firstChunkMs": 4671,
+          "model": "claude-opus-4-6",
+          "tier": "BASELINE",
+          "inputTokens": 13308,
+          "outputTokens": 2525,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.129665,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "get_dependency_graph",
+            "grep_content",
+            "run_diagnostics"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": []
+        },
+        "cursor": {
+          "name": "Cursor Agent (Opus 4.6)",
+          "success": true,
+          "totalTimeMs": 47243,
+          "firstChunkMs": 4608,
+          "model": "claude-opus-4-6",
+          "tier": "CURSOR",
+          "inputTokens": 13242,
+          "outputTokens": 2454,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.12756,
+          "toolCalls": 5,
+          "toolsUsed": [
+            "search_files",
+            "grep_content"
+          ],
+          "changes": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ]
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

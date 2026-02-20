@@ -674,6 +674,9 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               {liveUrlPath || effectivePath || '/'}
             </span>
           </div>
+          <span className="text-[10px] ide-text-muted shrink-0" title="Preview shows your Shopify dev theme. Enable Auto-push on save in the Shopify panel to update the preview when you save files.">
+            Shopify dev theme · push on save is optional
+          </span>
           {relevantLiquidFiles && relevantLiquidFiles.length > 0 && (
             <div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
               {relevantLiquidFiles.map((fp) => (

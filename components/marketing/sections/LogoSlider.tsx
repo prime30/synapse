@@ -118,14 +118,14 @@ export function LogoSlider() {
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Fade edges */}
-      <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
+      <div className="absolute inset-y-0 left-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-r from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
+      <div className="absolute inset-y-0 right-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-l from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
 
       <div className="logo-marquee-track flex whitespace-nowrap items-center">
         {items.map((item, i) => (
           <span
             key={`${item.name}-${i}`}
-            className="inline-flex items-center mx-8 md:mx-12 select-none shrink-0"
+            className="inline-flex items-center mx-4 sm:mx-6 md:mx-12 select-none shrink-0"
           >
             <item.Logo className={`${item.width} h-8 text-stone-400/60 dark:text-white/25`} />
           </span>

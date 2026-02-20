@@ -16,6 +16,7 @@ import {
   Archive,
   ArchiveRestore,
   BookOpen,
+  Brain,
 } from 'lucide-react';
 import type { ChatSession } from './SessionHistory';
 
@@ -66,6 +67,8 @@ interface SessionSidebarProps {
   onLoadMore?: () => void;
   /** Open prompt template library (moved from input bar into sidebar). */
   onOpenTemplates?: () => void;
+  /** Open training review panel. */
+  onOpenTraining?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +95,7 @@ export function SessionSidebar({
   isLoadingMore = false,
   onLoadMore,
   onOpenTemplates,
+  onOpenTraining,
 }: SessionSidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -347,65 +351,83 @@ export function SessionSidebar({
       className="flex flex-col border-r ide-border-subtle ide-surface-panel shrink-0 h-full overflow-hidden transition-[width] duration-200"
       style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
     >
-      <div className="flex items-center justify-between shrink-0 border-b ide-border-subtle px-2 py-1.5 gap-1">
-        {!collapsed && (
-          <span className="text-[11px] font-semibold ide-text-2 truncate min-w-0">
-            Agents
-          </span>
-        )}
-        {onOpenTemplates && (
-          <button
-            type="button"
-            onClick={onOpenTemplates}
-            className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
-            title="Prompt templates"
-            aria-label="Open prompt templates"
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="p-1 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0 ml-auto"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-3.5 w-3.5" />
-          ) : (
-            <PanelLeftClose className="h-3.5 w-3.5" />
-          )}
-        </button>
-      </div>
-
+      {/* ── Expanded header ─────────────────────────────────────────── */}
       {!collapsed && (
-        <div className="shrink-0 px-2 pt-2 pb-1 space-y-1.5">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 ide-text-muted pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Agents..."
-              aria-label="Search agents"
-              className="w-full ide-input pl-6 pr-2 py-1 text-[11px] rounded"
-            />
+        <>
+          <div className="flex items-center justify-between shrink-0 border-b ide-border-subtle px-2 py-1.5 gap-1">
+            <span className="text-[11px] font-semibold ide-text-2 truncate min-w-0">
+              Agents
+            </span>
+            {onOpenTemplates && (
+              <button
+                type="button"
+                onClick={onOpenTemplates}
+                className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
+                title="Prompt templates"
+                aria-label="Open prompt templates"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onOpenTraining && (
+              <button
+                type="button"
+                onClick={onOpenTraining}
+                className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
+                title="Training review"
+                aria-label="Open training review"
+              >
+                <Brain className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              className="p-1 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0 ml-auto"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleNewClick}
-            disabled={isCreatingNew}
-            aria-label="New agent"
-            className="w-full flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-70 disabled:pointer-events-none"
-          >
-            {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            New Agent
-          </button>
-        </div>
+
+          <div className="shrink-0 px-2 pt-2 pb-1 space-y-1.5">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 ide-text-muted pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Agents..."
+                aria-label="Search agents"
+                className="w-full ide-input pl-6 pr-2 py-1 text-[11px] rounded"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleNewClick}
+              disabled={isCreatingNew}
+              aria-label="New agent"
+              className="w-full flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-70 disabled:pointer-events-none"
+            >
+              {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              New Agent
+            </button>
+          </div>
+        </>
       )}
 
+      {/* ── Collapsed vertical icon bar ───────────────────────────────── */}
       {collapsed && (
-        <div className="flex items-center justify-center py-2 shrink-0">
+        <div className="flex flex-col items-center gap-1 shrink-0 border-b ide-border-subtle py-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5" />
+          </button>
           <button
             type="button"
             onClick={handleNewClick}
@@ -416,6 +438,28 @@ export function SessionSidebar({
           >
             {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           </button>
+          {onOpenTemplates && (
+            <button
+              type="button"
+              onClick={onOpenTemplates}
+              className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors"
+              title="Prompt templates"
+              aria-label="Open prompt templates"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onOpenTraining && (
+            <button
+              type="button"
+              onClick={onOpenTraining}
+              className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors"
+              title="Training review"
+              aria-label="Open training review"
+            >
+              <Brain className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 

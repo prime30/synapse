@@ -1,0 +1,29 @@
+.t4s-typed-inner {
+    display: inline;
+    will-change: contents
+}
+.t4s-typed-inited .typed-cursor {
+    font-weight: 300;
+    display: inline-block;
+    vertical-align: baseline;
+    -webkit-animation: t4s-blink 0.7s infinite;
+    -ms-animation: t4s-blink 0.7s infinite;
+    animation: t4s-blink 0.7s infinite
+}
+@keyframes t4s-blink {
+    0% { opacity: 1 }
+    50% { opacity: 0 }
+    100% { opacity: 1 }
+}
+
+@-webkit-keyframes t4s-blink {
+    0% { opacity: 1 }
+    50% { opacity: 0 }
+    100% { opacity: 1 }
+}
+
+@-moz-keyframes t4s-blink {
+    0% { opacity: 1 }
+    50% { opacity: 0 }
+    100% { opacity: 1 }
+}

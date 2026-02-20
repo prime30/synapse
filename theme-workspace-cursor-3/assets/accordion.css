@@ -1,0 +1,146 @@
+.t4s-type-accordion > .t4s-tab-wrapper {
+	position: relative;
+	border-bottom: solid 1px var(--border-color);
+}
+.t4s-type-accordion > .t4s-tab-wrapper:last-child {
+	border: none;
+}
+.t4s-type-accordion .t4s-accor-title {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	line-height: 24px;
+	padding: 0;
+	font-size: 16px;
+	color: var(--title-cl);
+	background-color: var(--bg-title-cl);
+	position: relative;
+	font-weight: 400;
+}
+.t4s-type-accordion .t4s-tab-wrapper.t4s-active .t4s-accor-title {
+	color: var(--title-active-cl);
+	background-color: var(--bg-title-active-cl);
+	border-bottom: solid 1px var(--border-color);
+}
+.t4s-type-accordion .t4s-tab-content {
+	padding: 20px 0 0;
+}
+.t4s-accor-title .t4s-accor-icon {
+	margin-right: 5px;
+    color: inherit;
+}
+.t4s-accor-title .t4s-accor-icon svg {
+	display: flex;
+    align-self: center;
+    fill: currentColor;
+    height: 20px;
+    width: 20px;
+}
+.t4s-accor-title .t4s-accor-text {
+	display: inline-flex;
+    padding: 16px 0;
+    line-height: 24px;
+    justify-content: center;
+    align-items: center;
+}
+.t4s-accor-title .t4s-accor-item-nav {
+	width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+.t4s-accor-title .t4s-accor-item-nav svg {
+	width: 12px;
+	height: 12px;
+	transform: rotate(90deg);
+	transition: 0.5s ease 0s;
+}
+.t4s-tab-wrapper.t4s-active .t4s-accor-title .t4s-accor-item-nav svg {
+	transform: rotate(270deg);
+}
+.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav {
+	width: 56px;
+    height: 56px;
+    background-color: var(--title-cl);
+    color: var(--title-cl2);
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    display: inline-block;
+	vertical-align: top;
+}
+.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav::before,
+.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav::after {
+	position: absolute;
+    content: '';
+    top: 50%;
+    left: 50%;
+    -webkit-transform: translate(-50%,-50%) rotate(-90deg);
+    transform: translate(-50%,-50%) rotate(-90deg);
+    background-color: currentColor;
+    transition: transform .35s ease-in-out,opacity .35s ease-in-out,-webkit-transform .35s ease-in-out;
+    background-color: var(--title-cl2);
+}
+.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav::before {
+	width: 15px;
+    height: 2px;
+    opacity: 1;
+}
+.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav::after {
+	width: 2px;
+    height: 15px;
+    opacity: 1;
+}
+
+.t4s-accordion-style-2 .t4s-tab-wrapper.t4s-active .t4s-accor-title .t4s-accor-item-nav {
+	background-color: var(--title-active-cl);
+}
+.t4s-accordion-style-2 .t4s-tab-wrapper.t4s-active .t4s-accor-title .t4s-accor-item-nav::before {
+	opacity: 0;
+}
+.t4s-accordion-style-2 .t4s-tab-wrapper.t4s-active .t4s-accor-title .t4s-accor-item-nav::after, 
+.t4s-accordion-style-2 .t4s-tab-wrapper.t4s-active .t4s-accor-title .t4s-accor-item-nav::before {
+	-webkit-transform: translate(-50%,-50%) rotate(90deg);
+    transform: translate(-50%,-50%) rotate(90deg);
+    background-color: var(--title-active-cl2);
+}
+
+.t4s-accordion-style-2 .t4s-type-accordion .t4s-accor-title {
+	padding: 0 0 0 10px;
+}
+.t4s-accordion-style-2 .t4s-type-accordion .t4s-tab-content {
+	padding: 20px 20px 0;
+}
+.t4s-accordion-style-2 .t4s-tab-wrapper .t4s-accor-title .t4s-accor-item-nav svg {
+	display: none;
+}
+.t4s-accordion-style-2 .t4s-type-accordion > .t4s-tab-wrapper {
+	margin-bottom: 10px;
+	border: solid 1px var(--border-color);
+}
+
+@media(max-width: 767px) {
+	.t4s-type-accordion .t4s-accor-title {
+		padding: 0 60px 0 10px;
+	}
+	.t4s-accordion-style-2 .t4s-type-accordion .t4s-accor-title {
+		padding: 10px 50px 10px 10px;
+	}
+	.t4s-accordion-style-2 .t4s-accor-title .t4s-accor-item-nav {
+		right: 10px;
+	}
+	.t4s-type-accordion .t4s-tab-content {
+		padding: 10px;
+	}
+	.t4s-accor-title .t4s-accor-text {
+		padding: 6px 0;
+	}
+	.t4s-accor-title .t4s-accor-item-nav {
+		width: 36px;
+		height: 36px;
+	}
+}

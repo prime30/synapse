@@ -15,6 +15,8 @@ import type { Components } from 'react-markdown';
 
 interface MarkdownRendererProps {
   content: string;
+  /** True when the parent message is still being streamed by the agent. */
+  isStreaming?: boolean;
   onOpenFile?: (filePath: string) => void;
   onApplyCode?: (code: string, fileId: string, fileName: string) => void;
   onSaveCode?: (code: string, fileName: string) => void;
@@ -69,7 +71,7 @@ function detectFileNameFromCode(code: string): string | undefined {
 interface BufferedContent {
   /** Markdown safe to render (all code fences are closed). */
   safeContent: string;
-  /** True when the content ends with an unclosed fence. */
+  /** True when the content ends with an unclosed fence (code is still streaming). */
   hasIncompleteFence: boolean;
 }
 
@@ -84,10 +86,11 @@ function bufferIncompleteFences(content: string): BufferedContent {
     count++;
   }
 
-  // Odd count means there's an unclosed fence
+  // Odd count means there's an unclosed fence — close it synthetically
+  // so the code block renders progressively while the LLM is still streaming.
   if (count % 2 !== 0 && lastFenceIndex >= 0) {
     return {
-      safeContent: content.slice(0, lastFenceIndex),
+      safeContent: content + '\n```',
       hasIncompleteFence: true,
     };
   }
@@ -153,20 +156,33 @@ function ParagraphWithFilePaths({
 
 function MarkdownRendererInner({
   content,
+  isStreaming = false,
   onOpenFile,
   onApplyCode,
   onSaveCode,
   resolveFileId,
 }: MarkdownRendererProps) {
-  // Buffer incomplete fences during streaming
-  const { safeContent, hasIncompleteFence } = useMemo(
+  // Buffer incomplete fences during streaming.
+  // Only treat a fence as "incomplete" when the agent is actually still streaming;
+  // otherwise a finished message with an odd number of ``` will get stuck.
+  const { safeContent, hasIncompleteFence: rawIncompleteFence } = useMemo(
     () => bufferIncompleteFences(content ?? ''),
     [content],
   );
+  const hasIncompleteFence = rawIncompleteFence && isStreaming;
+
+  // Count fenced code blocks so we know which one is the "last" (streaming) block.
+  const fencedBlockCount = useMemo(() => {
+    const m = safeContent.match(/```/g);
+    return m ? Math.floor(m.length / 2) : 0;
+  }, [safeContent]);
 
   // Pre-process: extract diff code blocks and replace with placeholders
   // We'll handle diffs by detecting them in the code renderer override
-  const components: Components = useMemo(() => ({
+  // The counter tracks which fenced block we're rendering (reset per useMemo recompute).
+  const components: Components = useMemo(() => {
+  let fencedBlockIdx = 0;
+  return ({
     // ── Headings ────────────────────────────────────────────────────────
     h1: ({ children }) => (
       <h1 className="text-base font-semibold ide-text mb-2 mt-3 first:mt-0">{children}</h1>
@@ -277,6 +293,10 @@ function MarkdownRendererInner({
 
       const fId = resolvedFileName && resolveFileId ? resolveFileId(resolvedFileName) : undefined;
 
+      // Track block index to detect the last (streaming) block
+      const blockIdx = fencedBlockIdx++;
+      const isStreamingBlock = hasIncompleteFence && blockIdx === fencedBlockCount - 1;
+
       return (
         <CodeBlock
           code={codeString}
@@ -285,13 +305,16 @@ function MarkdownRendererInner({
           fileId={fId ?? undefined}
           onApply={onApplyCode}
           onSave={onSaveCode}
+          streaming={isStreamingBlock}
         />
       );
     },
 
     // ── Pre — pass through so code blocks render correctly ──────────────
     pre: ({ children }) => <>{children}</>,
-  }), [onOpenFile, onApplyCode, onSaveCode, resolveFileId]);
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onOpenFile, onApplyCode, onSaveCode, resolveFileId, hasIncompleteFence, fencedBlockCount]);
 
   // Handle empty/whitespace content (after hooks to satisfy rules-of-hooks)
   if (!content?.trim()) return null;
@@ -306,8 +329,9 @@ function MarkdownRendererInner({
         {safeContent}
       </ReactMarkdown>
       {hasIncompleteFence && (
-        <div className="flex items-center gap-1.5 px-2 py-1 my-1 rounded ide-surface-inset border ide-border-subtle">
-          <span className="text-[11px] ide-text-muted italic animate-pulse">Generating code...</span>
+        <div className="flex items-center gap-1 px-2 py-0.5 -mt-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+          <span className="text-[10px] ide-text-muted italic">writing...</span>
         </div>
       )}
     </div>

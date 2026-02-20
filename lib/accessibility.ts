@@ -15,14 +15,14 @@ export function safeTransition(duration: number = 0.2): Record<string, unknown> 
 }
 
 export function trapFocus(container: HTMLElement): () => void {
-  var sel = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key !== 'Tab') return;
-    var focusable = Array.from(container.querySelectorAll(sel)) as HTMLElement[];
+    const focusable = Array.from(container.querySelectorAll(sel)) as HTMLElement[];
     if (focusable.length === 0) return;
-    var first = focusable[0];
-    var last = focusable[focusable.length - 1];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
     if (e.shiftKey) {
       if (document.activeElement === first) { e.preventDefault(); last.focus(); }
     } else {
@@ -31,7 +31,7 @@ export function trapFocus(container: HTMLElement): () => void {
   }
 
   container.addEventListener('keydown', handleKeyDown);
-  var firstFocusable = container.querySelector(sel) as HTMLElement | null;
+  const firstFocusable = container.querySelector(sel) as HTMLElement | null;
   if (firstFocusable) firstFocusable.focus();
 
   return function() { container.removeEventListener('keydown', handleKeyDown); };
@@ -39,8 +39,8 @@ export function trapFocus(container: HTMLElement): () => void {
 
 export function announce(message: string, priority: 'polite' | 'assertive' = 'polite'): void {
   if (typeof document === 'undefined') return;
-  var id = 'synapse-aria-live-' + priority;
-  var el = document.getElementById(id);
+  const id = 'synapse-aria-live-' + priority;
+  let el = document.getElementById(id);
   if (!el) {
     el = document.createElement('div');
     el.id = id;

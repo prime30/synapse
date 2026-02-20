@@ -1,5 +1,5 @@
 const THEMES = [
-  { name: 'Dawn', badge: 'Live', badgeClass: 'bg-sky-500/10 text-sky-400' },
+  { name: 'Dawn', badge: 'Live', badgeClass: 'bg-accent/10 text-accent' },
   { name: 'Custom Theme v2', badge: 'Draft', badgeClass: 'bg-white/5 text-white/30' },
   { name: 'Starter Theme', badge: null, badgeClass: '' },
 ];
@@ -46,7 +46,7 @@ export function SyncFlowMockup() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          <button className="flex-1 h-9 rounded-lg bg-sky-500 text-white text-[11px] font-medium flex items-center justify-center">
+          <button className="flex-1 h-9 rounded-lg bg-accent text-white text-[11px] font-medium flex items-center justify-center">
             Deploy to Shopify
           </button>
           <button className="h-9 px-4 rounded-lg border border-white/10 text-[11px] text-white/50">
@@ -57,3 +57,4 @@ export function SyncFlowMockup() {
     </div>
   );
 }
+

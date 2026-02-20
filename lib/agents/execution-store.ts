@@ -24,6 +24,20 @@ import { createNamespacedCache, type CacheAdapter } from '@/lib/cache/cache-adap
 
 const TTL_MS = 15 * 60 * 1000; // 15 minutes
 
+/** Agent types used for change keys; includes fixed + dynamic general subagents */
+const AGENT_TYPES: AgentType[] = [
+  'project_manager',
+  'liquid',
+  'javascript',
+  'css',
+  'json',
+  'review',
+  'general_1',
+  'general_2',
+  'general_3',
+  'general_4',
+];
+
 // ── Cache singleton ──────────────────────────────────────────────────────────
 
 let _cache: CacheAdapter | null = null;
@@ -43,6 +57,7 @@ function completedKey(id: string): string { return id + ':completed'; }
 function messagesKey(id: string): string { return id + ':messages'; }
 function changesKey(id: string, agent: string): string { return id + ':changes:' + agent; }
 function reviewKey(id: string): string { return id + ':review'; }
+function screenshotsKey(id: string): string { return id + ':screenshots'; }
 
 // ── Serializable meta type ──────────────────────────────────────────────────
 
@@ -110,9 +125,8 @@ export async function getExecution(executionId: string): Promise<ExecutionState 
   const review = await cache.get<ReviewResult>(reviewKey(executionId));
 
   // Reconstruct proposedChanges by scanning known agent types
-  const agentTypes: AgentType[] = ['project_manager', 'liquid', 'javascript', 'css', 'json', 'review'];
   const changeEntries = await Promise.all(
-    agentTypes.map(async (agent) => {
+    AGENT_TYPES.map(async (agent) => {
       const changes = await cache.get<CodeChange[]>(changesKey(executionId, agent));
       return changes ? [agent, changes] as [AgentType, CodeChange[]] : null;
     })
@@ -204,6 +218,30 @@ export function setReviewResult(
   cache.set(reviewKey(executionId), result, TTL_MS);
 }
 
+// ── Screenshot URLs (optional, captured during change preview) ────────────────
+
+interface ScreenshotData {
+  beforeUrl?: string;
+  afterUrl?: string;
+}
+
+export function storeScreenshot(
+  executionId: string,
+  field: 'beforeUrl' | 'afterUrl',
+  url: string,
+): void {
+  const cache = getCache();
+  cache.get<ScreenshotData>(screenshotsKey(executionId)).then((data) => {
+    const updated = { ...(data ?? {}), [field]: url };
+    cache.set(screenshotsKey(executionId), updated, TTL_MS);
+  });
+}
+
+export async function getScreenshots(executionId: string): Promise<ScreenshotData> {
+  const cache = getCache();
+  return (await cache.get<ScreenshotData>(screenshotsKey(executionId))) ?? {};
+}
+
 /** Persist completed execution to database and remove from Redis */
 export async function persistExecution(executionId: string): Promise<void> {
   const state = await getExecution(executionId);
@@ -214,30 +252,34 @@ export async function persistExecution(executionId: string): Promise<void> {
     allChanges.push(...changes);
   }
 
-  const supabase = await createClient();
-  await supabase.from('agent_executions').insert({
-    id: state.executionId,
-    project_id: state.projectId,
-    user_id: state.userId,
-    user_request: state.userRequest,
-    status: state.status === 'completed' ? 'completed' : 'failed',
-    execution_log: state.messages,
-    proposed_changes: allChanges,
-    review_result: state.reviewResult ?? null,
-    started_at: state.startedAt.toISOString(),
-    completed_at: state.completedAt?.toISOString() ?? null,
-  });
+  try {
+    const supabase = await createClient();
+    await supabase.from('agent_executions').insert({
+      id: state.executionId,
+      project_id: state.projectId,
+      user_id: state.userId,
+      user_request: state.userRequest,
+      status: state.status === 'completed' ? 'completed' : 'failed',
+      execution_log: state.messages,
+      proposed_changes: allChanges,
+      review_result: state.reviewResult ?? null,
+      started_at: state.startedAt.toISOString(),
+      completed_at: state.completedAt?.toISOString() ?? null,
+    });
+  } catch (err) {
+    // Outside request scope (e.g. tests, serverless cold start) — skip DB persist
+  }
 
   // Clean up all Redis keys for this execution
   const cache = getCache();
-  const agentTypes: AgentType[] = ['project_manager', 'liquid', 'javascript', 'css', 'json', 'review'];
   const deletePromises = [
     cache.delete(metaKey(executionId)),
     cache.delete(activeKey(executionId)),
     cache.delete(completedKey(executionId)),
     cache.delete(messagesKey(executionId)),
     cache.delete(reviewKey(executionId)),
-    ...agentTypes.map((agent) => cache.delete(changesKey(executionId, agent))),
+    cache.delete(screenshotsKey(executionId)),
+    ...AGENT_TYPES.map((agent) => cache.delete(changesKey(executionId, agent))),
   ];
   await Promise.all(deletePromises);
 }

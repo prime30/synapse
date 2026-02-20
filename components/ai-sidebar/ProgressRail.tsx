@@ -1,9 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Square } from 'lucide-react';
 import type { RailStep, RailPhaseStatus } from '@/lib/agents/phase-mapping';
+
+// -- Constants --
+
+/** Minimum time a phase must be visible before transitioning (prevents flicker). */
+const MIN_PHASE_DISPLAY_MS = 500;
 
 // -- Props --
 
@@ -66,7 +71,7 @@ function getLabelClasses(status: RailPhaseStatus): string {
     case 'active':
       return `${base} text-stone-900 dark:text-white`;
     case 'completed':
-      return `${base} text-stone-600 dark:text-gray-400`;
+      return `${base} text-stone-600 dark:text-stone-400`;
     case 'error':
       return `${base} text-red-500 dark:text-red-400`;
     case 'skipped':
@@ -89,10 +94,62 @@ function getLineClasses(leftStatus: RailPhaseStatus, rightStatus: RailPhaseStatu
   return 'bg-stone-200 dark:bg-white/10';
 }
 
+// -- 500ms minimum phase display hook --
+
+/**
+ * Debounces rail step transitions so each phase is visible for at least
+ * MIN_PHASE_DISPLAY_MS before transitioning. Prevents visual flicker when
+ * fast phases complete in <100ms.
+ *
+ * Uses a ref + timeout pattern to avoid synchronous setState in effects.
+ */
+function useDebouncedSteps(steps: RailStep[]): RailStep[] {
+  const [displaySteps, setDisplaySteps] = useState(steps);
+  const lastUpdateRef = useRef(0);
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Clear any pending debounce from previous render
+    if (pendingRef.current) {
+      clearTimeout(pendingRef.current);
+      pendingRef.current = null;
+    }
+
+    const now = Date.now();
+    // First update: initialize the timestamp and schedule immediate
+    if (lastUpdateRef.current === 0) lastUpdateRef.current = now;
+    const elapsed = now - lastUpdateRef.current;
+
+    // Schedule the update — always via setTimeout to avoid synchronous setState in effect
+    const delay = elapsed >= MIN_PHASE_DISPLAY_MS ? 0 : MIN_PHASE_DISPLAY_MS - elapsed;
+    pendingRef.current = setTimeout(() => {
+      setDisplaySteps(steps);
+      lastUpdateRef.current = Date.now();
+      pendingRef.current = null;
+    }, delay);
+
+    return () => {
+      if (pendingRef.current) clearTimeout(pendingRef.current);
+    };
+  }, [steps]);
+
+  return displaySteps;
+}
+
 // -- Component --
 
 export function ProgressRail({ steps, isStreaming, onStop }: ProgressRailProps) {
-  if (!isStreaming || steps.length === 0) return null;
+  const debouncedSteps = useDebouncedSteps(steps);
+
+  // Derive the active phase label for the aria-live announcement
+  const activeStep = debouncedSteps.find((s) => s.status === 'active');
+  const liveAnnouncement = activeStep
+    ? `${activeStep.label}: in progress`
+    : debouncedSteps.every((s) => s.status === 'completed' || s.status === 'skipped')
+      ? 'All phases complete'
+      : '';
+
+  if (!isStreaming || debouncedSteps.length === 0) return null;
 
   return (
     <AnimatePresence>
@@ -106,10 +163,15 @@ export function ProgressRail({ steps, isStreaming, onStop }: ProgressRailProps) 
         role="progressbar"
         aria-label="Agent progress"
       >
+        {/* Screen reader live region for phase transitions */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {liveAnnouncement}
+        </div>
+
         <div className="flex items-center justify-between">
           {/* Phase rail */}
           <div className="flex items-center flex-1 min-w-0">
-            {steps.map((step, index) => (
+            {debouncedSteps.map((step, index) => (
               <React.Fragment key={step.railPhase}>
                 {/* Phase step */}
                 <div
@@ -121,15 +183,20 @@ export function ProgressRail({ steps, isStreaming, onStop }: ProgressRailProps) 
                   </div>
                   <span className={`${getLabelClasses(step.status)} ${step.status === 'active' ? 'animate-pulse' : ''}`}>{step.label}</span>
                   {step.status === 'completed' && step.summary && (
-                    <span className="text-[10px] text-stone-500 dark:text-gray-500 truncate max-w-[80px]">
+                    <span className="text-[10px] text-stone-500 dark:text-stone-500 truncate max-w-[80px]">
                       {step.summary}
+                    </span>
+                  )}
+                  {step.status === 'error' && step.error && (
+                    <span className="text-[10px] text-red-500 dark:text-red-400 truncate max-w-[100px]">
+                      {step.error.message}
                     </span>
                   )}
                 </div>
                 {/* Connecting line */}
-                {index < steps.length - 1 && (
+                {index < debouncedSteps.length - 1 && (
                   <div
-                    className={`flex-1 h-0.5 mx-1 self-start mt-3 ${getLineClasses(step.status, steps[index + 1].status)}`}
+                    className={`flex-1 h-0.5 mx-1 self-start mt-3 ${getLineClasses(step.status, debouncedSteps[index + 1].status)}`}
                   />
                 )}
               </React.Fragment>

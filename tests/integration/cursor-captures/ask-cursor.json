@@ -1,0 +1,10 @@
+{
+  "scenario": "ask",
+  "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?",
+  "capturedAt": "2026-02-17T13:36:51.260Z",
+  "cursorModel": "claude-4.6-opus",
+  "responseText": "Accessibility issues in product-thumbnail.liquid:\n\n1. Interactive div without keyboard semantics — <div data-t4s-gallery--open> is clickable but uses a div, not a button. No role=\"button\", tabindex=\"0\", or keyboard event handlers.\n\n2. Alt text can silently become empty — The complex t4option/underscore parsing logic can produce blank img_alt. No final fallback to product.title.\n\n3. Hidden variant media lacks aria-hidden — isMediaHidden adds a CSS class but screen readers still traverse hidden content.\n\n4. No focus indicators — No :focus-visible styles on gallery-open element.\n\n5. Video/model media has no accessible label — Deferred media template renders with no aria-label indicating media type.\n\n6. Noscript images duplicate content — Both lazy-loaded img and noscript fallback exist in DOM.\n\n7. No prefers-reduced-motion check — t4s-lz--fadeIn animation plays regardless of user motion preferences.\n\n8. Placeholder data:image/gif announced as image — Base64 placeholder GIF has real alt text before actual image loads.",
+  "totalTimeMs": 21044,
+  "toolsObserved": ["read_file", "read_file"],
+  "notes": "Cursor agent (Claude 4.6 Opus) with direct file access. 2 file reads, analysis produced in single pass."
+}

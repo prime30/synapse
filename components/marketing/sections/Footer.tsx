@@ -88,13 +88,13 @@ export function Footer() {
       <FooterWatermark />
 
       <motion.div
-        className="relative max-w-6xl mx-auto px-8 md:px-10 pt-24 pb-12"
+        className="relative max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-24 pb-12"
         initial={{ opacity: 0, y: 20 }}
         animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Main footer content */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-10 mb-16">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link

@@ -1,58 +1,78 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createCheckpoint, listCheckpoints, restoreCheckpoint, deleteCheckpoint } from '@/lib/checkpoints/checkpoint-service';
-import { checkIdempotency, recordIdempotencyResponse } from '@/lib/middleware/idempotency';
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { requireAuth } from '@/lib/middleware/auth';
+import { validateBody } from '@/lib/middleware/validation';
+import { successResponse } from '@/lib/api/response';
+import { handleAPIError } from '@/lib/errors/handler';
+import {
+  createCheckpoint,
+  listCheckpoints,
+} from '@/lib/services/checkpoints';
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> },
-) {
-  const { projectId } = await params;
-  const checkpoints = await listCheckpoints(projectId);
-  return NextResponse.json({ checkpoints });
+interface RouteParams {
+  params: Promise<{ projectId: string }>;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> },
-) {
-  const { projectId } = await params;
+/**
+ * GET /api/projects/[projectId]/checkpoints
+ *
+ * List checkpoints for the project. Optional `?sessionId=` filter.
+ */
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireAuth(request);
+    const { projectId } = await params;
 
-  const idempotencyCheck = await checkIdempotency(req);
-  if (idempotencyCheck.isDuplicate) return idempotencyCheck.cachedResponse;
+    const sessionId = request.nextUrl.searchParams.get('sessionId') ?? undefined;
+    const checkpoints = listCheckpoints(projectId, sessionId);
 
-  const body = await req.json();
-  const { label, fileIds } = body;
-
-  if (!fileIds?.length) {
-    return NextResponse.json({ error: 'fileIds required' }, { status: 400 });
+    return successResponse({
+      checkpoints: checkpoints.map((cp) => ({
+        id: cp.id,
+        label: cp.label,
+        createdAt: cp.createdAt,
+        fileCount: cp.files.size,
+      })),
+    });
+  } catch (error) {
+    return handleAPIError(error);
   }
-
-  const checkpoint = await createCheckpoint(projectId, label ?? 'Auto checkpoint', fileIds);
-  const response = NextResponse.json({ checkpoint });
-  await recordIdempotencyResponse(req, response);
-  return response;
 }
 
-export async function PUT(req: NextRequest) {
-  const body = await req.json();
-  const { checkpointId, action } = body;
+const createSchema = z.object({
+  sessionId: z.string().min(1),
+  label: z.string().min(1).max(200),
+  files: z.array(
+    z.object({
+      fileId: z.string().min(1),
+      path: z.string().min(1),
+      content: z.string(),
+    }),
+  ).min(1),
+});
 
-  if (action === 'restore' && checkpointId) {
-    const result = await restoreCheckpoint(checkpointId);
-    return NextResponse.json(result);
+/**
+ * POST /api/projects/[projectId]/checkpoints
+ *
+ * Create a checkpoint snapshot of the supplied files.
+ */
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireAuth(request);
+    const { projectId } = await params;
+    const body = await validateBody(createSchema)(request);
+
+    const cp = createCheckpoint(projectId, body.sessionId, body.label, body.files);
+
+    return successResponse({
+      checkpoint: {
+        id: cp.id,
+        label: cp.label,
+        createdAt: cp.createdAt,
+        fileCount: cp.files.size,
+      },
+    });
+  } catch (error) {
+    return handleAPIError(error);
   }
-
-  return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-}
-
-export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const checkpointId = searchParams.get('id');
-
-  if (!checkpointId) {
-    return NextResponse.json({ error: 'id required' }, { status: 400 });
-  }
-
-  const deleted = await deleteCheckpoint(checkpointId);
-  return NextResponse.json({ deleted });
 }

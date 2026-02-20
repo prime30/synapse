@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getOAuthConfig } from '../oauth-config';
-import { jwtCallback, sessionCallback } from '../oauth-callbacks';
+import { jwtCallback, sessionCallback, type EnhancedSession, type EnhancedToken } from '../oauth-callbacks';
 import type { OAuthUser } from '@/lib/types/oauth';
 
 describe('OAuth Configuration - REQ-8', () => {
@@ -101,12 +101,13 @@ describe('OAuth Configuration - REQ-8', () => {
     it('should add user.id from token.sub', () => {
       const session = {
         user: {
+          id: '',
           name: 'Test User',
           email: 'test@example.com',
         },
         expires: '2024-12-31',
-      };
-      const token = {
+      } satisfies EnhancedSession;
+      const token: EnhancedToken = {
         sub: 'user-123',
         name: 'Test User',
         picture: 'https://example.com/avatar.jpg',
@@ -120,10 +121,11 @@ describe('OAuth Configuration - REQ-8', () => {
     });
 
     it('should handle missing user in session', () => {
+      // Test edge case: session without user field (cast to bypass type check)
       const session = {
         expires: '2024-12-31',
-      };
-      const token = {
+      } as unknown as EnhancedSession;
+      const token: EnhancedToken = {
         sub: 'user-123',
       };
 

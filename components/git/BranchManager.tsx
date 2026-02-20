@@ -75,39 +75,39 @@ export function BranchManager({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-800 rounded-lg shadow-xl w-96 max-h-[80vh] flex flex-col"
+        className="ide-surface-panel border ide-border rounded-lg shadow-xl w-96 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center justify-between px-4 py-3 border-b ide-border">
           <div className="flex items-center gap-2">
-            <GitBranch className="w-5 h-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-200">Branches</h2>
+            <GitBranch className="w-5 h-5 ide-text-muted" />
+            <h2 className="text-lg font-semibold ide-text">Branches</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-800 transition-colors"
+            className="p-1 rounded ide-hover transition-colors"
           >
-            <X className="w-4 h-4 text-gray-400" />
+            <X className="w-4 h-4 ide-text-muted" />
           </button>
         </div>
 
         {/* Search input */}
-        <div className="px-4 py-3 border-b border-gray-800">
+        <div className="px-4 py-3 border-b ide-border">
           <input
             ref={searchInputRef}
             type="text"
             placeholder="Search branches..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 ide-input"
           />
         </div>
 
         {/* Branch list */}
         <div className="flex-1 overflow-y-auto">
           {filteredBranches.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-400">
+            <div className="px-4 py-8 text-center ide-text-muted">
               {searchQuery ? 'No branches found' : 'No branches'}
             </div>
           ) : (
@@ -124,14 +124,14 @@ export function BranchManager({
                       }
                     }}
                     className={
-                      'w-full px-4 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors text-left' +
-                      (isCurrent ? ' bg-gray-800' : '')
+                      'w-full px-4 py-2 flex items-center justify-between ide-hover transition-colors text-left' +
+                      (isCurrent ? ' ide-surface-inset' : '')
                     }
                     disabled={isCurrent}
                   >
                     <div className="flex items-center gap-2">
-                      <GitBranch className="w-4 h-4 text-gray-400" />
-                      <span className={'text-gray-200' + (isCurrent ? ' font-medium' : '')}>
+                      <GitBranch className="w-4 h-4 ide-text-muted" />
+                      <span className={'ide-text' + (isCurrent ? ' font-medium' : '')}>
                         {branch}
                       </span>
                     </div>
@@ -145,7 +145,7 @@ export function BranchManager({
 
         {/* New branch input */}
         {showNewBranchInput ? (
-          <div className="px-4 py-3 border-t border-gray-800">
+          <div className="px-4 py-3 border-t ide-border">
             <div className="flex items-center gap-2">
               <input
                 ref={newBranchInputRef}
@@ -154,13 +154,13 @@ export function BranchManager({
                 value={newBranchName}
                 onChange={(e) => setNewBranchName(e.target.value)}
                 onKeyDown={handleNewBranchKeyDown}
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 ide-input"
               />
               <button
                 onClick={handleCreateBranch}
                 disabled={!newBranchName.trim() || branches.includes(newBranchName.trim())}
                 className={
-                  'p-2 rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
+                  'p-2 rounded ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
                   (newBranchName.trim() && !branches.includes(newBranchName.trim()) ? '' : '')
                 }
               >
@@ -171,14 +171,14 @@ export function BranchManager({
                   setShowNewBranchInput(false);
                   setNewBranchName('');
                 }}
-                className="p-2 rounded hover:bg-gray-800 transition-colors"
+                className="p-2 rounded ide-hover transition-colors"
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 ide-text-muted" />
               </button>
             </div>
           </div>
         ) : (
-          <div className="px-4 py-3 border-t border-gray-800">
+          <div className="px-4 py-3 border-t ide-border">
             <button
               onClick={() => {
                 setShowNewBranchInput(true);
@@ -186,7 +186,7 @@ export function BranchManager({
                   newBranchInputRef.current?.focus();
                 }, 100);
               }}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 ide-surface-inset ide-hover rounded ide-text transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>New Branch</span>

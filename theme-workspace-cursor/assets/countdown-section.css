@@ -1,0 +1,38 @@
+.t4s-countdown-wrap {
+    display: flex;
+    padding:var(--box-s);
+}
+@media (min-width: 768px) and (max-width: 1024px){
+    .t4s-countdown-wrap {
+        padding:var(--box-s-tb);
+    }
+}
+@media (max-width: 767px){
+    .t4s-countdown-wrap {
+        padding:var(--box-s-mb);
+    }
+}
+.t4s-countdown-inner {
+    width: var(--box-width);
+    border-style: solid;
+    border-color: var(--bd-box-cl);
+    border-width: var(--bd-box-width);
+    border-radius: var(--bdr-box-width);
+    max-width: 96%;
+}
+.t4s-countdown-content { 
+    display: flex;
+    justify-content: center;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+.t4s-justify-content-start .t4s-countdown-box .t4s-countdown-content{
+    align-items: start;
+    text-align: left;
+}
+.t4s-justify-content-end .t4s-countdown-box .t4s-countdown-content{
+    align-items: end;
+    text-align: right;
+}

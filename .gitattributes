@@ -1,0 +1,2 @@
+# Shell scripts: LF so they run in WSL/Linux (no bash\r from CRLF)
+*.sh text eol=lf

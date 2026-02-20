@@ -1,0 +1,1718 @@
+<!-- sections/featured-sale-collection.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'collection-products.css' | asset_url | stylesheet_tag }}
+{{ 'collection-products-discount.css' | asset_url | stylesheet_tag }}
+{{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+{{ 'pre_flickityt4s.min.css' | asset_url | stylesheet_tag }}
+{%- liquid
+  assign sid = section.id
+  assign se_stts = section.settings
+  assign se_blocks = section.blocks
+  assign stt_layout = se_stts.layout
+  assign stt_image_bg = se_stts.image_bg
+  assign image_ratio = se_stts.image_ratio
+  if stt_layout == 't4s-se-container' 
+    assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+  elsif stt_layout == 't4s-container-wrap'
+    assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+  else
+    assign html_layout = '__' | split: '__'
+  endif
+
+  assign heading_inline = se_stts.heading_inline
+  assign layout_des = se_stts.layout_des
+  assign image_ratio = se_stts.image_ratio
+  if image_ratio == "ratioadapt"
+    assign imgatt = ''
+   else 
+    assign imgatt = 'data-'
+  endif
+  assign sett_equal = se_stts.use_eq_height
+  assign show_vendor = se_stts.show_vendor
+  assign use_link_vendor = settings.use_link_vendor
+  assign enable_rating = settings.enable_rating
+  if enable_rating
+    assign rating_pos = se_stts.rating_pos
+  endif
+  assign product_des = se_stts.product_des
+  assign limit = se_stts.limit
+  if se_stts.btn_owl == "outline"
+    assign arrow_icon = 1
+  else
+    assign arrow_icon = 2
+  endif
+
+  assign show_img = settings.show_img
+  assign isGrowaveWishlist = false
+  if settings.wishlist_mode == "3" and shop.customer_accounts_enabled
+    assign isGrowaveWishlist = true
+  endif
+  assign placeholder_img = settings.placeholder_img
+  assign enable_pr_size = settings.enable_pr_size
+  assign pr_size_pos = settings.pr_size_pos
+  assign show_size_type = settings.show_size_type
+  assign size_ck = settings.size_ck | append: ',size,sizes,Größe' 
+  assign get_size = size_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+  assign enable_pr_color = settings.enable_pr_color
+  assign show_cl_type = settings.show_color_type
+  assign color_ck = settings.color_ck | append: ',color,colors,couleur,colour'
+  assign get_color = color_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+  assign price_varies_style = settings.price_varies_style
+  assign app_review = settings.app_review
+
+  assign txt_sold = se_stts.txt_sold
+  assign txt_avai = se_stts.txt_avai
+  assign show_stock_bar = se_stts.show_stock_bar
+  assign product_list = se_stts.product_list
+
+  assign head_btn_label = se_stts.head_btn_label
+  assign head_btn_url = se_stts.head_btn_url
+
+  assign col_dk = se_stts.col_dk
+  assign col_tb = se_stts.col_tb
+  assign col_mb = se_stts.col_mb
+  if product_des == "1" 
+    if se_stts.col_dk == "4" or se_stts.col_dk == "3" 
+      assign col_dk = "2"
+    endif
+    if se_stts.col_tb == "4" or se_stts.col_tb == "3" or se_stts.col_tb == "2" 
+      assign col_tb = "1"
+    endif
+    if se_stts.col_mb == "2"
+      assign col_mb = "1"
+    endif
+  elsif product_des == "2" 
+    if se_stts.col_dk == "4"
+      assign col_dk = "3"
+    endif
+    if se_stts.col_tb == "4" or se_stts.col_tb == "3"
+      assign col_tb = "2"
+    endif
+    if se_stts.col_mb == "2"
+      assign col_mb = "1"
+    endif
+  endif 
+  -%} 
+                  
+  {%- capture pr_countdown_html -%}
+    {%- assign cd_title = se_stts.cd_title -%}
+    {%- assign cd_subtitle = se_stts.cd_subtitle -%}
+    <div class="t4s-pr-countdown" style="--cd-cl1: {{ se_stts.pr_cd_1 }};--cd-cl2: {{ se_stts.pr_cd_2 }}">
+      {%- if cd_title != blank or cd_subtitle != blank -%}
+        <div class="t4s-pr-cd-head">
+            {%- if cd_title != blank -%}
+              <h4 class="t4s-cd-title">{{ cd_title }}</h4>
+            {%- endif -%}
+            {%- if cd_subtitle != blank -%}
+              <span class="t4s-cd-subtitle">{{ cd_subtitle }}</span>
+            {%- endif -%}
+        </div>
+      {%- endif -%}
+
+      {%- if product_des == "1" -%}
+        <div class="t4s-countdown-time" data-countdown-t4s data-date='date_data_t4s'>
+          <span class="countdown-days">
+            <span class="cd_timet4 t4s-cd-number">%-D</span>
+            <span class="cd_txtt4 t4s-cd-text">{{ "products.product_card.countdown_text.day_plural" | t }} </span>
+          </span>
+          <span class="countdown-hours">
+            <span class="cd_timet4 t4s-cd-number">%H</span>
+            <span class="cd_txtt4 t4s-cd-text">{{ "products.product_card.countdown_text.hr_plural" | t }} </span>
+          </span>
+          <span class="countdown-min">
+            <span class="cd_timet4 t4s-cd-number">%M</span> 
+            <span class="cd_txtt4 t4s-cd-text">{{ "products.product_card.countdown_text.min_plural" | t }} </span>
+          </span>
+          <span class="countdown-sec">
+            <span class="cd_timet4 t4s-cd-number">%S</span> 
+            <span class="cd_txtt4 t4s-cd-text">{{ "products.product_card.countdown_text.sec_plural" | t }} </span>
+          </span>
+        </div>
+      {%- elsif product_des == "2" -%}
+        <div class="t4s-countdown-time" data-countdown-t4s data-date='date_data_t4s'>
+          <span class="countdown-days">
+            <span class="cd_timet4 t4s-cd-number">%-D{{ "products.product_card.countdown_text.day" | t }} </span>
+          </span>
+          <span class="countdown-hours">
+            <span class="cd_timet4 t4s-cd-number"> : %H{{ "products.product_card.countdown_text.hr" | t }} </span>
+          </span>
+          <span class="countdown-min">
+            <span class="cd_timet4 t4s-cd-number"> : %M{{ "products.product_card.countdown_text.min" | t }} </span>
+          </span>
+          <span class="countdown-sec">
+            <span class="cd_timet4 t4s-cd-number"> : %S{{ "products.product_card.countdown_text.sec" | t }}</span>
+          </span>
+        </div>
+      {%- else -%}
+        <div class="t4s-countdown-time" data-countdown-t4s data-date='date_data_t4s'>
+          <span class="countdown-days">
+            <span class="cd_timet4 t4s-cd-number">%-D{{ "products.product_card.countdown_text.day_short" | t }} </span>
+          </span>
+          <span class="countdown-hours">
+            <span class="cd_timet4 t4s-cd-number"> : %H{{ "products.product_card.countdown_text.hr_short" | t }} </span>
+          </span>
+          <span class="countdown-min">
+            <span class="cd_timet4 t4s-cd-number"> : %M{{ "products.product_card.countdown_text.min_short" | t }} </span>
+          </span>
+          <span class="countdown-sec">
+            <span class="cd_timet4 t4s-cd-number"> : %S{{ "products.product_card.countdown_text.sec_short" | t }}</span>
+          </span>
+        </div>
+      {%- endif -%}
+    </div>
+  {%- endcapture -%}
+
+  {%- if show_stock_bar -%}
+    {%- capture append_stock_html -%}
+      {% if product_des != '3' %}
+        <div class="loop-t4s-pr-stock" style="--stock-cl1: {{ se_stts.cl_stock_1 }};--stock-cl2: {{ se_stts.cl_stock_2 }}">
+          <div class="status-bar">
+             <div class="sold-bar" style="width: sold_t4s%"></div>
+          </div>
+          <div class="t4s-pr-stock-status">
+            <div class="available"> <span class="label">{{ txt_avai }} </span> <span class="value">available_t4s<span></span></span></div>
+            <div class="sold">
+              <span class="label">{{ txt_sold }} </span> <span class="value">total_minus_t4s<span></span></span>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="loop-t4s-pr-stock" style="--stock-cl1: {{ se_stts.cl_stock_1 }};--stock-cl2: {{ se_stts.cl_stock_2 }}">
+          <div class="status-bar">
+             <div class="sold-bar" style="width: sold_t4s%"></div>
+          </div>
+          <div class="t4s-pr-stock-status">
+            <div class="sold">
+              <span class="label">{{ txt_sold }} </span> <span class="value">total_minus_t4s<span></span></span>
+            </div>
+            <div class="available"> <span class="label">{{ txt_avai }} </span> <span class="value">available_t4s<span></span></span></div>
+          </div>
+        </div>
+      {% endif %}
+    {%- endcapture -%}
+  {% endif %}
+
+<div class="t4s-section-inner t4s-section-inline-{{ heading_inline }} t4s_nt_se_{{ sid }} t4s_se_{{ sid }} {{ stt_layout }} {%- if stt_image_bg != blank and stt_layout != 't4s-se-container' -%}  t4s-has-imgbg lazyloadt4s {%- endif -%} "  {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {% endif %}  {% render 'section_style', se_stts: se_stts %}>
+  {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner {% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s {% endif %} "  {% if stt_image_bg != blank %}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {% endif %} > {%- endif -%}
+      {% if heading_inline %}
+        <div class="t4s-section-inline-inner">
+      {% endif %}
+        <div class="t4s-section-head {% if se_stts.heading_center %}t4s-text-center{% endif %} {% if head_btn_url != blank and head_btn_label != blank %}t4s-sec-head-btn-on{% endif %} t4s-hidden-head-btn-mb-{{ se_stts.hidden_btn_mb }} {%- if se_stts.countdown_heading -%} t4s-head-has-countdown {% endif %}" style="--head-mgb: {{ se_stts.tophead_mb }}px;--head-mgb-tb: {{ se_stts.tophead_mb_tb }}px;--head-mgb-mb: {{ se_stts.tophead_mb_mb }}px;">
+          {%- render 'section_tophead', se_stts: se_stts, get_height: true -%}
+          {%- if se_stts.countdown_heading -%}
+            <div class="t4s-pr-countdown" style="--cd-cl1: {{ se_stts.pr_cd_1 }};--cd-cl2: {{ se_stts.pr_cd_2 }}">
+                <div class="t4s-countdown-time" data-countdown-t4s data-date='{{ se_stts.date }}'>
+                  <span class="countdown-days">
+                    <span class="cd_timet4 t4s-cd-number">%-D{{ "products.product_card.countdown_text.day_short" | t }} </span>
+                  </span>
+                  <span class="countdown-hours">
+                    <span class="cd_timet4 t4s-cd-number"> : %H{{ "products.product_card.countdown_text.hr_short" | t }} </span>
+                  </span>
+                  <span class="countdown-min">
+                    <span class="cd_timet4 t4s-cd-number"> : %M{{ "products.product_card.countdown_text.min_short" | t }} </span>
+                  </span>
+                  <span class="countdown-sec">
+                    <span class="cd_timet4 t4s-cd-number"> : %S{{ "products.product_card.countdown_text.sec_short" | t }}</span>
+                  </span>
+                </div>
+            </div>
+          {%- endif -%}
+          {%- if head_btn_url != blank and head_btn_label != blank -%}
+            <div class="t4s-head-btn">
+                {{ 'button-style.css' | asset_url | stylesheet_tag }}
+                <a class="t4s-btn t4s-btn-base t4s-btn-style-{{ se_stts.head_button_style }} t4s-btn-size-{{ se_stts.head_btns_size }} t4s-btn-icon-{{ se_stts.head_btn_icon }} t4s-btn-color-{{ se_stts.head_btns_cl }} t4s-btn-rounded-{{ se_stts.head_btn_rounded }} {% if se_stts.head_button_style == 'default' or se_stts.head_button_style == 'outline' %}t4s-btn-effect-{{ se_stts.head_button_effect }}{% endif %}" href="{{ se_stts.head_btn_url }}">{{ head_btn_label }}
+                  {% if se_stts.head_btn_icon %}
+                    <svg class="t4s-btn-icon" xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 489.6 489.6"><path d="M0,244.8c0,9.5,7.7,17.2,17.2,17.2h414.2L322.9,370.4c-3.3,3.3-5,7.7-5,12.1s1.7,8.8,5,12.1c6.7,6.7,17.6,6.7,24.3,0 l137.6-137.7c6.4-6.4,6.4-17.8,0-24.3L347.1,95c-6.7-6.7-17.6-6.7-24.3,0c-6.7,6.7-6.7,17.6,0,24.3l108.4,108.4H17.1 C7.6,227.6,0,235.3,0,244.8z"></path></svg>
+                  {% endif %}
+                </a>
+            </div>
+          {% endif %}
+        </div>
+        {%- if se_stts.layout_des == "1" -%} 
+          <div data-collection-url="{{ collection.url }}" class="t4s-section-content t4s_box_pr_grid t4s-products  t4s-justify-content-center t4s-text-{{ se_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }}  t4s-row t4s-row-cols-lg-{{ col_dk }} t4s-row-cols-md-{{ col_tb }} t4s-row-cols-{{ col_mb }} t4s-gx-lg-{{ se_stts.space_h_item }} t4s-gy-lg-{{ se_stts.space_v_item }} t4s-gx-md-{{ se_stts.space_h_item_tb }} t4s-gy-md-{{ se_stts.space_v_item_tb }} t4s-gx-{{ se_stts.space_h_item_mb }} t4s-gy-{{ se_stts.space_v_item_mb }}">
+        {%- else -%} 
+          <div data-collection-url="{{ collection.url }}" data-t4s-resizeobserver class="t4s-section-content t4s-flickity-slider t4s_box_pr_slider t4s-products t4s-text-{{ se_stts.content_align }} t4s_{{ image_ratio }} t4s_position_{{ se_stts.image_position }} t4s_{{ se_stts.image_size }} {% if se_stts.nav_btn %} t4s-slider-btn__{{ se_stts.btn_pos }}-content t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }} t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-{{ se_stts.btn_cl }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-slider-btn-hidden-mobile-{{ se_stts.btn_hidden_mobile }} {% endif %}{% if se_stts.nav_dot %} t4s-dots-style-{{ se_stts.dot_owl }} t4s-dots-cl-{{ se_stts.dots_cl }} t4s-dots-round-{{ se_stts.dots_round }} t4s-dots-hidden-mobile-{{ se_stts.dots_hidden_mobile }} {% endif %} t4s-row t4s-row-cols-lg-{{ col_dk }} t4s-row-cols-md-{{ col_tb }} t4s-row-cols-{{ col_mb }} t4s-gx-lg-{{ se_stts.space_h_item }} t4s-gy-lg-{{ se_stts.space_v_item }} t4s-gx-md-{{ se_stts.space_h_item_tb }} t4s-gy-md-{{ se_stts.space_v_item_tb }} t4s-gx-{{ se_stts.space_h_item_mb }} t4s-gy-{{ se_stts.space_v_item_mb }}  flickityt4s" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": {{ se_stts.loop }},"prevNextButtons": {{ se_stts.nav_btn }},"percentPosition": 1,"pageDots": {{ se_stts.nav_dot }}, "autoPlay" : {{ se_stts.au_time | times: 1000 }}, "pauseAutoPlayOnHover" : {{ se_stts.au_hover }} }' style="--space-dots: {{ se_stts.dots_space }}px;">
+        {%- endif -%} 
+            {%- if product_list != blank -%}
+              {%- liquid 
+                assign se_stts_date = se_stts.date
+                if show_stock_bar
+                  assign sold_t4s = se_stts.total | minus: se_stts.available | times: 100 | divided_by: se_stts.total | ceil
+                  assign available_t4s   = se_stts.available
+                  assign total_minus_t4s = se_stts.total | minus: se_stts.available
+                  assign append_stock = append_stock_html | replace_first: 'sold_t4s', sold_t4s | replace_first: 'available_t4s', available_t4s | replace_first: 'total_minus_t4s', total_minus_t4s
+                else
+                  assign append_stock = ''
+                endif -%}
+
+               {%- for product in product_list -%}
+
+                    {%- liquid
+                      assign date_countdown =  product.metafields.theme.countdown | default: se_stts_date
+                      if date_countdown != blank and se_stts.countdown_heading == false
+                          assign pr_countdown = pr_countdown_html | replace_first: 'date_data_t4s', date_countdown
+                      else
+                          assign pr_countdown = ''
+                      endif -%}
+
+                    {%- case product_des  -%}
+                      {%- when '1'  -%}
+                        {%- render 'pr-discount-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                      {%- when '2'  -%}
+                        {%- render 'pr-discount-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, pp_review: app_review, show_list_btns: false, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                      {%- when '3'  -%}
+                        {%- render 'pr-discount-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, pp_review: app_review, show_list_btns: false, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                    {%- endcase -%}
+
+               {%- endfor -%}
+
+            {%- elsif se_blocks.size > 0 -%}
+            
+              {%- for block in se_blocks limit: limit -%}
+                {%- comment -%}
+                {%- liquid 
+                  assign bk_stts = block.settings
+                  assign link = bk_stts.link_product
+                  assign pr_badge = bk_stts.pr_badge
+                  if link.type == "product_link" and link != blank
+                    assign product = link.object
+                  else
+                    continue
+                  endif
+                  assign ck_noPr = false
+                  assign sold = bk_stts.total | minus: bk_stts.available | times: 100 | divided_by: bk_stts.total | ceil 
+                  -%}
+                {%- endcomment -%}
+                {%- liquid 
+                  assign bk_stts = block.settings
+                  assign product = bk_stts.product
+                  if product == blank
+                    continue
+                  endif
+                  assign ck_noPr = false
+
+                  if show_stock_bar
+                    assign sold_t4s = bk_stts.total | minus: bk_stts.available | times: 100 | divided_by: bk_stts.total | ceil
+                    assign available_t4s   = bk_stts.available
+                    assign total_minus_t4s = bk_stts.total | minus: bk_stts.available
+                    assign append_stock = append_stock_html | replace_first: 'sold_t4s', sold_t4s | replace_first: 'available_t4s', available_t4s | replace_first: 'total_minus_t4s', total_minus_t4s
+                  else
+                    assign append_stock = ''
+                  endif
+                  if bk_stts.date != blank and se_stts.countdown_heading == false
+                      assign pr_countdown = pr_countdown_html | replace_first: 'date_data_t4s', bk_stts.date 
+                  else
+                      assign pr_countdown = ''
+                  endif -%}
+
+                {%- case product_des  -%}
+                  {%- when '1'  -%}
+                    {%- render 'pr-discount-item1', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, imgatt: imgatt, show_list_btns: false, placeholder_img: placeholder_img, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                  {%- when '2'  -%}
+                    {%- render 'pr-discount-item2', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, pp_review: app_review, show_list_btns: false, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                  {%- when '3'  -%}
+                    {%- render 'pr-discount-item3', product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: show_vendor, use_link_vendor: use_link_vendor, enable_rating: enable_rating, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, pp_review: app_review, show_list_btns: false, append_stock: append_stock, pr_countdown: pr_countdown -%}
+                {%- endcase -%}
+
+              {%- endfor -%}
+
+            {%- else -%} 
+
+              {%- for i in (1..8) limit: limit -%}
+                <div class="t4s-col-item t4s-product t4s-pr-grid t4s-pr-style1 t4s-pr-discount pr-{{ se_stts.content_align }}">
+                  <div class="t4s-product-wrapper">
+                    <div class="t4s-row t4s-align-items-center t4s-row-cols-lg-2 t4s-row-cols-md-2 t4s-row-cols-1">
+                      <div class="t4s-col-item">
+                        <div class="t4s-product-inner">
+                          <a class="db" href="/admin/products">{%- capture current -%}  {%- cycle 1, 2, 3, 4, 5, 6 -%}  {%- endcapture -%} {{ 'product-' | append: current | placeholder_svg_tag: 't4s-placeholder-svg' }}</a>
+                        </div>
+                      </div>
+                      <div class="t4s-col-item">
+                        <div class="t4s-product-info">
+                          <h3 class="t4s-product-title"><a href="/admin/products">{{ 'onboarding.product_title' | t }}</a></h3>
+                          <span class="t4s-product-price"><del>$59.00</del><ins>$39.00</ins></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {%- assign sold = bk_stts.total | minus: bk_stts.available | times: 100 | divided_by: bk_stts.total | ceil -%}
+                  {% if se_stts.show_stock_bar %}
+                    {%- capture append_stock -%}
+                      {% if product_des != '3' %}
+                        <div class="loop-t4s-pr-stock"  style="--stock-cl1: {{ se_stts.cl_stock_1 }};--stock-cl2: {{ se_stts.cl_stock_2 }}">
+                          <div class="status-bar">
+                             <div class="sold-bar" style="width: {{ sold }}%"></div>
+                          </div>
+                          <div class="t4s-pr-stock-status">
+                            <div class="sold"> <span class="label">{{ txt_sold }} </span> <span class="value">{{ bk_stts.total | minus: bk_stts.available }}<span></span></span></div>
+                            <div class="available"> <span class="label">{{ txt_avai }} </span> <span class="value">{{ bk_stts.available }}<span></span></span></div>
+                          </div>
+                        </div>
+                      {% else %}
+                        <div class="loop-t4s-pr-stock"  style="--stock-cl1: {{ se_stts.cl_stock_1 }};--stock-cl2: {{ se_stts.cl_stock_2 }}">
+                          <div class="t4s-pr-stock-status">
+                            <div class="sold"> <span class="label">{{ txt_sold }} </span> <span class="value">{{ bk_stts.total | minus: bk_stts.available }}<span></span></span></div>
+                            <div class="available"> <span class="label">{{ txt_avai }} </span> <span class="value">{{ bk_stts.available }}<span></span></span></div>
+                          </div>
+                          <div class="status-bar">
+                             <div class="sold-bar" style="width: {{ sold }}%"></div>
+                          </div>
+                        </div>
+                      {% endif %}
+                    {%- endcapture -%}
+                  {% endif %}
+                </div>
+              {%- endfor -%}
+            {%- endif -%}
+          </div>
+      {% if heading_inline %}
+        </div>
+      {% endif %}
+  {{- html_layout[1] -}}
+</div>
+{% schema %}
+  {
+    "name": "Discount collection",
+    "tag": "section",
+    "class": "t4s-section t4s_bk_flickity t4s-section-all t4s_tp_cdt t4s_tp_cd t4s-discount-collection",
+    "settings": [
+      {
+            "type": "header",
+            "content": "1. Heading options"
+      },
+      {
+          "type": "select",
+          "id": "design_heading",
+          "label": "Heading design",
+          "default": "1",
+          "options": [
+              {
+                  "value": "1",
+                  "label": "Design 01"
+              },
+              {
+                  "value": "2",
+                  "label": "Design 02"
+              },
+              {
+                  "value": "3",
+                  "label": "Design 03"
+              },
+              {
+                  "value": "4",
+                  "label": "Design 04 (Working when description has content)"
+              },
+              {
+                  "value": "5",
+                  "label": "Design 05"
+              }
+          ]
+      },
+      {
+          "type": "checkbox",
+          "id": "heading_center",
+          "label": "Center align the heading",
+          "default": true
+      },
+      {
+          "type": "text",
+          "id": "top_heading",
+          "label": "Heading",
+          "default": "Collections products sale"
+      },
+      {
+          "type": "richtext",
+          "id": "top_subheading",
+          "label": "Description"
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb",
+          "label": "Bottom space (Desktop)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 30
+      },
+      
+      {
+          "type": "number",
+          "id": "tophead_mb_tb",
+          "label": "Bottom space (Tablet)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 30
+      },
+      {
+          "type": "number",
+          "id": "tophead_mb_mb",
+          "label": "Bottom space (Mobile)(px)",
+          "info": "The spacing is between the heading and the content",
+          "default": 25
+      },
+      {
+          "type": "checkbox",
+          "id": "heading_inline",
+          "label": "Heading inline",
+          "info": "Heading and section content are in a line. Only works on desktop",
+          "default": false
+      },
+      {
+        "type": "header",
+        "content": "2. General options"
+      },
+      {
+        "type": "product_list",
+        "id": "product_list",
+        "label": "Select product",
+        "info": "Leave blank to use product added"
+      },
+      {
+        "type": "select",
+        "id": "product_des",
+        "options": [
+          {
+            "value": "1",
+            "label": "Design 1 (Always show <= 2 items per row)"
+          },
+          {
+            "value": "2",
+            "label": "Design 2 (No image)(Always show <= 3 items)"
+          },
+          {
+            "value": "3",
+            "label": "Design 3"
+          }
+        ],
+        "label": "Product discount design",
+        "info": "Design 1,2 of the Product Discount Section is designed with a large width, so it is only suitable for showing 2 or 3 items on a row.",
+        "default": "1"
+      },
+      {
+        "type": "checkbox",
+        "id": "show_vendor",
+        "label": "Show product vendors",
+        "default": false
+      },
+      {
+          "type": "paragraph",
+          "content": "We recommend that you use 'Add Block' to add discount products and optimization options for each product, the Stock and Countdown options of this section are available for all products in the Discount Collection section."
+      },
+      {
+        "type": "header",
+        "content": "+ stock Bar"
+      },
+      {
+       "type": "checkbox",
+       "id": "show_stock_bar",
+       "label": "Show stock bar",
+       "default": true
+      },
+      {
+        "type": "text",
+        "id": "txt_sold",
+        "label": "Text sold",
+        "default": "Sold:"
+      },
+      {
+        "type": "text",
+        "id": "txt_avai",
+        "label": "Text available",
+        "default": "Available:"
+      },
+      {
+        "type": "range",
+        "id": "total",
+        "min": 1,
+        "max": 100,
+        "step": 1,
+        "label": "Total Stock:",
+        "default": 100
+      },
+      {
+        "type": "range",
+        "id": "available",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "label": "Available Stock:",
+        "default": 75
+      },
+      {
+        "type": "color",
+        "id": "cl_stock_1",
+        "label": "Stock primary color",
+        "default": "#0063d1"
+      },
+      {
+        "type": "color",
+        "id": "cl_stock_2",
+        "label": "Stock secondary color",
+        "default": "#ff4545"
+      },
+      {
+        "type": "header",
+        "content": "+ Countdown"
+      },
+      {
+        "type": "checkbox",
+        "id": "countdown_heading",
+        "label": "Show countdown on heading",
+        "info": "This options always use 'Data countdown' below this",
+        "default": false
+      },
+      {
+        "type": "text",
+        "id": "cd_title",
+        "label": "Countdown title",
+        "default": "HungRy Up !",
+        "info": "Not works when 'show countdown on heading' "
+      },
+      {
+        "type": "text",
+        "id": "cd_subtitle",
+        "label": "Countdown subtitle",
+        "default": "Offer end in:",
+        "info": "Not works when 'show countdown on heading' "
+      },
+      {
+       "type": "text",
+       "id": "date",
+       "label": "Data countdown",
+       "default": "2023\/12\/26",
+       "info": "Countdown to the end sale date will be shown. Use for all product in product list selected. This option is priority if have Countdown metafiled of the product."
+      },
+      {
+        "type": "color",
+        "id": "pr_cd_1",
+        "label": "Countdown primary color",
+        "default": "#f03333"
+      },
+      {
+        "type": "color",
+        "id": "pr_cd_2",
+        "label": "Countdown secondary color",
+        "default": "#000000"
+      },
+      {
+        "type": "header",
+        "content": "+ Options image products"
+      },
+      {
+        "type": "select",
+        "id": "image_ratio",
+        "label": "Image ratio",
+        "default": "rationt",
+        "info": "Aspect ratio custom will settings in general panel",
+        "options": [
+          {
+            "group": "Natural",
+            "value": "ratioadapt",
+            "label": "Adapt to image"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio2_1",
+            "label": "2:1"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio16_9",
+            "label": "16:9"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio8_5",
+            "label": "8:5"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio3_2",
+            "label": "3:2"
+          },
+          {
+            "group": "Landscape",
+            "value": "ratio4_3",
+            "label": "4:3"
+          },
+          {
+            "group": "Landscape",
+            "value": "rationt",
+            "label": "Ratio ASOS"
+          },
+          {
+            "group": "Squared",
+            "value": "ratio1_1",
+            "label": "1:1"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio2_3",
+            "label": "2:3"
+          },
+          {
+            "group": "Portrait",
+            "value": "ratio1_2",
+            "label": "1:2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus1",
+            "label": "Ratio custom 1"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus2",
+            "label": "Ratio custom 2"
+          },
+          {
+            "group": "Custom",
+            "value": "ratio_us3",
+            "label": "Ratio custom 3"
+          },
+          {
+            "group": "Custom",
+            "value": "ratiocus4",
+            "label": "Ratio custom 4"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_size",
+        "label": "Image size",
+        "default": "cover",
+        "info": "This settings apply only if the image ratio is not set to 'Adapt to image'",
+        "options": [
+          {
+            "value": "cover",
+            "label": "Full"
+          },
+          {
+            "value": "contain",
+            "label": "Auto"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "image_position",
+        "info": "The first value is the horizontal position and the second value is the vertical. This settings apply only if the image ratio is not set to 'Adapt to image'",
+        "options": [
+          {
+            "value": "default",
+            "label": "Default"
+          },
+          {
+            "value": "1",
+            "label": "Left top"
+          },
+          {
+            "value": "2",
+            "label": "Left center"
+          },
+          {
+            "value": "3",
+            "label": "Left bottom"
+          },
+          {
+            "value": "4",
+            "label": "Right top"
+          },
+          {
+            "value": "5",
+            "label": "Right center"
+          },
+          {
+            "value": "6",
+            "label": "Right bottom"
+          },
+          {
+            "value": "7",
+            "label": "Center top"
+          },
+          {
+            "value": "8",
+            "label": "Center center"
+          },
+          {
+            "value": "9",
+            "label": "Center bottom"
+          }
+        ],
+        "label": "Image position",
+        "default": "8"
+      },
+      {
+        "type": "select",
+        "id": "content_align",
+        "label": "Product content align",
+        "default": "default",
+        "options": [
+          {
+            "label": "Default",
+            "value": "default"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
+      },
+      {
+        "type": "range",
+        "id": "limit",
+        "min": 1,
+        "max": 50,
+        "step": 1,
+        "label": "Maximum products to show",
+        "default": 8
+      },
+      {
+        "type": "select",
+        "id": "col_dk",
+        "label": "Items per row",
+        "info": "Depends on the style of 'Product discount design' to change the number of items. ",
+        "default": "2",
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "col_tb",
+        "label": "Items per row (Tablet)",
+        "default": "2",
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "col_mb",
+        "label": "Items per row (Mobile)",
+        "default": "1",
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "id": "space_h_item",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items",
+        "default": "30"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items",
+        "default": "30"
+      },
+      {
+        "type": "select",
+        "id": "space_h_item_tb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items",
+        "default": "30"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item_tb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items",
+        "default": "30"
+      },
+      {
+        "type": "select",
+        "id": "space_h_item_mb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space horizontal items (Mobile)",
+        "default": "10"
+      },
+      {
+        "type": "select",
+        "id": "space_v_item_mb",
+        "options": [
+          {
+              "value": "0", 
+              "label": "0"
+          },
+          {
+              "value": "2", 
+              "label": "2px"
+          },
+          {
+              "value": "4", 
+              "label": "4px"
+          },
+          {
+              "value": "6", 
+              "label": "6px"
+          },
+          {
+              "value": "8", 
+              "label": "8px"
+          },
+          {
+              "value": "10", 
+              "label": "10px"
+          },
+          {
+              "value": "15",
+              "label": "15px"
+          },
+          {
+              "value": "20",
+              "label": "20px"
+          },
+          {
+              "value": "25",
+              "label": "25px"
+          },
+          {
+              "value": "30",
+              "label": "30px"
+          }
+        ],
+        "label": "Space vertical items (Mobile)",
+        "default": "10"
+      },
+      {
+        "type": "header",
+        "content": "--Box options--"
+      },
+      {
+        "type": "select",
+        "id": "layout_des",
+        "options": [
+          {
+            "value": "1",
+            "label": "Grid"
+          },
+          {
+            "value": "2",
+            "label": "Carousel"
+          }
+        ],
+        "label": "Layout design",
+        "default": "2"
+      },
+      {
+        "type": "header",
+        "content": "+Options for carousel layout"
+      },
+      {
+            "type": "checkbox",
+            "id": "loop",
+            "label": "Enable loop",
+            "info": "At the end of cells, wrap-around to the other end for infinite scrolling",
+            "default": true
+        },
+        {
+            "type": "range",
+            "id": "au_time",
+            "min": 0,
+            "max": 30,
+            "step": 0.5,
+            "label": "Autoplay speed in second.",
+            "info": "Set is '0' to disable autoplay",
+            "unit": "s",
+            "default": 0
+        },
+        {
+            "type": "checkbox",
+            "id": "au_hover",
+            "label": "Pause autoplay on hover",
+            "info": "Auto-playing will pause when the user hovers over the carousel",
+            "default": true
+        },
+        {
+            "type": "paragraph",
+            "content": "—————————————————"
+        },
+        {
+            "type": "paragraph",
+            "content": "Prev next button"
+        },
+        {
+            "type": "checkbox",
+            "id": "nav_btn",
+            "label": "Use prev next button",
+            "info": "Enable previous & next buttons",
+            "default": false
+        },
+        {
+            "type": "select",
+            "id": "btn_pos",
+            "label": "Prev next position",
+            "info": "Working on screen Desktop",
+            "default": "in",
+            "options": [
+                {
+                    "label": "In content",
+                    "value": "in"
+                },
+                {
+                    "label": "Out content",
+                    "value": "out"
+                },
+                {
+                    "label": "Content side center",
+                    "value": "between"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_vi",
+            "label": "Visible",
+            "default": "hover",
+            "options": [
+                {
+                    "value": "always",
+                    "label": "Always"
+                },
+                {
+                    "value": "hover",
+                    "label": "Only hover"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_owl",
+            "label": "Button style",
+            "default": "default",
+            "options": [
+                {
+                    "value": "default",
+                    "label": "Default"
+                },
+                {
+                    "value": "outline",
+                    "label": "Outline"
+                },
+                {
+                    "value": "simple",
+                    "label": "Simple"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_shape",
+            "label": "Button shape",
+            "info": "Not work for 'Simple' button style",
+            "default": "none",
+            "options": [
+                {
+                    "value": "none",
+                    "label": "Default"
+                },
+                {
+                    "value": "round",
+                    "label": "Round"
+                },
+                {
+                    "value": "rotate",
+                    "label": "Rotate"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_cl",
+            "label": "Button color",
+            "default": "dark",
+            "options": [
+                {
+                    "value": "light",
+                    "label": "Light"
+                },
+                {
+                    "value": "dark",
+                    "label": "Dark"
+                },
+                {
+                    "value": "primary",
+                    "label": "Primary"
+                },
+                {
+                    "value": "custom1",
+                    "label": "Custom color 1"
+                },
+                {
+                    "value": "custom2",
+                    "label": "Custom color 2"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_size",
+            "label": "Buttons size",
+            "default": "small",
+            "options": [
+                {
+                    "value": "small",
+                    "label": "Small"
+                },
+                {
+                    "value": "medium",
+                    "label": "Medium"
+                },
+                {
+                    "value": "large",
+                    "label": "Large"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "btn_hidden_mobile",
+            "label": "Hidden buttons on mobile ",
+            "default": false
+        },
+        {
+            "type": "paragraph",
+            "content": "—————————————————"
+        },
+        {
+            "type": "paragraph",
+            "content": "Page dots"
+        },
+        {
+            "type": "checkbox",
+            "id": "nav_dot",
+            "label": "Use page dots",
+            "info": "Creates and show page dots",
+            "default": false
+        },
+        {
+            "type": "select",
+            "id": "dot_owl",
+            "label": "Dots style",
+            "default": "default",
+            "options": [
+                {
+                    "value": "default",
+                    "label": "Default"
+                },
+                {
+                    "value": "outline",
+                    "label": "Outline"
+                },
+                {
+                    "value": "elessi",
+                    "label": "Elessi"
+                },
+                {
+                    "value": "br-outline",
+                    "label": "Bordered outline"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "dots_cl",
+            "label": "Dots color",
+            "default": "dark",
+            "options": [
+                {
+                    "value": "light",
+                    "label": "Light (Best on dark background)"
+                },
+                {
+                    "value": "dark",
+                    "label": "Dark"
+                },
+                {
+                    "value": "primary",
+                    "label": "Primary"
+                },
+                {
+                    "value": "custom1",
+                    "label": "Custom color 1"
+                },
+                {
+                    "value": "custom2",
+                    "label": "Custom color 2"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "dots_round",
+            "label": "Enable round dots",
+            "default": true
+        },
+        {
+            "type": "range",
+            "id": "dots_space",
+            "min": 2,
+            "max": 20,
+            "step": 1,
+            "label": "Space among dots",
+            "unit": "px",
+            "default": 10
+        },
+        {
+            "type": "checkbox",
+            "id": "dots_hidden_mobile",
+            "label": "Hidden dots on mobile ",
+            "default": false
+        },
+        {
+          "type": "header",
+          "content": "+ Section head button"
+        },
+        {
+          "type": "text",
+          "id": "head_btn_label",
+          "label": "Button label",
+          "default": "Shop All"
+        },
+        {
+          "type": "url",
+          "id": "head_btn_url",
+          "label": "Link"
+        },
+        {
+          "type": "checkbox",
+          "id": "head_btn_icon",
+          "label": "Enable button icon",
+          "default": true
+        },
+        {
+          "type": "checkbox",
+          "id": "head_btn_rounded",
+          "label": "Button rounded",
+          "default": false
+        },
+        {
+          "type": "select",
+          "id": "head_button_style",
+          "label": "Button style",
+          "options": [
+              {
+                  "label": "Default",
+                  "value": "default"
+              },
+              {
+                  "label": "Outline",
+                  "value": "outline"
+              },
+              {
+                  "label": "Bordered bottom",
+                  "value": "bordered"
+              },
+              {
+                  "label": "Link",
+                  "value": "link"
+              }
+          ],
+          "default": "outline"
+        },
+        {
+          "type": "select",
+          "id": "head_btns_size",
+          "label": "Button size",
+          "default": "default",
+          "options": [
+              {
+                  "label": "Default",
+                  "value": "default"
+              },
+              {
+                  "label": "Custom size #1",
+                  "value": "1"
+              },
+              {
+                  "label": "Custom size #2",
+                  "value": "2"
+              },
+              {
+                  "label": "Custom size #3",
+                  "value": "3"
+              }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "head_btns_cl",
+          "label": "Button color",
+          "default": "dark",
+          "options": [
+            {
+                "value": "light",
+                "label": "Light"
+            },
+            {
+                "value": "dark",
+                "label": "Dark"
+            },
+            {
+                "value": "primary",
+                "label": "Primary"
+            },
+            {
+                "value": "custom1",
+                "label": "Custom color 1"
+            },
+            {
+                "value": "custom2",
+                "label": "Custom color 2"
+            }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "head_button_effect",
+          "label": "Hover button effect",
+          "default": "default",
+          "info": "Only working button style default, outline",
+          "options": [
+              {
+                  "label": "Default",
+                  "value": "default"
+              },
+              {
+                  "label": "Fade",
+                  "value": "fade"
+              },
+              {
+                  "label": "Rectangle out",
+                  "value": "rectangle-out"
+              },
+              {
+                  "label": "Sweep to right",
+                  "value": "sweep-to-right"
+              },
+              {
+                  "label": "Sweep to left",
+                  "value": "sweep-to-left"
+              },
+              {
+                  "label": "Sweep to bottom",
+                  "value": "sweep-to-bottom"
+              },
+              {
+                  "label": "Sweep to top",
+                  "value": "sweep-to-top"
+              },
+              {
+                  "label": "Shutter out horizontal",
+                  "value": "shutter-out-horizontal"
+              },
+              {
+                  "label": "Outline",
+                  "value": "outline"
+              },
+              {
+                  "label": "Shadow",
+                  "value": "shadow"
+              }
+          ]
+        },
+        {
+          "type": "checkbox",
+          "id": "hidden_btn_mb",
+          "label": "Hidden head button on Mobile",
+          "default": false
+        },
+        {
+          "type": "header",
+          "content": "3. Design options"
+        },
+        {
+          "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+          "options": [
+              { "value": "t4s-se-container", "label": "Container"},
+              { "value": "t4s-container-wrap", "label": "Wrapped container"},
+              { "value": "t4s-container-fluid", "label": "Full width"}
+          ]
+        },
+        {
+          "type": "color",
+          "id": "cl_bg",
+          "label": "Background"
+        },
+        {
+          "type": "color_background",
+          "id": "cl_bg_gradient",
+          "label": "Background gradient"
+        },
+        {
+          "type": "image_picker",
+          "id": "image_bg",
+          "label": "Background image"
+        },
+        {
+            "type": "text",
+            "id": "mg",
+            "label": "Margin",
+            "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+            "default": ",,50px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd",
+            "label": "Padding",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "50px,,50px,"
+        },
+        {
+          "type": "header",
+          "content": "+ Design tablet options"
+        },
+        {
+            "type": "text",
+            "id": "mg_tb",
+            "label": "Margin",
+            "default": ",,30px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_tb",
+            "label": "Padding",
+            "placeholder": ",,50px,"
+        },
+        {
+          "type": "header",
+          "content": "+ Design mobile options"
+        },
+        {
+            "type": "text",
+            "id": "mg_mb",
+            "label": "Margin",
+            "default": ",,30px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_mb",
+            "label": "Padding",
+            "placeholder": ",,50px,"
+        }
+    ],
+    "blocks": [
+      {
+        "type": "product",
+        "name": "Product",
+        "settings": [
+          {
+            "type": "text",
+            "id": "title",
+            "info": "Only show on admin editor, a key word reminiscent of the selected products.",
+            "label": "Title (optional)"
+          },
+          // {
+          //   "type": "url",
+          //   "id": "link_product",
+          //   "info": "Only active when choose link product",
+          //   "label": "Choose Product (recommended)"
+          // },
+          {
+            "type": "product",
+            "id": "product",
+            "label": "Choose Product"
+          },
+          {
+            "type": "range",
+            "id": "total",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "label": "Total Stock:",
+            "default": 100
+          },
+          {
+            "type": "range",
+            "id": "available",
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "label": "Available Stock:",
+            "default": 75
+          },
+          {
+            "type": "header",
+            "content": "+ Product countdown"
+          },
+          {
+            "type": "text",
+            "id": "cd_title",
+            "label": "Countdown title",
+            "default": "HungRy Up !"
+          },
+          {
+            "type": "text",
+            "id": "cd_subtitle",
+            "label": "Countdown subtitle",
+            "default": "Offer end in:"
+          },
+          {
+           "type": "text",
+           "id": "date",
+           "label": "Data countdown",
+           "default": "2023\/12\/26",
+           "info": "Countdown to the end sale date will be shown."
+          }
+          
+        ]
+      }
+    ],
+    "presets": [
+      {
+        "name": "Discount collection",
+        "category": "Homepage"
+      }
+    ]
+  }
+ {% endschema %} 

@@ -1,0 +1,40 @@
+<div class="t4s-testimonial-wrap">
+  {% if ter_des == '5' %}
+    <svg class="t4s-quote-icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svg="http://svg.com/svg" version="1.1" width="48" height="40" x="0" y="0" viewBox="0 0 512 512" style="enable-background: new 0 0 512 512" xml:space="preserve"><g><path xmlns="http://www.w3.org/2000/svg" d="m221 93.5h-140c-11.028 0-20 8.972-20 20v130c0 11.028 8.972 20 20 20h82.865c-9.372 45.993-50.458 80-97.865 80-2.761 0-5 2.238-5 5v65c0 2.762 2.239 5 5 5 96.495 0 175-78.505 175-175v-130c0-11.028-8.972-20-20-20zm10 150c0 89.31-71.321 162.274-160 164.926v-55.039c24.82-1.129 48.548-10.633 67.293-27.052 19.792-17.335 32.74-41.174 36.461-67.125.206-1.436-.221-2.89-1.171-3.985-.95-1.096-2.329-1.725-3.778-1.725h-88.805c-5.514 0-10-4.486-10-10v-130c0-5.514 4.486-10 10-10h140c5.514 0 10 4.486 10 10zm200-150h-140c-11.028 0-20 8.972-20 20v130c0 11.028 8.972 20 20 20h82.869c-9.372 45.993-50.459 80-97.869 80-2.762 0-5 2.238-5 5v65c0 2.762 2.238 5 5 5 96.495 0 175-78.505 175-175v-130c0-11.028-8.971-20-20-20zm10 150c0 89.31-71.321 162.274-160 164.926v-55.039c24.82-1.128 48.549-10.633 67.295-27.052 19.793-17.335 32.742-41.174 36.463-67.125.206-1.436-.222-2.89-1.171-3.985-.95-1.096-2.328-1.725-3.778-1.725h-88.809c-5.514 0-10-4.486-10-10v-130c0-5.514 4.486-10 10-10h140c5.514 0 10 4.486 10 10z" fill="#000000" data-original="#000000"></path></g></svg>
+  {% endif %}
+  {%- render 'rating_star',rating: bk_stts.rating -%}
+  {% if bk_stts.heading != blank %}
+    <h3 class="t4s-testimonial-heading">{{ bk_stts.heading }}</h3>
+  {% endif %}
+  {% if bk_stts.content != blank %}
+    <div class="t4s-testimonial-content t4s-rte">
+      {{ bk_stts.content }}
+    </div>
+  {% endif %}
+  <div class="t4s-testimonial-author">
+  {%- if bk_stts.image_avata -%}
+     {%- assign image = bk_stts.image_avata -%} 
+    <div {% if image.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image.presentation.focal_point}}"{% endif %} class="t4s-testimonial-avatar lazyloadt4s" data-bgset="{{ image | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" style="background-image: url({{ image | image_url: width: 1 }};"></div>
+  {%- endif -%}
+    <div class="t4s-author-metas">
+      {% if bk_stts.title != blank %}<div class="t4s-testimonial-name">{{ bk_stts.title }}</div>{% endif %}
+      {%- if bk_stts.pos != blank -%}<div class="t4s-testimonial-position">{{ bk_stts.pos }}</div>{%- endif -%} 
+    </div>
+  </div>
+  {%- if bk_stts.product != blank -%}
+    {%- liquid 
+      assign product = bk_stts.product
+      assign image = product.images[0]
+      assign placeholder_img = settings.placeholder_img
+      assign price_varies_style = settings.price_varies_style
+      if bk_stts.image_ratio == "t4s_ratioadapt"
+        assign imgatt = ''
+      else 
+        assign imgatt = 'data-'
+      endif 
+      -%}
+    <div class="t4s-testimonial-product t4s_ratioadapt  t4s_position_8 t4s_cover" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }}">
+      {%- render 'pr-loop-item', block: block, imgatt: imgatt, product: product, pr_url: pr_url, placeholder_img: placeholder_img, price_varies_style: price_varies_style -%}  
+    </div>
+  {%- endif -%}
+</div>

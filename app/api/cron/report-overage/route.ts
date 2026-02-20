@@ -5,7 +5,7 @@ import { reportOverageToStripe } from '@/lib/billing/overage-reporter';
 /**
  * Daily cron: report overage usage to Stripe.
  * Run at 00:05 UTC (or similar) to report for the previous calendar day.
- * Auth: Authorization: Bearer CRON_SECRET (Vercel sends this automatically).
+ * Auth: Authorization: Bearer CRON_SECRET (sent by Vercel Cron or in-process scheduler on Fly.io).
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');

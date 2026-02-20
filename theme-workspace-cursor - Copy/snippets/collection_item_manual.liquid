@@ -1,0 +1,65 @@
+{%- liquid
+  assign collection = collections[bk_stts.collection]
+  assign image = bk_stts.image | default: collection.image
+  assign title = bk_stts.title | default: collection.title
+  assign collection_link = bk_stts.collection_link | default: collection.url
+  assign html = cur_html | split: ','
+  assign all_products_count = collection.all_products_count | default: 0
+ -%}
+
+{{ html[0] }}
+<div class="t4s-col-item t4s-collection-item t4s-text-{{ content_align }} t4s-coll-item-{{ stt }} t4s-col-lg-{{ html[1] }} t4s-col-md-{{ html[2] }} t4s-col-{{ html[3] }}" id="b_{{ block.id }}" data-select-flickity {{ block.shopify_attributes }}>  
+  <div class="t4s-collection-content t4s-pr t4s-eff-img-{{ img_effect }}">
+    <div class="t4s-coll-img t4s-pr t4s-oh t4s-eff t4s-eff-{{ b_effect }}" data-cacl-slide>
+      {% if bk_stts.collection_badge != blank %}
+        <span class="t4s-collection-badge t4s-text-center t4s-pa">{{ bk_stts.collection_badge }}</span>
+      {% endif %}
+      <a class="t4s_collection_item_link t4s-img-wrap t4s-d-block" href="{{ collection_link }}" target="{{ open_link }}">
+      	<div class="t4s_ratio t4s_ratio_hasmb t4s-bg-11" style=" {%- if image != blank -%} background: url({{ image | image_url: width: 1 }});{%- endif -%}--aspect-ratioapt: {{ html[4] }}/{{ html[5] }};--aspect-ratioapttb: {{ html[6] }}/{{ html[7] }};--aspect-ratioaptmb: {{ html[8] }}/{{ html[9] }};" data-cacl-slide>
+          {%- if image != blank -%}
+            <img {% if image.presentation.focal_point != '50.0% 50.0%' %} style="object-position: {{image.presentation.focal_point}}"{% endif %} class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src=" {%- render 'img_svg',w: image.width,h: image.height -%}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+          {%- else -%}
+            {%- assign txt = html[4] | append: 'x' | append: html[5] -%}
+            {%- render 'svg_holder',txt: txt,fs:"40px" | placeholder_svg_tag: 't4s-placeholder-svg t4s-obj-eff' -%}
+          {%- endif -%}
+  	    </div>
+      </a>
+    </div>
+    {%- if title != blank -%}
+      {%- if collection_des != "11" -%}
+        <div class="t4s-collection-wrapper">
+           <span class="t4s-collection-wrapper-content">
+            <a class="t4s-collection-title" href="{{ collection_link }}" target="{{ open_link }}">
+              {%- if collection_des == "1" or collection_des == "2" or collection_des == "8" -%}
+                {%- if bk_stts.image_icon != blank -%}
+                  {%- assign image_icon = bk_stts.image_icon  -%}
+                  <img class="lazyloadt4s t4s-lz--fadeIn" data-src="{{ image_icon | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg',w: image_icon.width,h: image_icon.height %}" width="{{ image_icon.width }}" height="{{ image_icon.height }}" alt="{{ image_icon.alt | escape }}">
+                {%- endif -%}
+              {%- endif -%}
+              <span class="t4s-d-block t4s-text">{{ title }}</span>
+            </a>
+            {%- if collection_des == "9" and all_products_count > 0 -%}
+            <div class="t4s-collec-list-pr t4s_ratio1_1 t4s_position_8 t4s_cover">
+              {%- for product in collection.products limit: 3 -%}
+                {%- assign image = product.featured_image -%}
+                <a href="{{ product.url }}" data-tooltip="top" title="{{ product.title }}" class="t4s-collec-pr-item t4s-d-inline-flex t4s_ratio"><img loading="lazy" src="{{ image | image_url: width: 60 }}" width="{{ image.width }}" height="{{ image.height }}" ></a>
+              {%- endfor -%}
+              {%- if all_products_count > 3 -%}
+                <a class="t4s-collec-pr-item t4s-d-inline-flex t4s-collec-viewall" href="{{ collection.url }}" data-tooltip="top" title="{{ 'collections.pagination.view_all' | t }}">+{{ all_products_count | minus : 3 }} </a>
+              {%- endif -%}
+            </div>
+          {%- endif -%}
+          </span>
+          {%- if bk_stts.button_label != blank -%}
+            {%- if collection_des == "3" or collection_des == "5" or collection_des == "6"  -%}
+              <a class="t4s-collection-btn" href="{{ collection_link }}" target="{{ open_link }}">
+                <span class="t4s-text">{{ bk_stts.button_label }}</span>
+              </a>
+            {%- endif -%}
+          {%- endif -%}
+        </div>
+      {%- endif -%}
+    {%- endif -%}
+  </div>
+</div>
+{{ html[10] }}

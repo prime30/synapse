@@ -6,7 +6,6 @@ import {
   useScroll,
   useTransform,
   useMotionValueEvent,
-  useSpring,
   useInView,
   AnimatePresence,
   type MotionValue,
@@ -259,9 +258,9 @@ function BackgroundEffects({
   const layer2Y = useTransform(scrollYProgress, [0, 1], [0, -60]);
   const layer3Y = useTransform(scrollYProgress, [0, 1], [0, -100]);
 
-  /* Dot-grid mask: larger dots intersected with vignette ellipse */
+  /* Dot-grid mask: subtle dots intersected with vignette ellipse */
   const dotMask = [
-    'radial-gradient(circle 1.5px at center, black 1.5px, transparent 1.5px)',
+    'radial-gradient(circle 0.5px at center, black 0.5px, transparent 0.5px)',
     'radial-gradient(ellipse 100% 80% at center, black 60%, transparent 100%)',
   ].join(', ');
 
@@ -286,11 +285,11 @@ function BackgroundEffects({
       <motion.div
         className="absolute inset-0"
         style={{
-          opacity: reducedMotion ? 0.6 : dotOpacity,
+          opacity: reducedMotion ? 0.3 : Math.min(dotOpacity as number, 0.4),
           maskImage: dotMask,
           WebkitMaskImage: dotMask,
-          maskSize: '24px 24px, 100% 100%',
-          WebkitMaskSize: '24px 24px, 100% 100%',
+          maskSize: '32px 32px, 100% 100%',
+          WebkitMaskSize: '32px 32px, 100% 100%',
           maskComposite: 'intersect',
           WebkitMaskComposite: 'source-in' as string,
         }}
@@ -996,38 +995,44 @@ function ArchitectureFlow({
       >
         {config.haloSize > 0 && !reducedMotion && (
           <div
-            className="absolute left-1/2 top-1/2 rounded-full"
-            style={{
-              width: config.haloSize,
-              height: config.haloSize,
-              transform: 'translate(-50%, -50%)',
-              background: `rgba(40, 205, 86, ${config.haloOpacity})`,
-              filter: config.hasPlasma
-                ? `url(#plasma) blur(${config.haloBlur}px)`
-                : `blur(${config.haloBlur}px)`,
-              animation: 'glow-breathe 3s ease-in-out infinite',
-            }}
-          />
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+          >
+            <div
+              className="rounded-full"
+              style={{
+                width: config.haloSize,
+                height: config.haloSize,
+                background: `rgba(40, 205, 86, ${config.haloOpacity})`,
+                filter: config.hasPlasma
+                  ? `url(#plasma) blur(${config.haloBlur}px)`
+                  : `blur(${config.haloBlur}px)`,
+                animation: 'glow-breathe 3s ease-in-out infinite',
+              }}
+            />
+          </div>
         )}
         {config.hasRing && !reducedMotion && (
           <div
-            className="absolute left-1/2 top-1/2 rounded-full border border-green-500/30"
-            style={{
-              width: config.dotSize + 8,
-              height: config.dotSize + 8,
-              transform: 'translate(-50%, -50%)',
-              animation: 'glow-breathe 3s ease-in-out infinite',
-            }}
-          />
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+          >
+            <div
+              className="rounded-full border border-green-500/30"
+              style={{
+                width: config.dotSize + 8,
+                height: config.dotSize + 8,
+                animation: 'glow-breathe 3s ease-in-out infinite',
+              }}
+            />
+          </div>
         )}
         {!reducedMotion && config.tailHeight > 0 && (
           <div
-            className="absolute left-1/2 pointer-events-none"
+            className="absolute left-1/2 top-1/2 pointer-events-none"
             style={{
               width: config.dotSize,
               height: config.tailHeight,
-              top: '50%',
-              transform: 'translate(-50%, -100%)',
+              marginLeft: -(config.dotSize / 2),
+              marginTop: -config.tailHeight,
               background: `radial-gradient(ellipse 100% 200% at 50% 100%, rgba(40,205,86,${config.tailOpacity}), transparent 70%)`,
               borderRadius: '50%',
             }}
@@ -1171,6 +1176,14 @@ function StepTextPanel({
 /*  Mobile step card — stacked fallback                                */
 /* ------------------------------------------------------------------ */
 
+/** Extract the raw RGB values from the step's glowColor for dynamic border/glow */
+function extractRGB(glowColor: string): string {
+  const m = glowColor.match(/rgba?\(([^)]+)\)/);
+  if (!m) return '40,205,86';
+  const parts = m[1].split(',').map((s) => s.trim());
+  return `${parts[0]},${parts[1]},${parts[2]}`;
+}
+
 function MobileStepCard({
   step,
   index,
@@ -1180,61 +1193,309 @@ function MobileStepCard({
   index: number;
   progress: number;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
   const [openFeature, setOpenFeature] = useState<number>(0);
-  const isActive = progress > 0.1 && progress < 0.9;
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    const id = setInterval(() => setTick((t) => {
+      if (t > 60) { clearInterval(id); return t; }
+      return t + 1;
+    }), 30);
+    return () => clearInterval(id);
+  }, [inView]);
+
+  const powerPct = Math.min(1, Math.max(0, (tick - 15) / 20));
+  const showPowerUp = tick > 15;
+  const rgb = extractRGB(step.glowColor);
 
   return (
-    <div className="relative z-[3]">
+    <div ref={ref} className="relative z-[3]">
       <motion.div
-        className="space-y-6"
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-60px' }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="flex items-center gap-3">
-          <span className="relative flex items-center justify-center">
-            {isActive && (
-              <span className={`absolute w-3 h-3 rounded-full ${step.dotClass} opacity-30 animate-ping`} />
-            )}
-            <span className={`w-1.5 h-1.5 rounded-full ${step.dotClass} relative z-10`} />
-          </span>
-          <span className={`text-[13px] font-mono font-medium tracking-wider ${step.color}`}>
-            {step.number}
-          </span>
+        {/* Card with border trace + backlit glow */}
+        <div
+          className="relative rounded-xl"
+          style={{
+            boxShadow: showPowerUp
+              ? `0 0 ${15 + powerPct * 25}px rgba(${rgb},${0.1 + powerPct * 0.2}), 0 0 ${50 + powerPct * 30}px rgba(${rgb},${powerPct * 0.08})`
+              : undefined,
+            transition: 'box-shadow 0.5s ease-out',
+          }}
+        >
+          {/* Border trace */}
+          {showPowerUp && (
+            <div className="absolute -inset-px rounded-xl overflow-hidden pointer-events-none" aria-hidden="true">
+              <div
+                className="absolute"
+                style={{
+                  width: '200%',
+                  height: '200%',
+                  top: '-50%',
+                  left: '-50%',
+                  background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(${rgb},0.5) 60deg, rgba(${rgb},0.7) 90deg, transparent 150deg, transparent 360deg)`,
+                  animation: powerPct >= 1 ? 'prompt-border-spin 2.5s linear infinite' : undefined,
+                  transform: `rotate(${powerPct * 360}deg)`,
+                }}
+              />
+              <div className="absolute inset-[1.5px] rounded-[10px] bg-[#fafaf9] dark:bg-[#0a0a0a]" />
+            </div>
+          )}
+
+          <div
+            className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-[#fafaf9]/80 dark:bg-white/[0.02] p-5 sm:p-6 space-y-5 transition-colors duration-500"
+            style={{
+              borderColor: showPowerUp ? `rgba(${rgb},${0.15 + powerPct * 0.35})` : undefined,
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <span className="relative flex items-center justify-center">
+                <span
+                  className="w-2 h-2 rounded-full relative z-10"
+                  style={{
+                    background: `rgb(${rgb})`,
+                    boxShadow: showPowerUp ? `0 0 8px rgba(${rgb},${powerPct * 0.6})` : undefined,
+                  }}
+                />
+              </span>
+              <span className={`text-[13px] font-mono font-medium tracking-wider ${step.color}`}>
+                {step.number}
+              </span>
+            </div>
+
+            <h3 className="text-2xl sm:text-3xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-[1.1]">
+              {step.title}
+            </h3>
+
+            <p className="text-sm sm:text-base text-stone-500 dark:text-white/50 leading-relaxed">
+              {step.description}
+            </p>
+
+            <div className="pt-1">
+              {step.features.map((feature, i) => (
+                <FeatureItem
+                  key={feature.title}
+                  feature={feature}
+                  isOpen={openFeature === i}
+                  onToggle={() => setOpenFeature((prev) => (prev === i ? -1 : i))}
+                  index={i}
+                />
+              ))}
+            </div>
+
+            {/* Illustration inside the card */}
+            <div className="pt-2">
+              <StepIllustration step={step} isActive={inView} />
+            </div>
+          </div>
         </div>
-
-        <h3 className="text-3xl md:text-4xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-[1.1]">
-          {step.title}
-        </h3>
-
-        <p className="text-base md:text-lg text-stone-500 dark:text-white/50 leading-relaxed">
-          {step.description}
-        </p>
-
-        <div className="pt-2">
-          {step.features.map((feature, i) => (
-            <FeatureItem
-              key={feature.title}
-              feature={feature}
-              isOpen={openFeature === i}
-              onToggle={() => setOpenFeature((prev) => (prev === i ? -1 : i))}
-              index={i}
-            />
-          ))}
-        </div>
-      </motion.div>
-
-      <motion.div
-        className="mt-8 mb-4"
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-40px' }}
-        transition={{ duration: 0.5, delay: 0.15 }}
-      >
-        <StepIllustration step={step} isActive={isActive} />
       </motion.div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mobile prompt card — auto-types and powers up on viewport entry     */
+/* ------------------------------------------------------------------ */
+
+function MobilePromptCard() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-40px' });
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    const id = setInterval(() => setTick((t) => t + 1), 40);
+    return () => clearInterval(id);
+  }, [inView]);
+
+  const charsToShow = Math.min(TYPING_PROMPT.length, tick);
+  const displayText = TYPING_PROMPT.slice(0, charsToShow);
+  const typingDone = charsToShow >= TYPING_PROMPT.length;
+  const showCursor = !typingDone || tick < TYPING_PROMPT.length + 30;
+  const powerUp = typingDone && tick > TYPING_PROMPT.length + 10;
+  const powerPct = powerUp ? Math.min(1, (tick - TYPING_PROMPT.length - 10) / 20) : 0;
+
+  return (
+    <motion.div
+      ref={ref}
+      className="mt-6 max-w-md mx-auto w-full text-left"
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+    >
+      <div
+        className="relative rounded-xl"
+        style={{
+          boxShadow: powerUp
+            ? `0 0 ${20 + powerPct * 30}px rgba(40,205,86,${0.15 + powerPct * 0.25}), 0 0 ${60 + powerPct * 40}px rgba(40,205,86,${powerPct * 0.12})`
+            : undefined,
+          transition: 'box-shadow 0.4s ease-out',
+        }}
+      >
+        {powerUp && (
+          <div className="absolute -inset-px rounded-xl overflow-hidden pointer-events-none" aria-hidden="true">
+            <div
+              className="absolute"
+              style={{
+                width: '200%',
+                height: '200%',
+                top: '-50%',
+                left: '-50%',
+                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(40,205,86,0.5) 60deg, rgba(40,205,86,0.7) 90deg, transparent 150deg, transparent 360deg)',
+                animation: powerPct >= 1 ? 'prompt-border-spin 2s linear infinite' : undefined,
+                transform: `rotate(${powerPct * 360}deg)`,
+              }}
+            />
+            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[#0a0a0a]" />
+          </div>
+        )}
+        <div
+          className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-sm overflow-hidden transition-colors duration-500"
+          style={{ borderColor: powerUp ? `rgba(40,205,86,${0.2 + powerPct * 0.4})` : undefined }}
+        >
+          <div className="px-3 pt-2.5 pb-1.5 min-h-[2.5rem]">
+            <p className="text-sm text-stone-700 dark:text-white/70 leading-relaxed">
+              {displayText || <span className="text-stone-300 dark:text-white/20">Describe the change you want...</span>}
+              {showCursor && (
+                <span className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 animate-pulse align-middle rounded-full" />
+              )}
+            </p>
+          </div>
+          <div className="flex items-center justify-between px-2.5 py-1.5 border-t border-stone-100 dark:border-white/5">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-stone-200 dark:border-white/10 text-stone-600 dark:text-white/50 bg-stone-50 dark:bg-white/[0.03]">
+                Code
+              </span>
+              <span className="text-[10px] text-stone-400 dark:text-white/30">opus</span>
+              <span className="text-[10px] text-stone-400 dark:text-white/30">1x</span>
+            </div>
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center transition-all duration-500"
+              style={{
+                background: charsToShow > 0 ? '#28CD56' : undefined,
+                boxShadow: powerUp ? `0 0 10px rgba(40,205,86,${powerPct * 0.6})` : undefined,
+              }}
+            >
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Typing prompt preview — bridges section header to first step        */
+/* ------------------------------------------------------------------ */
+
+const TYPING_PROMPT = 'Add an animated hero section with a countdown timer';
+
+function TypingPromptPreview({ progress }: { progress: number }) {
+  // Typing starts at 2%, finishes by 8%, powerup at 9-12%, then holds until parent exits at 14%
+  const typeProgress = Math.min(1, Math.max(0, (progress - 0.02) / 0.06));
+  const charsToShow = Math.floor(typeProgress * TYPING_PROMPT.length);
+  const displayText = TYPING_PROMPT.slice(0, charsToShow);
+  const showCursor = charsToShow < TYPING_PROMPT.length || progress < 0.10;
+  const typingDone = typeProgress >= 1;
+  const powerUpProgress = Math.min(1, Math.max(0, (progress - 0.09) / 0.02));
+  const showPowerUp = typingDone && progress >= 0.09;
+
+  if (progress < 0.01) return null;
+
+  return (
+    <motion.div
+      className="mt-6 max-w-xl w-full text-left"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div
+        className="relative rounded-xl"
+        style={{
+          boxShadow: showPowerUp
+            ? `0 0 ${20 + powerUpProgress * 30}px rgba(40,205,86,${0.15 + powerUpProgress * 0.25}), 0 0 ${60 + powerUpProgress * 40}px rgba(40,205,86,${powerUpProgress * 0.12})`
+            : undefined,
+          transition: 'box-shadow 0.4s ease-out',
+        }}
+      >
+        {/* Border trace animation — conic gradient that rotates */}
+        {showPowerUp && (
+          <div
+            className="absolute -inset-px rounded-xl overflow-hidden pointer-events-none"
+            aria-hidden="true"
+          >
+            <div
+              className="absolute"
+              style={{
+                width: '200%',
+                height: '200%',
+                top: '-50%',
+                left: '-50%',
+                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(40,205,86,0.5) 60deg, rgba(40,205,86,0.7) 90deg, transparent 150deg, transparent 360deg)',
+                animation: showPowerUp && powerUpProgress >= 1 ? 'prompt-border-spin 2s linear infinite' : undefined,
+                transform: `rotate(${powerUpProgress * 360}deg)`,
+              }}
+            />
+            {/* Inner mask to make it a border, not a fill */}
+            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[#0a0a0a]" />
+          </div>
+        )}
+
+        <div
+          className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-sm overflow-hidden transition-colors duration-500"
+          style={{
+            borderColor: showPowerUp
+              ? `rgba(40,205,86,${0.2 + powerUpProgress * 0.4})`
+              : undefined,
+          }}
+        >
+          {/* Textarea area */}
+          <div className="px-4 pt-3 pb-2 min-h-[3.5rem]">
+            <p className="text-sm text-stone-700 dark:text-white/70 leading-relaxed">
+              {displayText || <span className="text-stone-300 dark:text-white/20">Describe the change you want...</span>}
+              {showCursor && (
+                <span className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 animate-pulse align-middle rounded-full" />
+              )}
+            </p>
+          </div>
+          {/* Footer — mimics IDE input footer */}
+          <div className="flex items-center justify-between px-3 py-2 border-t border-stone-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-stone-200 dark:border-white/10 text-stone-600 dark:text-white/50 bg-stone-50 dark:bg-white/[0.03]">
+                Code <svg className="w-2.5 h-2.5 ml-0.5 opacity-40" fill="none" viewBox="0 0 10 10"><path d="M3 4l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </span>
+              <span className="text-[11px] text-stone-400 dark:text-white/30">claude opus</span>
+              <span className="text-[11px] text-stone-400 dark:text-white/30">1x</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-stone-400 dark:text-white/30">1%</span>
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-500"
+                style={{
+                  background: showPowerUp ? '#28CD56' : charsToShow > 0 ? '#28CD56' : undefined,
+                  boxShadow: showPowerUp ? `0 0 12px rgba(40,205,86,${powerUpProgress * 0.6})` : undefined,
+                }}
+              >
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -1252,31 +1513,48 @@ export function AgentScrollStory() {
     offset: ['start start', 'end end'],
   });
 
-  const dampedProgress = useSpring(scrollYProgress, {
-    stiffness: 100,
-    damping: 30,
-    mass: 0.5,
-  });
-
   const [scrollProgress, setScrollProgress] = useState(0);
-  useMotionValueEvent(dampedProgress, 'change', (v) => {
+  useMotionValueEvent(scrollYProgress, 'change', (v) => {
     setScrollProgress(v);
   });
 
-  const [rawProgress, setRawProgress] = useState(0);
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    setRawProgress(v);
-  });
+  // The intro uses ~17% of scroll. The remaining ~83% is split across 4 steps.
+  // Within each step: 10% transition in, 80% HOLD, 10% transition out.
+  // At 700vh total, each step = ~145vh. Hold = 80% of 145 = ~116vh (more than a full screen).
+  const STEP_COUNT = 4;
+  const TRANSITION_FRAC = 0.1;
+
+  // Staircase: maps continuous scroll (0→1) to stepped card positions (0,1,2,3).
+  // Each step's 25% scroll window: first 20% = transition IN, middle 60% = HOLD, last 20% = transition OUT.
+  // During HOLD, snappedProgress is an integer so the card centers on the dot.
+  const snappedProgress = (() => {
+    const raw = scrollProgress * STEP_COUNT;
+    const step = Math.floor(Math.min(raw, STEP_COUNT - 0.001));
+    const frac = raw - step;
+    if (step >= STEP_COUNT - 1) return STEP_COUNT - 1;
+    // Each step window: [0, TRANSITION_FRAC) = hold at step,
+    // [TRANSITION_FRAC, 1-TRANSITION_FRAC) = hold at step,
+    // [1-TRANSITION_FRAC, 1) = transition to step+1
+    if (frac < 1 - TRANSITION_FRAC) {
+      return step;
+    }
+    const t = (frac - (1 - TRANSITION_FRAC)) / TRANSITION_FRAC;
+    return step + t;
+  })();
+
+  const snappedNormalized = snappedProgress / Math.max(STEP_COUNT - 1, 1);
 
   const getStepProgress = (index: number): number => {
     const stepStart = index * 0.25;
     const stepEnd = stepStart + 0.25;
     if (scrollProgress < stepStart) return 0;
     if (scrollProgress > stepEnd) return 1;
-    return (scrollProgress - stepStart) / 0.25;
+    const raw = (scrollProgress - stepStart) / 0.25;
+    if (raw < TRANSITION_FRAC) return raw / TRANSITION_FRAC;
+    return 1;
   };
 
-  const activeStep = Math.min(3, Math.max(0, Math.floor(scrollProgress * 4)));
+  const activeStep = Math.min(3, Math.max(0, Math.round(snappedProgress)));
   const currentStep = STEPS[activeStep];
 
   return (
@@ -1284,7 +1562,7 @@ export function AgentScrollStory() {
       ref={sectionRef}
       data-navbar-theme="light"
       className={`relative bg-[#fafaf9] dark:bg-[#0a0a0a] ${
-        isDesktop ? 'min-h-[400vh] overflow-x-clip' : 'py-20 md:py-32 overflow-hidden'
+        isDesktop ? 'min-h-[900vh] overflow-x-clip pt-24 md:pt-32' : 'py-20 md:py-32 overflow-hidden'
       }`}
       aria-label="Agent workflow: four-step scroll story"
     >
@@ -1295,56 +1573,57 @@ export function AgentScrollStory() {
         reducedMotion={reducedMotion}
       />
 
-      {/* Content frame lines (z-[1]) */}
-      <div
-        className={`${isDesktop ? 'fixed inset-0' : 'absolute inset-0'} max-w-6xl mx-auto pointer-events-none z-[1]`}
-        aria-hidden="true"
-      >
-        <div className="relative h-full">
-          <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
-          <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
-        </div>
-      </div>
-
       {/* ─── Desktop: sticky two-column layout ─── */}
       {isDesktop ? (
-        <div className="sticky top-0 h-screen flex flex-col justify-center relative z-[3]">
+        <div className="sticky top-0 h-screen relative z-[3]">
+          {/* Content frame lines — inside sticky container so they aren't clipped */}
+          <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none z-[5]" aria-hidden="true">
+            <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
+            <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
+          </div>
           {/* Left column gradient mask — fades dot grid behind text */}
           <div
-            className="absolute inset-y-0 left-0 w-[55%] pointer-events-none z-[2]
-              bg-gradient-to-r from-[#fafaf9] via-[#fafaf9]/80 to-transparent
-              dark:from-[#0a0a0a] dark:via-[#0a0a0a]/80 dark:to-transparent"
+            className="absolute inset-y-0 left-0 w-[55%] pointer-events-none z-[2] bg-gradient-to-r from-[#fafaf9] via-[#fafaf9]/80 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/80 dark:to-transparent"
             aria-hidden="true"
           />
 
-          <div className="max-w-6xl mx-auto px-8 md:px-10 w-full relative z-[3]">
-            {/* Section header — fades out and collapses as user scrolls */}
-            <motion.div
-              className="overflow-hidden"
-              animate={{
-                opacity: scrollProgress < 0.05 ? 1 : 0,
-                height: scrollProgress > 0.1 ? 0 : 'auto',
-                marginBottom: scrollProgress > 0.1 ? 0 : 32,
+          {/* Intro block: centered in viewport, scrolls up to exit */}
+          {scrollProgress < 0.22 && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center z-[4] px-4 sm:px-6 md:px-10"
+              style={{
+                transform: scrollProgress > 0.14
+                  ? `translateY(-${Math.min(100, ((scrollProgress - 0.14) / 0.06) * 100)}vh)`
+                  : undefined,
+                opacity: scrollProgress > 0.14
+                  ? Math.max(0, 1 - ((scrollProgress - 0.14) / 0.06))
+                  : 1,
               }}
-              transition={{ duration: 0.3 }}
             >
-              <span className="inline-block rounded-full border border-stone-200 dark:border-white/10 bg-stone-100 dark:bg-white/5 px-3 py-1 text-[11px] font-medium tracking-widest uppercase text-stone-500 dark:text-white/50 mb-4">
-                ARCHITECTURE
-              </span>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
-                From prompt to{' '}
-                <PixelAccent>production</PixelAccent>
-              </h2>
-              <p className="text-lg text-stone-500 dark:text-white/50 mt-4 max-w-xl">
-                Four phases. Five AI agents. Every change validated before it
-                reaches your store.
-              </p>
-            </motion.div>
+              <div className="text-center max-w-2xl">
+                <span className="inline-block rounded-full border border-stone-200 dark:border-white/10 bg-stone-100 dark:bg-white/5 px-3 py-1 text-[11px] font-medium tracking-widest uppercase text-stone-500 dark:text-white/50 mb-5">
+                  ARCHITECTURE
+                </span>
+                <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
+                  From prompt to{' '}
+                  <PixelAccent>production</PixelAccent>
+                </h2>
+                <p className="text-base text-stone-500 dark:text-white/50 mt-3 mx-auto max-w-xl">
+                  Four phases. Five AI agents. Every change validated before it
+                  reaches your store.
+                </p>
 
+                <TypingPromptPreview progress={scrollProgress} />
+              </div>
+            </div>
+          )}
+
+          <div className="absolute inset-0 flex flex-col justify-center">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 w-full relative z-[3]">
             {/* Two-column grid */}
             <div
               className="grid lg:grid-cols-2 gap-12 items-center"
-              style={{ opacity: Math.min(1, scrollProgress * 15) }}
+              style={{ opacity: scrollProgress > 0.16 ? Math.min(1, (scrollProgress - 0.16) * 20) : 0 }}
             >
               {/* Left column — crossfading text + accordion */}
               <div className="min-h-[420px] flex items-center">
@@ -1366,18 +1645,20 @@ export function AgentScrollStory() {
               <div className="h-[calc(100vh-12rem)]">
                 <ArchitectureFlow
                   activeStep={activeStep}
-                  scrollProgress={rawProgress}
+                  scrollProgress={snappedNormalized}
                   reducedMotion={reducedMotion}
                 />
               </div>
             </div>
           </div>
+          </div>
         </div>
       ) : (
-        /* ─── Mobile: stacked fallback ─── */
-        <div className="relative max-w-6xl mx-auto px-8 md:px-10">
+        /* ─── Mobile: powerup prompt → stacked steps ─── */
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 md:px-10">
+          {/* Header + powerup prompt */}
           <motion.div
-            className="mb-16 relative z-[3]"
+            className="mb-12 relative z-[3] text-center"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-80px' }}
@@ -1386,17 +1667,19 @@ export function AgentScrollStory() {
             <span className="inline-block rounded-full border border-stone-200 dark:border-white/10 bg-stone-100 dark:bg-white/5 px-3 py-1 text-[11px] font-medium tracking-widest uppercase text-stone-500 dark:text-white/50 mb-4">
               ARCHITECTURE
             </span>
-            <h2 className="text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
+            <h2 className="text-3xl sm:text-4xl font-medium text-stone-900 dark:text-white tracking-[-0.02em]">
               From prompt to{' '}
               <PixelAccent>production</PixelAccent>
             </h2>
-            <p className="text-lg text-stone-500 dark:text-white/50 mt-6 max-w-xl">
+            <p className="text-base text-stone-500 dark:text-white/50 mt-3 max-w-md mx-auto">
               Four phases. Five AI agents. Every change validated before it
               reaches your store.
             </p>
+            <MobilePromptCard />
           </motion.div>
 
-          <div className="space-y-12">
+          {/* Steps */}
+          <div className="space-y-16">
             {STEPS.map((step, index) => (
               <div key={step.number}>
                 <MobileStepCard
@@ -1404,13 +1687,6 @@ export function AgentScrollStory() {
                   index={index}
                   progress={getStepProgress(index)}
                 />
-                {index < STEPS.length - 1 && (
-                  <SVGTravelPath
-                    progress={getStepProgress(index)}
-                    tier={index}
-                    reducedMotion={reducedMotion}
-                  />
-                )}
               </div>
             ))}
           </div>

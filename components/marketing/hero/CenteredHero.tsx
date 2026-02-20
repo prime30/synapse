@@ -41,7 +41,7 @@ export function CenteredHero() {
           <input
             type="email"
             placeholder="Enter your email"
-            className="w-full sm:flex-1 h-12 px-4 rounded-full bg-white/08 border border-white/12 text-white placeholder:text-white/40 focus:outline-none focus:border-sky-500/50 transition-colors"
+            className="w-full sm:flex-1 h-12 px-4 rounded-full bg-white/08 border border-white/12 text-white placeholder:text-white/40 focus:outline-none focus:border-accent/50 transition-colors"
             aria-label="Email"
           />
           <Link

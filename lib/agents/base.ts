@@ -3,6 +3,7 @@ import type { AIProvider, AIProviderInterface, AIMessage, ToolDefinition, ToolRe
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { AIProviderError, isRetryable } from '@/lib/ai/errors';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
+import { canMakeRequest, recordSuccess, recordFailure } from '@/lib/ai/circuit-breaker';
 import {
   resolveModel,
   getProviderForModel,
@@ -14,7 +15,7 @@ import {
 } from './model-router';
 
 /** Type guard: does this provider support completeWithTools? */
-function isToolProvider(provider: AIProviderInterface): provider is AIToolProviderInterface {
+export function isToolProvider(provider: AIProviderInterface): provider is AIToolProviderInterface {
   return 'completeWithTools' in provider && typeof (provider as AIToolProviderInterface).completeWithTools === 'function';
 }
 import { enforceRequestBudget, getAgentBudget } from '@/lib/ai/request-budget';
@@ -46,6 +47,11 @@ export interface AgentExecuteOptions {
   outputSchema?: Record<string, unknown>;
   /** Routing tier for adaptive budget/model escalation (EPIC V5). */
   tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+  /**
+   * When provided, the agent streams LLM output token-by-token instead of
+   * waiting for the full response. Each chunk is forwarded to the callback.
+   */
+  onReasoningChunk?: (chunk: string) => void;
 }
 
 /** Accumulated token usage from the last AI call. */
@@ -87,6 +93,9 @@ export abstract class Agent {
 
   /** The current output schema (for structured outputs). */
   protected currentOutputSchema: Record<string, unknown> | undefined;
+
+  /** Streaming reasoning callback set per-execute. */
+  private _onReasoningChunk: ((chunk: string) => void) | undefined;
 
   /** Token usage from the most recent AI call. */
   private _lastUsage: AgentUsage | null = null;
@@ -137,6 +146,7 @@ export abstract class Agent {
     this.currentModel = model;
     this.currentAction = options?.action;
     this.currentOutputSchema = options?.outputSchema;
+    this._onReasoningChunk = options?.onReasoningChunk;
 
     try {
       return await this.executeWithRetry(task);
@@ -147,7 +157,9 @@ export abstract class Agent {
       this.currentModel = undefined; // let the provider use its default model
 
       try {
-        return await this.executeSingle(task);
+        return this._onReasoningChunk
+          ? await this.executeSingleStreaming(task, this._onReasoningChunk)
+          : await this.executeSingle(task);
       } catch (fallbackError) {
         const elapsed = Date.now() - startTime;
         const isProviderErr = fallbackError instanceof AIProviderError;
@@ -177,13 +189,13 @@ export abstract class Agent {
    * Execute with explicit user and system prompts (for solo mode).
    * Handles model resolution, budget enforcement, usage tracking, and
    * empty-response validation — matching the full `executeSingle` contract.
+   * When `options.onReasoningChunk` is set, streams tokens via the callback.
    */
   async executeDirectPrompt(
     userPrompt: string,
     systemPrompt: string,
     options?: AgentExecuteOptions
   ): Promise<string> {
-    // Resolve model and set up the correct provider (with tier-aware escalation)
     const model = resolveModel({
       action: options?.action,
       userOverride: options?.model,
@@ -194,33 +206,61 @@ export abstract class Agent {
     this.provider = getAIProvider(toAIProvider(providerName));
     this.currentModel = model;
 
-    // Build message array
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ];
 
-    // Enforce budget
     const agentBudget = getAgentBudget(this.type);
     const budgeted = enforceRequestBudget(messages, agentBudget.total);
+    const completionOpts: Partial<AICompletionOptions> = { model: this.currentModel, maxTokens: 4096 };
 
-    // Call provider with timeout
+    // Stream path: forward tokens to the callback as they arrive
+    if (options?.onReasoningChunk) {
+      const onChunk = options.onReasoningChunk;
+      const streamResult = await this.withTimeout(
+        this.provider.stream(budgeted.messages, completionOpts),
+        this.retryConfig.timeoutMs
+      );
+
+      let fullText = '';
+      const reader = streamResult.stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += value;
+          onChunk(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      const usage = await streamResult.getUsage();
+      this._lastUsage = {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        model: this.currentModel || providerName,
+      };
+
+      if (!fullText || fullText.trim().length === 0) {
+        throw new AIProviderError('EMPTY_RESPONSE', `Agent ${this.type} received empty streaming response from ${providerName}`, providerName);
+      }
+      return fullText;
+    }
+
+    // Non-streaming path (original)
     const result = await this.withTimeout(
-      this.provider.complete(budgeted.messages, {
-        model: this.currentModel,
-        maxTokens: 4096,
-      }),
+      this.provider.complete(budgeted.messages, completionOpts),
       this.retryConfig.timeoutMs
     );
 
-    // Track usage
     this._lastUsage = {
       inputTokens: result.inputTokens ?? 0,
       outputTokens: result.outputTokens ?? 0,
       model: result.model,
     };
 
-    // Validate non-empty response
     if (!result.content || result.content.trim().length === 0) {
       throw new AIProviderError(
         'EMPTY_RESPONSE',
@@ -339,10 +379,14 @@ export abstract class Agent {
 
   private async executeWithRetry(task: AgentTask): Promise<AgentResult> {
     let lastError: unknown;
+    const runOnce = (t: AgentTask) =>
+      this._onReasoningChunk
+        ? this.executeSingleStreaming(t, this._onReasoningChunk)
+        : this.executeSingle(t);
 
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
-        return await this.executeSingle(task);
+        return await runOnce(task);
       } catch (error) {
         lastError = error;
 
@@ -386,6 +430,20 @@ export abstract class Agent {
     const prompt = this.formatPrompt(task);
     const systemPrompt = this.getSystemPrompt();
 
+    // ── Circuit breaker check ──────────────────────────────────────────
+    // If the provider's circuit is open, skip directly to throw so the
+    // caller falls back to an alternative provider without waiting for
+    // a timeout.
+    const providerName = this.provider.name;
+    const circuitStatus = await canMakeRequest(providerName);
+    if (circuitStatus === 'blocked') {
+      throw new AIProviderError(
+        'PROVIDER_ERROR',
+        `Circuit breaker open for ${providerName} — skipping to fallback`,
+        providerName
+      );
+    }
+
     // Convert to the AIMessage[] format expected by the unified provider
     const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
     if (AI_FEATURES.promptCaching) {
@@ -425,28 +483,128 @@ export abstract class Agent {
       };
     }
 
-    const result = await this.withTimeout(
-      this.provider.complete(budgeted.messages, completionOpts),
-      this.retryConfig.timeoutMs
-    );
+    try {
+      const result = await this.withTimeout(
+        this.provider.complete(budgeted.messages, completionOpts),
+        this.retryConfig.timeoutMs
+      );
 
-    // Store token usage
-    this._lastUsage = {
-      inputTokens: result.inputTokens ?? 0,
-      outputTokens: result.outputTokens ?? 0,
-      model: result.model,
-    };
+      // Record success with circuit breaker
+      recordSuccess(providerName).catch(() => {});
 
-    // Validate non-empty response
-    if (!result.content || result.content.trim().length === 0) {
+      // Store token usage
+      this._lastUsage = {
+        inputTokens: result.inputTokens ?? 0,
+        outputTokens: result.outputTokens ?? 0,
+        model: result.model,
+      };
+
+      // Validate non-empty response
+      if (!result.content || result.content.trim().length === 0) {
+        throw new AIProviderError(
+          'EMPTY_RESPONSE',
+          `Agent ${this.type} received empty response from ${result.provider}`,
+          result.provider
+        );
+      }
+
+      return this.parseResponse(result.content, task);
+    } catch (error) {
+      // Record failure with circuit breaker
+      if (error instanceof AIProviderError) {
+        recordFailure(providerName, error.code).catch(() => {});
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Streaming variant of executeSingle: uses provider.stream() to forward
+   * LLM output tokens in real time via onChunk, then parses the full text.
+   */
+  private async executeSingleStreaming(
+    task: AgentTask,
+    onChunk: (chunk: string) => void,
+  ): Promise<AgentResult> {
+    const prompt = this.formatPrompt(task);
+    const systemPrompt = this.getSystemPrompt();
+
+    const providerName = this.provider.name;
+    const circuitStatus = await canMakeRequest(providerName);
+    if (circuitStatus === 'blocked') {
       throw new AIProviderError(
-        'EMPTY_RESPONSE',
-        `Agent ${this.type} received empty response from ${result.provider}`,
-        result.provider
+        'PROVIDER_ERROR',
+        `Circuit breaker open for ${providerName} — skipping to fallback`,
+        providerName
       );
     }
 
-    return this.parseResponse(result.content, task);
+    const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
+    if (AI_FEATURES.promptCaching) {
+      systemMsg.cacheControl = { type: 'ephemeral' };
+    }
+    const messages: AIMessage[] = [systemMsg, { role: 'user', content: prompt }];
+
+    const agentBudget = getAgentBudget(this.type);
+    const budgeted = enforceRequestBudget(messages, agentBudget.total);
+
+    const completionOpts: Partial<AICompletionOptions> = {
+      model: this.currentModel,
+      maxTokens: 4096,
+    };
+    if (AI_FEATURES.adaptiveThinking && this.currentAction && THINKING_ACTIONS.has(this.currentAction)) {
+      completionOpts.thinking = { type: 'adaptive' };
+      completionOpts.effort = ACTION_EFFORT[this.currentAction];
+    }
+    if (AI_FEATURES.structuredOutputs && this.currentOutputSchema) {
+      completionOpts.outputConfig = {
+        format: { type: 'json_schema', schema: this.currentOutputSchema },
+      };
+    }
+
+    try {
+      const streamResult = await this.withTimeout(
+        this.provider.stream(budgeted.messages, completionOpts),
+        this.retryConfig.timeoutMs
+      );
+
+      let fullText = '';
+      const reader = streamResult.stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += value;
+          onChunk(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      recordSuccess(providerName).catch(() => {});
+
+      const usage = await streamResult.getUsage();
+      this._lastUsage = {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        model: this.currentModel || providerName,
+      };
+
+      if (!fullText || fullText.trim().length === 0) {
+        throw new AIProviderError(
+          'EMPTY_RESPONSE',
+          `Agent ${this.type} received empty streaming response from ${providerName}`,
+          providerName
+        );
+      }
+
+      return this.parseResponse(fullText, task);
+    } catch (error) {
+      if (error instanceof AIProviderError) {
+        recordFailure(providerName, error.code).catch(() => {});
+      }
+      throw error;
+    }
   }
 
   /** Get a fallback provider when the primary fails. */

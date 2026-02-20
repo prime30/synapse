@@ -1,0 +1,284 @@
+{%- liquid 
+    assign se_stts = section.settings
+    if se_stts.btn_owl == "outline"
+        assign arrow_icon = 1
+    else
+        assign arrow_icon = 2
+    endif
+    assign se_blocks = section.blocks
+    assign isShowHTMl = false
+    if template.suffix == 'config' and request.design_mode
+        assign isShowHTMl = true
+    endif 
+ -%}
+{%- if isShowHTMl -%}
+    {{ 'pre_flickityt4s.min.css' | asset_url | stylesheet_tag }}
+    {{ 'slider-settings.css' | asset_url | stylesheet_tag }}
+    <div class="t4s-container" style="margin-top: 100px;margin-bottom: 100px;">
+        <h3 class="t4s-text-center" style="margin-bottom: 30px;">Slider button, dot config</h3>
+        {%- for block in se_blocks -%}
+            {%- assign index = forloop.index -%}
+            <div class="t4s-flickity-slider t4s_ratio16_9 t4s_position_8 t4s_cover flickityt4s t4s-row t4s-row-cols-lg-3 t4s-row-cols-md-2 t4s-row-cols-1 t4s-gx-30 t4s-gy-30 t4s-slider-btn-style-{{ se_stts.btn_owl }} t4s-slider-btn-{{ se_stts.btn_shape }} t4s-slider-btn-{{ se_stts.btn_size }} t4s-slider-btn-cl-custom{{ index }} t4s-slider-btn-vi-{{ se_stts.btn_vi }} t4s-dots-style-{{ se_stts.dot_owl }} t4s-dots-cl-custom{{ index }} t4s-dots-round-{{ se_stts.dots_round }}" data-flickityt4s-js='{"setPrevNextButtons": true,"arrowIcon": "{{ arrow_icon }}","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": true,"prevNextButtons": true,"percentPosition": 1,"pageDots": true, "autoPlay" : 5000, "pauseAutoPlayOnHover" : true }'  style="--space-dots: {{ se_stts.dots_space }}px;margin-bottom: 50px;">
+                {% for i in (1..5) %}
+                    <div class="t4s-col-item">
+                        <div class="t4s_ratio" data-cacl-slide>
+                            {{ 'image' | placeholder_svg_tag: 't4s-placeholder-svg t4s-obj-eff' }}
+                        </div>
+                    </div>
+                {%- endfor -%}
+            </div>
+        {%- endfor -%} 
+    </div>
+{%- endif -%}
+{%- for block in se_blocks -%}
+    {%- liquid 
+        assign bk_stts = block.settings 
+        assign index = forloop.index 
+        assign primary_color = bk_stts.primary_color
+        assign second_color = bk_stts.second_color
+        assign primary_color_hover =  bk_stts.primary_color_hover
+        assign second_color_hover =  bk_stts.second_color_hover
+    -%}
+    {%- style -%}
+        .t4s-flickity-slider.t4s-slider-btn-cl-custom{{ index }}{
+            --btn-color           : {{ second_color }};
+            --btn-background      : {{ primary_color }};
+            --btn-border          : {{ primary_color }};
+            --btn-color-hover     : {{ second_color_hover }};
+            --btn-background-hover: {{ primary_color_hover }};
+            --btn-border-hover    : {{ primary_color_hover }}; 
+        }
+        .t4s-flickity-slider.t4s-slider-btn-style-outline.t4s-slider-btn-cl-custom{{ index }}{
+            --btn-color           : {{ primary_color }};
+            --btn-border          : {{ primary_color }};
+            --btn-color-hover     : {{ second_color_hover }};
+            --btn-background-hover : {{ primary_color_hover }};
+        }
+        .t4s-flickity-slider.t4s-slider-btn-style-simple.t4s-slider-btn-cl-custom{{ index }}{
+            --btn-color           : {{ primary_color }};
+            --btn-border          : {{ primary_color }};
+            --btn-color-hover     : {{ primary_color_hover }};
+            --btn-border-hover    : {{ primary_color_hover }};
+        }
+        .t4s-flickity-slider.t4s-dots-cl-custom{{ index }}{
+            --dots-background      : {{ primary_color }};
+            --dots-background-hover : {{ primary_color_hover }}; 
+        }
+        .t4s-dots-style-number.t4s-dots-cl-custom{{ index }} {
+            --dots-cl: {{ second_color }};
+            --bg-dots-cl: {{ primary_color }};
+        }
+    {%- endstyle -%}
+{%- endfor -%}
+{% schema %}
+{
+    "name": "Carousel Color Configs",
+    "tag": "div",
+    "class": "t4s-section t4s-section-config t4s_tp_flickity",
+    "settings": [
+        {
+            "type": "paragraph",
+            "content": "Only for Preview and not work for all buttons and dots on your store"
+        },
+        {
+            "type": "header",
+            "content": "+ Prev next button"
+        },
+        {
+            "type": "select",
+            "id": "btn_vi",
+            "label": "Visible",
+            "default": "hover",
+            "options": [
+                {
+                    "value": "always",
+                    "label": "Always"
+                },
+                {
+                    "value": "hover",
+                    "label": "Only hover"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_owl",
+            "label": "Button style",
+            "default": "default",
+            "options": [
+                {
+                    "value": "default",
+                    "label": "Default"
+                },
+                {
+                    "value": "outline",
+                    "label": "Outline"
+                },
+                {
+                    "value": "simple",
+                    "label": "Simple"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_shape",
+            "label": "Button shape",
+            "info": "Not work for 'Simple' button style",
+            "default": "none",
+            "options": [
+                {
+                    "value": "none",
+                    "label": "Default"
+                },
+                {
+                    "value": "round",
+                    "label": "Round"
+                },
+                {
+                    "value": "rotate",
+                    "label": "Rotate"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "btn_size",
+            "label": "Buttons size",
+            "default": "small",
+            "options": [
+                {
+                    "value": "small",
+                    "label": "Small"
+                },
+                {
+                    "value": "medium",
+                    "label": "Medium"
+                },
+                {
+                    "value": "large",
+                    "label": "Large"
+                }
+            ]
+        },
+        {
+            "type": "header",
+            "content": "+ Dots"
+        },
+        {
+            "type": "select",
+            "id": "dot_owl",
+            "label": "Dots style",
+            "default": "default",
+            "options": [
+                {
+                    "value": "default",
+                    "label": "Default"
+                },
+                {
+                    "value": "outline",
+                    "label": "Outline"
+                },
+                {
+                    "value": "elessi",
+                    "label": "Elessi"
+                }
+            ]
+        },
+        {
+            "type": "checkbox",
+            "id": "dots_round",
+            "label": "Enable round dots",
+            "default": true
+        },
+        {
+            "type": "range",
+            "id": "dots_space",
+            "min": 2,
+            "max": 20,
+            "step": 1,
+            "label": "Space among dots",
+            "unit": "px",
+            "default": 10
+        }
+    ],
+    "blocks": [
+        {
+            "type": "custom1",
+            "name": "Custom color 1",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "color",
+                    "id": "primary_color",
+                    "label": "Primary color",
+                    "default": "#ffb100"
+                },
+                {
+                    "type": "color",
+                    "id": "second_color",
+                    "label": "Secondary color",
+                    "default": "#fff",
+                    "info": "Only working button style default"
+                },
+                {
+                    "type": "color",
+                    "id": "primary_color_hover",
+                    "label": "Primary hover color",
+                    "default": "#ff4e00"
+                },
+                {
+                    "type": "color",
+                    "id": "second_color_hover",
+                    "label": "Secondary hover color",
+                    "default": "#fff",
+                    "info": "Only working button style default, outline"
+                }
+            ]
+        },
+        {
+            "type": "custom2",
+            "name": "Custom color 2",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "color",
+                    "id": "primary_color",
+                    "label": "Primary color",
+                    "default": "#109533"
+                },
+                {
+                    "type": "color",
+                    "id": "second_color",
+                    "label": "Secondary color",
+                    "default": "#fff",
+                    "info": "Only working button style default"
+                },
+                {
+                    "type": "color",
+                    "id": "primary_color_hover",
+                    "label": "Primary hover color",
+                    "default": "#ff4e00"
+                },
+                {
+                    "type": "color",
+                    "id": "second_color_hover",
+                    "label": "Secondary hover color",
+                    "default": "#fff",
+                    "info": "Only working button style default, outline"
+                }
+            ]
+        }
+    ],
+    "default": {
+        "blocks": [
+            {
+                "type": "custom1"
+            },
+            {
+                "type": "custom2"
+            }
+        ]
+    }
+}
+{% endschema %}

@@ -77,6 +77,8 @@ interface MonacoEditorProps {
   getLocaleEntries?: () => Array<{ key: string; value: string }>;
   /** EPIC 7: Called when Ctrl+backtick is pressed to toggle console */
   onToggleConsole?: () => void;
+  /** Called when cursor position changes in the editor */
+  onCursorPositionChange?: (position: { line: number; column: number }) => void;
   /** Called after editor mounts with the editor instance (for Yjs binding) */
   onEditorMount?: (editor: import('monaco-editor').editor.IStandaloneCodeEditor) => void;
   /** Enable Cursor-like inline (ghost) completions via /api/ai/complete-inline */
@@ -205,6 +207,7 @@ export function MonacoEditor({
   onSelectionPosition,
   fileResolver,
   getLocaleEntries,
+  onCursorPositionChange,
   onToggleConsole,
   onEditorMount,
   enableInlineCompletions = false,
@@ -419,13 +422,14 @@ export function MonacoEditor({
       tagDecorationsRef.current = tagDecs;
 
       editorInstance.onDidChangeCursorPosition((e) => {
+        const { lineNumber, column } = e.position;
+        onCursorPositionChange?.({ line: lineNumber, column });
+
         const model = editorInstance.getModel();
         if (!model) {
           tagDecs.clear();
           return;
         }
-
-        const { lineNumber, column } = e.position;
         const lineContent = model.getLineContent(lineNumber);
 
         const tagRe =
@@ -834,7 +838,7 @@ export function MonacoEditor({
 
       }); // end loadProviders().then(...)
     },
-    [language, fileResolver, getLocaleEntries, settings.tabSize, onToggleConsole],
+    [language, fileResolver, getLocaleEntries, settings.tabSize, onToggleConsole, onCursorPositionChange],
   );
 
   /* Clean up inline completion provider on unmount */

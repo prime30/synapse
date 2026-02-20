@@ -117,8 +117,7 @@ export function ScrollRevealSection() {
 
         {/* Layer 2: Fiber field canvas — extends below viewport so origin is hidden */}
         <div
-          className="absolute left-0 right-0 w-full pointer-events-none synaptic-layer-fade synaptic-layer-fade-delay"
-          style={{ top: '15%', height: '120%' }}
+          className="absolute left-0 right-0 w-full pointer-events-none synaptic-layer-fade synaptic-layer-fade-delay top-[-40%] sm:top-[-20%] md:top-[-20%] h-[200%] md:h-[170%]"
           aria-hidden="true"
         >
           <FiberField
@@ -131,8 +130,8 @@ export function ScrollRevealSection() {
         </div>
 
         {/* Layer 3: Text content */}
-        <div ref={textRef} className="relative max-w-4xl mx-auto px-6 text-center z-[2]">
-          <p className="text-3xl md:text-5xl lg:text-6xl font-medium leading-tight tracking-[-0.02em]">
+        <div ref={textRef} className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center z-[2]">
+          <p className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium leading-tight tracking-[-0.02em] break-words">
             {WORDS.map((word, i) => (
               <span
                 key={i}

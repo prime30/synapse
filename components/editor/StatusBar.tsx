@@ -14,6 +14,8 @@ interface StatusBarProps {
   content: string;
   language: 'liquid' | 'javascript' | 'css' | 'other';
   filePath?: string | null;
+  /** Cursor line and column from Monaco editor */
+  cursorPosition?: { line: number; column: number } | null;
   /** EPIC 2: Token usage from last AI response */
   tokenUsage?: TokenUsageDisplay | null;
   /** EPIC 7: Whether the app is online */
@@ -22,6 +24,8 @@ interface StatusBarProps {
   hasOfflineChanges?: boolean;
   /** EPIC 14: Count of active developer memory conventions */
   activeMemoryCount?: number;
+  /** Count of learned term-to-file mappings */
+  termMappingCount?: number;
   /** Cost of the last AI interaction in cents */
   lastCostCents?: number | null;
   /** Total session cost in cents */
@@ -70,7 +74,7 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, lastCostCents, sessionCostCents, batchJobs, onCancelBatch, cacheBackend, children }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, cursorPosition, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, termMappingCount = 0, lastCostCents, sessionCostCents, batchJobs, onCancelBatch, cacheBackend, children }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -132,17 +136,20 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
       )}
 
       {/* EPIC 14: Memory indicator */}
-      {activeMemoryCount > 0 && (
+      {(activeMemoryCount > 0 || termMappingCount > 0) && (
         <>
           <span
             className="inline-flex items-center gap-1 whitespace-nowrap text-purple-400"
-            title={`${activeMemoryCount} convention${activeMemoryCount === 1 ? '' : 's'} learned from this project`}
+            title={[
+              activeMemoryCount > 0 ? `${activeMemoryCount} convention${activeMemoryCount === 1 ? '' : 's'}` : '',
+              termMappingCount > 0 ? `${termMappingCount} term mapping${termMappingCount === 1 ? '' : 's'}` : '',
+            ].filter(Boolean).join(', ') + ' learned from this project'}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
               <circle cx="12" cy="11" r="3" />
             </svg>
-            {activeMemoryCount} {activeMemoryCount === 1 ? 'convention' : 'conventions'}
+            {activeMemoryCount + termMappingCount} learned
           </span>
           <Divider />
         </>
@@ -196,8 +203,8 @@ export function StatusBar({ fileName, content, language, filePath, tokenUsage, i
         </>
       )}
 
-      {/* Cursor position placeholder */}
-      <span className="whitespace-nowrap">Ln 1, Col 1</span>
+      {/* Cursor position */}
+      <span className="whitespace-nowrap">Ln {cursorPosition?.line ?? 1}, Col {cursorPosition?.column ?? 1}</span>
     </div>
   );
 }

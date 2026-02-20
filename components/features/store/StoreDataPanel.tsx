@@ -89,7 +89,7 @@ function needsReAuth(currentScopes?: string[]): boolean {
 
 // ── Re-auth banner ────────────────────────────────────────────────────
 
-function ReAuthBanner() {
+function ReAuthBanner({ connectionId }: { connectionId: string }) {
   return (
     <div className="mx-3 mt-3 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
       <svg
@@ -117,6 +117,9 @@ function ReAuthBanner() {
       </div>
       <button
         type="button"
+        onClick={() => {
+          window.location.href = `/api/stores/${connectionId}/oauth/reauthorize`;
+        }}
         className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 transition-colors"
       >
         Re-authorize
@@ -177,7 +180,7 @@ export function StoreDataPanel({ connectionId, scopes }: StoreDataPanelProps) {
       </div>
 
       {/* Re-auth banner */}
-      {needsReAuth(scopes) && <ReAuthBanner />}
+      {needsReAuth(scopes) && <ReAuthBanner connectionId={connectionId} />}
 
       {/* Tabs */}
       <div className="flex border-b ide-border">

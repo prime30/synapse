@@ -1,0 +1,148 @@
+{
+  "timestamp": "2026-02-19T08:50:24.967Z",
+  "runsPerPrompt": 3,
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "cursor-production"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2867,
+          "firstChunkMs": 1328,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 2,
+          "outputTokens": 285,
+          "cacheRead": 7377,
+          "cacheWrite": 0,
+          "costUSD": 0.0017317333333333334,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 2293,
+          "totalTimeMsHigh": 3343,
+          "firstChunkMsLow": 721,
+          "firstChunkMsHigh": 1859,
+          "costUSDLow": 0.001136,
+          "costUSDHigh": 0.0020356000000000003
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 82951,
+          "firstChunkMs": 2617,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 73211,
+          "outputTokens": 10638,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.1011192,
+          "toolCalls": 7,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "create_file",
+            "propose_code_edit"
+          ],
+          "changes": 4,
+          "filesCreated": 1,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 71234,
+          "totalTimeMsHigh": 105164,
+          "firstChunkMsLow": 2356,
+          "firstChunkMsHigh": 2798,
+          "costUSDLow": 0.0794768,
+          "costUSDHigh": 0.12810560000000001
+        },
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": false,
+          "totalTimeMs": 300024,
+          "firstChunkMs": 300024,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ]
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

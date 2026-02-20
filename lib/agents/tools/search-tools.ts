@@ -11,7 +11,6 @@ import type { FileContext } from '@/lib/types/agent';
 import type { ToolExecutorContext } from './tool-executor';
 import { loadAllContent } from '@/lib/supabase/file-loader';
 import { estimateTokens } from '@/lib/ai/token-counter';
-import { ContextEngine } from '@/lib/ai/context-engine';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -36,10 +35,10 @@ interface GrepInput {
  * Search file contents using a regex or substring pattern.
  * Returns matching lines with file names and line numbers.
  */
-export function executeGrep(
+export async function executeGrep(
   input: GrepInput,
   ctx: ToolExecutorContext,
-): ToolResult & { _matchedFileIds?: string[] } {
+): Promise<ToolResult & { _matchedFileIds?: string[] }> {
   const { pattern, filePattern, caseSensitive = false, maxResults = 50, maxTokens = 5000 } = input;
 
   if (!pattern) {
@@ -58,16 +57,8 @@ export function executeGrep(
     };
   }
 
-  // Hydrate all files — grep needs to read every file's content
-  let filesToSearch: FileContext[];
-  if (ctx.loadContent) {
-    filesToSearch = loadAllContent(ctx.files, ctx.loadContent);
-  } else {
-    // Fallback: use only files that are already hydrated (not stubs)
-    filesToSearch = ctx.files.filter(f => !f.content.startsWith('['));
-  }
-
-  // Filter by glob pattern if provided
+  // Filter by glob pattern BEFORE hydration to avoid loading all 150+ files
+  let filesToHydrate = ctx.files;
   if (filePattern) {
     let isMatch: (path: string) => boolean;
     try {
@@ -79,7 +70,15 @@ export function executeGrep(
         is_error: true,
       };
     }
-    filesToSearch = filesToSearch.filter(f => isMatch(f.path ?? f.fileName));
+    filesToHydrate = ctx.files.filter(f => isMatch(f.path ?? f.fileName));
+  }
+
+  // Hydrate only the filtered subset
+  let filesToSearch: FileContext[];
+  if (ctx.loadContent) {
+    filesToSearch = await loadAllContent(filesToHydrate, ctx.loadContent);
+  } else {
+    filesToSearch = filesToHydrate.filter(f => !f.content.startsWith('['));
   }
 
   // Search line-by-line
@@ -255,7 +254,7 @@ export async function executeSemanticSearch(
 
   // Auto-hydrate top 5 results with content excerpts
   const topFileIds = topResults.slice(0, 5).map(r => r.fileId);
-  const hydratedFiles = ctx.loadContent ? ctx.loadContent(topFileIds) : [];
+  const hydratedFiles = ctx.loadContent ? await ctx.loadContent(topFileIds) : [];
   const hydratedMap = new Map(hydratedFiles.map(f => [f.fileId, f]));
 
   const formatted = topResults.map((r, idx) => {

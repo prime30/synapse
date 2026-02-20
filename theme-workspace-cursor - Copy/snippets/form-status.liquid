@@ -1,0 +1,41 @@
+{%- comment -%}
+    Renders a form status message
+    Accepts: 
+    - form: {Object} Form Liquid object (required)
+    - form_id: {String} Form's id attribute for accessibility purpose (required)
+    - success_message: {String} Success message locale key. Default to 'contact.form.post_success' (optional)
+    
+    form_errors.translated_fields | size == 1
+    form_errors.translated_fields.size == 1
+    Usage: 
+    {%- render 't4s-form-status', form: form, form_id: formId, success_message: post_message, form_errors: form_errors, form_errors_messages: form_errors_messages, error_heading: error_heading, name: name, email: email, message: message -%}
+{%- endcomment -%}
+
+{%- if isSuccessfully -%}
+    <div data-t4s-response-form class="t4s-form-message t4s-form-message--success" role="status">
+        <h3 class="t4s-form-status" tabindex="-1" autofocus>{%- render 'icon-success' %} {{ success_message | default: 'templates.contact.form.post_success' | t }}</h3>
+    </div>
+{%- elsif form_errors -%}
+    {%- assign translated_fields = form_errors.translated_fields -%}
+    {%- if translated_fields.size == 1 and form_errors.first == 'form' -%}
+        <div data-t4s-response-form class="t4s-form-message t4s-form-message--error" role="alert">
+            <span class="t4s-form-status" tabindex="-1" autofocus>{%- render 'icon-error' %} {{ form_errors_messages['form'] }}</span>
+        </div>
+    {%- else -%}
+        <div data-t4s-response-form class="t4s-form-message t4s-form-message--error" role="alert">
+            <h3 class="t4s-form-status" tabindex="-1" autofocus>{%- render 'icon-error' %} {{ error_heading | default: 'templates.contact.form.error_heading' | t }}</h3>
+            <ul class="t4s-form-status-list">
+                {%- for field in form_errors -%}
+                {%- capture field_label -%}
+                    {%- if translated_fields[field] contains 'author' -%}{{ name | t }}
+                    {%- elsif translated_fields[field] contains 'email' -%}{{ email | t }}
+                    {%- elsif translated_fields[field] contains 'body' -%}{{ message | t }}
+                    {%- else -%}{{ translated_fields[field] }}
+                    {%- endif -%}
+                {%- endcapture -%}
+                <li><a href="#{{ form_id }}-{{ field }}" class="t4s-form-message-link">{{ field_label }} {{ form_errors_messages[field] }}</a></li>
+                {%- endfor -%}
+            </ul>
+        </div>
+    {%- endif -%}
+{%- endif -%}

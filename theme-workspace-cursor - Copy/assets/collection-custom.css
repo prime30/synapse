@@ -1,0 +1,29 @@
+.t4s-cate-wrapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    padding: 20px;
+    width: fit-content;
+    transform: translateX(-50%) translateY(-50%);
+}
+.t4s-content-layout-dark a.t4s-cat-title {
+	background: #010101;
+	color: #fff;
+}
+a.t4s-cat-title {
+    min-width: 220px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    justify-content: center;
+    text-align: center;
+    min-height: 104px;
+    font-size: 22px;
+    line-height: 1.4;
+    color: #010101;
+    transition: 0.3s;
+}
+a.t4s-cat-title:hover{
+	opacity: 0.8
+} 

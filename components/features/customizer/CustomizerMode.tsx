@@ -3,21 +3,22 @@
 /**
  * CustomizerMode — top-level layout for the visual theme customizer.
  *
- * EPIC 11: Replaces the editor view with a sidebar (section list + settings form)
- * and a live preview panel. Activates via toolbar button.
+ * EPIC 11: Three-panel layout — section tree (left), live preview (center),
+ * schema settings (right). Activates via toolbar button.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSchemaParser } from '@/hooks/useSchemaParser';
 import { PreviewSyncProvider, usePreviewSync } from '@/contexts/PreviewSyncContext';
-import { SectionListSidebar } from './SectionListSidebar';
+import { SectionTree } from './SectionTree';
+import { SchemaSettingsPanel } from './SchemaSettingsPanel';
 import { TemplateSelector } from './TemplateSelector';
-import SchemaSettingInput from './SchemaSettingInput';
+import { parseTemplateJSON } from '@/lib/theme/template-parser';
+import type { TemplateTree, SchemaSettingDefinition } from '@/lib/theme/template-parser';
 import { BlockInstanceManager } from './BlockInstanceManager';
 import { SectionHighlighter } from './SectionHighlighter';
 import { SchemaBuilderInline } from './SchemaBuilderInline';
 import { PresetPanel } from './PresetPanel';
-// SchemaSetting type used internally by SchemaSettingInput
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -62,6 +63,8 @@ interface CustomizerModeProps {
   onSettingsChange?: (sectionId: string, settings: Record<string, unknown>) => void;
   /** Callback to exit customizer mode */
   onExit: () => void;
+  /** Raw template JSON content for parsing into a section tree */
+  templateJSON?: string;
 }
 
 // ── Sub-panels ────────────────────────────────────────────────────────
@@ -81,11 +84,13 @@ function CustomizerInner({
   onRemoveSection,
   onSettingsChange,
   onExit,
+  templateJSON,
 }: CustomizerModeProps) {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
     sections[0]?.id ?? null
   );
   const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [activeSubPanel, setActiveSubPanel] = useState<SubPanel>('settings');
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
@@ -95,6 +100,28 @@ function CustomizerInner({
   useEffect(() => {
     previewSync.setIframeRef(iframeRef.current);
   }, [previewSync]);
+
+  const templateTree = useMemo((): TemplateTree | null => {
+    if (templateJSON) {
+      return parseTemplateJSON(activeTemplate, templateJSON);
+    }
+    if (sections.length === 0) return null;
+    return {
+      name: activeTemplate,
+      sections: sections.map((s) => ({
+        id: s.id,
+        type: s.type,
+        settings: s.settings,
+        blocks: s.blocks
+          ? Object.fromEntries(
+              s.blocks.map((b) => [b.id, { type: b.type, settings: b.settings }])
+            )
+          : undefined,
+        block_order: s.blocks?.map((b) => b.id),
+      })),
+      order: sections.map((s) => s.id),
+    };
+  }, [templateJSON, activeTemplate, sections]);
 
   // Get selected section
   const selectedSection = useMemo(
@@ -148,12 +175,30 @@ function CustomizerInner({
     [previewSync, schemaParser]
   );
 
+  // ── Section tree selection handlers ───────────────────────────────
+
+  const handleTreeSelectSection = useCallback(
+    (sectionId: string) => {
+      setSelectedSectionId(sectionId);
+      setSelectedBlockId(null);
+    },
+    []
+  );
+
+  const handleSelectBlock = useCallback(
+    (sectionId: string, blockId: string) => {
+      setSelectedSectionId(sectionId);
+      setSelectedBlockId(blockId);
+    },
+    []
+  );
+
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full ide-surface">
-      {/* Left sidebar — Section list + settings */}
-      <div className="w-[320px] flex flex-col border-r ide-border ide-surface-panel shrink-0">
+      {/* Left panel — Section tree */}
+      <div className="hidden lg:flex w-[240px] flex-col border-r ide-border-subtle ide-surface-inset shrink-0">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2.5 border-b ide-border">
           <div className="flex items-center gap-2">
@@ -186,120 +231,27 @@ function CustomizerInner({
           />
         </div>
 
-        {/* Section list */}
-        <div
-          className="flex-1 overflow-y-auto"
-          onMouseLeave={() => setHoveredSectionId(null)}
-        >
-          <SectionListSidebar
-            sections={sections.map((s) => ({
-              id: s.id,
-              type: s.type,
-              settings: s.settings,
-            }))}
-            selectedId={selectedSectionId}
-            onSelect={setSelectedSectionId}
-            onReorder={onSectionsReorder}
-            onAdd={onAddSection}
-            onRemove={onRemoveSection}
-          />
+        {/* Section tree */}
+        <div className="flex-1 overflow-hidden">
+          {templateTree ? (
+            <SectionTree
+              templateTree={templateTree}
+              selectedSectionId={selectedSectionId}
+              selectedBlockId={selectedBlockId}
+              onSelectSection={handleTreeSelectSection}
+              onSelectBlock={handleSelectBlock}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full px-4">
+              <p className="text-sm ide-text-muted text-center">
+                Import a theme to use the customizer
+              </p>
+            </div>
+          )}
         </div>
-
-        {/* Selected section settings */}
-        {selectedSection && schemaParser.schema && (
-          <div className="border-t ide-border flex flex-col max-h-[50%]">
-            {/* Sub-panel tabs */}
-            <div className="flex border-b ide-border shrink-0">
-              {(['settings', 'blocks', 'schema', 'presets'] as SubPanel[]).map(
-                (panel) => (
-                  <button
-                    key={panel}
-                    type="button"
-                    onClick={() => setActiveSubPanel(panel)}
-                    className={`flex-1 px-2 py-1.5 text-[10px] font-medium capitalize transition-colors relative ${
-                      activeSubPanel === panel
-                        ? 'text-sky-500 dark:text-sky-400'
-                        : 'ide-text-muted ide-hover'
-                    }`}
-                  >
-                    {panel}
-                    {activeSubPanel === panel && (
-                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-sky-500 dark:bg-sky-400" />
-                    )}
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Sub-panel content */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {activeSubPanel === 'settings' &&
-                schemaParser.schema.settings.map((setting) => (
-                  <SchemaSettingInput
-                    key={setting.id}
-                    setting={setting}
-                    value={schemaParser.settingValues[setting.id] ?? setting.default ?? ''}
-                    onChange={(val) => handleSettingChange(val, setting.id)}
-                  />
-                ))}
-
-              {activeSubPanel === 'blocks' && (
-                <BlockInstanceManager
-                  blockTypes={schemaParser.schema.blocks.map((b) => ({
-                    type: b.type,
-                    name: b.name,
-                    limit: b.limit,
-                  }))}
-                  instances={schemaParser.blockInstances}
-                  onAdd={handleAddBlock}
-                  onRemove={handleRemoveBlock}
-                  onReorder={handleReorderBlocks}
-                  onSelect={() => {}}
-                />
-              )}
-
-              {activeSubPanel === 'schema' && (
-                <SchemaBuilderInline
-                  settings={schemaParser.schema.settings}
-                  onAddSetting={schemaParser.addSetting}
-                  onRemoveSetting={schemaParser.removeSetting}
-                  onReorder={() => {}}
-                />
-              )}
-
-              {activeSubPanel === 'presets' && (
-                <PresetPanel
-                  presets={schemaParser.schema.presets.map((p) => ({
-                    name: p.name,
-                    settings: p.settings,
-                  }))}
-                  onApply={(preset) => {
-                    if (preset.settings) {
-                      previewSync.batchUpdateSettings(preset.settings);
-                    }
-                  }}
-                  onSave={() => {}}
-                  onExport={() => {
-                    const json = schemaParser.getSerializedSchema();
-                    if (json) {
-                      const blob = new Blob([json], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${selectedSection.type}-schema.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }
-                  }}
-                  onImport={() => {}}
-                />
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Preview panel */}
+      {/* Center panel — Preview */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Preview toolbar */}
         <div className="flex items-center justify-between px-3 py-2 border-b ide-border ide-surface-panel shrink-0">
@@ -314,7 +266,6 @@ function CustomizerInner({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Mode toggle: Accurate Preview */}
             <label className="flex items-center gap-1.5 cursor-pointer">
               <span className="text-[10px] ide-text-muted">Accurate Preview</span>
               <button
@@ -335,7 +286,6 @@ function CustomizerInner({
               </button>
             </label>
 
-            {/* Refresh */}
             <button
               type="button"
               onClick={previewSync.refreshPreview}
@@ -360,13 +310,148 @@ function CustomizerInner({
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
 
-          {/* Section highlighter overlay */}
           <SectionHighlighter
             iframeRef={iframeRef}
             hoveredSectionId={hoveredSectionId}
             selectedSectionId={selectedSectionId}
           />
         </div>
+      </div>
+
+      {/* Right panel — Schema settings */}
+      <div className="hidden lg:flex w-[280px] flex-col border-l ide-border-subtle ide-surface-inset shrink-0">
+        {selectedSection && schemaParser.schema ? (
+          <>
+            {/* Sub-panel tabs */}
+            <div className="flex border-b ide-border shrink-0">
+              {(['settings', 'blocks', 'schema', 'presets'] as SubPanel[]).map(
+                (panel) => (
+                  <button
+                    key={panel}
+                    type="button"
+                    onClick={() => setActiveSubPanel(panel)}
+                    className={`flex-1 px-2 py-1.5 text-[10px] font-medium capitalize transition-colors relative ${
+                      activeSubPanel === panel
+                        ? 'text-sky-500 dark:text-sky-400'
+                        : 'ide-text-muted ide-hover'
+                    }`}
+                  >
+                    {panel}
+                    {activeSubPanel === panel && (
+                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-sky-500 dark:bg-sky-400" />
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+
+            {/* Sub-panel content */}
+            <div className="flex-1 overflow-hidden">
+              {activeSubPanel === 'settings' && (
+                <SchemaSettingsPanel
+                  sectionName={selectedSection.type
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                  settings={schemaParser.schema.settings as SchemaSettingDefinition[]}
+                  values={schemaParser.settingValues}
+                  onSettingChange={(settingId, value) =>
+                    handleSettingChange(value, settingId)
+                  }
+                />
+              )}
+
+              {activeSubPanel === 'blocks' && (
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  <BlockInstanceManager
+                    blockTypes={schemaParser.schema.blocks.map((b) => ({
+                      type: b.type,
+                      name: b.name,
+                      limit: b.limit,
+                    }))}
+                    instances={schemaParser.blockInstances}
+                    onAdd={handleAddBlock}
+                    onRemove={handleRemoveBlock}
+                    onReorder={handleReorderBlocks}
+                    onSelect={(blockId) => {
+                      const el = document.getElementById(`block-${blockId}`);
+                      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      setActiveSubPanel('settings');
+                    }}
+                  />
+                </div>
+              )}
+
+              {activeSubPanel === 'schema' && (
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  <SchemaBuilderInline
+                    settings={schemaParser.schema.settings}
+                    onAddSetting={schemaParser.addSetting}
+                    onRemoveSetting={schemaParser.removeSetting}
+                    onReorder={() => {}}
+                  />
+                </div>
+              )}
+
+              {activeSubPanel === 'presets' && (
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  <PresetPanel
+                    presets={schemaParser.schema.presets.map((p) => ({
+                      name: p.name,
+                      settings: p.settings,
+                    }))}
+                    onApply={(preset) => {
+                      if (preset.settings) {
+                        previewSync.batchUpdateSettings(preset.settings);
+                      }
+                    }}
+                    onSave={(name) => {
+                      const json = schemaParser.getSerializedSchema();
+                      if (json) {
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${name.replace(/\s+/g, '-').toLowerCase()}-preset.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    onExport={() => {
+                      const json = schemaParser.getSerializedSchema();
+                      if (json) {
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${selectedSection.type}-schema.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    onImport={(json) => {
+                      try {
+                        const parsed = JSON.parse(json);
+                        if (parsed?.settings && typeof parsed.settings === 'object') {
+                          previewSync.batchUpdateSettings(parsed.settings as Record<string, unknown>);
+                        }
+                      } catch {
+                        // Invalid JSON
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center px-4">
+            <p className="text-sm ide-text-muted text-center">
+              {sections.length === 0
+                ? 'Import a theme to use the customizer'
+                : 'Select a section to edit its settings'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

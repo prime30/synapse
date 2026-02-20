@@ -66,6 +66,9 @@ export function ImportThemeModal({
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [successProjectId, setSuccessProjectId] = useState<string | null>(null);
   const [createDevThemeForPreview, setCreateDevThemeForPreview] = useState(true);
+  const [syncToLocal, setSyncToLocal] = useState(
+    process.env.NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1',
+  );
   const [previewNote, setPreviewNote] = useState('');
   const [importProgress, setImportProgress] = useState<'idle' | 'importing'>('idle');
   const [totalAssets, setTotalAssets] = useState(0);
@@ -228,6 +231,7 @@ export function ImportThemeModal({
         themeId: selectedThemeId,
         themeName: selectedTheme?.name,
         createDevThemeForPreview,
+        syncToLocal,
         note: previewNote.trim() || undefined,
         projectId: clientProjectId,
       });
@@ -468,6 +472,23 @@ export function ImportThemeModal({
                     className="w-full px-3 py-2 text-sm rounded ide-input"
                   />
                 </div>
+              )}
+
+              {process.env.NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1' && (
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncToLocal}
+                    onChange={(e) => setSyncToLocal(e.target.checked)}
+                    className="mt-1 rounded ide-border ide-surface-input text-sky-500 focus:ring-sky-500"
+                  />
+                  <span className="text-sm ide-text-2">
+                    Sync to local filesystem for editing in your IDE.
+                    <span className="block text-xs ide-text-muted mt-0.5">
+                      Files are pulled to <code className="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-white/5">.synapse-themes/</code> and changes auto-push to the dev theme.
+                    </span>
+                  </span>
+                </label>
               )}
 
               {importProgress !== 'idle' && (

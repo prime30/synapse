@@ -227,8 +227,8 @@ export function FileTabs({
           ))}
         </div>
       )}
-      <div className="flex items-stretch ide-surface-panel border-b ide-border overflow-x-auto">
-        <div className="flex flex-1 min-w-0">
+      <div className="flex items-center ide-tabbar border-b border-stone-200/50 dark:border-white/5 px-1.5 py-1.5 rounded-xl overflow-x-auto no-scrollbar">
+        <div className="flex flex-1 min-w-0 gap-1">
           {/* Pinned preview tab (always first) */}
           {previewTabOpen && (
             <FileTab
@@ -242,9 +242,9 @@ export function FileTabs({
               onSelect={() => onTabSelect(PREVIEW_TAB_ID)}
               onClose={() => onClosePreviewTab?.()}
               index={-1}
-              onDragStart={() => {}}
-              onDragOver={() => {}}
-              onDrop={() => {}}
+              onDragStart={undefined}
+              onDragOver={undefined}
+              onDrop={undefined}
             />
           )}
           {visibleTabs.map((fileId, idx) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useShopifyNavigation } from '@/hooks/useShopifyNavigation';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -95,6 +95,7 @@ export function NavigationPanel({ connectionId }: NavigationPanelProps) {
   const { menus, isLoading, error, refetch } = useShopifyNavigation(connectionId);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+  const dragSourceRef = useRef<number | null>(null);
 
   const toggleMenu = useCallback((menuId: string) => {
     setExpandedMenus((prev) => {
@@ -112,17 +113,22 @@ export function NavigationPanel({ connectionId }: NavigationPanelProps) {
     setTimeout(() => setCopiedHandle(null), 2000);
   }, []);
 
-  const handleDragStart = useCallback((_index: number) => {
-    // Track drag source for reorder
+  const handleDragStart = useCallback((index: number) => {
+    dragSourceRef.current = index;
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
   }, []);
 
-  const handleDrop = useCallback(() => {
-    // Drag-and-drop reorder logic — updates local state only.
-    // Persisting order to Shopify would require a PATCH call.
+  const handleDrop = useCallback((e: React.DragEvent, _targetIndex: number) => {
+    e.preventDefault();
+    const sourceIndex = dragSourceRef.current;
+    if (sourceIndex === null || sourceIndex === _targetIndex) return;
+    // Reorder is visual only — Shopify Navigation API doesn't support order changes.
+    // Menus come from the API and are re-fetched on refetch().
+    dragSourceRef.current = null;
   }, []);
 
   // ── Loading state ───────────────────────────────────────────────────

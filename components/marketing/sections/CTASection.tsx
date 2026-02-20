@@ -57,12 +57,12 @@ export function CTASection() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 py-16 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           {/* Left column — text + CTA (staggered children) */}
           <div>
             <motion.h2
-              className="text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight"
+              className="text-3xl sm:text-4xl md:text-5xl font-medium text-stone-900 dark:text-white tracking-[-0.02em] leading-tight"
               initial={{ opacity: 0, y: 24 }}
               animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -70,7 +70,7 @@ export function CTASection() {
               Start <PixelAccent>shipping</PixelAccent>.
             </motion.h2>
             <motion.p
-              className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-md"
+              className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-full sm:max-w-md"
               initial={{ opacity: 0, y: 20 }}
               animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
               transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}

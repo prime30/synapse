@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 const TOKEN_CLASSES = {
   liquid: 'text-purple-600 dark:text-purple-400',
   output: 'text-amber-600 dark:text-amber-400',
-  tag: 'text-sky-600 dark:text-sky-400',
+  tag: 'text-accent dark:text-accent',
   string: 'text-emerald-600 dark:text-emerald-400',
   key: 'text-blue-600 dark:text-blue-400',
   comment: 'text-stone-400 dark:text-white/30',
@@ -102,3 +102,4 @@ export function LiquidCodeLine({ line, className, compact }: LiquidCodeLineProps
     </span>
   );
 }
+

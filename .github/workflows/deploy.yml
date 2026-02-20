@@ -1,0 +1,59 @@
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  REGISTRY: registry.fly.io
+  IMAGE_NAME: synapse-w9lyrw
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_ENV: production
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Auth to Fly Registry
+        run: flyctl auth docker
+
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            --file Dockerfile.ci \
+            --tag $REGISTRY/$IMAGE_NAME:${{ github.sha }} \
+            --tag $REGISTRY/$IMAGE_NAME:latest \
+            .
+          docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}
+          docker push $REGISTRY/$IMAGE_NAME:latest
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --image $REGISTRY/$IMAGE_NAME:${{ github.sha }} -a synapse-w9lyrw

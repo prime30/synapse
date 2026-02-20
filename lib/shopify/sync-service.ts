@@ -7,6 +7,7 @@ import { createHash } from 'crypto';
 import { APIError } from '@/lib/errors/handler';
 import { createFile, updateFile } from '@/lib/services/files';
 import { detectFileTypeFromName } from '@/lib/types/files';
+import { invalidateAllProjectCaches } from '@/lib/supabase/file-loader';
 import {
   downloadFromStorage,
   uploadToStorage,
@@ -195,7 +196,7 @@ export class ThemeSyncService {
           const textThemeRows: Array<Record<string, unknown>> = [];
 
           for (const asset of chunk) {
-            let content = asset.value ?? prefetchedChunk.get(asset.key);
+            const content = asset.value ?? prefetchedChunk.get(asset.key);
             if (!content) continue;
 
             const fileName = asset.key.split('/').pop() || asset.key;
@@ -530,6 +531,73 @@ export class ThemeSyncService {
           await Promise.all(binaryWorkers);
         }
       }
+
+      // Queue background embedding refresh if vector search is enabled
+      if (process.env.ENABLE_VECTOR_SEARCH === 'true' && result.pulled > 0) {
+        import('@/lib/tasks/built-in/warm-embeddings')
+          .then(({ warmEmbeddingsForProject }) => warmEmbeddingsForProject(resolvedProjectId))
+          .then((embResult) => {
+            if (embResult.embedded > 0 || embResult.errors > 0) {
+              console.log(`[sync-service] Embedding refresh: ${embResult.embedded} files, ${embResult.errors} errors`);
+            }
+          })
+          .catch((err) => console.warn('[sync-service] Embedding refresh failed:', String(err)));
+      }
+
+      // Queue background term mapping extraction from theme files
+      if (result.pulled > 0) {
+        import('@/lib/ai/theme-term-extractor')
+          .then(async ({ extractAndStoreTermMappings }) => {
+            const { data: textFiles } = await supabase
+              .from('files')
+              .select('id, name, path, file_type, content')
+              .eq('project_id', resolvedProjectId)
+              .not('content', 'is', null);
+            if (textFiles && textFiles.length > 0) {
+              return extractAndStoreTermMappings(resolvedProjectId, project.owner_id, textFiles);
+            }
+          })
+          .then((r) => {
+            if (r && r.stored > 0) {
+              console.log(`[sync-service] Term mapping extraction: ${r.stored} stored, ${r.skipped} skipped`);
+            }
+          })
+          .catch((err) => console.warn('[sync-service] Term mapping extraction failed:', String(err)));
+      }
+
+      // Bulk invalidation: clear metadata + all per-file content caches
+      if (result.pulled > 0) {
+        const { data: projFiles } = await supabase
+          .from('files')
+          .select('id')
+          .eq('project_id', resolvedProjectId);
+        const fileIds = (projFiles ?? []).map((f: { id: string }) => f.id);
+        await invalidateAllProjectCaches(resolvedProjectId, fileIds).catch(() => {});
+
+        // Write files to local disk cache for zero-latency agent reads
+        try {
+          const { data: allProjFiles } = await supabase
+            .from('files')
+            .select('id, name, path, file_type, content')
+            .eq('project_id', resolvedProjectId);
+
+          if (allProjFiles && allProjFiles.length > 0) {
+            const cacheEntries = allProjFiles
+              .filter((pf: { content: string | null }) => pf.content)
+              .map((pf: { id: string; name: string; path: string | null; file_type: string; content: string }) => ({
+                fileId: pf.id,
+                fileName: pf.name,
+                path: pf.path ?? pf.name,
+                fileType: pf.file_type,
+                content: pf.content,
+              }));
+            const { cacheThemeFiles } = await import('@/lib/cache/local-file-cache');
+            cacheThemeFiles(resolvedProjectId, cacheEntries);
+          }
+        } catch (localCacheErr) {
+          console.warn('[sync-service] Local cache write failed (non-fatal):', localCacheErr);
+        }
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -703,6 +771,16 @@ export class ThemeSyncService {
       await Promise.all(
         Array.from({ length: Math.min(PUSH_CONCURRENCY, pendingFiles.length) }, () => pushWorker())
       );
+
+      // Bulk invalidation: clear metadata + all per-file content caches
+      if (result.pushed > 0) {
+        const { data: projFiles } = await supabase
+          .from('files')
+          .select('id')
+          .eq('project_id', resolvedProjectId);
+        const fileIds = (projFiles ?? []).map((f: { id: string }) => f.id);
+        await invalidateAllProjectCaches(resolvedProjectId, fileIds).catch(() => {});
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -1278,3 +1356,6 @@ export class ThemeSyncService {
     return values;
   }
 }
+
+
+

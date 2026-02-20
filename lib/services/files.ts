@@ -8,6 +8,7 @@ import {
 } from '@/lib/storage/files';
 import type { CreateFileInput, UpdateFileInput, FileFilter } from '@/lib/types/files';
 import { APIError } from '@/lib/errors/handler';
+import { invalidateProjectFilesCache, invalidateFileContent } from '@/lib/supabase/file-loader';
 
 /**
  * Returns a Supabase client that bypasses RLS (service role).
@@ -67,6 +68,10 @@ export async function createFile(input: CreateFileInput) {
   if (error) {
     throw error;
   }
+
+  // Invalidate project files cache after creating a file
+  await invalidateProjectFilesCache(input.project_id).catch(() => {});
+
   return data;
 }
 
@@ -153,6 +158,11 @@ export async function updateFile(fileId: string, input: UpdateFileInput) {
     .single();
 
   if (error) throw error;
+
+  // Granular invalidation: only bust the per-file content cache for this file.
+  // Metadata (file list) hasn't changed, so no need to invalidate the project cache.
+  invalidateFileContent(fileId);
+
   return data;
 }
 
@@ -161,7 +171,7 @@ export async function deleteFile(fileId: string) {
 
   const { data: file } = await supabase
     .from('files')
-    .select('storage_path')
+    .select('storage_path, project_id')
     .eq('id', fileId)
     .single();
 
@@ -175,6 +185,11 @@ export async function deleteFile(fileId: string) {
     .eq('id', fileId);
 
   if (error) throw error;
+
+  // Invalidate project files cache after deleting a file
+  if (file?.project_id) {
+    await invalidateProjectFilesCache(file.project_id).catch(() => {});
+  }
 }
 
 export async function listProjectFiles(

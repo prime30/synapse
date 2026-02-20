@@ -1,0 +1,1821 @@
+<!doctype html>
+{%- liquid
+  assign t_name = request.page_type
+  assign iso_code = request.locale.iso_code
+  assign use_rtl = settings.use_rtl
+  if use_rtl == '2'
+    assign lis_rtl = 'ar; dv; ha; he; ku; fa; ur; ug; ps; yi'
+    assign iso_code_ck = iso_code | split: '-' | first
+  else
+    assign iso_code_ck = iso_code
+    assign lis_rtl = settings.list_rtl
+  endif
+  if use_rtl == '1'
+    assign isRTL = true
+  elsif lis_rtl contains iso_code_ck and use_rtl == '2' or use_rtl == '3'
+    assign isRTL = true
+  else
+    assign isRTL = false
+  endif
+  assign body_img = settings.body_bg_image
+  if body_img != blank and settings.general_layout == 'boxed'
+    assign class_lazy = 'lazyloadt4s'
+  endif
+-%}
+{%- capture class_html -%}
+t4sp-theme no-js t4s-wrapper__{{ settings.general_layout }} rtl_{{ isRTL }} swatch_color_style_{{ settings.swatch_color_style }} pr_img_effect_{{ settings.pr_img_effect }} enable_eff_img1_{{ settings.enable_eff_img1 }} badge_shape_{{ settings.badge_shape }} badge_reverse_color_{{ settings.badge_reverse_color }} css_for_wis_app_{{ settings.enable_css_wis }}{% if settings.use_cus_lz and settings.cus_lz %} t4s-lzcus-true{% endif %} shadow_round_img_{{ settings.enable_shadow_round_img }} t4s-header__{{ settings.header_design }} is-remove-unavai-{{ settings.variant_remove }} t4_has_quickview_{{ settings.enable_quickview }} t4_has_quickshop_{{ settings.enable_quickshop }} t4_has_atc_{{ settings.enable_atc }} t4_compare_{{ settings.enable_compe }}{% if settings.type_qv == '1' %} t4s-sidebar-qv {% else %} t4s-popup-qv {% endif %} t4s-cart-count-{{ cart.item_count }} t4s-pr-ellipsis-{{ settings.enable_pr_ellipsis }}
+{%- endcapture -%}
+
+<html
+  class="{{ class_html }}"
+  lang="{{ iso_code }}"
+  {% if isRTL %}
+    dir="rtl"
+  {% endif %}
+>
+  <head>
+    <link rel="stylesheet" href="https://use.typekit.net/bkt6itx.css">
+
+    {% unless template.name == 'blank' or template.name == 'instant-NbIEdahnBHfQsaLv' %}
+      {%- render 'ecom_header' -%}
+    {% endunless %}
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, height=device-height, minimum-scale=1.0, maximum-scale=1.0"
+    >
+    <meta name="theme-color" content="{{ settings.body_bg }}">
+
+    {% comment %} Set Cannonical to Parent on Child Products (SellersDash) {% endcomment %}
+    {% assign shsd_shop_settings = shop.metafields.sellersdash.shsd_settings %}
+    {%- if shsd_shop_settings.set_cannonical_on_children and template contains 'product' -%}
+      {%- assign shsd_product_details = product.metafields.sellersdash.shsdproducts -%}
+      {% if shsd_product_details.product_type == 'shsd_child' %}
+        <link
+          rel="cannonical"
+          href="{{shop.url}}/products/{{shsd_product_details.parent_handle}}"
+        >
+      {%- elsif canonical_url != blank -%}
+        <link rel="canonical" href="{{ canonical_url }}">
+      {%- endif -%}
+    {%- else -%}
+      {% comment %} Set Cannonical to Parent on Child Products (SellersDash) {% endcomment %}
+      {% assign shsd_shop_settings = shop.metafields.sellersdash.shsd_settings %}
+      {%- if shsd_shop_settings.set_cannonical_on_children and template contains 'product' -%}
+        {%- assign shsd_product_details = product.metafields.sellersdash.shsdproducts -%}
+        {% if shsd_product_details.product_type == 'shsd_child' %}
+          <link
+            rel="cannonical"
+            href="{{shop.url}}/products/{{shsd_product_details.parent_handle}}"
+          >
+        {%- elsif canonical_url != blank -%}
+          <link rel="canonical" href="{{ canonical_url }}">
+        {%- endif -%}
+      {%- else -%}
+        {%- if canonical_url != blank -%}
+          <link rel="canonical" href="{{ canonical_url }}">
+        {%- endif -%}
+      {%- endif -%}
+      {% comment %} Redirect to parent from child if option turned on(SellersDash) {% endcomment %}
+      {% assign shsd_shop_settings = shop.metafields.sellersdash.shsd_settings %}
+
+      {% if shsd_shop_settings.redirect_to_parent_product and template contains 'product' %}
+        {%- assign shsd_product_details = product.metafields.sellersdash.shsdproducts -%}
+        {% if shsd_product_details.product_type == 'shsd_child' %}
+          <script>
+            window.location.href = '{{shop.url}}/products/{{shsd_product_details.parent_handle}}';
+          </script>
+        {% endif %}
+      {% endif %}
+    {%- endif -%}
+
+    {% comment %} Redirect to parent from child if option turned on(SellersDash) {% endcomment %}
+    {% assign shsd_shop_settings = shop.metafields.sellersdash.shsd_settings %}
+
+    {% if shsd_shop_settings.redirect_to_parent_product and template contains 'product' %}
+      {%- assign shsd_product_details = product.metafields.sellersdash.shsdproducts -%}
+      {% if shsd_product_details.product_type == 'shsd_child' %}
+        <script>
+          window.location.href = '{{shop.url}}/products/{{shsd_product_details.parent_handle}}';
+        </script>
+      {% endif %}
+    {% endif %}
+
+    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
+
+    {%- if settings.favicon != blank -%}
+      <link
+        rel="shortcut icon"
+        type="image/png"
+        href="{{ settings.favicon | image_url: width: 32, height: 32 }}"
+
+      ><link
+        id="t4s-favico"
+        rel="apple-touch-icon-precomposed"
+        type="image/png"
+        sizes="152x152"
+        href="{{ settings.favicon | image_url: width: 152, height: 152 }}"
+      >
+    {%- endif -%}
+
+    {%- if settings.font_source == '1'
+      and settings.fnt_fm_sp1.system? == false
+      or settings.fnt_fm_sp2.system? == false
+      or settings.fnt_fm_sp3.system? == false
+    -%}
+      <link
+        rel="preconnect"
+        href="https://fonts.shopifycdn.com"
+        crossorigin
+      >
+    {%- endif -%}
+
+    {%- if t_name != 'list-collections' -%}
+      {%- capture seo_title -%}
+      {%- if template == 'search' and search.performed == true -%}{{ 'search.general.heading' | t: count: search.results_count }}: {{ 'search.results_with_count_and_term' | t: terms: search.terms, count: search.results_count }}{%- elsif template == 'search.wishlist' %}{{ 'wishlist_page.meta' | t }}{%- elsif template == 'search.compare' %}{{ 'compare_page.meta' | t }}{%- else -%}{{ page_title }}{%- endif -%}
+      {%- if current_tags -%}{%- assign meta_tags = current_tags | join: ', ' %} &ndash; {{ 'general.meta.tags' | t: tags: meta_tags -}}{%- endif -%}
+      {%- if current_page != 1 %} &ndash; {{ 'general.meta.page' | t: page: current_page }}{%- endif -%}
+      {%- assign escaped_page_title = page_title | escape -%}
+      {%- unless escaped_page_title contains shop.name %} &ndash; {{ shop.name }}{%- endunless -%}
+    {%- endcapture -%}
+      <title>{{ seo_title | strip }}</title>
+      <meta
+        name="description"
+        content="{{ page_description | default: shop.description | default: shop.name | escape }}"
+      >
+    {%- else -%}
+      <title>{{ 'list_collections.meta_title' | t | escape }}</title
+      ><meta
+        name="description"
+        content="{{ 'list_collections.meta_description' | t | escape }}"
+      >
+    {%- endif -%}
+
+    {%- render 'meta-tags', t_name: t_name -%}
+
+    <script
+      src="{{ 'lazysizes.min.js' | asset_url }}"
+      async="async"
+    ></script>
+    <script src="{{ 'global.min.js' | asset_url }}" defer="defer"></script>
+
+    {{ content_for_header }}
+    {%- render 'head_assets', t_name: t_name, isRTL: isRTL -%}
+
+    <script src="{{ 'sca.affiliate.data.js' | asset_url }}" async></script>
+    <script
+      src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"
+    ></script>
+    {% capture webpanda_hide_price_template %}{% include 'webpanda_hide_price' %}{% endcapture %}
+    {% unless webpanda_hide_price_template contains 'Liquid error' -%}
+      {{- webpanda_hide_price_template -}}
+    {%- endunless %}
+    {% render 'judgeme_core' %}
+
+    {% render 'delivery_coder' %}
+
+    {% if template.suffix == 'instant-NbIEdahnBHfQsaLv' %}
+      <style>
+        #dummy-chat-button-iframe,
+        #shopify-chat,
+        #smile-ui-container {
+          display: none !important;
+        }
+      </style>
+    {% endif %}
+
+    {% include 'pagefly-app-header' %}
+
+    
+  
+
+{% include 'store-credit-launcher' %}
+</head>
+
+  <body
+    class="template-{{ request.page_type | handle }} {{ class_lazy }}"
+    {% if body_img != blank %}
+      data-bgset="{{ body_img | image_url: width: 1 }}"
+      data-optimumx="1.5" data-sizes="auto"
+    {% endif -%}
+  >
+    {% if isRTL %}
+      <script type="text/javascript" id="t4s-flicker-fix">
+        // Flicker fix.
+      </script>
+    {% endif -%}
+    <div class="t4s-assets-pre"></div>
+    <a class="skip-to-content-link visually-hidden" href="#MainContent">
+      {{- 'accessibility.skip_to_text' | t -}}
+    </a>
+    <div class="t4s-close-overlay t4s-op-0"></div>
+
+    <div class="t4s-website-wrapper">
+      {% unless template.suffix == 'instant-NbIEdahnBHfQsaLv' %}
+        {%- render 'header', t_name: t_name -%}
+      {% endunless %}
+
+      <main
+        id="MainContent"
+        class="content-for-layout focus-none"
+        role="main"
+        tabindex="-1"
+      >
+        {{ content_for_layout }}
+      </main>
+      <footer id="t4s-footer">
+        {%- section 'footer-top' -%}
+        {%- section 'footer' -%}
+        {%- section 'footer-bottom' -%}
+      </footer>
+    </div>
+
+    <ul hidden class="t4s-d-none">
+      <li id="a11y-refresh-page-message">
+        {{ 'accessibility.refresh_page' | t }}
+      </li>
+    </ul>
+    {%- render 'render_bottom' -%}
+    {%- render 'ecom_footer' -%}
+    <script>
+      $(document).ready(function () {
+        setTimeout(function () {
+          $('#grid_badge:empty').addClass('empty_element');
+        }, 5000);
+      });
+
+      $(document).ready(function () {
+        // 20% Black Friday Discount Start
+        setTimeout(() => {
+          const bfSection = document.querySelector('.black_friday_discount');
+          if (bfSection) {
+            var priceText = document.querySelector('[data-product-price] .hide-price-guest')?.textContent.trim();
+
+            if (priceText) {
+              var origEl = bfSection.querySelector('.discounted-price .hide-price-guest');
+              if (origEl) origEl.textContent = priceText;
+
+              var clean = priceText.replace(/[^0-9.]/g, '');
+              var priceNum = parseFloat(clean);
+              var discounted = priceNum * 0.8;
+
+              var finalEl = bfSection.querySelector('.discounted-price .final-price .hide-price-guest');
+              if (finalEl)
+                finalEl.textContent = '$' + (discounted % 1 === 0 ? discounted.toFixed(0) : discounted.toFixed(2));
+
+              bfSection.style.display = 'flex';
+            }
+          }
+        }, 1000);
+        // 20% Black Friday Discount End
+
+        var data_product_var = window.location.href;
+        var data_curre_vid = data_product_var.split('?variant=');
+        var data_curre_vid = data_curre_vid[1];
+        var result = data_product_var.includes('?variant=');
+        if (result) {
+          $('.t4s-product__select.t4s-d-none option').each(function () {
+            $('.t4s-swatch').addClass('opacityhidden');
+            var valll = $(this).val();
+            if (valll == data_curre_vid) {
+              var option1 = $(this).data('option1');
+              var option2 = $(this).data('option2');
+              setTimeout(function () {
+                $('.t4s-swatch__option[data-id="0"]')
+                  .find(".t4s-swatch__item[data-value='" + option1 + "']")
+                  .trigger('click');
+                $('.t4s-swatch__option[data-id="1"]')
+                  .find(".t4s-swatch__item[data-value='" + option2 + "']")
+                  .trigger('click');
+                $('.t4s-swatch').removeClass('opacityhidden');
+              }, 2000);
+            }
+          });
+        }
+        // $('.t4s-swatch__option[data-id="1"] .t4s-swatch__item').each(function(){
+        //  var quantity = $(this).data('qty');
+        //  console.log(quantity);
+        //  if(quantity == 0){
+        // $(this).addClass('is--soldout');
+
+        //  }
+        // });
+
+        $(document).on('click', '.t4s-pr-addtocart[data-atc-selector]', function () {
+          var productTitle = $(this)
+            .closest('.t4s-product-wrapper')
+            .find('.t4s-product-info')
+            .find('.t4s-product-title a')
+            .text();
+          var productsplit = productTitle.split('-');
+          var variantSplit = productsplit[1].split(' / ');
+          setTimeout(function () {
+            $('.t4s-modal__inner')
+              .find('.t4s-swatch__option[data-id="0"] .t4s-swatch__item')
+              .each(function () {
+                var optionOne = $(this).data('value');
+                if (variantSplit[0] == optionOne) {
+                  $('.t4s-swatch__option[data-id="0"] .t4s-swatch__item').removeClass('is--selected');
+                  $(this).addClass('is--selected');
+                }
+              });
+            $('.t4s-modal__inner')
+              .find('.t4s-swatch__option[data-id="1"] .t4s-swatch__item')
+              .each(function () {
+                var optiontwo = $(this).data('value');
+                if (variantSplit[1] == optiontwo) {
+                  $('.t4s-swatch__option[data-id="1"] .t4s-swatch__item').removeClass('is--selected');
+                  $(this).addClass('is--selected');
+                  var colorselectedimg = $(this).data('bg');
+                  $('.t4s-modal__inner')
+                    .find('.t4s-product-quick-shop')
+                    .find('.t4s_ratio img')
+                    .attr('data-srcset', colorselectedimg);
+                }
+              });
+          }, 2000);
+        });
+        $(document).on('click', '.t4s-pr-quickview', function () {
+          var productTitle = $(this)
+            .closest('.t4s-product-wrapper')
+            .find('.t4s-product-info')
+            .find('.t4s-product-title a')
+            .text();
+          var productsplit = productTitle.split('-');
+          var variantSplit = productsplit[1].split(' / ');
+          setTimeout(function () {
+            $('.t4s-modal__inner')
+              .find('.t4s-swatch__option[data-id="0"] .t4s-swatch__item')
+              .each(function () {
+                var optionOne = $(this).data('value');
+                if (variantSplit[0] == optionOne) {
+                  $(this).trigger('click');
+                }
+              });
+            $('.t4s-modal__inner')
+              .find('.t4s-swatch__option[data-id="1"] .t4s-swatch__item')
+              .each(function () {
+                var optiontwo = $(this).data('value');
+                if (variantSplit[1] == optiontwo) {
+                  $(this).trigger('click');
+                }
+              });
+          }, 2000);
+        });
+
+        $(document).on('click', '.t4s-product-wrapper .is--href-replaced', function (event) {
+          var variantUrl = $(this).attr('href');
+          var varianturlSplit = variantUrl.split('=');
+          var variantId = varianturlSplit[1];
+          console.log(variantId);
+          localStorage.setItem('variant_Id', variantId);
+        });
+
+        var product_pageVariantId = localStorage.getItem('variant_Id');
+        console.log(product_pageVariantId);
+        $('.t4s-product__select.t4s-d-none option').each(function () {
+          $('.t4s-swatch').addClass('opacityhidden');
+          var valll = $(this).val();
+          if (valll == product_pageVariantId) {
+            var option1 = $(this).data('option1');
+            var option2 = $(this).data('option2');
+            setTimeout(function () {
+              $('.t4s-swatch__option[data-id="0"]')
+                .find(".t4s-swatch__item[data-value='" + option1 + "']")
+                .trigger('click');
+              $('.t4s-swatch__option[data-id="1"]')
+                .find(".t4s-swatch__item[data-value='" + option2 + "']")
+                .trigger('click');
+              $('.t4s-swatch').removeClass('opacityhidden');
+              localStorage.removeItem('variant_Id');
+            }, 2000);
+          }
+        });
+      });
+    </script>
+
+    {% include 'smile-initializer' %}
+
+    <link
+      rel="stylesheet"
+      href="https://gravity-software.com/js/shopify/rondell/jquery.rondellf85.css?v=123"
+    >
+
+    <script>
+      document.querySelectorAll('input[type="password"]').forEach((input) => {
+        input.addEventListener('touchend', function (e) {
+          this.focus();
+        });
+      });
+    </script>
+
+    <script>
+      let login_interval = setInterval(get_login_form, 500);
+      let interval_tries = 0;
+
+      function get_login_form() {
+        let login_form = document.querySelector('#login_login-sidebar');
+        interval_tries += 1;
+        if (login_form) {
+          clearInterval(login_interval);
+          let current_url = window.location.href;
+          login_form.querySelector('.custom-redirect').setAttribute('value', current_url);
+        } else if (interval_tries == 20) {
+          console.log('max tries');
+          clearInterval(login_interval);
+        }
+      }
+    </script>
+
+    
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<style id="ddg-chat-widget-css" data-version="2026-01-21-v181">
+/** DDG Chat Widget CSS v2026-01-21-v181 */
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('https://lightstep-onboard.lovable.app/fonts/AeonikPro-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('https://lightstep-onboard.lovable.app/fonts/AeonikPro-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('https://lightstep-onboard.lovable.app/fonts/AeonikPro-Bold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('https://lightstep-onboard.lovable.app/fonts/AeonikPro-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+#ddg-chat-widget,
+#ddg-chat-widget *,
+#ddg-chat-widget *::before,
+#ddg-chat-widget *::after {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#ddg-chat-widget {
+  --ddg-accent: 352 90% 47%;
+  --ddg-accent-foreground: 0 0% 100%;
+  --ddg-background: 0 0% 100%;
+  --ddg-foreground: 220 13% 10%;
+  --ddg-muted: 220 14% 96%;
+  --ddg-muted-foreground: 220 9% 46%;
+  --ddg-border: 220 13% 91%;
+  --ddg-card: 0 0% 100%;
+  --ddg-card-foreground: 220 13% 10%;
+  --ddg-success: 142 71% 45%;
+  --ddg-warning: 38 92% 50%;
+  --ddg-gold: 38 92% 50%;
+  --ddg-primary: 220 13% 10%;
+  --ddg-primary-foreground: 0 0% 100%;
+  --ddg-destructive: 0 84% 60%;
+  --ddg-radius: 0.75rem;
+  --ddg-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --ddg-message-customer: 211 100% 50%;
+  --ddg-message-customer-foreground: 0 0% 100%;
+  --ddg-message-reply: 220 14% 96%;
+  --ddg-message-reply-foreground: 220 13% 10%;
+  --ddg-avatar-fallback: 220 14% 90%;
+  --ddg-avatar-fallback-foreground: 220 13% 25%;
+  --ddg-info: 210 91% 60%;
+  --ddg-info-foreground: 0 0% 100%;
+  --ddg-feature: 270 100% 45%;
+  --ddg-feature-foreground: 0 0% 100%;
+  --ddg-ai-gradient-from: 280 85% 65%;
+  --ddg-ai-gradient-to: 15 70% 70%;
+}
+
+@keyframes ddg-wave {
+  0% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  30% { transform: rotate(14deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+  60% { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes ddg-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ddg-wave-emoji {
+  display: inline-block !important;
+  transform-origin: 70% 70% !important;
+  animation: ddg-wave 1.2s ease-in-out !important;
+  animation-delay: 0.4s !important;
+  animation-fill-mode: both !important;
+}
+
+.ddg-wave-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  transform-origin: 70% 70% !important;
+  animation: ddg-wave 1.2s ease-in-out !important;
+  animation-delay: 0.4s !important;
+  animation-fill-mode: both !important;
+  color: #f59e0b !important;
+}
+
+#ddg-chat-widget .ddg-panel {
+  all: initial !important;
+  position: fixed !important;
+  z-index: 999990 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background-color: hsl(var(--ddg-background)) !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  right: 16px !important;
+  width: calc(100vw - 2rem) !important;
+  max-width: 380px !important;
+  min-width: 280px !important;
+  height: 580px !important;
+  min-height: 580px !important;
+  border-radius: 24px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  border: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+  bottom: 88px !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  font-family: 'Aeonik Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  animation: ddg-slide-in 0.3s ease-out !important;
+}
+
+#ddg-chat-widget .ddg-panel::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 120px !important;
+  background: linear-gradient(to bottom, hsl(var(--ddg-muted) / 0.8) 0%, transparent 100%) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  border-radius: 24px 24px 0 0 !important;
+}
+
+#ddg-chat-widget .ddg-panel.ddg-closing {
+  opacity: 0 !important;
+  transform: translateY(16px) scale(0.95) !important;
+}
+
+#ddg-chat-widget .ddg-panel * {
+  font-family: inherit !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 640px) {
+  #ddg-chat-widget .ddg-panel {
+    right: 24px !important;
+    width: 380px !important;
+    min-width: 380px !important;
+  }
+}
+
+@media (max-height: 700px) {
+  #ddg-chat-widget .ddg-panel {
+    height: calc(100vh - 120px) !important;
+    min-height: auto !important;
+  }
+}
+
+/* Mobile slide animations for bento drawer */
+@keyframes ddg-drawer-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ddg-drawer-slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+}
+
+/* Vaul Drawer Overlay - transparent to allow background interaction */
+#ddg-chat-widget .ddg-drawer-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  /* Transparent overlay - background remains visible and scrollable */
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 999991 !important;
+  /* Allow clicks to pass through to website content */
+  pointer-events: none !important;
+}
+
+/* Spring-like drawer animations matching drag velocity */
+#ddg-chat-widget .ddg-drawer-content,
+#ddg-chat-widget .ddg-drawer-content[data-vaul-drawer] {
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+
+/* Faster close animation to match quick dismiss gestures */
+#ddg-chat-widget .ddg-drawer-content[data-state='closed'] {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* ============================================
+   Staggered Parallax Entry Animations
+   ============================================ */
+
+@keyframes ddg-parallax-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Initial state - elements start hidden */
+#ddg-chat-widget .ddg-drawer-content .ddg-parallax-1,
+#ddg-chat-widget .ddg-drawer-content .ddg-parallax-2,
+#ddg-chat-widget .ddg-drawer-content .ddg-parallax-3,
+#ddg-chat-widget .ddg-drawer-content .ddg-parallax-4,
+#ddg-chat-widget .ddg-drawer-content .ddg-parallax-5 {
+  opacity: 0;
+}
+
+/* Animate in when drawer is open with staggered delays */
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-1,
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-2,
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-3,
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-4,
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-5 {
+  animation: ddg-parallax-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Stagger delays for cascading effect */
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-1 { animation-delay: 0ms; }
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-2 { animation-delay: 50ms; }
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-3 { animation-delay: 100ms; }
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-4 { animation-delay: 150ms; }
+#ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-parallax-5 { animation-delay: 200ms; }
+
+/* Mobile-responsive styles - Bento drawer style - Enlarged for touch */
+@media (max-width: 639px) {
+  /* Bento drawer: floating card with margins on all sides */
+  #ddg-chat-widget .ddg-panel {
+    position: fixed !important;
+    top: 48px !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: calc(100dvh - 56px) !important;
+    max-height: calc(100vh - 56px) !important;
+    margin: 0 !important;
+    border-radius: 16px !important;
+    border: none !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    animation: ddg-drawer-slide-up 0.4s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    z-index: 999992 !important;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.25), 0 -2px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 -40px 100px rgba(0, 0, 0, 0.12) !important;
+    background: hsl(var(--ddg-background)) !important;
+    /* Animate shadow for depth perception */
+    transition: box-shadow 0.3s ease-out, transform 0.4s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
+  /* Shadow states for open/close depth effect */
+  #ddg-chat-widget .ddg-drawer-content[data-state='open'] .ddg-panel {
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.25), 0 -2px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 -40px 100px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  #ddg-chat-widget .ddg-drawer-content[data-state='closed'] .ddg-panel {
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15), 0 -1px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  /* Subtle scale feedback when being dragged */
+  #ddg-chat-widget .ddg-drawer-content:active .ddg-panel {
+    transform: scale(0.995) !important;
+  }
+
+  #ddg-chat-widget .ddg-panel::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 80px !important;
+    background: linear-gradient(to bottom, hsl(var(--ddg-muted) / 0.85) 0%, transparent 100%) !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  #ddg-chat-widget .ddg-panel.ddg-closing {
+    animation: ddg-drawer-slide-down 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+
+  /* Drag handle inside ddg-header-top for gradient background coverage */
+  #ddg-chat-widget .ddg-header-top {
+    position: relative !important;
+    padding-top: 28px !important;
+  }
+
+  #ddg-chat-widget .ddg-drag-handle {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    display: flex !important;
+    width: 100% !important;
+    height: 28px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: grab !important;
+    touch-action: none !important;
+    z-index: 10 !important;
+  }
+
+  #ddg-chat-widget .ddg-drag-handle::after {
+    content: '' !important;
+    display: block !important;
+    width: 36px !important;
+    height: 4px !important;
+    border-radius: 2px !important;
+    background-color: hsl(var(--ddg-muted-foreground) / 0.2) !important;
+  }
+
+  #ddg-chat-widget .ddg-header {
+    background: transparent !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding-top: 0 !important;
+  }
+
+  #ddg-chat-widget .ddg-close-btn {
+    display: none !important;
+  }
+
+  #ddg-chat-widget .ddg-header-top {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    padding: 4px 14px 4px 14px !important;
+  }
+
+  #ddg-chat-widget .ddg-header-avatars {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  #ddg-chat-widget .ddg-avatar-stack {
+    justify-content: center !important;
+  }
+
+  /* Enlarged header avatars for mobile */
+  #ddg-chat-widget .ddg-header-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  #ddg-chat-widget .ddg-header-info {
+    text-align: center !important;
+  }
+
+  /* Enlarged header typography */
+  #ddg-chat-widget .ddg-header-title-row h2 {
+    font-size: 18px !important;
+  }
+
+  #ddg-chat-widget .ddg-header-subtitle {
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    opacity: 0.6 !important;
+  }
+
+  #ddg-chat-widget .ddg-home {
+    padding: 16px 16px !important;
+  }
+
+  #ddg-chat-widget .ddg-greeting {
+    padding: 16px 16px !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* Enlarged greeting typography */
+  #ddg-chat-widget .ddg-greeting h2,
+  #ddg-chat-widget .ddg-greeting p {
+    font-size: 26px !important;
+  }
+
+  /* Enlarged action card typography */
+  #ddg-chat-widget .ddg-action-title {
+    font-size: 15px !important;
+  }
+
+  #ddg-chat-widget .ddg-action-subtitle {
+    font-size: 13px !important;
+  }
+
+  /* Enlarged action cards */
+  #ddg-chat-widget .ddg-action-card {
+    padding: 16px 14px !important;
+    border-radius: 12px !important;
+  }
+
+  #ddg-chat-widget .ddg-action-icons {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    border-radius: 10px !important;
+  }
+
+  #ddg-chat-widget .ddg-action-icons svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  /* Enlarged nav items */
+  #ddg-chat-widget .ddg-nav-item {
+    padding: 10px 14px !important;
+    font-size: 11px !important;
+  }
+
+  #ddg-chat-widget .ddg-nav-item svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  /* Enlarged message bubbles */
+  #ddg-chat-widget .ddg-message-bubble {
+    font-size: 16px !important;
+    padding: 12px 16px !important;
+  }
+
+  /* Enlarged ticket list */
+  #ddg-chat-widget .ddg-ticket-list {
+    padding: 12px 16px !important;
+  }
+
+  #ddg-chat-widget .ddg-ticket-item {
+    padding: 14px 16px !important;
+    gap: 14px !important;
+  }
+
+  #ddg-chat-widget .ddg-ticket-subject {
+    font-size: 15px !important;
+  }
+
+  #ddg-chat-widget .ddg-ticket-preview {
+    font-size: 14px !important;
+  }
+
+  #ddg-chat-widget .ddg-ticket-meta {
+    font-size: 12px !important;
+  }
+
+  /* Enlarged input container */
+  #ddg-chat-widget .ddg-input-container {
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  #ddg-chat-widget .ddg-input-wrapper {
+    padding: 10px 10px 10px 16px !important;
+  }
+
+  #ddg-chat-widget .ddg-input-wrapper textarea {
+    font-size: 16px !important;
+    min-height: 24px !important;
+  }
+
+  #ddg-chat-widget .ddg-send-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+  }
+
+  #ddg-chat-widget .ddg-send-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  /* Enlarged back button */
+  #ddg-chat-widget .ddg-back-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+  }
+
+  #ddg-chat-widget .ddg-back-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* Prevent iOS zoom on input focus - must be 16px minimum */
+  #ddg-chat-widget .ddg-input,
+  #ddg-chat-widget input,
+  #ddg-chat-widget textarea,
+  #ddg-chat-widget select {
+    font-size: 16px !important;
+    touch-action: manipulation !important;
+    -webkit-text-size-adjust: 100% !important;
+  }
+
+  /* Enlarged view title */
+  #ddg-chat-widget .ddg-view-title {
+    font-size: 17px !important;
+    padding: 14px 20px !important;
+  }
+
+  /* Enlarged buttons */
+  #ddg-chat-widget .ddg-btn {
+    padding: 12px 24px !important;
+    font-size: 16px !important;
+  }
+
+  /* Enlarged home footer */
+  #ddg-chat-widget .ddg-home-footer {
+    font-size: 12px !important;
+  }
+
+  /* Fix double-tap issue on mobile - remove 300ms tap delay */
+  #ddg-chat-widget .ddg-action-card,
+  #ddg-chat-widget .ddg-btn,
+  #ddg-chat-widget .ddg-btn-primary,
+  #ddg-chat-widget .ddg-btn-secondary,
+  #ddg-chat-widget .ddg-ticket-item,
+  #ddg-chat-widget .ddg-nav-item,
+  #ddg-chat-widget .ddg-back-btn,
+  #ddg-chat-widget .ddg-send-btn,
+  #ddg-chat-widget .ddg-close-btn,
+  #ddg-chat-widget button,
+  #ddg-chat-widget a,
+  #ddg-chat-widget [role="button"],
+  #ddg-chat-widget [onclick] {
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    cursor: pointer !important;
+  }
+}
+
+#ddg-chat-widget .ddg-header {
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border-bottom: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+#ddg-chat-widget .ddg-header-top {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 12px 16px !important;
+  gap: 12px !important;
+}
+
+#ddg-chat-widget .ddg-header-avatar {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--ddg-accent)) !important;
+  color: hsl(var(--ddg-accent-foreground)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  text-transform: uppercase !important;
+  border: 2px solid white !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+#ddg-chat-widget .ddg-header-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
+
+#ddg-chat-widget .ddg-header-info {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+#ddg-chat-widget .ddg-header-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+#ddg-chat-widget .ddg-header-title-row h2 {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+#ddg-chat-widget .ddg-header-subtitle {
+  font-size: 12px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  line-height: 1.3 !important;
+}
+
+#ddg-chat-widget .ddg-close-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  transition: background 0.2s, color 0.2s !important;
+  padding: 0 !important;
+}
+
+#ddg-chat-widget .ddg-close-btn:hover {
+  background: hsl(var(--ddg-muted)) !important;
+  color: hsl(var(--ddg-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-close-btn svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+#ddg-chat-widget .ddg-content {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  position: relative !important;
+  z-index: 1 !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: hsl(var(--ddg-border)) transparent !important;
+}
+
+#ddg-chat-widget .ddg-content::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+#ddg-chat-widget .ddg-content::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+#ddg-chat-widget .ddg-content::-webkit-scrollbar-thumb {
+  background: hsl(var(--ddg-border)) !important;
+  border-radius: 3px !important;
+}
+
+#ddg-chat-widget .ddg-home {
+  padding: 20px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+#ddg-chat-widget .ddg-greeting {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  line-height: 1.3 !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-action-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  background: white !important;
+  border: 1px solid hsl(var(--ddg-border)) !important;
+  border-radius: 12px !important;
+  cursor: pointer !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+  text-decoration: none !important;
+}
+
+#ddg-chat-widget .ddg-action-card:hover {
+  border-color: hsl(var(--ddg-accent)) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+#ddg-chat-widget .ddg-action-icons {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  border-radius: 10px !important;
+  background: hsl(var(--ddg-muted)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: hsl(var(--ddg-accent)) !important;
+}
+
+#ddg-chat-widget .ddg-action-icons svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+#ddg-chat-widget .ddg-action-title {
+  font-weight: 500 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  font-size: 14px !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-action-subtitle {
+  font-size: 12px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-messages {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 16px !important;
+}
+
+#ddg-chat-widget .ddg-message {
+  display: flex !important;
+  gap: 8px !important;
+  max-width: 85% !important;
+}
+
+#ddg-chat-widget .ddg-message-customer {
+  flex-direction: row-reverse !important;
+  margin-left: auto !important;
+}
+
+#ddg-chat-widget .ddg-message-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--ddg-avatar-fallback)) !important;
+  color: hsl(var(--ddg-avatar-fallback-foreground)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+}
+
+#ddg-chat-widget .ddg-message-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+#ddg-chat-widget .ddg-message-bubble {
+  padding: 10px 14px !important;
+  border-radius: 16px !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  word-break: break-word !important;
+}
+
+#ddg-chat-widget .ddg-message:not(.ddg-message-customer) .ddg-message-bubble {
+  background: hsl(var(--ddg-message-reply)) !important;
+  color: hsl(var(--ddg-message-reply-foreground)) !important;
+  border-bottom-left-radius: 4px !important;
+}
+
+#ddg-chat-widget .ddg-message-customer .ddg-message-bubble {
+  background: hsl(var(--ddg-message-customer)) !important;
+  color: hsl(var(--ddg-message-customer-foreground)) !important;
+  border-bottom-right-radius: 4px !important;
+}
+
+#ddg-chat-widget .ddg-message-time {
+  font-size: 10px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  margin-top: 4px !important;
+  padding: 0 4px !important;
+}
+
+#ddg-chat-widget .ddg-message-customer .ddg-message-time {
+  text-align: right !important;
+}
+
+#ddg-chat-widget .ddg-input-container {
+  padding: 12px 16px 16px !important;
+  background: hsl(var(--ddg-background)) !important;
+  border-top: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+}
+
+#ddg-chat-widget .ddg-input-wrapper {
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  background: hsl(var(--ddg-muted)) !important;
+  border-radius: 20px !important;
+  padding: 8px 8px 8px 16px !important;
+  border: 1px solid transparent !important;
+  transition: border-color 0.2s !important;
+}
+
+#ddg-chat-widget .ddg-input-wrapper:focus-within {
+  border-color: hsl(var(--ddg-accent)) !important;
+}
+
+#ddg-chat-widget .ddg-input-wrapper textarea {
+  flex: 1 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  resize: none !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  max-height: 100px !important;
+  min-height: 20px !important;
+  padding: 4px 0 !important;
+}
+
+#ddg-chat-widget .ddg-input-wrapper textarea::placeholder {
+  color: hsl(var(--ddg-muted-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-send-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--ddg-muted-foreground)) !important;
+  color: white !important;
+  border: none !important;
+  cursor: not-allowed !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background 0.2s, transform 0.15s !important;
+  padding: 0 !important;
+}
+
+#ddg-chat-widget .ddg-send-btn.ddg-send-btn-active {
+  background: hsl(var(--ddg-accent)) !important;
+  cursor: pointer !important;
+}
+
+#ddg-chat-widget .ddg-send-btn.ddg-send-btn-active:hover {
+  transform: scale(1.05) !important;
+}
+
+#ddg-chat-widget .ddg-send-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+#ddg-chat-widget .ddg-nav {
+  display: flex !important;
+  justify-content: space-around !important;
+  padding: 8px 16px 12px !important;
+  background: hsl(var(--ddg-background)) !important;
+  border-top: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+}
+
+#ddg-chat-widget .ddg-nav-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 8px 16px !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  transition: color 0.2s !important;
+  position: relative !important;
+}
+
+#ddg-chat-widget .ddg-nav-item:hover,
+#ddg-chat-widget .ddg-nav-item.active {
+  color: hsl(var(--ddg-accent)) !important;
+}
+
+#ddg-chat-widget .ddg-nav-item svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+#ddg-chat-widget .ddg-nav-badge {
+  position: absolute !important;
+  top: 2px !important;
+  right: 8px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  padding: 0 4px !important;
+  background: hsl(var(--ddg-destructive)) !important;
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#ddg-chat-widget .ddg-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 10px 20px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  border-radius: 10px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: background 0.2s, transform 0.15s !important;
+  text-decoration: none !important;
+}
+
+#ddg-chat-widget .ddg-btn-primary {
+  background: hsl(var(--ddg-accent)) !important;
+  color: hsl(var(--ddg-accent-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-btn-primary:hover {
+  opacity: 0.9 !important;
+  transform: translateY(-1px) !important;
+}
+
+#ddg-chat-widget .ddg-ticket-list {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#ddg-chat-widget .ddg-ticket-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+  border-bottom: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+}
+
+#ddg-chat-widget .ddg-ticket-item:hover {
+  background: hsl(var(--ddg-muted) / 0.5) !important;
+}
+
+#ddg-chat-widget .ddg-ticket-avatar {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--ddg-avatar-fallback)) !important;
+  color: hsl(var(--ddg-avatar-fallback-foreground)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+#ddg-chat-widget .ddg-ticket-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 1 !important;
+}
+
+#ddg-chat-widget .ddg-status-dot {
+  position: absolute !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  border: 2px solid white !important;
+  background: hsl(var(--ddg-success)) !important;
+  z-index: 2 !important;
+}
+
+#ddg-chat-widget .ddg-ticket-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+#ddg-chat-widget .ddg-ticket-subject {
+  font-weight: 500 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-ticket-preview {
+  font-size: 13px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-ticket-meta {
+  font-size: 11px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+}
+
+#ddg-chat-widget .ddg-empty-state {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 40px 24px !important;
+  text-align: center !important;
+}
+
+#ddg-chat-widget .ddg-empty-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  margin: 12px 0 4px !important;
+}
+
+#ddg-chat-widget .ddg-empty-subtitle {
+  font-size: 14px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-skeleton {
+  background: linear-gradient(90deg, hsl(var(--ddg-muted)) 0%, hsl(var(--ddg-border)) 50%, hsl(var(--ddg-muted)) 100%) !important;
+  background-size: 200% 100% !important;
+  animation: ddg-skeleton-shimmer 1.5s infinite !important;
+  border-radius: 4px !important;
+}
+
+@keyframes ddg-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+#ddg-chat-widget .ddg-guest-mode {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 32px 24px !important;
+  text-align: center !important;
+  height: 100% !important;
+}
+
+#ddg-chat-widget .ddg-guest-icon {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--ddg-muted)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 16px !important;
+  color: hsl(var(--ddg-accent)) !important;
+}
+
+#ddg-chat-widget .ddg-guest-icon svg {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+#ddg-chat-widget .ddg-guest-title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  margin: 0 0 8px !important;
+}
+
+#ddg-chat-widget .ddg-guest-subtitle {
+  font-size: 14px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  margin: 0 0 24px !important;
+  max-width: 280px !important;
+}
+
+#ddg-chat-widget .ddg-guest-login-btn {
+  width: 100% !important;
+  max-width: 240px !important;
+}
+
+#ddg-chat-widget .ddg-ticket-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  border-radius: 10px !important;
+  text-transform: capitalize !important;
+}
+
+#ddg-chat-widget .ddg-status-open {
+  background: hsl(var(--ddg-success) / 0.15) !important;
+  color: hsl(142 71% 35%) !important;
+}
+
+#ddg-chat-widget .ddg-status-closed {
+  background: hsl(var(--ddg-muted)) !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-status-pending {
+  background: hsl(var(--ddg-warning) / 0.15) !important;
+  color: hsl(38 92% 40%) !important;
+}
+
+#ddg-chat-widget .ddg-back-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  transition: background 0.2s, color 0.2s !important;
+  padding: 0 !important;
+  margin-right: 4px !important;
+}
+
+#ddg-chat-widget .ddg-back-btn:hover {
+  background: hsl(var(--ddg-muted)) !important;
+  color: hsl(var(--ddg-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-back-btn svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+#ddg-chat-widget .ddg-date-separator {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px 0 !important;
+}
+
+#ddg-chat-widget .ddg-date-separator span {
+  font-size: 11px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+  background: hsl(var(--ddg-background)) !important;
+  padding: 4px 12px !important;
+  border-radius: 10px !important;
+}
+
+#ddg-chat-widget .ddg-new-btn-container {
+  padding: 12px 16px !important;
+}
+
+#ddg-chat-widget .ddg-view-title {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--ddg-foreground)) !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid hsl(var(--ddg-border) / 0.5) !important;
+  margin: 0 !important;
+}
+
+#ddg-chat-widget .ddg-conversation-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 16px !important;
+  background: hsl(var(--ddg-muted) / 0.3) !important;
+  font-size: 12px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+}
+
+#ddg-chat-widget .ddg-new-message {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
+#ddg-chat-widget .ddg-new-message-welcome {
+  padding: 24px 16px !important;
+  text-align: center !important;
+}
+
+#ddg-chat-widget .ddg-home-footer {
+  padding: 16px !important;
+  text-align: center !important;
+  font-size: 12px !important;
+  color: hsl(var(--ddg-muted-foreground)) !important;
+}
+</style>
+
+{% comment %}
+  DDG Chat Widget - Embedded Support Chat
+  Version: 2026-01-21-v181
+  CSS Version: 2026-01-21-v181
+  CSS Mode: Inline
+  Mode: Everyone (Guest Mode Enabled)
+  Deployed by Lovable Admin
+  Source: https://pxjlrodxqanhzpudrutw.supabase.co/functions/v1/chat-widget
+{% endcomment %}
+
+{% if customer %}
+<script>
+  window.DDGChatConfig = {
+    email: '{{ customer.email | escape }}',
+    firstName: '{{ customer.first_name | escape }}',
+    lastName: '{{ customer.last_name | escape }}',
+    tags: '{{ customer.tags | escape }}',
+    customerId: '{{ customer.id }}',
+    accentColor: '#000000',
+    showFeatureCard: true,
+    quickActions: [{"id":"wheres-order","icon":"package","color":"blue","label":"Where's my order?","enabled":true,"navigateTo":"orders","responseGuest":"Please log in to your account to track your orders. You can also check your order status using the link in your confirmation email.","ctaButtonsGuest":[{"icon":"log-in","label":"Log In","action":"login"},{"url":"mailto:support@dropdeadhair.com?subject=Order Status Inquiry","icon":"mail","label":"Email Support"}],"responseNoOrders":"You don't have any orders yet."},{"id":"start-return","icon":"rotate-ccw","color":"teal","label":"Start a return","enabled":true,"responseGuest":"Log in to your account to start a return. Visit your Dashboard → Returns section. We offer hassle-free returns within 90 days of delivery. Need help? Just ask!","ctaButtonsGuest":[{"url":"https://www.dropdeadextensions.com/account/login","icon":"log-in","label":"Log In","action":"none"},{"url":"mailto:support@dropdeadhair.com?subject=Return Request","icon":"mail","label":"Email Support"}],"responseCustomer":"To start a return, visit your Dashboard → Returns section. We offer hassle-free returns within 90 days of delivery. Need help? Just ask!","ctaButtonsCustomer":[{"icon":"arrow-right","label":"Go to Returns","action":"navigate:returns"}]},{"id":"warranty","icon":"shield","color":"rose","label":"Claim a warranty","enabled":true,"responseGuest":"Log in to submit a warranty claim. Visit your account dashboard and go to Returns. Follow the steps to warranty your hair.","ctaButtonsGuest":[{"icon":"log-in","label":"Log In","action":"login"},{"url":"mailto:warranty@dropdeadhair.com?subject=Warranty Claim","icon":"mail","label":"Email Warranty"}],"responseCustomer":"Visit your account dashboard and go to Returns. Follow the steps to warranty your hair.","ctaButtonsCustomer":[{"icon":"arrow-right","label":"Go to Returns","action":"navigate:returns"}]},{"id":"can-i-buy","icon":"help-circle","color":"purple","label":"Can I buy if I'm not a stylist?","enabled":true,"responseGuest":"Drop Dead is a professional wholesaler and only sells to licensed professionals. If you're interested in trying Drop Dead, please have your stylist place an order for you.","ctaButtonsGuest":[{"icon":"arrow-right","label":"Find a stylist","action":"none"}],"responseCustomer":"Drop Dead is a professional wholesaler and only sells to licensed professionals. If you're interested in trying Drop Dead, please have your stylist place an order for you.","ctaButtonsCustomer":[{"url":"https://dropdeadhair.com/collections/all","icon":"external-link","label":"Shop Now"}]}],
+    version: '2026-01-21-v181'
+  };
+</script>
+<script>
+(function(){
+  function loadWidget(){
+    var s=document.createElement('script');
+    s.type='module';
+    s.src='https://pxjlrodxqanhzpudrutw.supabase.co/functions/v1/chat-widget?v=2026-01-21-v181&t={{ 'now' | date: '%s' }}';
+    document.body.appendChild(s);
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',loadWidget);
+  }else if('requestIdleCallback' in window){
+    requestIdleCallback(loadWidget,{timeout:2000});
+  }else{
+    setTimeout(loadWidget,0);
+  }
+})();
+</script>
+{% else %}
+<script>
+  window.DDGChatConfig = {
+    email: '',
+    firstName: 'Guest',
+    lastName: '',
+    tags: '',
+    allowGuestChat: true,
+    accentColor: '#000000',
+    showFeatureCard: true,
+    quickActions: [{"id":"wheres-order","icon":"package","color":"blue","label":"Where's my order?","enabled":true,"navigateTo":"orders","responseGuest":"Please log in to your account to track your orders. You can also check your order status using the link in your confirmation email.","ctaButtonsGuest":[{"icon":"log-in","label":"Log In","action":"login"},{"url":"mailto:support@dropdeadhair.com?subject=Order Status Inquiry","icon":"mail","label":"Email Support"}],"responseNoOrders":"You don't have any orders yet."},{"id":"start-return","icon":"rotate-ccw","color":"teal","label":"Start a return","enabled":true,"responseGuest":"Log in to your account to start a return. Visit your Dashboard → Returns section. We offer hassle-free returns within 90 days of delivery. Need help? Just ask!","ctaButtonsGuest":[{"url":"https://www.dropdeadextensions.com/account/login","icon":"log-in","label":"Log In","action":"none"},{"url":"mailto:support@dropdeadhair.com?subject=Return Request","icon":"mail","label":"Email Support"}],"responseCustomer":"To start a return, visit your Dashboard → Returns section. We offer hassle-free returns within 90 days of delivery. Need help? Just ask!","ctaButtonsCustomer":[{"icon":"arrow-right","label":"Go to Returns","action":"navigate:returns"}]},{"id":"warranty","icon":"shield","color":"rose","label":"Claim a warranty","enabled":true,"responseGuest":"Log in to submit a warranty claim. Visit your account dashboard and go to Returns. Follow the steps to warranty your hair.","ctaButtonsGuest":[{"icon":"log-in","label":"Log In","action":"login"},{"url":"mailto:warranty@dropdeadhair.com?subject=Warranty Claim","icon":"mail","label":"Email Warranty"}],"responseCustomer":"Visit your account dashboard and go to Returns. Follow the steps to warranty your hair.","ctaButtonsCustomer":[{"icon":"arrow-right","label":"Go to Returns","action":"navigate:returns"}]},{"id":"can-i-buy","icon":"help-circle","color":"purple","label":"Can I buy if I'm not a stylist?","enabled":true,"responseGuest":"Drop Dead is a professional wholesaler and only sells to licensed professionals. If you're interested in trying Drop Dead, please have your stylist place an order for you.","ctaButtonsGuest":[{"icon":"arrow-right","label":"Find a stylist","action":"none"}],"responseCustomer":"Drop Dead is a professional wholesaler and only sells to licensed professionals. If you're interested in trying Drop Dead, please have your stylist place an order for you.","ctaButtonsCustomer":[{"url":"https://dropdeadhair.com/collections/all","icon":"external-link","label":"Shop Now"}]}],
+    version: '2026-01-21-v181'
+  };
+</script>
+<script>
+(function(){
+  function loadWidget(){
+    var s=document.createElement('script');
+    s.type='module';
+    s.src='https://pxjlrodxqanhzpudrutw.supabase.co/functions/v1/chat-widget?v=2026-01-21-v181&t={{ 'now' | date: '%s' }}';
+    document.body.appendChild(s);
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',loadWidget);
+  }else if('requestIdleCallback' in window){
+    requestIdleCallback(loadWidget,{timeout:2000});
+  }else{
+    setTimeout(loadWidget,0);
+  }
+})();
+</script>
+{% endif %}
+<!-- DDG Chat Widget Version: 2026-01-21-v181 -->
+
+{% include 'store-credit-launcher' %}
+</body>
+</html>

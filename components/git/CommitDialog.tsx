@@ -111,7 +111,7 @@ export default function CommitDialog({
     } else if (status === 'deleted' || status === 'D' || status === 'deleted:') {
       return 'text-red-400';
     }
-    return 'text-zinc-400';
+    return 'ide-text-muted';
   };
 
   const getStatusIcon = (status: string) => {
@@ -138,16 +138,16 @@ export default function CommitDialog({
       />
       
       {/* Modal */}
-      <div className="relative z-50 w-full max-w-2xl mx-4 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl">
+      <div className="relative z-50 w-full max-w-2xl mx-4 ide-surface-panel border ide-border rounded-lg shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+        <div className="flex items-center justify-between p-4 border-b ide-border">
           <div className="flex items-center gap-2">
-            <GitCommit className="w-5 h-5 text-zinc-400" />
-            <h2 className="text-lg font-semibold text-zinc-100">Create Commit</h2>
+            <GitCommit className="w-5 h-5 ide-text-muted" />
+            <h2 className="text-lg font-semibold ide-text">Create Commit</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+            className="p-1 rounded ide-hover ide-text-muted hover:ide-text transition-colors"
             disabled={isCommitting}
           >
             <X className="w-5 h-5" />
@@ -160,7 +160,7 @@ export default function CommitDialog({
           {fileStatuses && fileStatuses.length > 0 && (
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-zinc-300">Files</h3>
+                <h3 className="text-sm font-medium ide-text-2">Files</h3>
                 <div className="flex items-center gap-2">
                   {someSelected && (
                     <button
@@ -191,7 +191,7 @@ export default function CommitDialog({
                   return (
                     <label
                       key={file.path}
-                      className="flex items-center gap-3 p-2 rounded hover:bg-zinc-800 cursor-pointer transition-colors"
+                      className="flex items-center gap-3 p-2 rounded ide-hover cursor-pointer transition-colors"
                     >
                       <div className="relative flex items-center">
                         <input
@@ -205,7 +205,7 @@ export default function CommitDialog({
                           'w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ' +
                           (isSelected 
                             ? 'bg-blue-500 border-blue-500' 
-                            : 'border-zinc-600 bg-zinc-800')
+                            : 'ide-border ide-surface-inset')
                         }>
                           {isSelected && <Check className="w-3 h-3 text-white" />}
                         </div>
@@ -213,7 +213,7 @@ export default function CommitDialog({
                       <div className={'flex items-center gap-2 ' + statusColor}>
                         {getStatusIcon(file.status)}
                       </div>
-                      <span className="flex-1 text-sm text-zinc-300 truncate">
+                      <span className="flex-1 text-sm ide-text-2 truncate">
                         {file.path}
                       </span>
                       <span className={'text-xs px-2 py-1 rounded ' + statusColor + ' bg-opacity-10'}>
@@ -224,7 +224,7 @@ export default function CommitDialog({
                 })}
               </div>
               
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs ide-text-3">
                 {selectedFiles.size} {selectedFiles.size === 1 ? 'file' : 'files'} selected
               </div>
             </div>
@@ -232,13 +232,13 @@ export default function CommitDialog({
 
           {/* Commit Message Section */}
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-3">Commit Message</h3>
+            <h3 className="text-sm font-medium ide-text-2 mb-3">Commit Message</h3>
             
             {/* Subject */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-zinc-400">Subject (required)</label>
-                <span className={'text-xs ' + (subject.length > 72 ? 'text-red-400' : 'text-zinc-500')}>
+                <label className="text-xs ide-text-muted">Subject (required)</label>
+                <span className={'text-xs ' + (subject.length > 72 ? 'text-red-400' : 'ide-text-3')}>
                   {subject.length}/72
                 </span>
               </div>
@@ -251,17 +251,16 @@ export default function CommitDialog({
                 maxLength={72}
                 disabled={isCommitting}
                 className={
-                  'w-full px-3 py-2 bg-zinc-800 border rounded text-zinc-100 placeholder-zinc-500 ' +
-                  'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ' +
+                  'w-full px-3 py-2 ide-input ' +
                   'disabled:opacity-50 disabled:cursor-not-allowed ' +
-                  (subject.length > 72 ? 'border-red-500' : 'border-zinc-700')
+                  (subject.length > 72 ? '!border-red-500' : '')
                 }
               />
             </div>
 
             {/* Body */}
             <div>
-              <label className="text-xs text-zinc-400 mb-1 block">Body (optional)</label>
+              <label className="text-xs ide-text-muted mb-1 block">Body (optional)</label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -269,9 +268,8 @@ export default function CommitDialog({
                 rows={4}
                 disabled={isCommitting}
                 className={
-                  'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-zinc-100 ' +
-                  'placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ' +
-                  'focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed'
+                  'w-full px-3 py-2 ide-input ' +
+                  'resize-none disabled:opacity-50 disabled:cursor-not-allowed'
                 }
               />
             </div>
@@ -279,13 +277,13 @@ export default function CommitDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-zinc-700">
+        <div className="flex items-center justify-end gap-3 p-4 border-t ide-border">
           <button
             onClick={onClose}
             disabled={isCommitting}
             className={
               'px-4 py-2 rounded text-sm font-medium transition-colors ' +
-              'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 ' +
+              'ide-text-2 hover:ide-text ide-hover ' +
               'disabled:opacity-50 disabled:cursor-not-allowed'
             }
           >
@@ -298,7 +296,7 @@ export default function CommitDialog({
               'px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2 ' +
               (canCommit
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-zinc-700 text-zinc-500 cursor-not-allowed')
+                : 'bg-stone-700 ide-text-3 cursor-not-allowed')
             }
           >
             {isCommitting && <Loader2 className="w-4 h-4 animate-spin" />}

@@ -1,0 +1,21 @@
+# Speed up Cursor Headless CLI: avoid indexing irrelevant files.
+.git/
+node_modules/
+*.map
+.DS_Store
+   *.min.js
+   *.min.css
+   locales/
+   # Speed up Cursor Headless CLI: avoid indexing irrelevant files.
+# Large/binary assets (agent can still read on demand)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.woff2
+*.woff
+*.ttf
+*.eot
+*.ico
+*.svg

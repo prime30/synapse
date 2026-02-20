@@ -1,0 +1,32 @@
+<form action="{{ routes.search_url }}" method="get" role="search" class="t4s-search-form t4s-search-page-form js_frm_search_none">
+  <div class="input-group input-group--nowrap">
+    {%- if settings.filter_type_search and shop.types.size > 0 and checkCat -%}
+      <div data-cat-search class="t4s-mini-search__cat">
+        <div data-cat-search class="t4s-search-header__type t4s-pr">
+           <select data-name="product_type" class="t4s-truncate">
+             <option value="*">{{ 'search.general.all_categories' | t }}</option>
+             {%- for product_type in shop.types -%}{%- if product_type == blank %}{% continue -%}{% endif -%}<option value="{{ product_type }}"{% if search_pr_type == product_type %} selected="selected"{% endif %}>{{ product_type }}</option>{%- endfor -%}
+           </select>
+        </div>
+      </div>
+    {%- endif -%} 
+    <div class="input-group__field input-group__field--connected t4s-search-form__input-wrapper row no-gutters tl">
+         {%- if search_type and false -%}
+         <div class="frm_search_cat col-auto">
+             <select name="product_type">
+                <option value="*">{{ 'search.general.all_categories' | t }}</option>
+               {%- for product_type in shop.types -%}{%- if product_type == blank %}{% continue -%}{% endif -%}<option value="{{ product_type }}"{% if search_pr_type == product_type %} selected="selected"{% endif %}>{{ product_type }}</option>{%- endfor -%}
+             </select>
+         </div>
+         {%- endif -%}
+         <input type="hidden" name="type" value="product">
+         <input type="hidden" name="options[unavailable_products]" value="{{ settings.unavailable_prs }}">
+         <input type="hidden" name="options[prefix]" value="last">
+         <input type="text" name="q" value="{{ search_terms }}" placeholder="{{ 'search.general.placeholder' | t }}" class="t4s-search-form__input js_iput_search col" />
+       <button type="reset" class="t4s-search-form__clear-action"><i class="las la-times"></i></button>
+     </div>
+     <button type="submit" class="t4s-search-form__connected-submit js_btn_search">
+       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+     </button>
+  </div>
+</form>

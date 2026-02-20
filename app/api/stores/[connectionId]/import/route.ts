@@ -8,6 +8,12 @@ import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
 import { ShopifyAdminAPIFactory } from '@/lib/shopify/admin-api-factory';
 import { ThemeSyncService } from '@/lib/shopify/sync-service';
 import { ensureDevTheme } from '@/lib/shopify/theme-provisioning';
+import {
+  isLocalSyncEnabled,
+  resolveProjectSlug,
+  writeAllFilesToDisk,
+  getLocalThemePath,
+} from '@/lib/sync/disk-sync';
 
 function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -52,6 +58,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const themeId = typeof body.themeId === 'number' ? body.themeId : null;
     const themeName = typeof body.themeName === 'string' ? body.themeName.trim() : null;
     const createDevThemeForPreview = body.createDevThemeForPreview !== false;
+    const syncToLocal = body.syncToLocal === true;
     const note = typeof body.note === 'string' ? body.note.trim() : 'Import from store';
     // Optional client-generated projectId for progress polling
     const clientProjectId =
@@ -122,7 +129,50 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const syncService = new ThemeSyncService();
     const result = await syncService.pullTheme(connectionId, themeId, project.id, { textOnly: true });
 
-    // 3b. Fire-and-forget design token ingestion in the background.
+    // 3b. Write files to local disk if requested (non-blocking).
+    let localPath: string | null = null;
+    if (syncToLocal && isLocalSyncEnabled()) {
+      (async () => {
+        try {
+          const { data: textFiles } = await supabase
+            .from('files')
+            .select('path, content')
+            .eq('project_id', project.id)
+            .not('content', 'is', null);
+
+          const diskFiles = (textFiles ?? [])
+            .filter((f: { path: string | null; content: string | null }) =>
+              f.path && typeof f.content === 'string' && f.content.length > 0,
+            )
+            .map((f: { path: string; content: string }) => ({
+              path: f.path,
+              content: f.content,
+            }));
+
+          if (diskFiles.length > 0) {
+            const slug = await resolveProjectSlug(project.id);
+            await writeAllFilesToDisk(slug, project.id, diskFiles);
+            console.log(`[Import] Wrote ${diskFiles.length} files to local disk for project ${project.id}`);
+
+            // Start file watcher so local edits flow back
+            try {
+              const { startFileWatcher } = await import('@/lib/sync/file-watcher');
+              startFileWatcher();
+            } catch { /* chokidar may not be available */ }
+          }
+        } catch (err) {
+          console.warn('[Import] Local disk sync failed:', err);
+        }
+      })();
+
+      // Resolve the local path for the response (even if write is still in progress)
+      try {
+        const slug = await resolveProjectSlug(project.id);
+        localPath = getLocalThemePath(slug);
+      } catch { /* non-critical */ }
+    }
+
+    // 3c. Fire-and-forget design token ingestion in the background (was 3b).
     (async () => {
       try {
         const { data: projectFiles } = await supabase
@@ -155,7 +205,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     })();
 
-    // 3c. Defer dev theme creation so the response returns as soon as pull is done.
+    // 3d. Defer dev theme creation so the response returns as soon as pull is done.
     //     Attach dev theme to project and mark theme_files pending when ready (background).
     if (createDevThemeForPreview) {
       (async () => {
@@ -204,6 +254,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       conflicts: result.conflicts,
       previewThemeId: null, // Attached in background when dev theme is ready; IDE uses source theme until then
       binaryPending: result.binaryPending ?? 0,
+      localPath,
     });
   } catch (error) {
     return handleAPIError(error);

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
+/** @deprecated Use maxAgents + specialistMode instead. Kept for localStorage migration. */
 export type AgentMode = 'orchestrated' | 'solo';
 export type IntentMode = 'code' | 'ask' | 'plan' | 'debug';
 export type MaxAgents = 1 | 2 | 3 | 4;
@@ -10,7 +11,7 @@ const INTENT_MODES: IntentMode[] = ['code', 'ask', 'plan', 'debug'];
 const VALID_MAX_AGENTS: readonly MaxAgents[] = [1, 2, 3, 4] as const;
 
 export interface AgentSettings {
-  mode: AgentMode;
+  specialistMode: boolean;
   model: string;
   intentMode: IntentMode;
   maxAgents: MaxAgents;
@@ -19,8 +20,8 @@ export interface AgentSettings {
 
 const STORAGE_KEY = 'synapse-agent-settings';
 const DEFAULT_SETTINGS: AgentSettings = {
-  mode: 'orchestrated',
-  model: 'claude-sonnet-4-5-20250929',
+  specialistMode: false,
+  model: 'claude-sonnet-4-6',
   intentMode: 'code',
   maxAgents: 1,
   verbose: false,
@@ -32,11 +33,31 @@ function loadSettings(): AgentSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
+
+    // Migration: convert old mode field to specialistMode + maxAgents
+    let specialistMode = DEFAULT_SETTINGS.specialistMode;
+    let maxAgents: MaxAgents = VALID_MAX_AGENTS.includes(parsed.maxAgents)
+      ? parsed.maxAgents
+      : DEFAULT_SETTINGS.maxAgents;
+
+    if ('mode' in parsed && !('specialistMode' in parsed)) {
+      if (parsed.mode === 'solo') {
+        maxAgents = 1;
+        specialistMode = false;
+      } else {
+        specialistMode = true;
+      }
+    } else {
+      specialistMode = typeof parsed.specialistMode === 'boolean'
+        ? parsed.specialistMode
+        : DEFAULT_SETTINGS.specialistMode;
+    }
+
     return {
-      mode: parsed.mode === 'solo' ? 'solo' : 'orchestrated',
+      specialistMode,
       model: typeof parsed.model === 'string' && parsed.model ? parsed.model : DEFAULT_SETTINGS.model,
       intentMode: INTENT_MODES.includes(parsed.intentMode) ? parsed.intentMode : DEFAULT_SETTINGS.intentMode,
-      maxAgents: VALID_MAX_AGENTS.includes(parsed.maxAgents) ? parsed.maxAgents : DEFAULT_SETTINGS.maxAgents,
+      maxAgents,
       verbose: typeof parsed.verbose === 'boolean' ? parsed.verbose : DEFAULT_SETTINGS.verbose,
     };
   } catch {
@@ -56,9 +77,9 @@ function saveSettings(settings: AgentSettings): void {
 export function useAgentSettings() {
   const [settings, setSettingsState] = useState<AgentSettings>(loadSettings);
 
-  const setMode = useCallback((mode: AgentMode) => {
+  const setSpecialistMode = useCallback((specialistMode: boolean) => {
     setSettingsState((prev) => {
-      const next = { ...prev, mode };
+      const next = { ...prev, specialistMode };
       saveSettings(next);
       return next;
     });
@@ -97,13 +118,13 @@ export function useAgentSettings() {
   }, []);
 
   return {
-    mode: settings.mode,
+    specialistMode: settings.maxAgents > 1,
     model: settings.model,
     intentMode: settings.intentMode,
     maxAgents: settings.maxAgents,
     verbose: settings.verbose,
     settings,
-    setMode,
+    setSpecialistMode,
     setModel,
     setIntentMode,
     setMaxAgents,

@@ -42,10 +42,10 @@ export interface ToolExecutorContext {
  * Some tools (grep_content, semantic_search) are async — the caller must
  * await the returned Promise when necessary.
  */
-export function executeToolCall(
+export async function executeToolCall(
   toolCall: ToolCall,
   ctx: ToolExecutorContext,
-): ToolResult | Promise<ToolResult> {
+): Promise<ToolResult> {
   const { files, contextEngine } = ctx;
 
   try {
@@ -64,7 +64,7 @@ export function executeToolCall(
         }
         // Hydrate if content is a stub
         if (file.content.startsWith('[') && ctx.loadContent) {
-          const hydrated = ctx.loadContent([file.fileId]);
+          const hydrated = await ctx.loadContent([file.fileId]);
           if (hydrated.length > 0) file = hydrated[0];
         }
         return { tool_use_id: toolCall.id, content: file.content };
@@ -135,7 +135,7 @@ export function executeToolCall(
       // ── Search tools (Phase 1) ──────────────────────────────────────
 
       case 'grep_content': {
-        const grepResult = executeGrep(
+        const grepResult = await executeGrep(
           {
             pattern: String(toolCall.input.pattern ?? ''),
             filePattern: toolCall.input.filePattern ? String(toolCall.input.filePattern) : undefined,
@@ -166,6 +166,51 @@ export function executeToolCall(
         ).then(result => ({ ...result, tool_use_id: toolCall.id }));
       }
 
+      // ── Check lint tool (PM exploration phase) ──────────────────────
+
+      case 'check_lint': {
+        const lintFileName = String(toolCall.input.fileName ?? '');
+        const lintContent = toolCall.input.content ? String(toolCall.input.content) : undefined;
+
+        const lintFile = files.find(f =>
+          f.fileId === lintFileName ||
+          f.fileName === lintFileName ||
+          f.fileName.endsWith(`/${lintFileName}`) ||
+          (f.path && f.path.endsWith(`/${lintFileName}`))
+        );
+        if (!lintFile && !lintContent) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${lintFileName}`, is_error: true };
+        }
+
+        let contentToLint = lintContent;
+        if (!contentToLint && lintFile) {
+          if (lintFile.content.startsWith('[') && ctx.loadContent) {
+            const hydrated = await ctx.loadContent([lintFile.fileId]);
+            contentToLint = hydrated[0]?.content;
+          } else {
+            contentToLint = lintFile.content;
+          }
+        }
+        if (!contentToLint || contentToLint.startsWith('[')) {
+          return { tool_use_id: toolCall.id, content: `Cannot load content for ${lintFileName}`, is_error: true };
+        }
+
+        const ext = lintFileName.split('.').pop()?.toLowerCase() ?? '';
+        let lintErrors: { line: number; message: string; severity: string }[] = [];
+        if (ext === 'liquid') lintErrors = checkLiquid(contentToLint);
+        else if (ext === 'css' || ext === 'scss') lintErrors = checkCSS(contentToLint);
+        else if (ext === 'js' || ext === 'ts') lintErrors = checkJavaScript(contentToLint);
+        else {
+          return { tool_use_id: toolCall.id, content: `Syntax valid (no checker for .${ext} files)` };
+        }
+
+        if (lintErrors.length === 0) {
+          return { tool_use_id: toolCall.id, content: 'Syntax valid — no issues found.' };
+        }
+        const lintFormatted = lintErrors.map(e => `Line ${e.line}: [${e.severity}] ${e.message}`).join('\n');
+        return { tool_use_id: toolCall.id, content: `${lintErrors.length} issue(s) found:\n${lintFormatted}` };
+      }
+
       // ── Diagnostics tool (Phase 2) ──────────────────────────────────
 
       case 'run_diagnostics': {
@@ -187,7 +232,7 @@ export function executeToolCall(
         let contentToCheck = diagContent;
         if (!contentToCheck && diagFile) {
           if (diagFile.content.startsWith('[') && ctx.loadContent) {
-            const hydrated = ctx.loadContent([diagFile.fileId]);
+            const hydrated = await ctx.loadContent([diagFile.fileId]);
             contentToCheck = hydrated[0]?.content;
           } else {
             contentToCheck = diagFile.content;
@@ -265,6 +310,76 @@ export function executeToolCall(
             content: `Failed to fetch URL: ${err instanceof Error ? err.message : String(err)}`,
             is_error: true as const,
           }));
+      }
+
+      // ── Search & replace tool (targeted edits) ─────────────────────
+
+      case 'search_replace': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        const oldText = String(toolCall.input.old_text ?? '');
+        const newText = String(toolCall.input.new_text ?? '');
+
+        if (!filePath || !oldText) {
+          return { tool_use_id: toolCall.id, content: 'filePath and old_text are required.', is_error: true };
+        }
+        if (oldText === newText) {
+          return { tool_use_id: toolCall.id, content: 'old_text and new_text are identical — no change needed.', is_error: true };
+        }
+
+        const file = files.find(f =>
+          f.fileId === filePath || f.fileName === filePath ||
+          f.fileName.endsWith(`/${filePath}`) ||
+          (f.path && f.path.endsWith(`/${filePath}`))
+        );
+        if (!file) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
+        }
+
+        // Hydrate if content is a stub
+        let currentContent = file.content;
+        if (currentContent.startsWith('[') && ctx.loadContent) {
+          const hydrated = await ctx.loadContent([file.fileId]);
+          if (hydrated.length > 0) currentContent = hydrated[0].content;
+        }
+        if (currentContent.startsWith('[')) {
+          return { tool_use_id: toolCall.id, content: `Cannot load content for ${filePath}`, is_error: true };
+        }
+
+        // Find and replace
+        const idx = currentContent.indexOf(oldText);
+        if (idx === -1) {
+          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure it matches exactly (including whitespace and indentation).`, is_error: true };
+        }
+
+        // Check uniqueness — only the first match is replaced
+        const secondIdx = currentContent.indexOf(oldText, idx + 1);
+        const uniqueWarning = secondIdx !== -1
+          ? ' Warning: old_text matches multiple locations — only the first occurrence was replaced. Add more context lines for precision.'
+          : '';
+
+        const updatedContent = currentContent.slice(0, idx) + newText + currentContent.slice(idx + oldText.length);
+
+        if (!ctx.supabaseClient) {
+          return { tool_use_id: toolCall.id, content: 'Database client not available for file writes.', is_error: true };
+        }
+
+        try {
+          const { error } = await ctx.supabaseClient
+            .from('files')
+            .update({ content: updatedContent, updated_at: new Date().toISOString() })
+            .eq('id', file.fileId);
+          if (error) {
+            return { tool_use_id: toolCall.id, content: `Write failed: ${error.message}`, is_error: true as const };
+          }
+
+          // Update in-memory file content so subsequent reads reflect the change
+          file.content = updatedContent;
+
+          const sizeBytes = new TextEncoder().encode(updatedContent).length;
+          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes, 1 replacement).${uniqueWarning}` };
+        } catch (err) {
+          return { tool_use_id: toolCall.id, content: `Write failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
+        }
       }
 
       // ── File mutation tools (Agent Power Tools Phase 1) ──────────────
@@ -599,19 +714,109 @@ export function executeToolCall(
 
         return (async () => {
           try {
-            // Server-side pixel comparison stub.
-            // Full pixel-diff requires loading images; the preview panel's
-            // visual-regression.ts utility handles client-side canvas diffs.
+            const sharp = (await import('sharp')).default;
+
+            // Fetch both images
+            const [beforeResp, afterResp] = await Promise.all([
+              fetch(beforeUrl),
+              fetch(afterUrl),
+            ]);
+            if (!beforeResp.ok) throw new Error(`Failed to fetch before image: ${beforeResp.status}`);
+            if (!afterResp.ok) throw new Error(`Failed to fetch after image: ${afterResp.status}`);
+
+            const beforeBuf = Buffer.from(await beforeResp.arrayBuffer());
+            const afterBuf = Buffer.from(await afterResp.arrayBuffer());
+
+            // Normalise both to the same dimensions (use before as reference)
+            const beforeMeta = await sharp(beforeBuf).metadata();
+            const width = beforeMeta.width ?? 1280;
+            const height = beforeMeta.height ?? 800;
+
+            const beforeRaw = await sharp(beforeBuf)
+              .resize(width, height, { fit: 'fill' })
+              .raw()
+              .toBuffer();
+            const afterRaw = await sharp(afterBuf)
+              .resize(width, height, { fit: 'fill' })
+              .raw()
+              .toBuffer();
+
+            // Pixel-by-pixel comparison (3 channels: R, G, B)
+            const totalPixels = width * height;
+            let diffPixels = 0;
+            const diffData = Buffer.alloc(beforeRaw.length);
+
+            for (let i = 0; i < beforeRaw.length; i += 3) {
+              const dr = Math.abs(beforeRaw[i] - afterRaw[i]);
+              const dg = Math.abs(beforeRaw[i + 1] - afterRaw[i + 1]);
+              const db = Math.abs(beforeRaw[i + 2] - afterRaw[i + 2]);
+              const delta = (dr + dg + db) / 3;
+
+              if (delta > 10) {
+                diffPixels++;
+                // Highlight differences in red
+                diffData[i] = 255;
+                diffData[i + 1] = 0;
+                diffData[i + 2] = 0;
+              } else {
+                // Dim unchanged pixels
+                diffData[i] = Math.floor(beforeRaw[i] * 0.3);
+                diffData[i + 1] = Math.floor(beforeRaw[i + 1] * 0.3);
+                diffData[i + 2] = Math.floor(beforeRaw[i + 2] * 0.3);
+              }
+            }
+
+            const diffPercentage = (diffPixels / totalPixels) * 100;
+            const passed = diffPercentage <= threshold;
+
+            // Generate diff image as PNG
+            const diffPng = await sharp(diffData, {
+              raw: { width, height, channels: 3 },
+            })
+              .png()
+              .toBuffer();
+
+            // Upload diff image to Supabase Storage if available
+            let diffUrl = '';
+            if (ctx.supabaseClient) {
+              const diffPath = `screenshots/${ctx.projectId}/diff-${Date.now()}.png`;
+              const { error: uploadErr } = await ctx.supabaseClient.storage
+                .from('project-assets')
+                .upload(diffPath, diffPng, { contentType: 'image/png', upsert: true });
+              if (!uploadErr) {
+                const { data: urlData } = ctx.supabaseClient.storage
+                  .from('project-assets')
+                  .getPublicUrl(diffPath);
+                diffUrl = urlData.publicUrl;
+              }
+            }
+
+            const resultJson = JSON.stringify({
+              diffPercentage: Math.round(diffPercentage * 100) / 100,
+              threshold,
+              passed,
+              diffPixels,
+              totalPixels,
+              dimensions: { width, height },
+              beforeUrl,
+              afterUrl,
+              diffUrl: diffUrl || undefined,
+            });
+
             return {
               tool_use_id: toolCall.id,
               content: [
                 `## Screenshot Comparison`,
-                `Before: ${beforeUrl}`,
-                `After: ${afterUrl}`,
+                `Status: ${passed ? 'PASS' : 'FAIL'}`,
+                `Diff: ${diffPercentage.toFixed(2)}% (${diffPixels.toLocaleString()} of ${totalPixels.toLocaleString()} pixels)`,
                 `Threshold: ${threshold}%`,
+                `Dimensions: ${width}x${height}`,
+                diffUrl ? `Diff Image: ${diffUrl}` : '',
                 ``,
-                `Note: Server-side pixel comparison requires image loading. Use the preview panel's visual regression feature for accurate comparison.`,
-              ].join('\n'),
+                `\`\`\`json`,
+                resultJson,
+                `\`\`\``,
+              ].filter(Boolean).join('\n'),
             };
           } catch (err) {
             return {

@@ -185,7 +185,7 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
           <h2 className="text-lg font-medium ide-text">Import from Folder</h2>
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-gray-800 ide-text-muted hover:ide-text transition-colors"
+            className="p-1 rounded ide-hover ide-text-muted hover:ide-text transition-colors"
             aria-label="Close"
           >
             <X size={16} />
@@ -205,7 +205,7 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
             </div>
           ) : state === 'idle' ? (
             <div className="text-center py-8 space-y-4">
-              <FolderOpen size={48} className="mx-auto text-gray-500" />
+              <FolderOpen size={48} className="mx-auto ide-text-3" />
               <div className="space-y-1">
                 <p className="text-sm ide-text">Select a Shopify theme folder</p>
                 <p className="text-xs ide-text-muted">
@@ -248,7 +248,7 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
                   Uploading files... {progress.uploaded} / {progress.total}
                 </p>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full ide-surface-inset overflow-hidden">
                 <div
                   className="h-full rounded-full bg-sky-500 transition-all duration-500"
                   style={{

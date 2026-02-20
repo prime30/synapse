@@ -23,7 +23,7 @@ export function ProgressIndicator({ activeFold, onFoldClick }: ProgressIndicator
           <AnimatePresence>
             {activeFold === index && (
               <motion.span
-                className="font-pixel text-[9px] tracking-[0.2em] text-sky-500 whitespace-nowrap"
+                className="font-pixel text-[9px] tracking-[0.2em] text-accent whitespace-nowrap"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
@@ -52,3 +52,5 @@ export function ProgressIndicator({ activeFold, onFoldClick }: ProgressIndicator
     </div>
   );
 }
+
+

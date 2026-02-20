@@ -1,0 +1,906 @@
+<!-- sections/contact.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'button-style.css' | asset_url | stylesheet_tag }}
+<link href="{{ 'custom-effect.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%-liquid
+    assign sid = section.id
+    assign se_stts = section.settings  
+    assign se_blocks = section.blocks  
+    assign stt_layout = se_stts.layout
+    assign stt_image_bg = se_stts.image_bg
+    assign image_mb = se_stts.image_mb
+    assign image = se_stts.image | default: image_mb
+    assign mb_image = image_mb | default: image 
+    if stt_layout == 't4s-se-container' 
+        assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+    elsif stt_layout == 't4s-container-wrap'
+        assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+    else
+        assign html_layout = '__' | split: '__'
+    endif 
+    assign formId = 'contact_form_page' | append: sid
+ -%}
+{%- capture append_style -%}--aspect-ratio-cus : {{ se_stts.height_dk }}px;--aspect-ratio-custb : {{ se_stts.height_tb }}px;--aspect-ratio-cusmb : {{ se_stts.height_mb }}px;{%- endcapture -%}
+<div class="t4s-section-inner t4s_nt_se_{{ sid }} {{ stt_layout }}{% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{% endif %} {% render 'section_style', se_stts: se_stts, append_style: append_style -%} >
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}
+        <div class="t4s-container-inner{% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s{% endif %}" {% if stt_image_bg != blank %} data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5"{% endif %}>{% endif -%}
+        <div class="t4s-contact-wrap t4s-contact-content__{{ se_stts.position_content }} t4s-pr t4s-oh">
+            <div class="t4s-contact-wrap__top t4s-pr t4s-oh">
+                {%- if se_stts.source == "map" -%}
+                    {%- style -%}.t4s-contact-map iframe {margin-bottom: 0;padding: 0;display: block;width: 100%;border: none;filter: grayscale({{ se_stts.filter_gray_map }}%);}{%- endstyle -%}
+                    <div class="t4s-contact-map t4-pr">{{ se_stts.map }}</div>
+                {%- else -%}
+                    <div class="t4s-contact-image t4s_ratio_mix t4s_ratio_cuspx_mb_{{ se_stts.custom_mb }} t4s_ratio_cuspx_tb_{{ se_stts.custom_tb }} t4s_ratio_cuspx_{{ se_stts.custom_dk }}">
+                        <div class="t4s-contact-image__inner t4s-pr t4s-oh t4s_ratio t4s_cover t4s-bg-11" style="{%- if image != blank -%}background: url({{ image | image_url: width: 1 }});{%- endif -%}--ratioapt: {{ image.aspect_ratio | default: 2 }}">
+                            {%- if image != blank -%}   
+                                {%- liquid
+                                    assign img_url_w     = image | image_url: width: 1904 | split: '1904'
+                                    assign img_url_w0    = img_url_w[0]
+                                    assign img_url_w1    = img_url_w[1]
+                                    assign img_url_w_mb  = mb_image | image_url: width: 1904 | split: '1904'
+                                    assign img_url_w_mb0 = img_url_w_mb[0]
+                                    assign img_url_w_mb1 = img_url_w_mb[1]  
+                                -%}
+                                <img class="t4s_bg t4s-img-as-bg t4s-d-md-none"
+                                srcset="{{ img_url_w_mb0 }}375{{ img_url_w_mb1 }} 375w, {{ img_url_w_mb0 }}550{{ img_url_w_mb1 }} 550w, {{ img_url_w_mb0 }}750{{ img_url_w_mb1 }} 750w, {{ img_url_w_mb0 }}1100{{ img_url_w_mb1 }} 1100w, {{ img_url_w_mb0 }}1500{{ img_url_w_mb1 }} 1500w, {{ img_url_w_mb0 }}1780{{ img_url_w_mb1 }} 1780w, {{ img_url_w_mb0 }}2000{{ img_url_w_mb1 }} 2000w, {{ img_url_w_mb0 }}3000{{ img_url_w_mb1 }} 3000w,{{ img_url_w_mb0 }}3840{{ img_url_w_mb1 }} 3840w, {{ mb_image | image_url }} {{ mb_image.width }}w"
+                                sizes="100vw" src="{{ img_url_w_mb0 }}1500{{ img_url_w_mb1 }}"
+                                loading="lazy" alt="{{ mb_image.alt | escape }}" width="{{ mb_image.width }}" height="{{ mb_image.height }}">
+                                <img class="t4s_bg t4s-img-as-bg t4s-d-none t4s-d-md-block"
+                                srcset="{{ img_url_w0 }}375{{ img_url_w1 }} 375w, {{ img_url_w0 }}550{{ img_url_w1 }} 550w, {{ img_url_w0 }}750{{ img_url_w1 }} 750w, {{ img_url_w0 }}1100{{ img_url_w1 }} 1100w, {{ img_url_w0 }}1500{{ img_url_w1 }} 1500w, {{ img_url_w0 }}1780{{ img_url_w1 }} 1780w, {{ img_url_w0 }}2000{{ img_url_w1 }} 2000w, {{ img_url_w0 }}3000{{ img_url_w1 }} 3000w,{{ img_url_w0 }}3840{{ img_url_w1 }} 3840w, {{ image | image_url }} {{ image.width }}w"
+                                sizes="100vw" src="{{ img_url_w0 }}1500{{ img_url_w1 }}"
+                                loading="lazy" alt="{{ image.alt | escape }}" width="{{ image.width }}" height="{{ image.height }}">
+                            {%- else -%} 
+                                {{ 'lifestyle-1' | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1' }}  
+                            {%- endif -%}
+                        </div>
+                    </div>
+                {% endif -%}
+            </div>
+            {%- if se_blocks.size > 0 -%}
+                <div class="t4s-contact-form">
+                    <div class="t4s-row t4s-justify-content-center">
+                        {%- for block in section.blocks -%}
+                            {%- assign bk_stts = block.settings -%} 
+                            {%- assign button_style = bk_stts.button_style -%}
+                            {%- case block.type -%}
+                                {%- when 'bl_form' -%}
+                                    <div class="t4s-col-item t4s-col-md-6 t4s-col-12">
+                                        {%- form 'contact', id: formId -%}
+                                        {%- liquid
+                                            assign form_errors   = form.errors
+                                            assign form_errors_messages = form_errors.messages
+                                            assign isSuccessfully = form.posted_successfully?
+                                            assign error_heading = 'templates.contact.form.error_heading'
+                                            assign name          = 'templates.contact.form.name'
+                                            assign email         = 'templates.contact.form.email'
+                                            assign phone         = 'templates.contact.form.phone'
+                                            assign message       = 'templates.contact.form.message'
+
+                                            render 'form-status', form: form, form_id: formId, isSuccessfully: isSuccessfully, form_errors: form_errors, form_errors_messages: form_errors_messages, error_heading: error_heading, name: name, email: email, phone: phone, message: message
+                                        -%}
+                                            <h3 class="t4s-contact-form__heading">{{ bk_stts.heading | escape }}</h3>
+                                            {%- if bk_stts.sub_heading != blank -%}<p class="t4s-contact-form__subheading">{{ bk_stts.sub_heading | escape }}</p>{%- endif -%}
+                                            <p>
+                                                <label for="{{ formId }}-name">{{ name | t }}</label>
+                                                <input required="required" type="text" id="{{ formId }}-name" name="contact[name]" value="{% if form[name] %}{{ form[name] }}{% elsif customer %}{{ customer.name }}{% endif %}">
+                                            </p>
+                                            <p>
+                                                <label for="{{ formId }}-email">{{ email | t }}</label>
+                                                <input required="required" type="email" id="{{ formId }}-email" name="contact[email]" autocorrect="off" autocapitalize="off" value="{% if form.email %}{{ form.email }}{% elsif customer %}{{ customer.email }}{% endif %}" aria-required="true" required="required"
+                                                {%- if form.errors contains 'email' -%}class="t4s-input--error" aria-invalid="true" aria-describedby="{{ formId }}-email-error"{%- endif -%}
+                                            >
+                                                {%- if form.errors contains 'email' -%}
+                                                    <span id="{{ formId }}-email-error" class="t4s-input-error-message"><i class="las la-exclamation-triangle"></i>{{ form.errors.translated_fields['email'] | capitalize }} {{ form.errors.messages['email'] }}.</span>
+                                                {%- endif -%}
+                                            </p>
+                                            {%- if bk_stts.enable_phone -%}
+                                                <p>
+                                                    <label for="{{ formId }}-phone">{{ phone | t }}</label>
+                                                    <input required="required" type="tel" id="{{ formId }}-phone" name="contact[phone]" pattern="[0-9\-]*" value="{% if form[phone] %}{{ form[phone] }}{% elsif customer %}{{ customer.phone }}{% endif %}">
+                                                </p>
+                                            {%- endif -%}
+                                            <p>
+                                                <label for="{{ formId }}-message">{{ message | t }}</label>
+                                                <textarea rows="20" id="{{ formId }}-message" name="contact[body]" required="required" class="t4s-input-textarea">{% if form.body %}{{ form.body }}{% endif %}</textarea>
+                                            </p>
+                                            <input type="submit" class="t4s-contact-form__submit t4s-btn t4s-btn-base t4s-btn-style-{{ button_style }} t4s-btn-size-{{ bk_stts.btn_size }} t4s-btn-color-{{ bk_stts.btn_cl }}{% if bk_stts.enable_full_btn %} t4s-w-100 t4s-justify-content-center{% endif %} t4s-btn-effect-fade t4s-cursor-pointer" value="{{ 'templates.contact.form.submit' | t }}">
+                                        {%- endform -%}
+                                    </div>
+                                {%- else -%}
+                                    <div class="t4s-col-item t4s-contact-form__info t4s-col-md-6 t4s-col-12 t4s-rte--list">
+                                        {%- if bk_stts.heading != blank -%}<h3 class="t4s-contact-form__heading">{{ bk_stts.heading | escape }}</h3>{%- endif -%}
+                                        {%- if bk_stts.text != blank -%}{{ bk_stts.text }}{%- endif -%}
+                                        {%- if bk_stts.enable_socials -%}
+                                            <div class="t4s-contact-form__socials">
+                                                {%- if bk_stts.heading_socials != blank -%}<h4 class="t4s-contact-form__socials-heading">{{ bk_stts.heading_socials | escape }}</h4>{%- endif -%}
+                                                {{ 'icon-social.css' | asset_url | stylesheet_tag }}
+                                                {% liquid 
+                                                    assign pri_cl_lightness       = bk_stts.pri_cl | color_extract: 'lightness'
+                                                    assign pri_hover_cl_lightness       = bk_stts.pri_hover_cl | color_extract: 'lightness'
+                                                    if pri_cl_lightness < 85
+                                                        assign pri_cl2 = "#fff"
+                                                    else 
+                                                        assign pri_cl2 = "#000"
+                                                    endif
+                                                    if pri_hover_cl_lightness < 85
+                                                        assign pri_hover_cl2 = "#fff"
+                                                    else 
+                                                        assign pri_hover_cl2 = "#000"
+                                                    endif
+                                                -%}
+                                                <div id="b_{{ block.id }}" class="t4s-socials-block social-{{ block.id }}" style="--pri-cl: {{ bk_stts.pri_cl }};--pri-cl2: {{ pri_cl2 }};--pri-hover-cl: {{ bk_stts.pri_hover_cl }};--pri-hover-cl2: {{ pri_hover_cl2 }};--mgb: {{ bk_stts.mgb }}px;--mgb-tb: {{ bk_stts.mgb_tb }}px;--mgb-mb: {{ bk_stts.mgb_mb }}px; --bd-radius: {{ bk_stts.bd_radius }}px;">
+                                                    {%- if bk_stts.social_mode == '1' -%}{%- assign follow_social = true -%} {%- endif -%} 
+                                                    {%- render 'social_sharing', style: bk_stts.social_style, use_color_set: bk_stts.use_color_set, size: bk_stts.social_size, space_h_item: bk_stts.space_h_item, space_h_item_mb: bk_stts.space_h_item_mb, space_v_item: bk_stts.space_v_item, space_v_item_mb: bk_stts.space_v_item_mb, follow_social: follow_social -%}  
+                                                </div> 
+                                            </div>
+                                        {%- endif -%}
+                                    </div>
+                            {%- endcase -%}
+                        {%- endfor -%}
+                    </div>
+                </div>
+            {%- endif -%}
+        </div>
+    {{- html_layout[1] -}}
+</div>
+<style>
+.t4s-contact-content__alternative .t4s-contact-form{
+    box-shadow: 0px 14px 40px 0px rgba(0, 0, 0, 0.05);
+    padding: 50px 40px;
+    margin: 0px 50px;
+    margin-top: -200px;
+    margin-bottom: 40px;
+    z-index: 2;
+    position: relative;
+    background: var(--t4s-light-color);
+}
+.t4s-contact-content__default .t4s-contact-form{
+    padding: 30px 0px;
+}
+.t4s-contact-form input.t4s-input--error {
+    border-color: var(--t4s-error-color)!important;
+    margin-bottom: 5px;
+}
+.t4s-contact-form input[type=date],
+.t4s-contact-form input[type=email],
+.t4s-contact-form input[type=number],
+.t4s-contact-form input[type=password], 
+.t4s-contact-form input[type=tel],
+.t4s-contact-form input[type=text], 
+.t4s-contact-form input[type=url],
+.t4s-contact-form select,
+.t4s-contact-form textarea {
+    width: 100%;
+    height: 44px;
+    line-height: 18px;
+    transition: border-color .5s;
+    box-shadow: none;
+    border-radius: var(--other-radius);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border: none;
+    background-color: rgba(var(--text-color-rgb),0.08);
+}
+.t4s-contact-form .t4s-input-textarea{
+    min-height: 174px;
+    overflow: hidden;
+    padding: 10px 15px;
+}
+
+.t4s-contact-form .t4s-fine-print{font-style: italic}
+.t4s-contact-form .t4s-input-error-message i{color: var(--t4s-error-color);margin-right: 5px;}
+.t4s-contact-form .t4s-form-message ul li{
+    list-style: disc;
+}
+.t4s-contact-form .t4s-form-message--error{
+    color: var(--t4s-error-color);
+    border: 1px solid var(--t4s-error-color);
+    background-color: rgba(var(--t4s-error-color-rgb),0.03);
+    padding: 15px 20px;
+    text-align: left;
+    width: 100%;
+    margin: 0 0 27.5px;
+}
+.t4s-contact-form .t4s-form-message__title {
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.t4s-contact-form__heading{
+   font-size: 22px;
+   font-weight: 400;
+    margin-bottom: 20px;  
+}
+.t4s-contact-form__submit{text-transform: uppercase;letter-spacing: 2.6px !important;}
+.t4s-contact-form .t4s-btn-style-bordered,
+.t4s-contact-form .t4s-btn-style-link{
+    border-top: none;
+    border-right: none;
+    border-left: none;
+} 
+.t4s-contact-form .t4s-btn-style-link{
+    border-bottom: none;
+}
+.t4-contact-form__icon{
+    color: var(--secondary-color);
+    margin-bottom: 14px;
+}
+.t4-contact-form__icon i{
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: rgba(var(--text-color-rgb),0.08);
+    margin-right: 11px;
+}
+.t4s-contact-form__socials{
+    margin-top: 30px;
+}
+.t4s-contact-form__socials-heading{
+    font-size: 18px;
+    font-weight: 400;
+    margin-bottom: 20px;
+}
+.t4s-contact-form .t4s-form-status{
+    font-size: 13px;
+    line-height: 24px;
+    font-weight: 400;
+    display: inline-block;
+    vertical-align: middle;
+    margin-bottom: 15px;
+}
+.t4s-contact-form .t4s-form-message--success .t4s-form-status{
+ color: var(--t4s-success-color);
+}
+.t4s-contact-form .t4s-form-status svg{
+    width: 20px;
+    height: auto;
+    display: inline-block;
+    vertical-align: middle;
+}
+@media (max-width:1024px) {
+    .t4s-contact-content__alternative .t4s-contact-form{
+        box-shadow: 0px 14px 30px 0px rgba(0, 0, 0, 0.05);
+        padding: 30px 20px;
+        margin: 0px 30px;
+        margin-top: -150px;
+        margin-bottom: 30px;
+    }
+}
+@media (max-width:767px) {
+    .t4s-contact-content__alternative .t4s-contact-form{
+        box-shadow: 0px 10px 10px 0px rgba(0, 0, 0, 0.05);
+        padding: 15px;
+        margin: 0px 15px;
+        margin-top: -50px;
+        margin-bottom: 20px;
+    }
+    .t4s-contact-form .t4s-row .t4s-col-item:first-child{
+        margin-bottom: 20px;
+    }
+}
+@media (min-width: 1025px) {
+    .t4s-contact-form .t4s-row:first-child{
+        --ts-gutter-x: 76px;
+    }
+}
+@media (min-width: 1100px) {
+    .t4s-contact-content__alternative .t4s-contact-form{
+        box-shadow: 0px 14px 88px 0px rgba(0, 0, 0, 0.05);
+        padding: 60px 70px;
+        margin: 0px 170px;
+        margin-top: -335px;
+        margin-bottom: 60px;
+    }
+}
+</style>
+{% schema %}
+{
+    "name": "Contact form",
+    "tag": "section",
+    "class": "t4s-section t4s-section-main t4s-contact",
+    "settings": [
+        {
+            "type": "header",
+            "content": "1.General options"
+        },
+        {
+            "type": "select",
+            "id": "source",
+            "label": "Source visual",
+            "default": "map",
+            "options": [
+                {
+                    "value": "use_image",
+                    "label": "From image"
+                },
+                {
+                    "value": "map",
+                    "label": "From map"
+                }
+            ]
+        },
+        {
+            "type": "select",
+            "id": "position_content",
+            "label": "Position content",
+            "options": [
+                {
+                    "value": "default",
+                    "label": "Default"
+                },
+                {
+                    "value": "alternative",
+                    "label": "Alternative"
+                }
+            ]
+        },
+        {
+            "type": "header",
+            "content": "+ Options for source from image"
+        },
+        {
+            "type": "checkbox",
+            "id": "custom_dk",
+            "label": "Use custom height (Desktop)",
+            "default": false
+        },
+        {
+            "type": "number",
+            "id": "height_dk",
+            "label": "Section height (Desktop)",
+            "default": 600
+        },
+        {
+            "type": "checkbox",
+            "id": "custom_tb",
+            "label": "Use custom height (Tablet)",
+            "default": true
+        },
+        {
+            "type": "number",
+            "id": "height_tb",
+            "label": "Section height (Tablet)",
+            "default": 400
+        },
+        {
+            "type": "checkbox",
+            "id": "custom_mb",
+            "label": "Use custom height (Mobile)",
+            "default": true
+        },
+        {
+            "type": "number",
+            "id": "height_mb",
+            "label": "Section height (Mobile)",
+            "default": 250
+        }, 
+        {                   
+            "type": "image_picker",
+            "id": "image",
+            "label": "Choose Image"                  
+        },
+        {
+            "type": "image_picker","id": "image_mb",
+            "label": "Mobile image"
+        },
+        {
+            "type": "header",
+            "content": "+ Options for source map"
+        },
+        {
+            "type": "textarea",
+            "id": "map",
+            "label": "Map",
+            "default": "<iframe src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3154.8939060848147!2d144.81158271584684!3d-37.74563313792195!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6ad65fa6debeb781%3A0xe1d23f5d1759961e!2s184%20Main%20Rd%20E%2C%20St%20Albans%20VIC%203021%2C%20%C3%9Ac!5e0!3m2!1svi!2s!4v1618277125252!5m2!1svi!2s\" width=\"100%\" height=\"600\" style=\"border: 0;\" allowfullscreen=\"\" loading=\"lazy\"></iframe>" 
+        },
+        {
+            "type": "range",
+            "id": "filter_gray_map",
+            "label": "Filter gray scale source map",
+            "min": 0,
+            "max": 100,
+            "step": 10,
+            "unit": "%",
+            "default": 50
+        },
+        {
+            "type": "header",
+            "content": "2. Design options"
+        },
+        {
+            "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+            "options": [
+                { "value": "t4s-se-container", "label": "Container"},
+                { "value": "t4s-container-wrap", "label": "Wrapped container"},
+                { "value": "t4s-container-fluid", "label": "Full width"}
+            ]
+        },
+        {
+            "type": "color",
+            "id": "cl_bg",
+            "label": "Background"
+        },
+        {
+            "type": "color_background",
+            "id": "cl_bg_gradient",
+            "label": "Background gradient"
+        },
+        {
+            "type": "image_picker",
+            "id": "image_bg",
+            "label": "Background image"
+        },
+        {
+            "type": "text",
+            "id": "mg",
+            "label": "Margin",
+            "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+            "default": "50px,,50px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd",
+            "label": "Padding",
+            "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+            "placeholder": "50px,,50px,"
+        },
+        {
+            "type": "header",
+            "content": "+ Design tablet options"
+        },
+        {
+            "type": "text",
+            "id": "mg_tb",
+            "label": "Margin",
+            "default": ",,50px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_tb",
+            "label": "Padding",
+            "placeholder": "50px,,50px,"
+        },
+        {
+            "type": "header",
+            "content": "+ Design mobile options"
+        },
+        {
+            "type": "text",
+            "id": "mg_mb",
+            "label": "Margin",
+            "default": ",,30px,",
+            "placeholder": ",,50px,"
+        },
+        {
+            "type": "text",
+            "id": "pd_mb",
+            "label": "Padding",
+            "placeholder": ",,50px,"
+        }
+    ],
+    "blocks": [
+        {
+            "name": "Contact information",
+            "type": "bl_info",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "heading",
+                    "label": "Heading",
+                    "default": "Contact"
+                },
+                {
+                    "type": "html",
+                    "id": "text",
+                    "label": "Text",
+                    "default": "<p>We love to hear from you on our customer service, merchandise, website or any topics you want to share with us. Your comments and suggestions will be appreciated. Please complete the form below.</p><p><i class=\"las la-home fs__16\"></i> 184 Main Rd E, St Albans Victoria 3021, Australia</p><p><i class=\"las la-phone fs__16\"></i> 1800-123-222 / 1900-1570-230</p><p><i class=\"las la-envelope fs__16\"></i> contact@company.com</p><i class=\"las la-clock fs__16\"></i> Everyday 9: 00-17: 00</p>"
+                },
+                {
+                    "type": "header",
+                    "content": "+ Options for socials"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "enable_socials",
+                    "label": "Enable socials"
+                },
+                {
+                    "type": "text",
+                    "id": "heading_socials",
+                    "label": "Heading socials",
+                    "default": "Our social"
+                },
+                {
+                    "type": "select",
+                    "id": "social_mode",
+                    "label": "Socials mode",
+                    "options": [
+                        {
+                            "value": "1",
+                            "label": "Follow"
+                        },
+                        {
+                            "value": "2",
+                            "label": "Share"
+                        }
+                    ],
+                    "default": "1"
+                },
+                {
+                    "type": "select",
+                    "id": "social_style",
+                    "label": "Socials style",
+                    "options": [
+                        { "value": "default", "label": "Default"},
+                        { "value": "outline", "label": "Outline"},
+                        { "value": "simple", "label": "Simple"}
+                    ],
+                    "default": "simple"
+                },
+                {
+                    "type": "select",
+                    "id": "social_size",
+                    "label": "Socials size",
+                    "options": [
+                        { "value": "small", "label": "Small"},
+                        { "value": "medium", "label": "Medium"},
+                        { "value": "large", "label": "Large"}
+                    ],
+                    "default": "medium"
+                },
+                {
+                    "type": "range",
+                    "id": "bd_radius", 
+                    "label": "Border radius",
+                    "info": "Not work when socials style is \"Simple\"",
+                    "unit": "px",
+                    "min": 0,
+                    "max": 30,
+                    "default": 0,
+                    "step": 1
+                },
+                {
+                    "type": "checkbox",
+                    "id": "use_color_set",
+                    "label": "Use color settings",
+                    "info": "Default is themes color, tick here if you want custom color for icon socials.",
+                    "default": false
+                },
+                {
+                    "type": "header",
+                    "content": "only true when check to box Color Settings"
+                },
+                {
+                    "type": "color",
+                    "id": "pri_cl",
+                    "label": "Primary color",
+                    "default": "#868686"
+                },
+                {
+                    "type": "color",
+                    "id": "pri_hover_cl",
+                    "label": "Primary hover color",
+                    "default": "#000000"
+                },
+                {
+                    "type": "select",
+                    "id": "space_h_item",
+                    "options": [
+                        {
+                            "value": "0", 
+                            "label": "0"
+                        },
+                        {
+                            "value": "2", 
+                            "label": "2px"
+                        },
+                        {
+                            "value": "4", 
+                            "label": "4px"
+                        },
+                        {
+                            "value": "5", 
+                            "label": "5px"
+                        },
+                        {
+                            "value": "8", 
+                            "label": "8px"
+                        },
+                        {
+                            "value": "10", 
+                            "label": "10px"
+                        },
+                      {
+                          "value": "15",
+                          "label": "15px"
+                      },
+                      {
+                          "value": "20",
+                          "label": "20px"
+                      },
+                      {
+                          "value": "25",
+                          "label": "25px"
+                      },
+                        {
+                            "value": "30",
+                            "label": "30px"
+                        }
+                    ],
+                    "label": "Space horizontal items",
+                    "default": "5"
+                },
+                {
+                    "type": "select",
+                    "id": "space_v_item",
+                    "options": [
+                        {
+                            "value": "0", 
+                            "label": "0"
+                        },
+                        {
+                            "value": "2", 
+                            "label": "2px"
+                        },
+                        {
+                            "value": "4", 
+                            "label": "4px"
+                        },
+                        {
+                            "value": "5", 
+                            "label": "5px"
+                        },
+                        {
+                            "value": "8", 
+                            "label": "8px"
+                        },
+                        {
+                            "value": "10", 
+                            "label": "10px"
+                        },
+                          {
+                              "value": "15",
+                              "label": "15px"
+                          },
+                          {
+                              "value": "20",
+                              "label": "20px"
+                          },
+                          {
+                              "value": "25",
+                              "label": "25px"
+                          },
+                        {
+                            "value": "30",
+                            "label": "30px"
+                        }
+                    ],
+                    "label": "Space vertical items",
+                    "default": "5"
+                },
+                {
+                    "type": "select",
+                    "id": "space_h_item_mb",
+                    "options": [
+                        {
+                            "value": "0", 
+                            "label": "0"
+                        },
+                        {
+                            "value": "2", 
+                            "label": "2px"
+                        },
+                        {
+                            "value": "4", 
+                            "label": "4px"
+                        },
+                        {
+                            "value": "6", 
+                            "label": "6px"
+                        },
+                        {
+                            "value": "8", 
+                            "label": "8px"
+                        },
+                        {
+                            "value": "10", 
+                            "label": "10px"
+                        },
+                      {
+                          "value": "15",
+                          "label": "15px"
+                      },
+                      {
+                          "value": "20",
+                          "label": "20px"
+                      },
+                      {
+                          "value": "25",
+                          "label": "25px"
+                      },
+                        {
+                            "value": "30",
+                            "label": "30px"
+                        }
+                        ],
+                        "label": "Space horizontal items (Mobile)",
+                        "default": "2"
+                    },
+                    {
+                        "type": "select",
+                        "id": "space_v_item_mb",
+                        "options": [
+                        {
+                            "value": "0", 
+                            "label": "0"
+                        },
+                        {
+                            "value": "2", 
+                            "label": "2px"
+                        },
+                        {
+                            "value": "4", 
+                            "label": "4px"
+                        },
+                        {
+                            "value": "6", 
+                            "label": "6px"
+                        },
+                        {
+                            "value": "8", 
+                            "label": "8px"
+                        },
+                        {
+                            "value": "10", 
+                            "label": "10px"
+                        },
+                          {
+                              "value": "15",
+                              "label": "15px"
+                          },
+                          {
+                              "value": "20",
+                              "label": "20px"
+                          },
+                          {
+                              "value": "25",
+                              "label": "25px"
+                          },
+                        {
+                            "value": "30",
+                            "label": "30px"
+                        }
+                    ],
+                    "label": "Space vertical items (Mobile)",
+                    "default": "2"
+                }
+            ]
+        },
+        {
+            "name": "Contact form",
+            "type": "bl_form",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "heading",
+                    "label": "Heading",
+                    "default": "Questions? Get in touch."
+                },
+                {
+                    "type": "text",
+                    "id": "sub_heading",
+                    "label": "Sub heading",
+                    "default": "Enter your details and message below and we'll get in touch asap"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "enable_phone",
+                    "label": "Enable phone",
+                    "default": false
+                },
+                {
+                    "type": "header",
+                    "content": "+ Options button submit"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "enable_full_btn",
+                    "label": "Enable button full width",
+                    "default": true
+                },
+                {
+                    "type": "select",
+                    "id": "button_style",
+                    "label": "Button style",
+                    "options": [
+                        {
+                            "label": "Default",
+                            "value": "default"
+                        },
+                        {
+                            "label": "Outline",
+                            "value": "outline"
+                        },
+                        {
+                            "label": "Bordered bottom",
+                            "value": "bordered"
+                        },
+                        {
+                            "label": "Link",
+                            "value": "link"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "btn_size",
+                    "label": "Button size",
+                    "default": "default",
+                    "options": [
+                        {
+                            "label": "Default",
+                            "value": "default"
+                        },
+                        {
+                            "label": "Custom size #1",
+                            "value": "1"
+                        },
+                        {
+                            "label": "Custom size #2",
+                            "value": "2"
+                        },
+                        {
+                            "label": "Custom size #3",
+                            "value": "3"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "btn_cl",
+                    "label": "Button color",
+                    "default": "dark",
+                    "options": [
+                        {
+                            "value": "light",
+                            "label": "Light"
+                        },
+                        {
+                            "value": "dark",
+                            "label": "Dark"
+                        },
+                        {
+                            "value": "primary",
+                            "label": "Primary"
+                        },
+                        {
+                            "value": "custom1",
+                            "label": "Custom color 1"
+                        },
+                        {
+                            "value": "custom2",
+                            "label": "Custom color 2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "presets": [
+        {
+            "name": "Contact form",
+            "blocks": [
+                { "type": "bl_form"},{ "type": "bl_info"}
+            ]
+        }
+    ]
+}
+{% endschema %}

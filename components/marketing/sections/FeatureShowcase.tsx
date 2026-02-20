@@ -10,7 +10,7 @@ import { StaggerText } from '@/components/marketing/interactions/StaggerText';
 const rows = [
   {
     label: 'AI ENGINE',
-    labelColor: 'text-sky-500',
+    labelColor: 'text-accent',
     headline: 'Watch AI write production-ready code',
     description:
       'Three specialized agents write, validate, and test Liquid templates in real-time. Context-aware, type-safe, and optimized for your theme.',
@@ -109,3 +109,4 @@ export function FeatureShowcase() {
     </section>
   );
 }
+

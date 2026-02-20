@@ -106,6 +106,7 @@ endcapture
     <div data-cacl-slide class="t4s-product-inner t4s-pr t4s-oh">
       {%- if image != blank %}{% render 'product-img', image: image, imgatt: imgatt %}{% endif -%}
       <div data-product-badge data-sort="sale,new,soldout,preOrder,custom" class="t4s-product-badge"></div>
+      {%- render 'sale-badge', product: product -%}
       <div class="t4s-product-btns2">
         {%- if isGrowaveWishlist -%} 
           {%- capture the_snippet_fave_icon %}{% render 'ssw-widget-faveicon' with pid %}{% endcapture -%}

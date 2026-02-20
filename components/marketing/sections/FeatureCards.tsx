@@ -79,14 +79,14 @@ function CodeMockup({ inView }: { inView: boolean }) {
   }, [visibleLines]);
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[280px] md:h-[400px] flex flex-col">
+    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[220px] sm:h-[280px] md:h-[400px] flex flex-col">
       <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5 shrink-0">
         <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
         <div className="w-2 h-2 rounded-full bg-[#febc2e]" />
         <div className="w-2 h-2 rounded-full bg-[#28c840]" />
         <span className="ml-3 text-[10px] text-stone-400 dark:text-white/40">hero-section.liquid</span>
       </div>
-      <div ref={codeScrollRef} className="flex-1 min-h-0 p-3 font-mono text-[10px] leading-5 overflow-y-auto">
+      <div ref={codeScrollRef} className="flex-1 min-h-0 p-3 font-mono text-[11px] sm:text-[10px] leading-5 overflow-y-auto">
         {CODE_CARD_LINES.slice(0, visibleLines).map((lineContent, i) => (
           <motion.div
             key={i}
@@ -149,7 +149,7 @@ function ContextMockup({ inView }: { inView: boolean }) {
         >
           <span className="text-purple-600 dark:text-cyan-400">{dep.from}</span>
           <span className="text-stone-300 dark:text-white/20">&rarr;</span>
-          <span className="text-blue-600 dark:text-sky-400">{dep.to}</span>
+          <span className="text-accent dark:text-accent">{dep.to}</span>
           <span className="ml-auto text-stone-300 dark:text-white/20 text-[8px]">{dep.type}</span>
         </motion.div>
       ))}
@@ -408,6 +408,13 @@ function RowDivider() {
 /*  Secondary feature: label + title + one line (no mockup)             */
 /* ------------------------------------------------------------------ */
 
+const CARD_GLOW_COLORS = [
+  '40,205,86',   // green — Context Intelligence
+  '59,130,246',  // blue — Shopify Sync
+  '168,85,247',  // purple — Version Control
+  '6,182,212',   // cyan — Liquid Intelligence
+];
+
 function SecondaryFeatureCard({
   card,
   inView,
@@ -417,22 +424,68 @@ function SecondaryFeatureCard({
   inView: boolean;
   index: number;
 }) {
+  const [tick, setTick] = useState(0);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!inView || started.current) return;
+    const staggerDelay = index * 400;
+    const timeout = setTimeout(() => {
+      started.current = true;
+      const id = setInterval(() => {
+        setTick((t) => { if (t > 50) { clearInterval(id); return t; } return t + 1; });
+      }, 30);
+    }, staggerDelay);
+    return () => clearTimeout(timeout);
+  }, [inView, index]);
+
+  const rgb = CARD_GLOW_COLORS[index % CARD_GLOW_COLORS.length];
+  const powerPct = Math.min(1, Math.max(0, (tick - 5) / 20));
+  const showGlow = tick > 5;
+
   return (
     <motion.div
-      className="p-5 md:p-6 border border-stone-200 dark:border-white/10 rounded-xl bg-[#fafaf9] dark:bg-[#111]"
+      className="relative rounded-xl"
       initial={{ opacity: 0, y: 12 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
       transition={{ duration: 0.4, delay: 0.2 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+      style={{
+        boxShadow: showGlow
+          ? `0 0 ${12 + powerPct * 20}px rgba(${rgb},${0.08 + powerPct * 0.15}), 0 0 ${40 + powerPct * 25}px rgba(${rgb},${powerPct * 0.06})`
+          : undefined,
+        transition: 'box-shadow 0.5s ease-out',
+      }}
     >
-      <span className="text-[10px] font-medium tracking-widest uppercase text-stone-400 dark:text-white/40">
-        {card.label}
-      </span>
-      <h3 className="text-base font-medium text-stone-900 dark:text-white mt-1.5">
-        {card.title}
-      </h3>
-      <p className="text-sm text-stone-500 dark:text-white/50 mt-1 leading-snug">
-        {card.description}
-      </p>
+      {showGlow && (
+        <div className="absolute -inset-px rounded-xl overflow-hidden pointer-events-none" aria-hidden="true">
+          <div
+            className="absolute"
+            style={{
+              width: '200%',
+              height: '200%',
+              top: '-50%',
+              left: '-50%',
+              background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(${rgb},0.5) 60deg, rgba(${rgb},0.7) 90deg, transparent 150deg, transparent 360deg)`,
+              animation: powerPct >= 1 ? 'prompt-border-spin 3s linear infinite' : undefined,
+              transform: `rotate(${powerPct * 360}deg)`,
+            }}
+          />
+          <div className="absolute inset-[1.5px] rounded-[10px] bg-[#fafaf9] dark:bg-[#111]" />
+        </div>
+      )}
+      <div
+        className={`relative p-5 md:p-6 rounded-xl bg-[#fafaf9] dark:bg-[#111] transition-colors duration-500 ${showGlow ? '' : 'border border-stone-200 dark:border-white/10'}`}
+      >
+        <span className="text-[10px] font-medium tracking-widest uppercase text-stone-400 dark:text-white/40">
+          {card.label}
+        </span>
+        <h3 className="text-base font-medium text-stone-900 dark:text-white mt-1.5">
+          {card.title}
+        </h3>
+        <p className="text-sm text-stone-500 dark:text-white/50 mt-1 leading-snug">
+          {card.description}
+        </p>
+      </div>
     </motion.div>
   );
 }
@@ -573,7 +626,7 @@ function FeatureSectionHeader({ inView }: { inView: boolean }) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24 pb-16">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 py-16 md:py-24 pb-16">
       {/* Badge */}
       <motion.span
         className="section-badge inline-block"
@@ -655,7 +708,7 @@ export function FeatureCards() {
       <RowDivider />
 
       {/* Secondary features: compact list, no mockups */}
-      <div className="max-w-6xl mx-auto px-8 md:px-10 py-12 md:py-16">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 py-12 md:py-16">
         <p className="text-sm font-medium text-stone-400 dark:text-white/40 uppercase tracking-wider mb-6">
           More from the platform
         </p>
@@ -673,3 +726,4 @@ export function FeatureCards() {
     </section>
   );
 }
+

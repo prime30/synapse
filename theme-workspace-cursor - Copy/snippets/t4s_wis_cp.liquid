@@ -1,0 +1,54 @@
+{%- liquid
+assign wishlist_mode = settings.wishlist_mode
+assign product_url   = product.url
+assign product_id    = product.id
+assign pr_handle     = product.handle
+unless disableTooltip
+ assign dataTooltip = ''
+else
+assign dataTooltip = '-no'
+endunless
+ -%}
+{%- if bk_stts.enable_wishlist -%}
+
+   {%- if wishlist_mode == "1" -%}
+        <a href="{{ product_url }}" data-tooltip{{ dataTooltip }}="top" data-id="{{ product_id }}" rel="nofollow" class="t4s-product-form__btn t4s-pr-wishlist" data-action-wishlist>
+         <span class="t4s-svg-pr-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </span>
+        <span class="t4s-text-pr">{{ 'products.product.add_to_wishlist' | t }}</span></a>
+   
+   {%- elsif wishlist_mode == "2" and shop.customer_accounts_enabled -%}
+        
+        {%- if customer -%}
+            <a href="{{ product_url }}" data-tooltip{{ dataTooltip }}="top" data-id="{{ product_id }}" data-handle="{{ pr_handle }}" rel="nofollow" class="t4s-product-form__btn t4s-pr-wishlist" data-action-wishlist>
+               <span class="t4s-svg-pr-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+               </span>
+               <span class="t4s-text-pr">{{ 'products.product.add_to_wishlist' | t }}</span>
+            </a>
+        {%- else -%}
+            <a href="{{ routes.account_login_url }}" data-tooltip{{ dataTooltip }}="top" rel="nofollow" class="t4s-product-form__btn t4s-pr-wishlist" data-action-wishlist-login>
+               <span class="t4s-svg-pr-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+               </span>
+               <span class="t4s-text-pr">{{ 'products.product.login_to_wishlist' | t }}</span>
+            </a>
+         {%- endif -%}
+
+   {%- elsif wishlist_mode == "3" and shop.customer_accounts_enabled -%}
+
+         {%- capture the_snippet_fave_icon %}{% render 'ssw-widget-faveicon' with product_id %}{% endcapture -%}
+         {%- unless the_snippet_fave_icon contains 'Liquid error' -%}<div class="t4s-product-form__btn t4s-pr-wishlist t4s-pr-growavewishlist">{{ the_snippet_fave_icon }}</div>{%- endunless -%}
+   
+   {%- endif -%}
+
+{%- endif -%}
+
+{%- if bk_stts.enable_compare and settings.enable_compe -%}
+   <a href="{{ product_url }}" data-tooltip{{ dataTooltip }}="top" data-id="{{ product_id }}" data-handle="{{ pr_handle }}" rel="nofollow" class="t4s-product-form__btn t4s-pr-compare" data-action-compare>
+      <span class="t4s-svg-pr-icon">
+         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </span>
+      <span class="t4s-text-pr">{{ 'products.product.compare' | t }}</span></a>
+{%- endif -%}

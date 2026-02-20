@@ -1,0 +1,73 @@
+# Auto-fix on CI failure: when Quality Gate fails, run Codex with workspace-write
+# to fix failing tests and open a PR. Requires OPENAI_API_KEY secret.
+name: Codex Auto-Fix on CI Failure
+
+on:
+  workflow_run:
+    workflows: ["Quality Gate"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      FAILED_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      FAILED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      FAILED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check OpenAI API Key
+        run: |
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "OPENAI_API_KEY secret is not set. Skipping auto-fix."
+            exit 0
+          fi
+
+      - name: Checkout failing commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FAILED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Codex to fix failures
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/autofix.md
+          output-file: codex-autofix-output.md
+          safety-strategy: drop-sudo
+          sandbox: workspace-write
+
+      - name: Verify tests
+        run: npm run test:run -- --coverage
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder' }}
+
+      - name: Create pull request with fixes
+        if: success()
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "fix(ci): auto-fix failing tests via Codex"
+          branch: codex/autofix-${{ github.event.workflow_run.run_id }}
+          base: ${{ env.FAILED_HEAD_BRANCH }}
+          title: "Auto-fix failing CI via Codex"
+          body: |
+            Codex generated this PR in response to a Quality Gate failure.
+            Failed run: ${{ env.FAILED_RUN_URL }}
+            Base branch: `${{ env.FAILED_HEAD_BRANCH }}`
+            Changes are minimal and intended to make the CI pass.

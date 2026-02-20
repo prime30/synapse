@@ -1,0 +1,33 @@
+{% comment %}
+  Renders a sale badge showing the discount percentage on product cards.
+  Respects the theme's use_sale_badge setting.
+
+  Accepts:
+  - product: {Object} Product Liquid object (required)
+  - variant: {Object} Variant Liquid object (optional, overrides product prices)
+
+  Usage:
+  {% render 'sale-badge', product: product %}
+  {% render 'sale-badge', product: product, variant: variant %}
+{% endcomment %}
+
+{%- if settings.use_sale_badge -%}
+  {%- liquid
+    if variant
+      assign sale_compare = variant.compare_at_price
+      assign sale_price = variant.price
+    else
+      assign sale_compare = product.compare_at_price
+      assign sale_price = product.price
+    endif
+
+    assign sale_discount = 0
+    if sale_compare > sale_price and sale_price > 0
+      assign sale_discount = sale_compare | minus: sale_price | times: 100 | divided_by: sale_compare
+    endif
+  -%}
+
+  {%- if sale_discount > 0 -%}
+    <span class="t4s-badge-item t4s-badge-sale t4s-sale-pct">-{{ sale_discount }}%</span>
+  {%- endif -%}
+{%- endif -%}

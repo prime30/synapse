@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { ContextMeterState, ContextStatus } from '@/hooks/useContextMeter';
+import { AGENT_BADGE_COLORS, formatAgentLabel } from '@/lib/agents/agent-colors';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,14 +79,7 @@ function BreakdownRow({ label, tokens, maxTokens }: { label: string; tokens: num
 // Per-agent breakdown (D3)
 // ---------------------------------------------------------------------------
 
-const AGENT_BADGE_COLORS: Record<string, string> = {
-  project_manager: 'bg-purple-500/20 text-purple-400',
-  liquid: 'bg-amber-500/20 text-amber-400',
-  css: 'bg-sky-500/20 text-sky-400',
-  javascript: 'bg-yellow-500/20 text-yellow-400',
-  json: 'bg-emerald-500/20 text-emerald-400',
-  review: 'bg-rose-500/20 text-rose-400',
-};
+// AGENT_BADGE_COLORS imported from @/lib/agents/agent-colors
 
 function AgentBreakdown({ agents }: { agents: Array<{ agentType: string; inputTokens: number; outputTokens: number }> }) {
   const [expanded, setExpanded] = useState(false);
@@ -108,7 +102,7 @@ function AgentBreakdown({ agents }: { agents: Array<{ agentType: string; inputTo
           {agents.map((a, i) => (
             <div key={i} className="flex items-center justify-between text-[11px]">
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${AGENT_BADGE_COLORS[a.agentType] ?? 'ide-surface-inset ide-text-muted'}`}>
-                {a.agentType.replace('_', ' ')}
+                {formatAgentLabel(a.agentType)}
               </span>
               <span className="ide-text-2 tabular-nums">
                 {formatTokens(a.inputTokens)} in / {formatTokens(a.outputTokens)} out

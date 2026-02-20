@@ -1,0 +1,55 @@
+{%- assign link = section.settings.link | default: routes.root_url -%}
+{%- assign link_txt = section.settings.link_txt -%}
+{%- assign image = section.settings.image -%}
+<div class="error-404-wrap t4s-text-center t4s-empty__page">
+	<div class="t4s-container">
+    {%- if image -%}
+      <div class="t4s-img t4s-pr t4s-oh">
+          <img class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+          <span class="lazyloadt4s-loader is-bg-img" style="background: url({{ image | image_url: width: 1 }});"></span>
+      </div>
+    {%- else -%} 
+      <h1 class="error-404-title">{{ 'templates.404.title' | t }}</h1>
+    {%- endif -%} 
+     <h3 class="error-404-subtext">{{ 'templates.404.subtext' | t }}</h3>
+     <p class="error-404-link">{{ 'templates.404.link_html' | t: link: link,link_txt: link_txt }}</p>
+	</div>
+</div>
+<style>
+.error-404.not-found h1{font-size: 140px;font-weight: 300;margin: 0 0 5px;}
+.error-404.not-found h3 {text-transform: capitalize;font-size: 30px;font-weight: 300; margin: 0 0 15px;}
+.error-404.not-found a {border-bottom: 1px solid;padding: 2px 0;color: var(--heading-color);}
+.error-404.not-found a:hover{color: var(--accent-color);}
+.error-404.not-found .t4s-img {margin-bottom: 50px;}
+@media(max-width:1024px){
+  .error-404.not-found h1{font-size: 80px;}
+  .error-404.not-found h3 {font-size: 24px;}
+}
+{%- if section.settings.link_txt != blank -%} {{ section.settings.link_txt }} {%- else -%} {{ 'templates.404.subtext' | t }} {%- endif -%}
+</style>
+
+{% schema %}
+{
+  "name": "404",
+  "tag": "section",
+  "class": "t4s-section t4s-section-main error-404 not-found t4s-pr t4s-oh",
+  "settings": [
+      {
+        "type": "image_picker",
+        "id": "image",
+        "label": "Image"
+      },
+      {
+        "type": "text",
+        "id": "link_txt",
+        "label": "Link Text",
+        "default": "Home page"
+      },
+      {
+        "type": "url",
+        "id": "link",
+        "label": "Link Button" 
+      }
+  ]
+}
+{% endschema %}

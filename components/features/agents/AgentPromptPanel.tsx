@@ -2,12 +2,15 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { ChatInterface } from '@/components/ai-sidebar/ChatInterface';
+import type { ContentBlock } from '@/components/ai-sidebar/ChatInterface';
 import type { ThinkingStep } from '@/components/ai-sidebar/ThinkingBlock';
 import { ContextPanel } from '@/components/ai-sidebar/ContextPanel';
 import { SessionSidebar } from '@/components/ai-sidebar/SessionSidebar';
+import { TrainingReviewPanel } from '@/components/ai-sidebar/TrainingReviewPanel';
+import { PromptTemplateLibrary } from '@/components/ai-sidebar/PromptTemplateLibrary';
 import type { AISidebarContextValue } from '@/hooks/useAISidebar';
 import { useAgentChat } from '@/hooks/useAgentChat';
-import { useAgentSettings } from '@/hooks/useAgentSettings';
+import { useAgentSettings, type IntentMode } from '@/hooks/useAgentSettings';
 import { usePinnedPreferences } from '@/hooks/usePinnedPreferences';
 import { useStyleProfile } from '@/hooks/useStyleProfile';
 import { mapCoordinatorPhase } from '@/lib/agents/phase-mapping';
@@ -113,7 +116,37 @@ interface SSEWorkerProgressEvent {
   metadata?: Record<string, unknown>;
 }
 
-type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent;
+interface SSEReasoningEvent {
+  type: 'reasoning';
+  agent: string;
+  text: string;
+}
+
+interface SSEActiveModelEvent {
+  type: 'active_model';
+  model: string;
+}
+
+interface SSERateLimitedEvent {
+  type: 'rate_limited';
+  originalModel: string;
+  fallbackModel: string;
+}
+
+interface SSEChangePreviewEvent {
+  type: 'change_preview';
+  executionId: string;
+  projectId: string;
+  changes: {
+    fileId: string;
+    fileName: string;
+    originalContent: string;
+    proposedContent: string;
+    reasoning: string;
+  }[];
+}
+
+type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -123,13 +156,13 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   AUTH_ERROR: 'AI is not configured. Please ask your admin to add API keys in Settings.',
   MODEL_UNAVAILABLE: 'The selected AI model is currently unavailable. Try switching to a different model.',
   NETWORK_ERROR: 'Connection lost. Check your internet and try again.',
-  TIMEOUT: 'The AI took too long to respond. Try a simpler request or switch to Solo mode.',
+  TIMEOUT: 'The AI took too long to respond. Try a simpler request or try with a single agent (1x).',
   EMPTY_RESPONSE: 'The AI returned an empty response. Try again or rephrase your message.',
   PARSE_ERROR: 'Received an unexpected response from the AI. Please try again.',
   PROVIDER_ERROR: 'The AI service is experiencing issues. Please try again in a moment.',
   QUOTA_EXCEEDED: 'Your AI usage quota has been reached. Please upgrade your plan or wait for the quota to reset.',
   CONTEXT_TOO_LARGE: 'Request was too large. Retrying with reduced context...',
-  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or switch to Team mode.',
+  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or try with more agents.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 
@@ -145,7 +178,9 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
       parsed.type === 'thinking' || parsed.type === 'context_stats' ||
       parsed.type === 'tool_start' || parsed.type === 'tool_call' ||
       parsed.type === 'cache_stats' || parsed.type === 'citation' ||
-      parsed.type === 'diagnostics' || parsed.type === 'worker_progress'
+      parsed.type === 'diagnostics' || parsed.type === 'worker_progress' ||
+      parsed.type === 'reasoning' || parsed.type === 'active_model' ||
+      parsed.type === 'rate_limited' || parsed.type === 'change_preview'
     ) {
       return parsed as SSEEvent;
     }
@@ -241,9 +276,9 @@ function formatElementContext(el: SelectedElement): string {
   const sectionId = attrs['data-section-id'];
   const sectionType = attrs['data-section-type'];
   const blockId = attrs['data-block-id'];
-  if (sectionId) parts.push(`Section: ${sectionId}`);
+  if (sectionId) parts.push(`Section ID: ${sectionId}`);
   if (sectionType) parts.push(`Section type: ${sectionType}`);
-  if (blockId) parts.push(`Block: ${blockId}`);
+  if (blockId) parts.push(`Block ID: ${blockId}`);
 
   if (!sectionId) {
     const m = el.selector?.match(/#shopify-section-([^\s>.]+)/);
@@ -408,7 +443,7 @@ export function AgentPromptPanel({
     forkSession,
   } = useAgentChat(projectId);
 
-  const { mode, model, intentMode, verbose, setMode, setModel, setIntentMode, setVerbose } = useAgentSettings();
+  const { specialistMode, model, intentMode, maxAgents, verbose, setSpecialistMode, setModel, setIntentMode, setMaxAgents, setVerbose } = useAgentSettings();
   const pinnedPrefs = usePinnedPreferences(projectId);
   const { styleGuide } = useStyleProfile(projectId);
 
@@ -428,6 +463,7 @@ export function AgentPromptPanel({
   const [lastTrimmedCount, setLastTrimmedCount] = useState(0);
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
   const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
+  const [trainingPanelOpen, setTrainingPanelOpen] = useState(false);
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
 
@@ -449,6 +485,16 @@ export function AgentPromptPanel({
   // Content debounce refs
   const contentBufferRef = useRef<string>('');
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Mode-switch auto-submit: when the user clicks "Switch to Code mode" button,
+  // the intent mode changes. This ref stores the pending auto-submit message so a
+  // useEffect can fire onSend after the mode state has propagated.
+  const pendingModeSwitchSend = useRef<string | null>(null);
+
+  // ── Cursor-style content blocks ──────────────────────────────────────
+  const blocksRef = useRef<ContentBlock[]>([]);
+  const thinkingStartedAtRef = useRef<number>(0);
+  const reasoningDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Suggestion generation ───────────────────────────────────────────────
 
@@ -499,6 +545,142 @@ export function AgentPromptPanel({
     return responseSuggestions.filter((s) => s.id !== 'post-retry-context');
   }, [responseSuggestions]);
 
+  // ── Cursor-style block helpers ─────────────────────────────────────────
+
+  function getToolLoadingLabel(toolName: string, input: Record<string, unknown>): string {
+    switch (toolName) {
+      case 'propose_plan': return 'Proposing plan...';
+      case 'propose_code_edit': return `Editing ${(input.filePath as string) ?? 'file'}...`;
+      case 'search_replace': return `Editing ${(input.filePath as string) ?? 'file'}...`;
+      case 'ask_clarification': return 'Asking for clarification...';
+      case 'create_file': return `Creating ${(input.fileName as string) ?? 'file'}...`;
+      case 'navigate_preview': return `Navigating to ${(input.path as string) ?? '/'}...`;
+      case 'write_file': return `Writing ${(input.fileName as string) ?? 'file'}...`;
+      case 'delete_file': return `Deleting ${(input.fileName as string) ?? 'file'}...`;
+      case 'rename_file': return `Renaming ${(input.fileName as string) ?? 'file'}...`;
+      case 'push_to_shopify': return 'Pushing to Shopify...';
+      case 'pull_from_shopify': return 'Pulling from Shopify...';
+      case 'list_themes': return 'Listing themes...';
+      case 'list_store_resources': case 'list_resources': return 'Listing resources...';
+      case 'get_shopify_asset': case 'get_asset': return 'Getting asset...';
+      case 'screenshot_preview': return 'Taking screenshot...';
+      case 'compare_screenshots': return 'Comparing screenshots...';
+      // PM exploration tools
+      case 'read_file': return `Reading ${(input.fileId as string) ?? 'file'}...`;
+      case 'search_files': return `Searching for "${(input.query as string) ?? ''}"...`;
+      case 'grep_content': return `Searching for "${(input.pattern as string) ?? ''}"...`;
+      case 'check_lint': return `Checking ${(input.fileName as string) ?? 'file'}...`;
+      case 'list_files': return 'Listing files...';
+      case 'get_dependency_graph': return `Getting deps for ${(input.fileId as string) ?? 'file'}...`;
+      default: return `Running ${toolName}...`;
+    }
+  }
+
+  function getToolDoneLabel(toolName: string, input: Record<string, unknown>): string {
+    switch (toolName) {
+      case 'propose_plan': return 'Proposed plan';
+      case 'propose_code_edit': return `Edited ${(input.filePath as string) ?? 'file'}`;
+      case 'search_replace': return `Edited ${(input.filePath as string) ?? 'file'}`;
+      case 'ask_clarification': return 'Asked for clarification';
+      case 'create_file': return `Created ${(input.fileName as string) ?? 'file'}`;
+      case 'navigate_preview': return `Navigated to ${(input.path as string) ?? '/'}`;
+      case 'write_file': return `Wrote ${(input.fileName as string) ?? 'file'}`;
+      case 'delete_file': return `Deleted ${(input.fileName as string) ?? 'file'}`;
+      case 'rename_file': return `Renamed ${(input.fileName as string) ?? 'file'}`;
+      case 'push_to_shopify': return 'Pushed to Shopify';
+      case 'pull_from_shopify': return 'Pulled from Shopify';
+      case 'list_themes': return 'Listed themes';
+      case 'list_store_resources': case 'list_resources': return 'Listed resources';
+      case 'get_shopify_asset': case 'get_asset': return 'Got asset';
+      case 'screenshot_preview': return 'Took screenshot';
+      case 'compare_screenshots': return 'Compared screenshots';
+      // PM exploration tools
+      case 'read_file': return `Read ${(input.fileId as string) ?? 'file'}`;
+      case 'search_files': return `Found results for "${(input.query as string) ?? ''}"`;
+      case 'grep_content': return `Found matches for "${(input.pattern as string) ?? ''}"`;
+      case 'check_lint': {
+        const name = (input.fileName as string) ?? 'file';
+        return `Checked ${name}`;
+      }
+      case 'list_files': return 'Listed files';
+      case 'get_dependency_graph': return `Got deps for ${(input.fileId as string) ?? 'file'}`;
+      default: return `Ran ${toolName}`;
+    }
+  }
+
+  function getToolSubtitle(toolName: string, input: Record<string, unknown>): string | undefined {
+    switch (toolName) {
+      case 'propose_plan': return (input.title as string) ?? undefined;
+      case 'propose_code_edit': return (input.reasoning as string)?.slice(0, 80) ?? undefined;
+      case 'search_replace': return (input.reasoning as string)?.slice(0, 80) ?? undefined;
+      case 'ask_clarification': return (input.question as string)?.slice(0, 80) ?? undefined;
+      case 'rename_file': return (input.newFileName as string) ?? undefined;
+      case 'push_to_shopify': case 'pull_from_shopify': return (input.reason as string) ?? undefined;
+      // PM exploration tools
+      case 'read_file': return (input.fileId as string) ?? undefined;
+      case 'search_files': return (input.query as string) ?? undefined;
+      case 'grep_content': return (input.pattern as string) ?? undefined;
+      case 'check_lint': return (input.fileName as string) ?? undefined;
+      case 'get_dependency_graph': return (input.fileId as string) ?? undefined;
+      default: return undefined;
+    }
+  }
+
+  type ToolCardType = Extract<ContentBlock, { type: 'tool_action' }>['cardType'];
+
+  function getToolCardType(toolName: string): ToolCardType {
+    const map: Record<string, ToolCardType> = {
+      propose_plan: 'plan',
+      propose_code_edit: 'code_edit',
+      search_replace: 'code_edit',
+      ask_clarification: 'clarification',
+      create_file: 'file_create',
+      navigate_preview: 'preview_nav',
+      write_file: 'file_op',
+      delete_file: 'file_op',
+      rename_file: 'file_op',
+      push_to_shopify: 'shopify_op',
+      pull_from_shopify: 'shopify_op',
+      list_themes: 'shopify_op',
+      list_store_resources: 'shopify_op',
+      get_shopify_asset: 'shopify_op',
+      screenshot_preview: 'screenshot',
+      compare_screenshots: 'screenshot_comparison',
+    };
+    return map[toolName] ?? undefined;
+  }
+
+  function flushContentBuffer() {
+    const text = contentBufferRef.current;
+    if (text.length === 0) return;
+    const blocks = blocksRef.current;
+    const lastBlock = blocks[blocks.length - 1];
+    if (lastBlock?.type === 'text') {
+      lastBlock.text += text;
+    } else {
+      blocks.push({ type: 'text', id: crypto.randomUUID(), text });
+    }
+    contentBufferRef.current = '';
+  }
+
+  function finalizeBlocks() {
+    const blocks = blocksRef.current;
+    // Mark thinking done
+    const thinkingBlock = blocks.find(b => b.type === 'thinking' && !b.done);
+    if (thinkingBlock && thinkingBlock.type === 'thinking') {
+      thinkingBlock.done = true;
+      thinkingBlock.elapsedMs = thinkingBlock.startedAt ? Date.now() - thinkingBlock.startedAt : 0;
+    }
+    // Mark orphaned loading tools as done
+    for (const b of blocks) {
+      if (b.type === 'tool_action' && b.status === 'loading') {
+        b.status = 'done';
+      }
+    }
+    // Flush any remaining content
+    flushContentBuffer();
+  }
+
   // ── Send handler ────────────────────────────────────────────────────────
 
   const onSend = useCallback(
@@ -520,6 +702,8 @@ export function AgentPromptPanel({
       lastPromptRef.current = content;
       thinkingStepsRef.current = [];
       workersRef.current = [];
+      blocksRef.current = [];
+      thinkingStartedAtRef.current = 0;
       // Reset stall detection
       lastSSEEventTimeRef.current = Date.now();
       stallWarningEmittedRef.current = false;
@@ -624,9 +808,45 @@ export function AgentPromptPanel({
       setLastTrimmedCount(trimmedCount);
       setLastHistorySummary(historySummary || undefined);
 
-      const requestWithContext = historySummary
+      let requestWithContext = historySummary
         ? `[Context from earlier conversation]:\n${historySummary}\n\n${enrichedContent}`
         : enrichedContent;
+
+      // ── Vague reference hint ─────────────────────────────────────────────
+      // When the user says something like "apply that code" or "do it", and
+      // there's code from earlier in the conversation, surface it explicitly
+      // so the coordinator doesn't have to search through history itself.
+      // (All modes now run through the same coordinator pipeline with full
+      // history, so this is just a convenience hint, not a recovery mechanism.)
+      if (messages.length >= 2) {
+        const userMsg = enrichedContent.trim();
+        const isVagueReference = /^(yes|ok|do it|go ahead|apply|implement|implement the code changes you just suggested)[\s.!]*$/i.test(userMsg)
+          || /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(userMsg)
+          || /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(userMsg);
+
+        if (isVagueReference) {
+          // Find most recent assistant message with code blocks
+          for (const msg of [...messages].reverse()) {
+            if (msg.role !== 'assistant') continue;
+            const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+            const blocks: string[] = [];
+            let match;
+            while ((match = codeBlockRegex.exec(msg.content)) !== null) {
+              const code = match[2].trim();
+              if (code.length > 0) blocks.push(`[${match[1] || 'code'}]\n${code}`);
+            }
+            if (blocks.length > 0) {
+              requestWithContext = `[The user is referencing code from earlier in this conversation. Apply it directly.]\n\nCode:\n${blocks.join('\n\n')}\n\nUser: "${userMsg}"`;
+              break;
+            }
+            if (msg.codeEdits && msg.codeEdits.length > 0) {
+              const edits = msg.codeEdits.map((e) => `[${e.filePath}]\n${e.newContent}`).join('\n\n');
+              requestWithContext = `[The user is referencing code edits from earlier. Apply them directly.]\n\nEdits:\n${edits}\n\nUser: "${userMsg}"`;
+              break;
+            }
+          }
+        }
+      }
 
       // Display user message with selected-code as a line-number pill (collapsed by default), not raw code
       const displayContent =
@@ -666,7 +886,11 @@ export function AgentPromptPanel({
         // Extract element hint for smart file auto-selection on the server
         const elementHint = extractElementHint(selectedElement);
 
-        const res = await fetch('/api/agents/stream', {
+        // V2 agent architecture: single-stream tool-calling loop (no Summary phase)
+        const useV2 = process.env.NEXT_PUBLIC_ENABLE_V2_AGENT === 'true';
+        const streamEndpoint = useV2 ? '/api/agents/stream/v2' : '/api/agents/stream';
+
+        const res = await fetch(streamEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -677,9 +901,10 @@ export function AgentPromptPanel({
             openTabs: openTabIds ?? undefined,
             domContext: domContext || undefined,
             elementHint: elementHint || undefined,
-            mode,          // EPIC 1c: agent mode (orchestrated/solo)
-            model,         // EPIC 1c: user model preference
-            intentMode,    // Intent mode: ask/plan/code/debug
+            subagentCount: maxAgents, // Cursor-style subagent count (1x-4x)
+            specialistMode,           // Whether to use domain specialists
+            model,                    // User model preference
+            intentMode,               // Intent mode: ask/plan/code/debug
             explicitFiles: attachedFilesRef.current.length > 0
               ? attachedFilesRef.current.map((f) => f.path)
               : undefined,
@@ -724,31 +949,41 @@ export function AgentPromptPanel({
           const elapsed = (Date.now() - lastSSEEventTimeRef.current) / 1000;
           if (elapsed >= 120 && !stallAlertEmittedRef.current) {
             stallAlertEmittedRef.current = true;
+            const stallMsg = 'This is taking unusually long. You can Stop and retry.';
             const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
             steps.push({
               phase: 'budget_warning' as const,
-              label: 'This is taking unusually long. You can Stop and retry.',
+              label: stallMsg,
               done: false,
               startedAt: Date.now(),
             });
             thinkingStepsRef.current = steps;
+            // Block building: append stall to thinking
+            const tb = blocksRef.current.find(b => b.type === 'thinking');
+            if (tb && tb.type === 'thinking') tb.reasoningText += `\n${stallMsg}`;
             updateMessage(assistantMsgId, streamedContent, {
               thinkingSteps: [...steps],
               thinkingComplete: false,
+              blocks: blocksRef.current.length > 0 ? [...blocksRef.current] : undefined,
             });
-          } else if (elapsed >= 60 && !stallWarningEmittedRef.current) {
+          } else if (elapsed >= 90 && !stallWarningEmittedRef.current) {
             stallWarningEmittedRef.current = true;
+            const stallMsg = 'Taking longer than expected...';
             const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
             steps.push({
               phase: 'analyzing' as const,
-              label: 'Taking longer than expected...',
+              label: stallMsg,
               done: false,
               startedAt: Date.now(),
             });
             thinkingStepsRef.current = steps;
+            // Block building: append stall to thinking
+            const tb = blocksRef.current.find(b => b.type === 'thinking');
+            if (tb && tb.type === 'thinking') tb.reasoningText += `\n${stallMsg}`;
             updateMessage(assistantMsgId, streamedContent, {
               thinkingSteps: [...steps],
               thinkingComplete: false,
+              blocks: blocksRef.current.length > 0 ? [...blocksRef.current] : undefined,
             });
           }
         }, 10_000);
@@ -767,21 +1002,77 @@ export function AgentPromptPanel({
               stallWarningEmittedRef.current = false;
               stallAlertEmittedRef.current = false;
 
+              // Handle change_preview: batch code changes awaiting approval
+              if (sseEvent.type === 'change_preview') {
+                if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
+                flushContentBuffer();
+                blocksRef.current.push({
+                  type: 'tool_action',
+                  id: crypto.randomUUID(),
+                  toolId: 'change_preview',
+                  toolName: 'change_preview',
+                  label: `${sseEvent.changes.length} file${sseEvent.changes.length !== 1 ? 's' : ''} ready for review`,
+                  status: 'done',
+                  cardType: 'change_preview',
+                  cardData: {
+                    executionId: sseEvent.executionId,
+                    projectId: sseEvent.projectId,
+                    changes: sseEvent.changes,
+                  },
+                });
+                updateMessage(assistantMsgId, streamedContent, {
+                  blocks: [...blocksRef.current],
+                });
+                continue;
+              }
               if (sseEvent.type === 'done') {
                 receivedDone = true;
                 // Mark thinking complete and enable input immediately so UX updates without waiting for stream close
                 thinkingComplete = true;
                 const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
                 thinkingStepsRef.current = steps;
+                // Finalize blocks
+                finalizeBlocks();
                 updateMessage(assistantMsgId, streamedContent, {
                   thinkingSteps: steps.length > 0 ? [...steps] : undefined,
                   thinkingComplete: true,
+                  blocks: [...blocksRef.current],
                 });
                 setIsLoading(false);
                 continue;
               }
               if (sseEvent.type === 'error') {
                 receivedError = sseEvent;
+                // Mark any loading tool action as error in blocks
+                const loadingBlock = blocksRef.current.findLast(
+                  (b: ContentBlock) => b.type === 'tool_action' && b.status === 'loading'
+                );
+                if (loadingBlock && loadingBlock.type === 'tool_action') {
+                  loadingBlock.status = 'error';
+                  loadingBlock.error = sseEvent.message;
+                } else {
+                  // Append error as text block
+                  flushContentBuffer();
+                  blocksRef.current.push({
+                    type: 'text', id: crypto.randomUUID(),
+                    text: `\n\n---\n⚠️ **Error:** ${sseEvent.message}`,
+                  });
+                }
+                continue;
+              }
+              // Handle active_model SSE event — show which model is being used
+              if (sseEvent.type === 'active_model') {
+                updateMessage(assistantMsgId, streamedContent, {
+                  activeModel: sseEvent.model,
+                });
+                continue;
+              }
+              // Handle rate_limited SSE event — flag rate limit + update active model
+              if (sseEvent.type === 'rate_limited') {
+                updateMessage(assistantMsgId, streamedContent, {
+                  rateLimitHit: true,
+                  activeModel: sseEvent.fallbackModel,
+                });
                 continue;
               }
               // Handle context_stats SSE event for accurate ContextMeter
@@ -799,6 +1090,21 @@ export function AgentPromptPanel({
               if (sseEvent.type === 'tool_start') {
                 updateMessage(assistantMsgId, streamedContent, {
                   activeToolCall: { name: sseEvent.name, id: sseEvent.id },
+                });
+                // Block building: flush content, add loading tool_action
+                if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
+                flushContentBuffer();
+                blocksRef.current.push({
+                  type: 'tool_action',
+                  id: sseEvent.id,
+                  toolId: sseEvent.id,
+                  toolName: sseEvent.name,
+                  label: getToolLoadingLabel(sseEvent.name, {}),
+                  status: 'loading',
+                });
+                updateMessage(assistantMsgId, streamedContent, {
+                  activeToolCall: { name: sseEvent.name, id: sseEvent.id },
+                  blocks: [...blocksRef.current],
                 });
                 continue;
               }
@@ -819,10 +1125,23 @@ export function AgentPromptPanel({
                       steps: (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ?? [],
                     },
                   });
-                } else if (toolName === 'propose_code_edit') {
+                } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
                   const editFilePath = (input.filePath as string) ?? '';
-                  const editNewContent = (input.newContent as string) ?? '';
                   const originalFileContent = resolveFileContent?.(editFilePath) ?? undefined;
+                  // Compute full new content: propose_code_edit provides it directly,
+                  // search_replace computes it by applying old_text -> new_text replacement.
+                  let editNewContent: string;
+                  if (toolName === 'search_replace') {
+                    const oldText = (input.old_text as string) ?? '';
+                    const newText = (input.new_text as string) ?? '';
+                    const base = originalFileContent ?? '';
+                    const idx = base.indexOf(oldText);
+                    editNewContent = idx !== -1
+                      ? base.slice(0, idx) + newText + base.slice(idx + oldText.length)
+                      : base;
+                  } else {
+                    editNewContent = (input.newContent as string) ?? '';
+                  }
                   accumulatedCodeEdits = [
                     ...accumulatedCodeEdits,
                     {
@@ -947,6 +1266,117 @@ export function AgentPromptPanel({
                   // Unknown tool — just clear the loading state
                   updateMessage(assistantMsgId, streamedContent, clearActive);
                 }
+
+                // ── Block building: update matching tool_action block ──
+                {
+                  const matchIdx = blocksRef.current.findLastIndex(
+                    (b: ContentBlock) => b.type === 'tool_action' && b.toolName === toolName && b.status === 'loading'
+                  );
+                  const cardType = getToolCardType(toolName);
+                  const doneLabel = getToolDoneLabel(toolName, input as Record<string, unknown>);
+                  const subtitle = getToolSubtitle(toolName, input as Record<string, unknown>);
+                  // Build card data from the existing accumulated data
+                  let cardData: unknown = undefined;
+                  if (toolName === 'propose_plan') {
+                    cardData = {
+                      title: (input.title as string) ?? 'Plan',
+                      description: (input.description as string) ?? '',
+                      steps: (input.steps as unknown[]) ?? [],
+                    };
+                  } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
+                    const editFilePath_ = (input.filePath as string) ?? '';
+                    const origContent_ = resolveFileContent?.(editFilePath_) ?? undefined;
+                    let newContent_: string;
+                    if (toolName === 'search_replace') {
+                      const oldT = (input.old_text as string) ?? '';
+                      const newT = (input.new_text as string) ?? '';
+                      const base_ = origContent_ ?? '';
+                      const idx_ = base_.indexOf(oldT);
+                      newContent_ = idx_ !== -1
+                        ? base_.slice(0, idx_) + newT + base_.slice(idx_ + oldT.length)
+                        : base_;
+                    } else {
+                      newContent_ = (input.newContent as string) ?? '';
+                    }
+                    cardData = {
+                      filePath: editFilePath_,
+                      reasoning: input.reasoning as string | undefined,
+                      newContent: newContent_,
+                      originalContent: origContent_,
+                      status: 'pending' as const,
+                    };
+                  } else if (toolName === 'ask_clarification') {
+                    cardData = {
+                      question: (input.question as string) ?? '',
+                      options: (input.options as unknown[]) ?? [],
+                      allowMultiple: input.allowMultiple as boolean | undefined,
+                    };
+                  } else if (toolName === 'create_file') {
+                    cardData = {
+                      fileName: (input.fileName as string) ?? '',
+                      content: (input.content as string) ?? '',
+                      reasoning: input.reasoning as string | undefined,
+                      status: 'pending' as const,
+                    };
+                  } else if (toolName === 'write_file' || toolName === 'delete_file' || toolName === 'rename_file') {
+                    const opType = toolName.replace('_file', '') as 'write' | 'delete' | 'rename';
+                    cardData = {
+                      type: opType,
+                      fileName: (input.fileName as string) ?? '',
+                      success: true,
+                      newFileName: toolName === 'rename_file' ? (input.newFileName as string) : undefined,
+                    };
+                  } else if (toolName === 'push_to_shopify' || toolName === 'pull_from_shopify' || toolName === 'list_themes' || toolName === 'list_store_resources' || toolName === 'get_shopify_asset') {
+                    const shopifyType = ({
+                      push_to_shopify: 'push',
+                      pull_from_shopify: 'pull',
+                      list_themes: 'list_themes',
+                      list_store_resources: 'list_resources',
+                      get_shopify_asset: 'get_asset',
+                    } as const)[toolName];
+                    cardData = {
+                      type: shopifyType,
+                      status: 'success' as const,
+                      summary: (input.reason as string) ?? `${shopifyType} completed`,
+                    };
+                  } else if (toolName === 'screenshot_preview') {
+                    cardData = { url: (input.path as string) ?? '/', path: (input.path as string) ?? '/' };
+                  } else if (toolName === 'compare_screenshots') {
+                    cardData = {
+                      beforeUrl: (input.beforeUrl as string) ?? '',
+                      afterUrl: (input.afterUrl as string) ?? '',
+                      threshold: (input.threshold as number) ?? 2.0,
+                    };
+                  }
+
+                  if (matchIdx >= 0) {
+                    const b = blocksRef.current[matchIdx];
+                    if (b.type === 'tool_action') {
+                      b.status = 'done';
+                      b.label = doneLabel;
+                      b.subtitle = subtitle;
+                      b.cardType = cardType;
+                      b.cardData = cardData;
+                    }
+                  } else {
+                    // Fallback: no matching tool_start, create done block directly
+                    blocksRef.current.push({
+                      type: 'tool_action',
+                      id: crypto.randomUUID(),
+                      toolId: toolName,
+                      toolName,
+                      label: doneLabel,
+                      subtitle,
+                      status: 'done',
+                      cardType,
+                      cardData,
+                    });
+                  }
+                  updateMessage(assistantMsgId, streamedContent, {
+                    ...clearActive,
+                    blocks: [...blocksRef.current],
+                  });
+                }
                 continue;
               }
               // Handle cache_stats event
@@ -1017,33 +1447,53 @@ export function AgentPromptPanel({
                 continue;
               }
               if (sseEvent.type === 'thinking') {
-                // Mark previous steps as done
-                const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
-                // Add new step with startedAt timestamp
                 const metadata = sseEvent.metadata as Record<string, unknown> | undefined;
                 const rawTier = metadata?.routingTier as string | undefined;
                 const validTier = rawTier && ['TRIVIAL', 'SIMPLE', 'COMPLEX', 'ARCHITECTURAL'].includes(rawTier)
                   ? rawTier as 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL'
                   : undefined;
-                const newStep = {
-                  phase: sseEvent.phase,
-                  label: sseEvent.label,
-                  detail: sseEvent.detail,
-                  agent: sseEvent.agent,
-                  analysis: sseEvent.analysis,
-                  summary: sseEvent.summary,
-                  done: sseEvent.phase === 'complete',
-                  startedAt: Date.now(),
-                  // Extract routing tier metadata from smart routing events
-                  routingTier: validTier,
-                  model: metadata?.model as string | undefined,
-                  // Phase mapping for progress rail
-                  railPhase: mapCoordinatorPhase(sseEvent.phase),
-                  subPhase: (sseEvent.subPhase ?? undefined) as ThinkingStep['subPhase'],
-                  // Rich metadata for deep-link rendering
-                  metadata: metadata as ThinkingStep['metadata'],
-                };
-                steps.push(newStep);
+                const incomingRail = mapCoordinatorPhase(sseEvent.phase);
+
+                // ── Consolidation: reduce noise by merging related events ──
+                const steps = [...thinkingStepsRef.current];
+                const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+                const isHeartbeat = sseEvent.label?.startsWith('Still ');
+                const samePhase = lastStep && !lastStep.done && incomingRail === lastStep.railPhase;
+                const hasTierEscalation = !!validTier;
+
+                if (isHeartbeat && lastStep && !lastStep.done) {
+                  // Heartbeat: update detail on current step, don't add a row
+                  lastStep.detail = sseEvent.detail ?? lastStep.detail;
+                } else if (samePhase && !hasTierEscalation && sseEvent.phase !== 'complete' && sseEvent.phase !== 'clarification') {
+                  // Same-phase continuation (retry, context reduction, etc.):
+                  // replace the current step's label/detail in-place
+                  lastStep!.label = sseEvent.label ?? lastStep!.label;
+                  lastStep!.detail = sseEvent.detail;
+                  if (sseEvent.agent) lastStep!.agent = sseEvent.agent;
+                  if (sseEvent.analysis) lastStep!.analysis = sseEvent.analysis;
+                  if (sseEvent.summary) lastStep!.summary = sseEvent.summary;
+                  if (sseEvent.subPhase) lastStep!.subPhase = sseEvent.subPhase as ThinkingStep['subPhase'];
+                  if (metadata) lastStep!.metadata = metadata as ThinkingStep['metadata'];
+                } else {
+                  // Phase transition or tier escalation: mark previous done, add new step
+                  for (const s of steps) s.done = true;
+                  steps.push({
+                    phase: sseEvent.phase,
+                    label: sseEvent.label,
+                    detail: sseEvent.detail,
+                    agent: sseEvent.agent,
+                    analysis: sseEvent.analysis,
+                    summary: sseEvent.summary,
+                    done: sseEvent.phase === 'complete',
+                    startedAt: Date.now(),
+                    routingTier: validTier,
+                    model: metadata?.model as string | undefined,
+                    railPhase: incomingRail,
+                    subPhase: (sseEvent.subPhase ?? undefined) as ThinkingStep['subPhase'],
+                    metadata: metadata as ThinkingStep['metadata'],
+                  });
+                }
+
                 thinkingStepsRef.current = steps;
                 if (sseEvent.phase === 'complete') thinkingComplete = true;
 
@@ -1109,11 +1559,76 @@ export function AgentPromptPanel({
                   onAgentActivity?.({ agentType: null, filePath: null, liveContent: null });
                 }
 
+                // ── Block building: create or update thinking block ──
+                {
+                  const existingThinking = blocksRef.current.find(b => b.type === 'thinking');
+                  if (!existingThinking) {
+                    thinkingStartedAtRef.current = Date.now();
+                    blocksRef.current.unshift({
+                      type: 'thinking',
+                      id: crypto.randomUUID(),
+                      startedAt: thinkingStartedAtRef.current,
+                      reasoningText: '',
+                      done: sseEvent.phase === 'complete',
+                      elapsedMs: 0,
+                    });
+                  } else if (existingThinking.type === 'thinking' && sseEvent.phase === 'complete') {
+                    existingThinking.done = true;
+                    existingThinking.elapsedMs = Date.now() - existingThinking.startedAt;
+                  }
+                  // Heartbeats ("Still generating...", "Still working...") are silently
+                  // consumed — the pulsing "Thinking..." label + elapsed counter already
+                  // communicate activity. Only the stall detection timer (90s/120s)
+                  // appends advisory text.
+                }
+
                 // Update message with thinking steps
                 updateMessage(assistantMsgId, streamedContent, {
                   thinkingSteps: [...steps],
                   thinkingComplete,
+                  blocks: [...blocksRef.current],
                 });
+                continue;
+              }
+
+              // Reasoning chunks: live LLM output streamed token-by-token.
+              // Append to the latest thinking step's reasoning field so the UI
+              // can show a collapsible live-text view per agent.
+              if (sseEvent.type === 'reasoning') {
+                const steps = thinkingStepsRef.current;
+                if (steps.length > 0) {
+                  const last = steps[steps.length - 1];
+                  last.reasoning = (last.reasoning ?? '') + sseEvent.text;
+                  last.reasoningAgent = sseEvent.agent;
+                  thinkingStepsRef.current = [...steps];
+                  updateMessage(assistantMsgId, streamedContent, {
+                    thinkingSteps: [...thinkingStepsRef.current],
+                  });
+                }
+                // Block building: append reasoning text to thinking block (debounced at 50ms)
+                {
+                  const tb = blocksRef.current.find(b => b.type === 'thinking');
+                  if (tb && tb.type === 'thinking') {
+                    tb.reasoningText += sseEvent.text;
+                  } else {
+                    // No thinking block yet — create one
+                    thinkingStartedAtRef.current = Date.now();
+                    blocksRef.current.unshift({
+                      type: 'thinking',
+                      id: crypto.randomUUID(),
+                      startedAt: thinkingStartedAtRef.current,
+                      reasoningText: sseEvent.text,
+                      done: false,
+                      elapsedMs: 0,
+                    });
+                  }
+                  if (reasoningDebounceRef.current) clearTimeout(reasoningDebounceRef.current);
+                  reasoningDebounceRef.current = setTimeout(() => {
+                    updateMessage(assistantMsgId, streamedContent, {
+                      blocks: [...blocksRef.current],
+                    });
+                  }, 50);
+                }
                 continue;
               }
             }
@@ -1167,16 +1682,27 @@ export function AgentPromptPanel({
               thinkingComplete = true;
               const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
               thinkingStepsRef.current = steps;
+              // Block building: finalize thinking block on first text
+              const tb = blocksRef.current.find(b => b.type === 'thinking' && !b.done);
+              if (tb && tb.type === 'thinking') {
+                tb.done = true;
+                tb.elapsedMs = Date.now() - tb.startedAt;
+              }
             }
 
             streamedContent += chunk;
 
+            // Block building: buffer content for text blocks
+            contentBufferRef.current += chunk;
+
             // Debounced content update (100ms) to reduce react-markdown re-renders
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             debounceTimerRef.current = setTimeout(() => {
+              flushContentBuffer();
               updateMessage(assistantMsgId, streamedContent, {
                 thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
                 thinkingComplete: thinkingComplete || undefined,
+                blocks: [...blocksRef.current],
               });
             }, 100);
           }
@@ -1185,6 +1711,7 @@ export function AgentPromptPanel({
         // Clean up timers (client timeout, stall detection) and flush debounce
         clearTimeout(clientTimeout);
         if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
+        if (reasoningDebounceRef.current) { clearTimeout(reasoningDebounceRef.current); reasoningDebounceRef.current = null; }
         // Stream ended — ensure we show Complete and final content
         thinkingComplete = true;
         const stepsToFlush = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
@@ -1193,11 +1720,14 @@ export function AgentPromptPanel({
           clearTimeout(debounceTimerRef.current);
           debounceTimerRef.current = null;
         }
+        // Finalize blocks (implicit done if stream ends without done event)
+        finalizeBlocks();
         const stepsForMessage = stepsToFlush.length > 0 ? [...stepsToFlush] : undefined;
-        if (streamedContent || stepsForMessage) {
+        if (streamedContent || stepsForMessage || blocksRef.current.length > 0) {
           updateMessage(assistantMsgId, streamedContent, {
             thinkingSteps: stepsForMessage,
             thinkingComplete: true,
+            blocks: blocksRef.current.length > 0 ? [...blocksRef.current] : undefined,
           });
         }
 
@@ -1332,13 +1862,45 @@ export function AgentPromptPanel({
         if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
         if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
 
-        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // EC-1: Stopped mid-stream — flush blocks with current state (loading tools stay loading)
+          if (blocksRef.current.length > 0) {
+            flushContentBuffer();
+            const tb = blocksRef.current.find(b => b.type === 'thinking' && !b.done);
+            if (tb && tb.type === 'thinking') {
+              tb.done = true;
+              tb.elapsedMs = Date.now() - tb.startedAt;
+            }
+            updateMessage(assistantMsgId, streamedContent, {
+              blocks: [...blocksRef.current],
+              thinkingComplete: true,
+            });
+          }
+          return;
+        }
         const msg = err instanceof Error ? err.message : 'Request failed';
         setError(msg);
 
         if (streamedContent) {
           streamedContent += '\n\n*Connection interrupted.*';
-          updateMessage(assistantMsgId, streamedContent);
+          // EC-2: Error mid-stream — finalize blocks with error state
+          if (blocksRef.current.length > 0) {
+            const loadingBlock = blocksRef.current.findLast(
+              (b: ContentBlock) => b.type === 'tool_action' && b.status === 'loading'
+            );
+            if (loadingBlock && loadingBlock.type === 'tool_action') {
+              loadingBlock.status = 'error';
+              loadingBlock.error = msg;
+            }
+            flushContentBuffer();
+            blocksRef.current.push({
+              type: 'text', id: crypto.randomUUID(),
+              text: '\n\n*Connection interrupted.*',
+            });
+          }
+          updateMessage(assistantMsgId, streamedContent, {
+            blocks: blocksRef.current.length > 0 ? [...blocksRef.current] : undefined,
+          });
           finalizeMessage(assistantMsgId);
         } else {
           appendMessage('assistant', `Error: ${msg}`);
@@ -1349,11 +1911,12 @@ export function AgentPromptPanel({
         // Ensure timers are always cleaned up
         if (stallTimerRef.current) { clearInterval(stallTimerRef.current); stallTimerRef.current = null; }
         if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
+        if (reasoningDebounceRef.current) { clearTimeout(reasoningDebounceRef.current); reasoningDebounceRef.current = null; }
         // Phase 4a: End live preview session
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, mode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -1363,6 +1926,17 @@ export function AgentPromptPanel({
       if (sendMessageRef) sendMessageRef.current = null;
     };
   }, [onSend, sendMessageRef]);
+
+  // Mode-switch auto-submit: when intentMode changes and there's a pending send
+  // from the ModeSwitchButton, fire it now that the mode state is current.
+  useEffect(() => {
+    const pending = pendingModeSwitchSend.current;
+    if (pending && !isLoading) {
+      pendingModeSwitchSend.current = null;
+      // Small RAF to ensure state is fully flushed before sending
+      requestAnimationFrame(() => onSend(pending));
+    }
+  }, [intentMode, isLoading, onSend]);
 
   // Wire onApplyStatsRef so the project page can report diff stats after applying code
   useEffect(() => {
@@ -1515,7 +2089,7 @@ export function AgentPromptPanel({
         break;
       case 'TIMEOUT':
         chips.push({ id: 'err-simpler', label: 'Simplify request', prompt: 'Can you break this into a smaller step?' });
-        chips.push({ id: 'err-solo', label: 'Try Solo mode', prompt: 'Try again in Solo mode for a faster single-pass response.' });
+        chips.push({ id: 'err-solo', label: 'Try 1x mode', prompt: 'Try again with a single agent for a faster response.' });
         break;
       case 'CONTENT_FILTERED':
         chips.push({ id: 'err-rephrase', label: 'Rephrase request', prompt: '' });
@@ -1549,11 +2123,27 @@ export function AgentPromptPanel({
         isLoadingMore={isLoadingMore}
         onLoadMore={loadMore}
         onOpenTemplates={() => setTemplateLibraryOpen(true)}
+        onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
       />
 
       {/* Chat area */}
       <div className="flex flex-col flex-1 min-h-0 min-w-0">
       <ContextPanel context={context} className="mb-2 flex-shrink-0 mx-2" />
+      <TrainingReviewPanel
+        open={trainingPanelOpen}
+        onClose={() => setTrainingPanelOpen(false)}
+        projectId={projectId}
+        activeSessionId={activeSessionId}
+        onReplayPrompt={(prompt) => onSend(prompt)}
+      />
+      <PromptTemplateLibrary
+        open={templateLibraryOpen}
+        onClose={() => setTemplateLibraryOpen(false)}
+        onSelectTemplate={(prompt) => {
+          setTemplateLibraryOpen(false);
+          onSend(prompt);
+        }}
+      />
       {error && (
         <div
           className={`mb-2 mx-2 rounded border px-2 py-1.5 text-xs flex-shrink-0 flex items-center justify-between gap-2 ${
@@ -1638,8 +2228,10 @@ export function AgentPromptPanel({
           onReview={handleReview}
           currentModel={model}
           onModelChange={setModel}
-          agentMode={mode}
-          onModeChange={setMode}
+          specialistMode={specialistMode}
+          onSpecialistModeChange={setSpecialistMode}
+          maxAgents={maxAgents}
+          onMaxAgentsChange={setMaxAgents}
           isStopped={isStopped}
           onApplyCode={onApplyCode}
           onSaveCode={onSaveCode}
@@ -1656,7 +2248,12 @@ export function AgentPromptPanel({
           onRenameSession={renameSession}
           intentMode={intentMode}
           onIntentModeChange={setIntentMode}
+          onModeSwitchAndSend={(mode: IntentMode, autoMsg: string) => {
+            setIntentMode(mode);
+            pendingModeSwitchSend.current = autoMsg;
+          }}
           onEditMessage={handleEditAndResend}
+          onTruncateMessages={truncateAt}
           onRegenerateMessage={handleRegenerate}
           onOpenFile={onOpenFile}
           errorCode={errorCode}
@@ -1676,8 +2273,6 @@ export function AgentPromptPanel({
           onForkAtMessage={(messageIndex) => forkSession(messageIndex)}
           projectId={projectId}
           onPinAsPreference={(rule) => pinnedPrefs.addPin(rule)}
-          templateLibraryOpen={templateLibraryOpen}
-          onTemplateLibraryClose={() => setTemplateLibraryOpen(false)}
         />
       )}
       </div>

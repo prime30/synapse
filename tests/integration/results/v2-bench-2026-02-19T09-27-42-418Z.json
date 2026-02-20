@@ -1,0 +1,151 @@
+{
+  "timestamp": "2026-02-19T09:27:42.418Z",
+  "runsPerPrompt": 3,
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "generic-assistant"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2856,
+          "firstChunkMs": 1231,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 3,
+          "outputTokens": 292,
+          "cacheRead": 7458,
+          "cacheWrite": 3729,
+          "costUSD": 0.005496040000000001,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 2401,
+          "totalTimeMsHigh": 3431,
+          "firstChunkMsLow": 817,
+          "firstChunkMsHigh": 1786,
+          "costUSDLow": 0.00204536,
+          "costUSDHigh": 0.0123654
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 6423,
+          "firstChunkMs": 3494,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 17668,
+          "outputTokens": 603,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.016546666666666668,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 5364,
+          "totalTimeMsHigh": 7256,
+          "firstChunkMsLow": 3419,
+          "firstChunkMsHigh": 3625,
+          "costUSDLow": 0.0161888,
+          "costUSDHigh": 0.0168424
+        },
+        "cursor": {
+          "name": "Cursor (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 6032,
+          "firstChunkMs": 3407,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 17687,
+          "outputTokens": 531,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.0162752,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "generic-assistant"
+          ],
+          "totalTimeMsLow": 5961,
+          "totalTimeMsHigh": 6143,
+          "firstChunkMsLow": 3256,
+          "firstChunkMsHigh": 3650,
+          "costUSDLow": 0.016096,
+          "costUSDHigh": 0.0165832
+        }
+      }
+    }
+  },
+  "gapAnalysis": []
+}

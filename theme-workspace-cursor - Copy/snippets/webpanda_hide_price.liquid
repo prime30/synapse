@@ -1,0 +1,49 @@
+
+{% if customer %}
+  {% else %}
+<style id="hide-price-guest-style" type="text/css">
+    .hide-price-guest, .hidePrice, .current_price.js-current-price .money, form[action*="/cart/add"] input[type="submit"], .shopify-payment-button, .cb_bundles, t4s-product-price ins, t4s-pr__notify-stock, .t4s-product-price{
+        display:none!important;
+    }
+    .show-price-guest .hide-price-guest, .show-price-guest .hidePrice, .show-price-guest.product-price  .money, .cart__footer .totals .hide-price-guest, .cart__footer .totals .hidePrice {
+        display:inline !important;
+    }
+    .wp-not-logged-wrapper {
+        padding: 8px !important;
+        text-align: center !important;
+        position: relative;
+        z-index: 2;
+    }
+    .wp-not-logged-wrapper p {
+        margin: 0;
+        padding: 0;
+    }
+    .wp-not-logged-wrapper a {
+        text-decoration: underline;
+        cursor: pointer;
+    } .grid--view-items .full-width-link {margin-bottom: 55px;} .price-separator {display: none;}
+</style>
+{% endif %}
+
+
+
+
+<script>
+    {% if customer %}var customerIsLogged = true;{% else %}var customerIsLogged = false;{% endif %}
+    {% if customer %}var customerIsLoggedBasic = true;{% else %}var customerIsLoggedBasic = false;{% endif %}
+    var webPandaHidePriceSettings = {"subscription": 1, "hide_price_enabled": true, "message": "{LOGIN} to see price", "message_logged_customers": "The product is not available for your account", "label_login": "Login", "label_registration": "Register", "font_size": 11.0, "style_by_page": false, "font_size_listing_page": 12.0, "font_size_product_page": 12.0, "font_size_search_page": 12.0, "text_color": "#000000", "has_background_color": false, "background_color": "transparent", "has_border": false, "border_width": 0.0, "border_color": "#e2a192", "border_radius": 8.0, "has_custom_login": false, "login_url": null, "has_custom_registration": false, "registration_url": null, "by_product_id": false, "by_product_tags": false, "by_collection": false, "product_tags": "", "language_config": "", "by_customer_tags": false, "customer_tags": "", "depth": 5, "depth_on_search": 5, "depth_on_listings": 0, "parent_depth": 3, "parent_depth_on_search": 2, "custom_price_selector": null, "custom_cart_selector": null, "force_hide_on_cart": false, "force_price_selector": null, "redirect_after_login": true}
+    
+    window.onload = function() {
+                        let removeWpPHidePrice = true;
+                        let pageScripts = document.getElementsByTagName("script");
+                        for (var i = 0; i < pageScripts.length; i++) {
+                            if (pageScripts[i].src.includes('assets/hide_main.js')) {
+                                removeWpPHidePrice = false;
+                            }
+                        }
+                        if (removeWpPHidePrice) {
+                            let appStyle = document.getElementById("hide-price-guest-style");
+                            appStyle.remove();
+                        }
+                    }
+</script>

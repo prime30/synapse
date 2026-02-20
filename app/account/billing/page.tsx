@@ -14,7 +14,7 @@ const PLAN_NAMES: Record<string, string> = {
 };
 
 const MODEL_DISPLAY: Record<string, string> = {
-  'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5',
+  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
   'claude-opus-4-6': 'Claude Opus 4.6',
   'claude-haiku-4-5-20251001': 'Claude Haiku 4.5',
   'gpt-4o-mini': 'GPT-4o Mini',

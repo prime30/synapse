@@ -97,7 +97,7 @@ export function NavbarUserMenu({ onSignOut }: NavbarUserMenuProps) {
       <button
         type="button"
         onClick={() => setMenuOpen((prev) => !prev)}
-        className="flex items-center gap-0 rounded-full p-0.5 hover:ring-2 hover:ring-stone-200 dark:hover:ring-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all"
+        className="flex items-center gap-0 rounded-full p-0.5 hover:ring-2 hover:ring-stone-200 dark:hover:ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all"
         aria-expanded={menuOpen}
         aria-haspopup="true"
         aria-label="User menu"

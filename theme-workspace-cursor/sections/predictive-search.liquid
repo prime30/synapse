@@ -1,0 +1,15 @@
+{%- if predictive_search.performed -%}
+  <div id="predictive-search-results">
+    {%- if predictive_search.resources.products.size > 0 -%}
+      <h3>Products</h3>
+      <ul>
+        {%- for product in predictive_search.resources.products -%}
+          {% if product.tags contains "shsdchildproduct" %}
+          {% continue %}
+          {% endif %} 
+          <li><a href="{{ product.url }}">{{ product.title }}</a></li>
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+  </div>
+{%- endif -%}

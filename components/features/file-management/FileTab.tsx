@@ -15,9 +15,9 @@ interface FileTabProps {
   onSelect: () => void;
   onClose: () => void;
   index: number;
-  onDragStart: (index: number) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (index: number) => void;
+  onDragStart?: (index: number) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (index: number) => void;
 }
 
 export function FileTab({
@@ -42,17 +42,18 @@ export function FileTab({
       role="tab"
       aria-selected={isActive}
       draggable={!pinned}
-      onDragStart={pinned ? undefined : () => onDragStart(index)}
-      onDragOver={pinned ? undefined : (e) => { e.preventDefault(); onDragOver(e); }}
+      onDragStart={pinned || !onDragStart ? undefined : () => onDragStart(index)}
+      onDragOver={pinned || !onDragOver ? undefined : (e) => { e.preventDefault(); onDragOver(e); }}
       onDragEnter={pinned ? undefined : () => setIsDragOver(true)}
       onDragLeave={pinned ? undefined : () => setIsDragOver(false)}
-      onDrop={pinned ? undefined : () => { setIsDragOver(false); onDrop(index); }}
+      onDrop={pinned || !onDrop ? undefined : () => { setIsDragOver(false); onDrop(index); }}
       className={`
-        group flex items-center gap-1.5 px-3 py-2 min-w-0 max-w-[150px]
-        border-r ide-border cursor-pointer
-        ide-hover transition-colors
-        ${isActive ? 'ide-surface-inset ide-text' : 'ide-surface-panel ide-text-muted'}
-        ${isDragOver ? 'border-l-2 border-l-sky-500' : ''}
+        group flex items-center gap-1.5 px-3.5 py-2 flex-1 min-w-[100px] max-w-[240px]
+        rounded-lg cursor-pointer transition-colors transition-shadow
+        ${isActive
+          ? 'ide-tab-active ide-text relative z-[1]'
+          : 'ide-tab-inactive ide-text-muted'}
+        ${isDragOver ? 'ring-2 ring-inset ring-sky-500/50' : ''}
       `}
       onClick={onSelect}
     >

@@ -1,0 +1,15 @@
+---
+description: "HARD RULE: Call out wrong model tier — Opus for lookups = waste; Sonnet for architecture = underpowered. Quick nudge only."
+alwaysApply: true
+---
+
+# Model Tier Nudge (HARD RULE)
+
+**You MUST call out when the wrong model tier is in use.** One short line. Quick nudge, not a lecture.
+
+- **Lookups on Opus = waste** — Simple questions, single-file edits, explain-one-thing, or classification.  
+  Nudge: *"Opus here is overkill — Sonnet or Haiku is enough."*
+- **Architecture on Sonnet = underpowered** — Multi-step planning, cross-system design, PM analysis of broad scope, or refactors touching many files.  
+  Nudge: *"This is architecture — Opus will do better."*
+
+Then continue. Do not repeat, justify, or expand unless the user asks.

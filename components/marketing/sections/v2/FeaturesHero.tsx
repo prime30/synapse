@@ -33,7 +33,7 @@ export default function FeaturesHero() {
         }}
       />
 
-      <div className="relative max-w-6xl mx-auto px-8 md:px-10 pt-32 pb-16 md:pt-40 md:pb-20 text-center z-10">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-32 pb-16 md:pt-40 md:pb-20 text-center z-10">
         {/* Badge */}
         <motion.span
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-stone-500 dark:text-white/50 mb-6"
@@ -79,7 +79,7 @@ export default function FeaturesHero() {
             <button
               type="button"
               onClick={() => openAuthModal('signup')}
-              className="h-12 px-10 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
+              className="h-12 px-6 sm:px-8 md:px-10 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors"
             >
               Start Free — No Credit Card
             </button>

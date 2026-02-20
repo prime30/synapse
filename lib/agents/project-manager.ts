@@ -1,5 +1,5 @@
 import { Agent } from './base';
-import { PROJECT_MANAGER_PROMPT, SOLO_PM_PROMPT, PM_PROMPT_LIGHTWEIGHT } from './prompts';
+import { PROJECT_MANAGER_PROMPT, SOLO_PM_PROMPT, PM_PROMPT_LIGHTWEIGHT, GENERAL_SUBAGENT_PROMPT, ASK_MODE_OVERLAY } from './prompts';
 import { getThemeContext, THEME_STRUCTURE_DOC } from '@/lib/shopify/theme-structure';
 import { detectWorkflow, getWorkflowDelegationHint } from './workflows/shopify-workflows';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
@@ -47,7 +47,7 @@ export const PM_OUTPUT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          agent: { type: 'string', enum: ['liquid', 'javascript', 'css', 'json'] },
+          agent: { type: 'string', enum: ['liquid', 'javascript', 'css', 'json', 'general'] },
           task: { type: 'string' },
           affectedFiles: { type: 'array', items: { type: 'string' } },
         },
@@ -79,8 +79,20 @@ export class ProjectManagerAgent extends Agent {
     return SOLO_PM_PROMPT;
   }
 
+  /**
+   * Returns the Solo PM prompt with the Ask mode overlay appended.
+   * The agent can still produce code changes — Ask mode is a preference, not a gate.
+   */
+  getAskSystemPrompt(): string {
+    return SOLO_PM_PROMPT + '\n\n' + ASK_MODE_OVERLAY;
+  }
+
   getLightweightSystemPrompt(): string {
     return PM_PROMPT_LIGHTWEIGHT;
+  }
+
+  getGeneralSubagentSystemPrompt(): string {
+    return GENERAL_SUBAGENT_PROMPT;
   }
 
   /**
@@ -248,6 +260,60 @@ export class ProjectManagerAgent extends Agent {
         ),
       '',
       'Analyze the request and respond with your changes as JSON. Include a referencedFiles array listing all files you examined.',
+    ].join('\n');
+  }
+
+  /**
+   * Format prompt for a general subagent — scoped task execution.
+   * Uses GENERAL_SUBAGENT_PROMPT. Receives a delegation task, not the full user request.
+   */
+  formatGeneralSubagentPrompt(task: AgentTask, proposalSummary?: string): string {
+    const selectedFiles = task.context.files.filter(f => !f.content.startsWith('['));
+    const stubCount = task.context.files.length - selectedFiles.length;
+    const fileList = [
+      `Selected files (${selectedFiles.length}):`,
+      ...selectedFiles.map(f => `- ${f.fileName} (${f.fileType}, ${f.content.length} chars)`),
+      '',
+      stubCount > 0
+        ? `${stubCount} other theme files available (not loaded).`
+        : '',
+    ].filter(Boolean).join('\n');
+
+    const prefs = task.context.userPreferences
+      .map((p) => `- [${p.category}] ${p.key}: ${p.value}`)
+      .join('\n');
+
+    return [
+      `## Assigned Task`,
+      task.instruction,
+      '',
+      ...(task.context.userRequest !== task.instruction
+        ? [`## Original User Request (for context)`, task.context.userRequest, '']
+        : []),
+      ...(proposalSummary
+        ? ['## Proposal Summary (other subagents)', proposalSummary, '']
+        : []),
+      ...(task.context.dependencyContext
+        ? [task.context.dependencyContext, '']
+        : []),
+      ...(task.context.domContext
+        ? [task.context.domContext, '']
+        : []),
+      ...(task.context.memoryContext
+        ? [task.context.memoryContext, '']
+        : []),
+      '## Project Files:',
+      fileList,
+      '',
+      '## User Preferences:',
+      prefs || '(No preferences recorded yet)',
+      '',
+      '## Full File Contents (selected files):',
+      ...selectedFiles.map(
+        (f) => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``
+      ),
+      '',
+      'Complete your assigned task and respond with your changes as JSON.',
     ].join('\n');
   }
 

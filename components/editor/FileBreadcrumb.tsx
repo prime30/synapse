@@ -5,6 +5,8 @@ import { useMemo } from 'react';
 interface FileBreadcrumbProps {
   filePath: string | null; // e.g. "sections/hero-banner.liquid"
   content?: string; // file content, for Liquid schema parsing
+  /** Navigate to a file path segment (e.g. folder or file name click) */
+  onNavigate?: (segmentPath: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -53,7 +55,7 @@ function Chevron() {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function FileBreadcrumb({ filePath, content }: FileBreadcrumbProps) {
+export function FileBreadcrumb({ filePath, content, onNavigate }: FileBreadcrumbProps) {
   const segments = useMemo(() => {
     if (!filePath) return [];
 
@@ -84,7 +86,15 @@ export function FileBreadcrumb({ filePath, content }: FileBreadcrumbProps) {
           {idx > 0 && <Chevron />}
           <button
             type="button"
-            onClick={() => console.log('Breadcrumb click:', segment)}
+            onClick={() => {
+              if (!onNavigate || !filePath) return;
+              // Path segments (folder/file names) navigate to partial path
+              const parts = filePath.split('/').filter(Boolean);
+              const segIndex = parts.indexOf(segment);
+              if (segIndex >= 0) {
+                onNavigate(parts.slice(0, segIndex + 1).join('/'));
+              }
+            }}
             className="text-xs ide-text-3 hover:ide-text-2 transition-colors whitespace-nowrap"
           >
             {segment}

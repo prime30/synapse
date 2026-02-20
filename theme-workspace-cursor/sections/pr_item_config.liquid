@@ -1,0 +1,2588 @@
+{%- liquid 
+assign isShowHTMl = false
+if template.suffix == 'config' and request.design_mode
+assign isShowHTMl = true
+endif 
+assign sid = section.id
+assign se_stts = section.settings
+assign se_blocks = section.blocks
+assign enable_rating = settings.enable_rating
+assign imgatt = 'data-'
+assign collection = collections['all'] 
+  assign pr_overlay  = se_stts.pr_overlay | divided_by: 100.0
+  assign countdown_overlay  = se_stts.countdown_overlay | divided_by: 100.0
+
+  assign show_img = settings.show_img
+  assign isGrowaveWishlist = false
+  if settings.wishlist_mode == "3" and shop.customer_accounts_enabled
+    assign isGrowaveWishlist = true
+  endif
+  
+  assign placeholder_img = settings.placeholder_img
+  assign enable_pr_size = settings.enable_pr_size
+  assign pr_size_pos = settings.pr_size_pos
+  assign show_size_type = settings.show_size_type
+  assign size_ck = settings.size_ck | append: ',size,sizes,Größe' 
+  assign get_size = size_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+  assign enable_pr_color = settings.enable_pr_color
+  assign show_cl_type = settings.show_color_type
+  assign color_ck = settings.color_ck | append: ',color,colors,couleur,colour'
+  assign get_color = color_ck | downcase | replace: ' ,', ',' | replace: ', ', ',' | split: ',' | uniq
+
+  assign price_varies_style = settings.price_varies_style
+  assign app_review = settings.app_review
+
+ -%}
+
+{%- if isShowHTMl -%}
+{{ 'collection-products.css' | asset_url | stylesheet_tag }}
+{{ 'collection-products-list.css' | asset_url | stylesheet_tag }}
+<div class="t4s-section-inner t4s_se_{{ sid }}">
+	<div class="t4s-container">
+		{%- paginate collection.products by 4 -%}
+			{% for block in se_blocks %}
+				{%- assign bk_stts = block.settings -%}
+				<div class="t4s-top-heading t4s_des_title_1 t4s-text-center" style="margin-bottom: 30px;margin-top: 50px;">
+					<h3 class="t4s-section-title t4s-title"><span>{{ bk_stts.heading }}</span></h3>
+				</div> 
+				<div class="t4s_box_pr_grid t4s-products {% if block.type == "list" %} is--listview {% endif %} t4s_ratio1_1 t4s_rationt t4s_position_8 t4s_cover t4s-row t4s-row-cols-lg-4 t4s-row-cols-md-2 t4s-row-cols-2 t4s-gx-md-30 t4s-gy-md-0 t4s-gx-10 t4s-gy-30 t4s_mb_100" style="margin-bottom: 50px;">
+				{%- liquid 	
+				    case block.type
+				        when '1'
+				          render 'pr-grid-item1' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '2'
+				          render 'pr-grid-item2' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '3'
+				          render 'pr-grid-item3' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '4'
+				          render 'pr-grid-item4' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '5'
+				          render 'pr-grid-item5' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '6'
+				          render 'pr-grid-item6' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when '7'
+				          render 'pr-grid-item7' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, placeholder_img: placeholder_img, show_vendor: false, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				        when 'list'
+				          render 'pr-grid-item1' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: false, placeholder_img: placeholder_img, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: true
+				        when 'packery'
+				          render 'pr-packery-item' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: false, placeholder_img: placeholder_img, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				    	when 'packery2'
+				          render 'pr-packery-item2' for collections.all.products as product, product: product, isGrowaveWishlist: isGrowaveWishlist, show_img: show_img, show_vendor: false, placeholder_img: placeholder_img, enable_pr_color: enable_pr_color, show_cl_type: show_cl_type, get_color: get_color, enable_pr_size: enable_pr_size, pr_size_pos: pr_size_pos, get_size: get_size, show_size_type: show_size_type, price_varies_style: price_varies_style, app_review: app_review, enable_rating: enable_rating, imgatt: imgatt, show_list_btns: false
+				    endcase -%}
+				</div> 
+			{% endfor %} 
+		{% assign sp_paginate_by = paginate.page_size %}{%- endpaginate -%}
+	</div>
+</div>
+{%- endif -%}
+
+{%- style -%}
+{% liquid 
+	if se_stts.lh_pr == 0
+		assign lh_pr = 1
+	else
+		assign lh_pr = se_stts.lh_pr | append: 'px'
+	endif %}
+	.t4s-section-config-product .t4s_box_pr_grid {
+		margin-bottom: 100px;
+	}
+	.t4s-section-config-product .t4s-top-heading {
+		margin-bottom: 30px;
+	}
+	.t4s-product {
+		--pr-btn-radius-size       : {{ se_stts.pr_btn_round }}px;
+	}
+	.t4s-bundle-pr-item .t4s-bundle-pr__info > select {
+		border-radius: {{ se_stts.pr_btn_round }}px; 
+	}
+	{%- assign countdown_color_lightness       = se_stts.countdown_color | color_extract: 'lightness' -%}
+	.t4s-widget__pr {
+		--pr-wishlist-color-active              : {{ se_stts.wishlist_color_active }};
+	}
+	.t4s-product {
+
+		--swatch-color-size 	   : {{ se_stts.swatch_color_size }}px;
+		--swatch-color-size-mb 	   : {{ se_stts.swatch_color_size_mb }}px;
+		--pr-background-overlay    : {{ se_stts.pr_bg_overlay | color_modify: 'alpha', pr_overlay }};
+		--product-title-family     : var(--font-family-{{ se_stts.fnt_df_pr }});
+		--product-title-style      : {{ se_stts.txt_tr_pr }};
+		--product-title-size       : {{ se_stts.size_pr }}px;
+		--product-title-weight     : {{ se_stts.fw_pr }};
+		--product-title-line-height: {{ lh_pr }};
+		--product-title-spacing    : {{ se_stts.ls_pr }}px;
+		--product-price-size       : {{ se_stts.size_price_pr }}px;
+		--product-price-weight     : {{ se_stts.fw_price_pr }};
+		--product-space-img-txt    : {{ se_stts.space_img_content }}px;
+		--product-space-elements   : {{ se_stts.space_elements }}px;
+
+		--pr-countdown-color       : {% if countdown_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+		--pr-countdown-bg-color    : {{ se_stts.countdown_color | color_modify: 'alpha', countdown_overlay }};
+	}
+	.t4s-product,
+	.t4s-container .t4s-row-cols-lg-5 > .t4s-product,
+	.t4s-container .t4s-row-cols-lg-6 > .t4s-product {
+		--product-title-color      : {{ se_stts.pr_title_color }};
+		--product-title-color-hover: {{ se_stts.pr_title_color_hover }};
+		--product-price-color      : {{ se_stts.price_color }};
+		--product-price-sale-color : {{ se_stts.price_sale_color }};
+		--product-vendors-color : {{ se_stts.vendors_color }};
+		--product-vendors-color-hover : {{ se_stts.vendors_color_hover }};
+	}
+{%- endstyle -%}
+{%- for block in se_blocks -%}
+	{%- assign bk_stts = block.settings -%}
+   	{%- case block.type -%}
+      	{%- when '1' -%}
+          {%- style -%}
+	        @media (max-width: 1024px){
+	          	{%- liquid 
+	          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+	          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+	          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+	          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+	          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+	          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+	          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+	          	{%- if hidden_atc_mb -%}
+	          		.t4s-pr-style1 .t4s-pr-addtocart,
+	    			.t4s-pr-style1 .t4s-product-atc-qty,
+	          	{%- endif -%}
+	          	{%- if hidden_qv_mb -%}
+	          		.t4s-pr-style1 .t4s-pr-quickview,
+	          	{%- endif -%}
+	          	{%- if hidden_wishlist_mb -%}
+	          		.t4s-pr-style1 .t4s-pr-wishlist,
+	          	{%- endif -%}
+	          	{%- if hidden_compare_mb -%}
+	          		.t4s-pr-style1 .t4s-pr-compare,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors -%}
+	          		.t4s-pr-style1 .t4s-product-colors,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_sizes -%}
+	          		.t4s-pr-style1 .t4s-product-sizes,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+	          		.t4s-pr-style1 .t4s-pr-group-variable,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_countdown -%}
+	          		.t4s-pr-style1 .t4s-product-countdown,
+	          	{%- endif -%}
+	    			.t4s-abc-xyz {
+	    				display: none !important;
+	    			}
+	          	
+	          	{%- if hidden_atc_mb and hidden_qv_mb -%}
+	          		.t4s-pr-style1 .t4s-product-btns {
+	          			display: none !important;
+	          		}
+	          		.t4s-pr-style1 .t4s-product-inner .t4s-pr-group-variable {
+				        bottom: 5px !important;
+				    }
+	          	{%- endif -%}
+	        }
+            .t4s-pr-style1 {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+			       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+			       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+			       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+			       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+			      
+			        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+			        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+			        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+			        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+			        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+			        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+			        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+			        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-compare-color               : {{ bk_stts.compare_color }};
+			        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+			        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --size-list-color             : {{ bk_stts.size_list_color }};
+			        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+			        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+            }
+          {%- endstyle -%} 
+      	{%- when '2' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+	        @media (max-width: 1024px){
+	          	{%- liquid 
+	          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+	          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+	          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+	          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+	          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+	          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+	          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+	          	{%- if hidden_atc_mb -%}
+	          		.t4s-pr-style2 .t4s-pr-addtocart,
+	    			.t4s-pr-style2 .t4s-product-atc-qty,
+	          	{%- endif -%}
+	          	{%- if hidden_qv_mb -%}
+	          		.t4s-pr-style2 .t4s-pr-quickview,
+	          	{%- endif -%}
+	          	{%- if hidden_wishlist_mb -%}
+	          		.t4s-pr-style2 .t4s-pr-wishlist,
+	          	{%- endif -%}
+	          	{%- if hidden_compare_mb -%}
+	          		.t4s-pr-style2 .t4s-pr-compare,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors -%}
+	          		.t4s-pr-style2 .t4s-product-colors,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_sizes -%}
+	          		.t4s-pr-style2 .t4s-product-sizes,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+	          		.t4s-pr-style2 .t4s-pr-group-variable,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_countdown -%}
+	          		.t4s-pr-style2 .t4s-product-countdown,
+	          	{%- endif -%}
+	    			.t4s-abc-xyz {
+	    				display: none !important;
+	    			}
+	          	
+	          	{%- if hidden_atc_mb and hidden_qv_mb and hidden_compare_mb -%}
+	          		.t4s-pr-style2 .t4s-product-btns {
+	          			display: none !important;
+	          		}
+	          		.t4s-pr-style2 .t4s-product-inner .t4s-pr-group-variable {
+				        bottom: 0 !important;
+				    }
+	          	{%- endif -%}
+	          	{%- if hidden_pr_countdown -%}
+		          	.t4s-pr-style2 .t4s-product-inner .t4s-pr-group-variable.t4s-has-countdown {
+				        padding-bottom: 5px;
+				    }		
+			    {%- endif -%}
+			}
+            .t4s-pr-style2 {
+		       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+			       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+			       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+			       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+			       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+			        
+			        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+			        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+			        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+			        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+			        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+			        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+			        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+			        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-compare-color               : {{ bk_stts.compare_color }};
+			        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+			        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        
+			        --size-list-color             : {{ bk_stts.size_list_color }};
+			        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+			        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+            }
+          {%- endstyle -%}
+      	{%- when '3' -%}
+          {%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          {%- style -%}
+          	@media (max-width: 1024px){
+	          	{%- liquid 
+	          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+	          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+	          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+	          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+	          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+	          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+	          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+	          	{%- if hidden_atc_mb -%}
+	          		.t4s-pr-style3 .t4s-pr-addtocart,
+	    			.t4s-pr-style3 .t4s-product-atc-qty,
+	          	{%- endif -%}
+	          	{%- if hidden_qv_mb -%}
+	          		.t4s-pr-style3 .t4s-pr-quickview,
+	          	{%- endif -%}
+	          	{%- if hidden_wishlist_mb -%}
+	          		.t4s-pr-style3 .t4s-pr-wishlist,
+	          	{%- endif -%}
+	          	{%- if hidden_compare_mb -%}
+	          		.t4s-pr-style3 .t4s-pr-compare,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors -%}
+	          		.t4s-pr-style3 .t4s-product-colors,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_sizes -%}
+	          		.t4s-pr-style3 .t4s-product-sizes,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+	          		.t4s-pr-style3 .t4s-pr-group-variable,
+	          	{%- endif -%}
+	          	{%- if hidden_pr_countdown -%}
+	          		.t4s-pr-style3 .t4s-product-countdown,
+	          	{%- endif -%}
+	    			.t4s-abc-xyz {
+	    				display: none !important;
+	    			}
+	          	
+	          	{%- if hidden_atc_mb and hidden_qv_mb and hidden_compare_mb -%}
+	          		.t4s-pr-style3 .t4s-product-btns {
+	          			display: none !important;
+	          		}
+	          		.t4s-pr-style3 .t4s-product-inner .t4s-pr-group-variable {
+				        bottom: 5px !important;
+				    }
+	          	{%- endif -%}
+	        }
+            .t4s-pr-style3 {
+		       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+			       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+			       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+			       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+			       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+			       
+			        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+			        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+			        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+			        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+			        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+			        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+			        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+			        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-compare-color               : {{ bk_stts.compare_color }};
+			        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+			        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        
+			        --size-list-color             : {{ bk_stts.size_list_color }};
+			        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+			        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+            }
+          {%- endstyle -%}
+      	{%- when '4' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+          		@media (max-width: 1024px){
+	          		{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.t4s-pr-style4 .t4s-pr-addtocart,
+		    			.t4s-pr-style4 .t4s-product-atc-qty,
+		    			.t4s-pr-style4 .t4s-product-btns,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.t4s-pr-style4 .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.t4s-pr-style4 .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.t4s-pr-style4 .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.t4s-pr-style4 .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.t4s-pr-style4 .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.t4s-pr-style4 .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.t4s-pr-style4 .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	
+		          	{%- if hidden_wishlist_mb and hidden_qv_mb and hidden_compare_mb -%}
+		          		.t4s-pr-style4 .t4s-product-btns2 {
+		          			display: none !important;
+		          		}
+		          		.t4s-pr-style4 .t4s-product-inner .t4s-pr-group-variable {
+					        bottom: 0 !important;
+					    }
+		          	{%- endif -%}
+		        }
+	            .t4s-pr-style4 {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+				       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+				       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+				       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+				       {%- assign size_list_color_lightness   	  = bk_stts.size_list_color | color_extract: 'lightness' %}
+				       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+
+				        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+				        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+				        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+				        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+				        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+				        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+				        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+				        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-compare-color               : {{ bk_stts.compare_color }};
+				        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+				        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+						--size-list-color             : {{ bk_stts.size_list_color }};
+				        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+				        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            } 
+        	{%- endstyle -%}
+        {%- when '5' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+          		@media (max-width: 1024px){
+	          		{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.t4s-pr-style5 .t4s-pr-addtocart,
+		    			.t4s-pr-style5 .t4s-product-atc-qty,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.t4s-pr-style5 .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.t4s-pr-style5 .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.t4s-pr-style5 .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.t4s-pr-style5 .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.t4s-pr-style5 .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.t4s-pr-style5 .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.t4s-pr-style5 .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	
+		          	{%- if hidden_atc_mb and hidden_qv_mb and hidden_compare_mb and hidden_wishlist_mb -%}
+		          		.t4s-pr-style5 .t4s-product-btns {
+		          			display: none !important;
+		          		}
+		          		.t4s-pr-style5 .t4s-product-countdown {
+		          			 bottom: 5px !important;
+		          		}
+		          	{%- endif -%}
+		        }
+	            .t4s-pr-style5 {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+				       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+				       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+				       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+				       {%- assign size_list_color_lightness   	  = bk_stts.size_list_color | color_extract: 'lightness' %}
+				       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+
+				        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+				        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+				        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+				        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+				        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+				        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+				        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+				        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-compare-color               : {{ bk_stts.compare_color }};
+				        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+				        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        
+				        --product5-title-color      : {{ bk_stts.pr_title_color }};
+						--product5-title-color-hover: {{ bk_stts.pr_title_color_hover }};
+
+						--product5-price-color      : {{ bk_stts.price_color }};
+						--product5-price-sale-color : {{ bk_stts.price_sale_color }};
+
+						--product5-vendors-color : {{ bk_stts.vendors_color }};
+						--product5-vendors-color-hover : {{ bk_stts.vendors_color_hover }};
+
+
+						--product-list-title-color      : {{ se_stts.pr_title_color }};
+						--product-list-title-color-hover: {{ se_stts.pr_title_color_hover }};
+						--product-list-price-color      : {{ se_stts.price_color }};
+						--product-list-vendors-color : {{ se_stts.vendors_color }};
+						--product-list-vendors-color-hover : {{ se_stts.vendors_color_hover }};
+						--product-list-price-sale-color : {{ se_stts.price_sale_color }};
+
+						--size-list-color             : {{ bk_stts.size_list_color }};
+				        --size-list-color2            : {% if size_list_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+				        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            } 
+        	{%- endstyle -%}
+      	{%- when '6' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+          		@media (max-width: 1024px){
+	          		{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.t4s-pr-style6 .t4s-product-inner .t4s-pr-group-variable {
+					        bottom: 40px !important;
+					    }
+						.t4s-pr-style6 .t4s-product-btns2 {
+						    bottom: 0 !important;
+						}
+		          		.t4s-pr-style6 .t4s-pr-addtocart,
+		    			.t4s-pr-style6 .t4s-product-atc-qty,
+		    			.t4s-pr-style6 .t4s-product-btns,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.t4s-pr-style6 .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.t4s-pr-style6 .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.t4s-pr-style6 .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.t4s-pr-style6 .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.t4s-pr-style6 .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.t4s-pr-style6 .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.t4s-pr-style6 .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	{%- if hidden_wishlist_mb and hidden_qv_mb and hidden_compare_mb -%}
+		          		.t4s-pr-style6 .t4s-product-btns2 {
+		          			display: none !important;
+		          		}
+		          		.t4s-pr-style6 .t4s-product-inner .t4s-pr-group-variable {
+					        bottom: 40px !important;
+					    }
+		          	{%- endif -%}
+		          	{%- if hidden_atc_mb and hidden_wishlist_mb and hidden_qv_mb and hidden_compare_mb -%}
+		          		.t4s-pr-style6 .t4s-product-inner .t4s-pr-group-variable {
+					        bottom: 5px !important;
+					    }
+		          	{%- endif -%}
+	          	}
+	            .t4s-pr-style6 {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+				       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+				       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+				       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+				       {%- assign size_list_color_lightness   	  = bk_stts.size_list_color | color_extract: 'lightness' %}
+				       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+
+				        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+				        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+				        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+				        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+				        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+				        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+				        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+				        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-compare-color               : {{ bk_stts.compare_color }};
+				        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+				        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+						--size-list-color             : {{ bk_stts.size_list_color }};
+				        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+				        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            } 
+        	{%- endstyle -%}
+      	{%- when 'list' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+          		@media (max-width: 1024px){
+		          	{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.is--listview .t4s-product .t4s-pr-addtocart,
+		    			.is--listview .t4s-product .t4s-product-atc-qty,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.is--listview .t4s-product .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.is--listview .t4s-product .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.is--listview .t4s-product .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.is--listview .t4s-product .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.is--listview .t4s-product .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.is--listview .t4s-product .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.is--listview .t4s-product .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	
+		          	{%- if hidden_atc_mb and hidden_qv_mb -%}
+		          		.is--listview .t4s-product .t4s-product-info .t4s-product-btns {
+		          			display: none !important;
+		          		}
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb and hidden_compare_mb -%}
+		          		.is--listview .t4s-product .t4s-product-btns2 {
+		          			display: none !important;
+		          		}
+		          	{%- endif -%}
+		        }
+	            .t4s-product.t4s-pr-list,
+	            .is--listview .t4s-product {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+			       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+			       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+			       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+			       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+			       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+			       {%- assign size_list_color_lightness   	  = bk_stts.size_list_color | color_extract: 'lightness' %}
+				   {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+		
+					--content-cl : {{ bk_stts.content_color }};
+
+			        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+			        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+			        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+			        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+			        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+			        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+			        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+			        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+			        --pr-compare-color               : {{ bk_stts.compare_color }};
+			        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+			        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+			        
+			        --size-list-color             : {{ bk_stts.size_list_color }};
+			        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+			        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            }
+          	{%- endstyle -%}
+      	{%- when 'packery' -%}
+          	{%- assign pr_overlay  = bk_stts.pr_overlay | divided_by: 100.0 -%}
+          	{%- style -%}
+          		@media (max-width: 1024px){
+	          		{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.t4s-pr-packery .t4s-pr-addtocart,
+		    			.t4s-pr-packery .t4s-product-atc-qty,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.t4s-pr-packery .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.t4s-pr-packery .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.t4s-pr-packery .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.t4s-pr-packery .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.t4s-pr-packery .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.t4s-pr-packery .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.t4s-pr-packery .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	
+		          	{%- if hidden_atc_mb and hidden_qv_mb and hidden_compare_mb and hidden_wishlist_mb -%}
+		          		.t4s-pr-packery .t4s-product-btns {
+		          			display: none !important;
+		          		}
+		          		.t4s-pr-packery .t4s-product-countdown {
+		          			 bottom: 5px !important;
+		          		}
+		          	{%- endif -%}
+		          }
+	            .t4s-pr-packery {
+			       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+				       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+				       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+				       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+				       {%- assign size_list_color_lightness   	  = bk_stts.size_list_color | color_extract: 'lightness' %}
+				       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+
+				        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+				        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+				        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+				        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+				        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+				        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+				        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+				        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-compare-color               : {{ bk_stts.compare_color }};
+				        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+				        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            } 
+		        @media(min-width: 1024px) {
+			        .t4s-pr-packery {
+						--size-list-color             : {{ bk_stts.size_list_color }};
+				        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+				        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --product-title-color       : {{ bk_stts.pr_title_color }};
+						--product-title-color-hover : {{ bk_stts.pr_title_color_hover }};
+						--product-price-color       : {{ bk_stts.price_color }};
+						--product-price-sale-color  : {{ bk_stts.price_sale_color }};
+						--product-vendors-color     : {{ bk_stts.vendors_color }};
+						--product-vendors-color-hover : {{ bk_stts.vendors_color_hover }};
+			        }
+			    }
+            {%- endstyle -%} 
+        {%- when 'packery2' -%}
+          	{%- style -%}
+	          	@media (max-width: 1024px){
+		          	{%- liquid 
+		          		assign hidden_atc_mb = bk_stts.hidden_atc_mb
+		          		assign hidden_qv_mb = bk_stts.hidden_qv_mb
+		          		assign hidden_wishlist_mb = bk_stts.hidden_wishlist_mb
+		          		assign hidden_compare_mb = bk_stts.hidden_compare_mb
+		          		assign hidden_pr_colors = bk_stts.hidden_pr_colors
+		          		assign hidden_pr_sizes = bk_stts.hidden_pr_sizes
+		          		assign hidden_pr_countdown = bk_stts.hidden_pr_countdown -%}
+		          	{%- if hidden_atc_mb -%}
+		          		.t4s-pr-packery2 .t4s-pr-addtocart,
+		    			.t4s-pr-packery2 .t4s-product-atc-qty,
+		          	{%- endif -%}
+		          	{%- if hidden_qv_mb -%}
+		          		.t4s-pr-packery2 .t4s-pr-quickview,
+		          	{%- endif -%}
+		          	{%- if hidden_wishlist_mb -%}
+		          		.t4s-pr-packery2 .t4s-pr-wishlist,
+		          	{%- endif -%}
+		          	{%- if hidden_compare_mb -%}
+		          		.t4s-pr-packery2 .t4s-pr-compare,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors -%}
+		          		.t4s-pr-packery2 .t4s-product-colors,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_sizes -%}
+		          		.t4s-pr-packery2 .t4s-product-sizes,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_colors and hidden_pr_sizes -%}
+		          		.t4s-pr-packery2 .t4s-pr-group-variable,
+		          	{%- endif -%}
+		          	{%- if hidden_pr_countdown -%}
+		          		.t4s-pr-packery2 .t4s-product-countdown,
+		          	{%- endif -%}
+		    			.t4s-abc-xyz {
+		    				display: none !important;
+		    			}
+		          	
+		          	{%- if hidden_atc_mb and hidden_qv_mb -%}
+		          		.t4s-pr-packery2 .t4s-product-btns {
+		          			display: none !important;
+		          		}
+		          		.t4s-pr-packery2 .t4s-product-inner .t4s-pr-group-variable {
+					        bottom: 5px !important;
+					    }
+		          	{%- endif -%}
+		        }
+	            .t4s-pr-packery2 {
+				       {%- assign addtocart_color_lightness       = bk_stts.addtocart_color | color_extract: 'lightness' -%}
+				       {%- assign addtocart_color_hover_lightness = bk_stts.addtocart_color_hover | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_lightness       = bk_stts.quickview_color | color_extract: 'lightness' -%}
+				       {%- assign quickview_color_hover_lightness = bk_stts.quickview_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_lightness        = bk_stts.wishlist_color | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_hover_lightness  = bk_stts.wishlist_color_hover | color_extract: 'lightness' -%}
+				       {%- assign wishlist_color_active_lightness = bk_stts.wishlist_color_active | color_extract: 'lightness' -%}
+				       {%- assign compare_color_lightness         = bk_stts.compare_color | color_extract: 'lightness' -%}
+				       {%- assign compare_color_hover_lightness   = bk_stts.compare_color_hover | color_extract: 'lightness' %}
+				       {%- assign size_list_color_info_lightness  = bk_stts.size_list_color_info | color_extract: 'lightness' %}
+				      
+				        --pr-addtocart-color             : {{ bk_stts.addtocart_color }};
+				        --pr-addtocart-color2            : {% if addtocart_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-addtocart-color-hover       : {{ bk_stts.addtocart_color_hover }};
+				        --pr-addtocart-color2-hover      : {% if addtocart_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-quickview-color             : {{ bk_stts.quickview_color }};
+				        --pr-quickview-color2            : {% if quickview_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-quickview-color-hover       : {{ bk_stts.quickview_color_hover }};
+				        --pr-quickview-color2-hover      : {% if quickview_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-wishlist-color              : {{ bk_stts.wishlist_color }};
+				        --pr-wishlist-color2             : {% if wishlist_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-hover        : {{ bk_stts.wishlist_color_hover }};
+				        --pr-wishlist-color2-hover       : {% if wishlist_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-wishlist-color-active        : {{ bk_stts.wishlist_color_active }};
+				        --pr-wishlist-color2-active       : {% if wishlist_color_active_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --pr-compare-color               : {{ bk_stts.compare_color }};
+				        --pr-compare-color2              : {% if compare_color_lightness < 85 %}#fff{% else %}#000{% endif %};
+				        --pr-compare-color-hover         : {{ bk_stts.compare_color_hover }};
+				        --pr-compare-color2-hover        : {% if compare_color_hover_lightness < 85 %}#fff{% else %}#000{% endif %};
+
+				        --size-list-color             : {{ bk_stts.size_list_color }};
+				        --size-list-color-info        : {{ bk_stts.size_list_color_info }};
+				        --size-list-color-info2       : {% if size_list_color_info_lightness < 85 %}#fff{% else %}#000{% endif %};
+	            }
+          	{%- endstyle -%} 
+   	{%- endcase -%}
+{%- endfor -%}
+
+{% if sp_paginate_by %}{% render 'spurit_po2_collection_template_snippet', paginate_by: sp_paginate_by %}{% endif %}{% schema %}
+  {
+  "name": "Product Items",
+  "tag": "div",
+  "class": "t4s-section t4s-section-config t4s-section-admn-fixed",
+  "settings": [
+	{
+	    "type": "header",
+	    "content": "+ Product title"
+	},
+	{
+	    "type": "select",
+	    "id": "txt_tr_pr",
+	    "default": "none",
+	    "options": [
+	      {
+	        "value": "none",
+	        "label": "None"
+	      },
+	      {
+	        "value": "lowercase",
+	        "label": "Lowercase"
+	      },
+	      {
+	        "value": "capitalize",
+	        "label": "Capitalize"
+	      },
+	      {
+	        "value": "uppercase",
+	        "label": "Uppercase"
+	      }
+	    ],
+	    "label": "Style"
+	},
+	{
+	    "type": "select",
+	    "id": "fnt_df_pr",
+	    "label": "Font family",
+	    "default": "1",
+	    "options": [
+	      {
+	        "value": "1",
+	        "label": "Font family #1"
+	      },
+	      {
+	        "value": "2",
+	        "label": "Font family #2"
+	      },
+	      {
+	        "value": "3",
+	        "label": "Font family #3"
+	      }
+	    ]
+	},
+	{
+	    "type": "range",
+	    "id": "size_pr",
+	    "min": 10,
+	    "max": 30,
+	    "step": 0.5,
+	    "label": "Font size",
+	    "unit": "px",
+	    "default": 14
+	},
+	{
+	    "type": "range",
+	    "id": "fw_pr",
+	    "min": 300,
+	    "max": 800,
+	    "step": 100,
+	    "label": "Font weight",
+	    "default": 400
+	},
+    {
+        "type": "range",
+        "id": "lh_pr",
+        "label": "Line height",
+        "max": 50,
+        "min": 0,
+        "step": 0.5,
+        "default": 0,
+        "unit": "px",
+        "info": "Set '0' to use default"            
+    },
+	{
+	    "type": "range",
+	    "id": "ls_pr",
+	    "min": 0,
+	    "max": 10,
+	    "step": 0.1,
+	    "label": "Letter spacing",
+	    "info": "set is '0' use to default",
+	    "unit": "px",
+	    "default": 0
+	},
+	{
+	    "type": "header",
+	    "content": "+ Product price"
+	},
+	{
+	    "type": "range",
+	    "id": "size_price_pr",
+	    "min": 10,
+	    "max": 36,
+	    "step": 0.5,
+	    "label": "Price size",
+	    "unit": "px",
+	    "default": 14
+	},
+	{
+	    "type": "range",
+	    "id": "fw_price_pr",
+	    "min": 300,
+	    "max": 800,
+	    "step": 100,
+	    "label": "Font weight",
+	    "default": 400
+	},
+	{
+	    "type": "header",
+	    "content": "+ Other"
+	},
+	{
+	    "type": "range",
+	    "id": "space_img_content",
+	    "min": 0,
+	    "max": 50,
+	    "step": 0.5,
+	    "label": "Space between images and content",
+	    "unit": "px",
+	    "default": 10
+	},
+	{
+	    "type": "range",
+	    "id": "space_elements",
+	    "min": 0,
+	    "max": 20,
+	    "step": 0.5,
+	    "label": "Space between elements of content",
+	    "unit": "px",
+	    "default": 5
+	},
+	{
+	    "type": "range",
+	    "id": "swatch_color_size",
+	    "label": "Swatch size",
+	    "default": 16,
+	    "min": 12,
+	    "max": 50,
+	    "step": 1,
+	    "unit": "px"
+	},
+	{
+	    "type": "range",
+	    "id": "swatch_color_size_mb",
+	    "label": "Swatch size (Mobile)",
+	    "default": 14,
+	    "min": 12,
+	    "max": 50,
+	    "step": 1,
+	    "unit": "px"
+	},
+	{
+	    "type": "header",
+	    "content": "+ Product button"
+	},
+	{
+	    "type": "range",
+	    "id": "pr_btn_round",
+	    "min": 0,
+	    "max": 40,
+	    "step": 1,
+	    "label": "Button round corners",
+	    "info": "Not working with product design 4",
+	    "unit": "px",
+	    "default": 40
+	},
+	{
+        "type": "header",
+        "content": "+ Color options",
+        "info": "Not working with product packery"
+    },
+	{
+        "type": "color",
+        "id": "pr_title_color",
+        "label": "Product title",
+        "default": "#000"
+    },
+    {
+        "type": "color",
+        "id": "pr_title_color_hover",
+        "label": "Product title hover",
+        "default": "#0ec1ae"
+      },
+       {
+        "type": "color",
+        "id": "price_color",
+        "label": "Price",
+        "default": "#696969"
+      },
+      {
+        "type": "color",
+        "id": "price_sale_color",
+        "label": "Sale price",
+        "default": "#e33131"
+      },
+      {
+        "type": "color",
+        "id": "vendors_color",
+        "label": "Vendors",
+        "default": "#878787"
+      },
+      {
+        "type": "color",
+        "id": "vendors_color_hover",
+        "label": "Vendors hover",
+        "default": "#0ec1ae"
+      },
+      {
+        "type": "color",
+        "id": "wishlist_color_active",
+        "label": "Wishlist active",
+        "default": "#e33131"
+      },
+      {
+        "type": "color",
+        "id": "countdown_color",
+        "label": "Countdown primary color",
+        "default": "#ffffff"
+      },
+      {
+        "type": "range",
+        "id": "countdown_overlay",
+        "label": "Background color countdown opacity",
+        "default": 10,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "unit": "%"
+      },
+      {
+        "type": "color",
+        "id": "pr_bg_overlay",
+        "label": "Color overlay",
+        "default": "#000"
+      },
+      {
+        "type": "range",
+        "id": "pr_overlay",
+        "label": "Color overlay opacity",
+        "default": 10,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "unit": "%"
+      }
+  ],
+   "blocks": [
+        {
+            "type": "1",
+            "name": "Product design 1",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 01"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product size list"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "2",
+            "name": "Product design 2",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 02"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			      }, 
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product size list"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "3",
+            "name": "Product design 3",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 03"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product size list"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "4",
+            "name": "Product design 4",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 04"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#0EC1AE"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			    },
+		        {
+			        "type": "header",
+			        "content": "+ Product size list"
+		        },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "5",
+            "name": "Product design 5",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 05"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Product title"
+			    },
+					{
+			        "type": "color",
+			        "id": "pr_title_color",
+			        "label": "Product title",
+			        "default": "#000000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "pr_title_color_hover",
+			        "label": "Product title hover",
+			        "default": "#0ec1ae"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product price"
+			      },
+			       {
+			        "type": "color",
+			        "id": "price_color",
+			        "label": "Price",
+			        "default": "#868686"
+			      },
+			      {
+			        "type": "color",
+			        "id": "price_sale_color",
+			        "label": "Sale price",
+			        "default": "#e33131"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product vendors"
+		        	},
+			      {
+			        "type": "color",
+			        "id": "vendors_color",
+			        "label": "Vendors",
+			        "default": "#868686"
+			      },
+			      {
+			        "type": "color",
+			        "id": "vendors_color_hover",
+			        "label": "Vendors hover",
+			        "default": "#0ec1ae"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			    },
+		        {
+			        "type": "header",
+			        "content": "+ Product size list"
+		        },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "6",
+            "name": "Product design 6, 7",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product design 6, design 7"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#0EC1AE"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			    },
+		        {
+			        "type": "header",
+			        "content": "+ Product size list"
+		        },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+       	{
+            "type": "list",
+            "name": "Product list",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product list"
+			    },
+
+			       {
+			        "type": "header",
+			        "content": "+ Product content"
+			      },
+			       {
+			        "type": "color",
+			        "id": "content_color",
+			        "label": "Content",
+			        "default": "#878787"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#0ec1ae"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#0ec1ae"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product size list"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "packery",
+            "name": "Product packery 1",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product packery 01"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Product title"
+			    },
+				{
+			        "type": "color",
+			        "id": "pr_title_color",
+			        "label": "Product title",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "pr_title_color_hover",
+			        "label": "Product title hover",
+			        "default": "#0ec1ae"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Product price"
+			    },
+			    {
+			        "type": "color",
+			        "id": "price_color",
+			        "label": "Price",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "price_sale_color",
+			        "label": "Sale price",
+			        "default": "#e33131"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Product vendors"
+		       	},
+			    {
+			        "type": "color",
+			        "id": "vendors_color",
+			        "label": "Vendors",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "vendors_color_hover",
+			        "label": "Vendors hover",
+			        "default": "#0ec1ae"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			    },
+			    {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			    },
+		      	{
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+		      	},
+		      	{
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+		      	},
+		      	{
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+		      	},
+		      	{
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			    },
+			    {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			    },
+		        {
+			        "type": "header",
+			        "content": "+ Product size list"
+		        },
+			    {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			    },
+			    {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			    },
+			    {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        },
+        {
+            "type": "packery2",
+            "name": "Product packery 2",
+            "limit": 1,
+            "settings": [
+				{
+			        "type": "text",
+			        "id": "heading",
+			        "label": "Heading",
+			        "default": "Product packery 02"
+			    },
+			       {
+			        "type": "header",
+			        "content": "+ Product buttons"
+			      },
+			       {
+			        "type": "color",
+			        "id": "addtocart_color",
+			        "label": "Button add to cart",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "addtocart_color_hover",
+			        "label": "Button add to cart hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color",
+			        "label": "Button quickview",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "quickview_color_hover",
+			        "label": "Button quickview hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color",
+			        "label": "Button wishlist",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_hover",
+			        "label": "Button wishlist hover",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "color",
+			        "id": "wishlist_color_active",
+			        "label": "Button wishlist active",
+			        "default": "#e33131"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color",
+			        "label": "Button compare",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "compare_color_hover",
+			        "label": "Button compare hover",
+			        "default": "#000"
+			      },
+			       {
+			        "type": "header",
+			        "content": "+ Product size list"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color",
+			        "label": "Size list on image product",
+			        "default": "#fff"
+			      },
+			      {
+			        "type": "color",
+			        "id": "size_list_color_info",
+			        "label": "Size list in product info ",
+			        "default": "#000"
+			      },
+			      {
+			        "type": "header",
+			        "content": "+ Options products infomation on Tablet & Mobile"
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_atc_mb",
+			        "label": "Hidden 'Add to cart' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_qv_mb",
+			        "label": "Hidden 'Quick view' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_wishlist_mb",
+			        "label": "Hidden 'Add to wishlist' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_compare_mb",
+			        "label": "Hidden 'Compare' button",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_colors",
+			        "label": "Hidden product colors swatches",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_sizes",
+			        "label": "Hidden product sizes list",
+			        "default": false
+			      },
+			      {
+			        "type": "checkbox",
+			        "id": "hidden_pr_countdown",
+			        "label": "Hidden product countdown",
+			        "default": false
+			      }
+            ]
+        }
+   ],
+    "default": {
+      "blocks": [
+        {
+          "type": "1"
+        },
+        {
+          "type": "2"
+        },
+        {
+          "type": "3"
+        },
+        {
+          "type": "4"
+        },
+        {
+          "type": "5"
+        },
+        {
+          "type": "6"
+        },
+        {
+          "type": "list"
+        },
+        {
+          "type": "packery"
+        },
+        {
+          "type": "packery2"
+        }
+      ]
+    }
+}
+{% endschema %}

@@ -1,0 +1,13 @@
+node_modules
+.git
+.gitignore
+.env
+.env.local
+.env.test
+.cursor
+.synapse-themes
+tests
+*.md
+Dockerfile
+fly.toml
+vercel.json

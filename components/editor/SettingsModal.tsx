@@ -26,7 +26,7 @@ interface CustomProvider {
   created_at: string;
 }
 
-type SettingsTab = 'editor' | 'appearance' | 'preview' | 'storage' | 'keys' | 'providers';
+type SettingsTab = 'editor' | 'appearance' | 'keys' | 'providers';
 
 /* ------------------------------------------------------------------ */
 /*  Preset card data                                                   */
@@ -43,7 +43,7 @@ const PRESET_CARDS: {
     label: 'Fast',
     description: 'Speed optimized',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
       </svg>
     ),
@@ -53,7 +53,7 @@ const PRESET_CARDS: {
     label: 'Comfort',
     description: 'Easy on the eyes',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
       </svg>
     ),
@@ -63,7 +63,7 @@ const PRESET_CARDS: {
     label: 'Power',
     description: 'All features on',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
       </svg>
     ),
@@ -71,7 +71,7 @@ const PRESET_CARDS: {
 ];
 
 /* ------------------------------------------------------------------ */
-/*  Tab definitions                                                    */
+/*  Tab definitions (sidebar navigation)                               */
 /* ------------------------------------------------------------------ */
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
@@ -79,7 +79,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     id: 'editor',
     label: 'Editor',
     icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="16 18 22 12 16 6" />
         <polyline points="8 6 2 12 8 18" />
       </svg>
@@ -89,7 +89,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     id: 'appearance',
     label: 'Appearance',
     icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="5" />
         <line x1="12" y1="1" x2="12" y2="3" />
         <line x1="12" y1="21" x2="12" y2="23" />
@@ -103,29 +103,10 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    id: 'preview',
-    label: 'Preview',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    ),
-  },
-  {
-    id: 'storage',
-    label: 'Storage',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-      </svg>
-    ),
-  },
-  {
     id: 'keys',
-    label: 'Keys',
+    label: 'Keyboard',
     icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
         <line x1="6" y1="8" x2="6.01" y2="8" />
         <line x1="10" y1="8" x2="10.01" y2="8" />
@@ -142,7 +123,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     id: 'providers',
     label: 'Providers',
     icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2L2 7l10 5 10-5-10-5z" />
         <path d="M2 17l10 5 10-5" />
         <path d="M2 12l10 5 10-5" />
@@ -188,18 +169,27 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-3">
-      <div>
+    <div className="flex items-center justify-between py-3 gap-4">
+      <div className="min-w-0">
         <p className="text-sm font-medium ide-text-2">{label}</p>
         {description && <p className="text-xs ide-text-muted mt-0.5">{description}</p>}
       </div>
-      {children}
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="pb-1 mb-1">
+      <h3 className="text-xs font-semibold tracking-widest uppercase ide-text-muted">{title}</h3>
+      {description && <p className="text-xs ide-text-quiet mt-1">{description}</p>}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Component                                                          */
+/*  Keybinding helpers                                                 */
 /* ------------------------------------------------------------------ */
 
 const CATEGORY_ORDER: KeyBinding['category'][] = ['editor', 'navigation', 'ai', 'general'];
@@ -224,6 +214,10 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.length > 0 ? parts.join('+') : e.key;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { settings, updateSetting, applyPreset, resetToDefaults } = useEditorSettings();
   const chromatic = useChromaticSettings();
@@ -231,7 +225,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [keybindings, setKeybindings] = useState<KeyBinding[]>(loadKeybindings);
   const [recordingId, setRecordingId] = useState<string | null>(null);
 
-  // EPIC E: Providers state
+  // Providers state
   const [providers, setProviders] = useState<CustomProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -264,7 +258,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     return () => window.removeEventListener('keydown', handleKeyCapture, { capture: true });
   }, [recordingId, handleKeyCapture]);
 
-  // EPIC E: Fetch providers when Providers tab is active
+  // Fetch providers when Providers tab is active
   useEffect(() => {
     if (activeTab !== 'providers' || !isOpen) return;
     let cancelled = false;
@@ -278,6 +272,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .finally(() => { if (!cancelled) setProvidersLoading(false); });
     return () => { cancelled = true; };
   }, [activeTab, isOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !recordingId) onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose, recordingId]);
 
   const handleAddProvider = async () => {
     setProviderSaving(true);
@@ -354,61 +358,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       aria-modal="true"
       aria-label="Settings"
     >
-      <div className="ide-surface-pop rounded-xl shadow-2xl w-full max-w-lg mx-4 border ide-border flex flex-col max-h-[90vh]">
+      <div className="ide-surface-pop rounded-xl shadow-2xl w-full max-w-[720px] mx-4 border ide-border flex flex-col" style={{ height: 'min(85vh, 640px)' }}>
         {/* ── Header ──────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4">
-          <h2 className="text-lg font-semibold ide-text">Settings</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b ide-border-subtle shrink-0">
+          <h2 className="text-base font-semibold ide-text">Settings</h2>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-md ide-text-3 hover:ide-text ide-hover transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-md ide-text-3 hover:ide-text ide-hover transition-colors"
             aria-label="Close"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
-        {/* ── Quick Presets ───────────────────────────────────────── */}
-        <div className="px-6 pb-4">
-          <p className="text-[11px] font-medium tracking-widest uppercase ide-text-muted mb-3">
-            Quick Presets
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {PRESET_CARDS.map((card) => {
-              const isActive = settings.preset === card.id;
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  onClick={() => applyPreset(card.id)}
-                  className={`relative flex flex-col items-center gap-1.5 rounded-lg border p-4 transition-all ${
-                    isActive
-                      ? 'border-sky-500 bg-sky-500/10 dark:bg-sky-500/10 ide-text'
-                      : 'ide-border ide-surface-inset ide-text-3 hover:ide-border hover:ide-text-2'
-                  }`}
-                >
-                  {isActive && (
-                    <span className="absolute top-2 right-2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-sky-500 dark:text-sky-400">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </span>
-                  )}
-                  <span className={isActive ? 'text-sky-500 dark:text-sky-400' : ''}>{card.icon}</span>
-                  <span className="text-sm font-medium">{card.label}</span>
-                  <span className="text-[11px] ide-text-muted">{card.description}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Tab bar ─────────────────────────────────────────────── */}
-        <div className="px-6">
-          <div className="inline-flex rounded-lg ide-surface-inset p-0.5">
+        {/* ── Body: sidebar + content ─────────────────────────────── */}
+        <div className="flex flex-1 min-h-0">
+          {/* Sidebar nav */}
+          <nav className="w-44 shrink-0 border-r ide-border-subtle py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
             {TABS.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -416,515 +386,501 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors text-left w-full ${
                     isActive
-                      ? 'ide-active ide-text'
-                      : 'ide-text-muted hover:ide-text-2 ide-hover'
+                      ? 'ide-active ide-text bg-sky-500/8 dark:bg-sky-500/10'
+                      : 'ide-text-3 hover:ide-text-2 ide-hover'
                   }`}
                 >
-                  {tab.icon}
+                  <span className={isActive ? 'text-sky-500 dark:text-sky-400' : ''}>{tab.icon}</span>
                   {tab.label}
                 </button>
               );
             })}
-          </div>
-        </div>
 
-        {/* ── Tab content ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-          {activeTab === 'editor' && (
-            <div className="divide-y ide-border-subtle">
-              {/* Font Size */}
-              <SettingRow label="Font Size">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={10}
-                    max={24}
-                    value={settings.fontSize}
-                    onChange={(e) => updateSetting('fontSize', Number(e.target.value))}
-                    className="w-32 accent-sky-500"
-                  />
-                  <span className="text-sm ide-text-3 tabular-nums w-10 text-right">
-                    {settings.fontSize}px
-                  </span>
-                </div>
-              </SettingRow>
-
-              {/* Tab Size */}
-              <SettingRow label="Tab Size">
-                <select
-                  value={settings.tabSize}
-                  onChange={(e) => updateSetting('tabSize', Number(e.target.value) as 2 | 4)}
-                  className="rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500 dark:focus:border-sky-400"
-                >
-                  <option value={2}>2 spaces</option>
-                  <option value={4}>4 spaces</option>
-                </select>
-              </SettingRow>
-
-              {/* Word Wrap */}
-              <SettingRow label="Word Wrap" description="Wrap long lines of code">
-                <Toggle checked={settings.wordWrap} onChange={(v) => updateSetting('wordWrap', v)} />
-              </SettingRow>
-
-              {/* Minimap */}
-              <SettingRow label="Minimap" description="Show code minimap on the right">
-                <Toggle checked={settings.minimap} onChange={(v) => updateSetting('minimap', v)} />
-              </SettingRow>
-
-              {/* Line Numbers */}
-              <SettingRow label="Line Numbers" description="Show line numbers in gutter">
-                <Toggle checked={settings.lineNumbers} onChange={(v) => updateSetting('lineNumbers', v)} />
-              </SettingRow>
-
-              {/* Bracket Matching */}
-              <SettingRow label="Bracket Matching" description="Highlight matching brackets">
-                <Toggle checked={settings.bracketMatching} onChange={(v) => updateSetting('bracketMatching', v)} />
-              </SettingRow>
-
-              {/* Separator */}
-              <div className="pt-2" />
-
-              {/* Auto-Save */}
-              <SettingRow label="Auto-Save" description="Automatically save files after changes">
-                <Toggle checked={settings.autoSave} onChange={(v) => updateSetting('autoSave', v)} />
-              </SettingRow>
-
-              {/* Auto-Save Delay */}
-              <SettingRow label="Auto-Save Delay" description="Time to wait before auto-saving">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={500}
-                    max={5000}
-                    step={100}
-                    value={settings.autoSaveDelay}
-                    onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
-                    className="w-32 accent-sky-500"
-                    disabled={!settings.autoSave}
-                  />
-                  <span className={`text-sm tabular-nums w-14 text-right ${settings.autoSave ? 'ide-text-3' : 'ide-text-quiet'}`}>
-                    {settings.autoSaveDelay}ms
-                  </span>
-                </div>
-              </SettingRow>
+            {/* Spacer + reset at bottom */}
+            <div className="flex-1" />
+            <div className="border-t ide-border-subtle mt-2 pt-2">
+              <button
+                type="button"
+                onClick={resetToDefaults}
+                className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-[13px] ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                Reset All
+              </button>
             </div>
-          )}
+          </nav>
 
-          {activeTab === 'appearance' && (
-            <div className="divide-y ide-border-subtle">
-              {/* Section header */}
-              <div className="pb-3">
-                <p className="text-xs font-medium tracking-widest uppercase ide-text-muted">
-                  Chromatic IDE
-                </p>
-                <p className="text-xs ide-text-quiet mt-1">
-                  IDE tints subtly based on your theme&apos;s color palette
-                </p>
+          {/* Content area */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+            {/* ── EDITOR TAB ───────────────────────────────────────── */}
+            {activeTab === 'editor' && (
+              <div className="space-y-6">
+                {/* Presets */}
+                <div>
+                  <SectionHeader title="Presets" description="Quickly apply a configuration profile" />
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    {PRESET_CARDS.map((card) => {
+                      const isActive = settings.preset === card.id;
+                      return (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => applyPreset(card.id)}
+                          className={`relative flex flex-col items-center gap-1 rounded-lg border py-3 px-2 transition-all ${
+                            isActive
+                              ? 'border-sky-500 bg-sky-500/8 dark:bg-sky-500/10 ide-text'
+                              : 'ide-border ide-surface-inset ide-text-3 hover:ide-text-2 hover:border-stone-300 dark:hover:border-white/15'
+                          }`}
+                        >
+                          {isActive && (
+                            <span className="absolute top-1.5 right-1.5">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-sky-500 dark:text-sky-400">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            </span>
+                          )}
+                          <span className={isActive ? 'text-sky-500 dark:text-sky-400' : ''}>{card.icon}</span>
+                          <span className="text-[13px] font-medium">{card.label}</span>
+                          <span className="text-[11px] ide-text-muted">{card.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Display settings */}
+                <div>
+                  <SectionHeader title="Display" />
+                  <div className="divide-y ide-border-subtle">
+                    <SettingRow label="Font Size">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={10}
+                          max={24}
+                          value={settings.fontSize}
+                          onChange={(e) => updateSetting('fontSize', Number(e.target.value))}
+                          className="w-28 accent-sky-500"
+                        />
+                        <span className="text-sm ide-text-3 tabular-nums w-10 text-right">
+                          {settings.fontSize}px
+                        </span>
+                      </div>
+                    </SettingRow>
+
+                    <SettingRow label="Tab Size">
+                      <select
+                        value={settings.tabSize}
+                        onChange={(e) => updateSetting('tabSize', Number(e.target.value) as 2 | 4)}
+                        className="rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500 dark:focus:border-sky-400"
+                      >
+                        <option value={2}>2 spaces</option>
+                        <option value={4}>4 spaces</option>
+                      </select>
+                    </SettingRow>
+
+                    <SettingRow label="Word Wrap" description="Wrap long lines of code">
+                      <Toggle checked={settings.wordWrap} onChange={(v) => updateSetting('wordWrap', v)} />
+                    </SettingRow>
+
+                    <SettingRow label="Minimap" description="Show code minimap on the right">
+                      <Toggle checked={settings.minimap} onChange={(v) => updateSetting('minimap', v)} />
+                    </SettingRow>
+
+                    <SettingRow label="Line Numbers" description="Show line numbers in gutter">
+                      <Toggle checked={settings.lineNumbers} onChange={(v) => updateSetting('lineNumbers', v)} />
+                    </SettingRow>
+
+                    <SettingRow label="Bracket Matching" description="Highlight matching brackets">
+                      <Toggle checked={settings.bracketMatching} onChange={(v) => updateSetting('bracketMatching', v)} />
+                    </SettingRow>
+                  </div>
+                </div>
+
+                {/* Behavior settings */}
+                <div>
+                  <SectionHeader title="Behavior" />
+                  <div className="divide-y ide-border-subtle">
+                    <SettingRow label="Auto-Save" description="Automatically save files after changes">
+                      <Toggle checked={settings.autoSave} onChange={(v) => updateSetting('autoSave', v)} />
+                    </SettingRow>
+
+                    <SettingRow label="Auto-Save Delay" description="Time to wait before auto-saving">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={500}
+                          max={5000}
+                          step={100}
+                          value={settings.autoSaveDelay}
+                          onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
+                          className="w-28 accent-sky-500"
+                          disabled={!settings.autoSave}
+                        />
+                        <span className={`text-sm tabular-nums w-14 text-right ${settings.autoSave ? 'ide-text-3' : 'ide-text-quiet'}`}>
+                          {settings.autoSaveDelay}ms
+                        </span>
+                      </div>
+                    </SettingRow>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Enable toggle */}
-              <SettingRow label="Chromatic Theming" description="Tint the IDE with your theme's colors">
-                <Toggle checked={chromatic.settings.enabled} onChange={() => chromatic.toggleEnabled()} />
-              </SettingRow>
-
-              {/* Intensity slider */}
-              <SettingRow label="Intensity" description="How strongly the theme colors tint the IDE">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={chromatic.settings.intensity}
-                    onChange={(e) => chromatic.setIntensity(Number(e.target.value))}
-                    className="w-32 accent-sky-500"
-                    disabled={!chromatic.settings.enabled}
+            {/* ── APPEARANCE TAB ────────────────────────────────────── */}
+            {activeTab === 'appearance' && (
+              <div className="space-y-6">
+                {/* Chromatic theming */}
+                <div>
+                  <SectionHeader
+                    title="Chromatic IDE"
+                    description="IDE tints subtly based on your theme's color palette"
                   />
-                  <span className={`text-sm tabular-nums w-10 text-right ${chromatic.settings.enabled ? 'ide-text-3' : 'ide-text-quiet'}`}>
-                    {chromatic.settings.intensity}%
-                  </span>
+                  <div className="divide-y ide-border-subtle">
+                    <SettingRow label="Enable" description="Tint the IDE with your theme's colors">
+                      <Toggle checked={chromatic.settings.enabled} onChange={() => chromatic.toggleEnabled()} />
+                    </SettingRow>
+
+                    <SettingRow label="Intensity" description="How strongly the colors tint">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={chromatic.settings.intensity}
+                          onChange={(e) => chromatic.setIntensity(Number(e.target.value))}
+                          className="w-28 accent-sky-500"
+                          disabled={!chromatic.settings.enabled}
+                        />
+                        <span className={`text-sm tabular-nums w-10 text-right ${chromatic.settings.enabled ? 'ide-text-3' : 'ide-text-quiet'}`}>
+                          {chromatic.settings.intensity}%
+                        </span>
+                      </div>
+                    </SettingRow>
+
+                    <SettingRow label="Transition Speed" description="Color transition duration">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={200}
+                          max={3000}
+                          step={100}
+                          value={chromatic.settings.transitionDuration}
+                          onChange={(e) => chromatic.updateSetting('transitionDuration', Number(e.target.value))}
+                          className="w-28 accent-sky-500"
+                        />
+                        <span className="text-sm ide-text-3 tabular-nums w-14 text-right">
+                          {chromatic.settings.transitionDuration}ms
+                        </span>
+                      </div>
+                    </SettingRow>
+                  </div>
                 </div>
-              </SettingRow>
 
-              {/* Separator */}
-              <div className="pt-2" />
-
-              {/* Per-region controls header */}
-              <SettingRow label="Regions" description="Choose which areas are tinted">
-                <span />
-              </SettingRow>
-
-              {/* Region toggles */}
-              <SettingRow label="Sidebar">
-                <Toggle
-                  checked={chromatic.settings.regions.sidebar}
-                  onChange={(v) => chromatic.updateRegion('sidebar', v)}
-                  disabled={!chromatic.settings.enabled}
-                />
-              </SettingRow>
-              <SettingRow label="Editor">
-                <Toggle
-                  checked={chromatic.settings.regions.editor}
-                  onChange={(v) => chromatic.updateRegion('editor', v)}
-                  disabled={!chromatic.settings.enabled}
-                />
-              </SettingRow>
-              <SettingRow label="Preview">
-                <Toggle
-                  checked={chromatic.settings.regions.preview}
-                  onChange={(v) => chromatic.updateRegion('preview', v)}
-                  disabled={!chromatic.settings.enabled}
-                />
-              </SettingRow>
-              <SettingRow label="Status Bar">
-                <Toggle
-                  checked={chromatic.settings.regions.statusBar}
-                  onChange={(v) => chromatic.updateRegion('statusBar', v)}
-                  disabled={!chromatic.settings.enabled}
-                />
-              </SettingRow>
-              <SettingRow label="Activity Bar">
-                <Toggle
-                  checked={chromatic.settings.regions.activityBar}
-                  onChange={(v) => chromatic.updateRegion('activityBar', v)}
-                  disabled={!chromatic.settings.enabled}
-                />
-              </SettingRow>
-
-              {/* Transition duration */}
-              <div className="pt-2" />
-              <SettingRow label="Transition Speed" description="Duration of color transitions on project switch">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={200}
-                    max={3000}
-                    step={100}
-                    value={chromatic.settings.transitionDuration}
-                    onChange={(e) => chromatic.updateSetting('transitionDuration', Number(e.target.value))}
-                    className="w-32 accent-sky-500"
-                  />
-                  <span className="text-sm ide-text-3 tabular-nums w-14 text-right">
-                    {chromatic.settings.transitionDuration}ms
-                  </span>
+                {/* Region controls */}
+                <div>
+                  <SectionHeader title="Tinted Regions" description="Choose which areas are tinted" />
+                  <div className="divide-y ide-border-subtle">
+                    {([
+                      ['sidebar', 'Sidebar'],
+                      ['editor', 'Editor'],
+                      ['preview', 'Preview'],
+                      ['statusBar', 'Status Bar'],
+                      ['activityBar', 'Activity Bar'],
+                    ] as const).map(([key, label]) => (
+                      <SettingRow key={key} label={label}>
+                        <Toggle
+                          checked={chromatic.settings.regions[key]}
+                          onChange={(v) => chromatic.updateRegion(key, v)}
+                          disabled={!chromatic.settings.enabled}
+                        />
+                      </SettingRow>
+                    ))}
+                  </div>
                 </div>
-              </SettingRow>
-            </div>
-          )}
+              </div>
+            )}
 
-          {activeTab === 'preview' && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm ide-text-muted">Preview settings coming soon.</p>
-            </div>
-          )}
-
-          {activeTab === 'storage' && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm ide-text-muted">Storage settings coming soon.</p>
-            </div>
-          )}
-
-          {activeTab === 'keys' && (
-            <div className="space-y-6">
-              {CATEGORY_ORDER.map((cat) => {
-                const bindings = keybindings.filter((b) => b.category === cat);
-                if (bindings.length === 0) return null;
-                return (
-                  <div key={cat}>
-                    <p className="text-xs font-medium tracking-widest uppercase ide-text-muted mb-3">
-                      {CATEGORY_LABELS[cat]}
-                    </p>
-                    <div className="divide-y ide-border-subtle">
-                      {bindings.map((binding) => {
-                        const effectiveKey = getEffectiveKey(binding);
-                        const isCustom = binding.customKeys !== null;
-                        const isRecording = recordingId === binding.id;
-                        return (
-                          <SettingRow
-                            key={binding.id}
-                            label={binding.label}
-                            description={binding.description}
-                          >
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setRecordingId(isRecording ? null : binding.id)}
-                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-100 dark:focus:ring-offset-[#0a0a0a] min-w-[100px] justify-center ${
-                                  isRecording
-                                    ? 'border-sky-500 bg-sky-500/20 text-sky-600 dark:text-sky-300'
-                                    : isCustom
-                                      ? 'border-sky-500/60 bg-sky-500/10 text-sky-600 dark:text-sky-300'
-                                      : 'ide-border ide-surface-input ide-text-3'
-                                }`}
-                              >
-                                {isRecording ? 'Press keys...' : effectiveKey}
-                              </button>
-                              {isCustom && (
+            {/* ── KEYBOARD TAB ──────────────────────────────────────── */}
+            {activeTab === 'keys' && (
+              <div className="space-y-6">
+                {CATEGORY_ORDER.map((cat) => {
+                  const bindings = keybindings.filter((b) => b.category === cat);
+                  if (bindings.length === 0) return null;
+                  return (
+                    <div key={cat}>
+                      <SectionHeader title={CATEGORY_LABELS[cat]} />
+                      <div className="divide-y ide-border-subtle">
+                        {bindings.map((binding) => {
+                          const effectiveKey = getEffectiveKey(binding);
+                          const isCustom = binding.customKeys !== null;
+                          const isRecording = recordingId === binding.id;
+                          return (
+                            <SettingRow
+                              key={binding.id}
+                              label={binding.label}
+                              description={binding.description}
+                            >
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setKeybindings((prev) => {
-                                      const next = prev.map((b) =>
-                                        b.id === binding.id ? { ...b, customKeys: null } : b
-                                      );
-                                      saveKeybindings(next);
-                                      return next;
-                                    });
-                                  }}
-                                  className="p-1 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors"
-                                  title="Reset to default"
-                                  aria-label="Reset to default"
+                                  onClick={() => setRecordingId(isRecording ? null : binding.id)}
+                                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-100 dark:focus:ring-offset-[#0a0a0a] min-w-[100px] justify-center ${
+                                    isRecording
+                                      ? 'border-sky-500 bg-sky-500/20 text-sky-600 dark:text-sky-300 animate-pulse'
+                                      : isCustom
+                                        ? 'border-sky-500/60 bg-sky-500/10 text-sky-600 dark:text-sky-300'
+                                        : 'ide-border ide-surface-input ide-text-3'
+                                  }`}
                                 >
-                                  <span className="text-sm">↺</span>
+                                  {isRecording ? 'Press keys...' : effectiveKey}
                                 </button>
-                              )}
-                            </div>
-                          </SettingRow>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setKeybindings(resetKeybindings());
-                    setRecordingId(null);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-md ide-surface-input px-3 py-1.5 text-sm ide-text-2 hover:ide-text ide-hover transition-colors"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                    <path d="M3 3v5h5" />
-                  </svg>
-                  Reset All
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'providers' && (
-            <div className="space-y-4">
-              {/* Built-in providers header */}
-              <div>
-                <p className="text-xs font-medium tracking-widest uppercase ide-text-muted mb-3">
-                  Built-in Providers
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { name: 'Anthropic', model: 'Claude Sonnet 4.5', status: process.env.NEXT_PUBLIC_HAS_ANTHROPIC === 'true' ? 'configured' : 'needs key' },
-                    { name: 'OpenAI', model: 'GPT-4o', status: process.env.NEXT_PUBLIC_HAS_OPENAI === 'true' ? 'configured' : 'needs key' },
-                    { name: 'Google', model: 'Gemini 2.0 Flash', status: process.env.NEXT_PUBLIC_HAS_GOOGLE === 'true' ? 'configured' : 'needs key' },
-                  ].map((p) => (
-                    <div key={p.name} className="flex items-center justify-between py-2 px-3 rounded-lg ide-surface-inset">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-2 h-2 rounded-full ${p.status === 'configured' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                        <div>
-                          <p className="text-sm font-medium ide-text-2">{p.name}</p>
-                          <p className="text-xs ide-text-muted">{p.model}</p>
-                        </div>
+                                {isCustom && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setKeybindings((prev) => {
+                                        const next = prev.map((b) =>
+                                          b.id === binding.id ? { ...b, customKeys: null } : b
+                                        );
+                                        saveKeybindings(next);
+                                        return next;
+                                      });
+                                    }}
+                                    className="p-1 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+                                    title="Reset to default"
+                                    aria-label="Reset to default"
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                      <path d="M3 3v5h5" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </SettingRow>
+                          );
+                        })}
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        p.status === 'configured'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      }`}>
-                        {p.status === 'configured' ? 'Active' : 'Not configured'}
-                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Custom providers section */}
-              <div className="pt-2">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium tracking-widest uppercase ide-text-muted">
-                    Custom Providers
-                  </p>
+                  );
+                })}
+                <div className="pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowAddProvider(!showAddProvider)}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-sky-500 hover:text-sky-400 transition-colors"
+                    onClick={() => {
+                      setKeybindings(resetKeybindings());
+                      setRecordingId(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md ide-surface-inset border ide-border px-3 py-1.5 text-[13px] ide-text-3 hover:ide-text-2 ide-hover transition-colors"
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
                     </svg>
-                    Add Provider
+                    Reset All Shortcuts
                   </button>
                 </div>
+              </div>
+            )}
 
-                {/* Add provider form */}
-                {showAddProvider && (
-                  <div className="rounded-lg border ide-border p-4 mb-3 space-y-3">
-                    <p className="text-sm font-medium ide-text-2">
-                      Add OpenAI-Compatible Provider
-                    </p>
-                    <p className="text-xs ide-text-muted">
-                      Works with DeepSeek, Groq, Mistral, Fireworks, Together AI, Ollama, and more.
-                    </p>
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Provider name (e.g. deepseek)"
-                        value={newProvider.name}
-                        onChange={(e) => setNewProvider((p) => ({ ...p, name: e.target.value }))}
-                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Display name (optional)"
-                        value={newProvider.displayName}
-                        onChange={(e) => setNewProvider((p) => ({ ...p, displayName: e.target.value }))}
-                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
-                      />
-                      <input
-                        type="url"
-                        placeholder="Base URL (e.g. https://api.deepseek.com/v1)"
-                        value={newProvider.baseURL}
-                        onChange={(e) => setNewProvider((p) => ({ ...p, baseURL: e.target.value }))}
-                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
-                      />
-                      <input
-                        type="password"
-                        placeholder="API Key"
-                        value={newProvider.apiKey}
-                        onChange={(e) => setNewProvider((p) => ({ ...p, apiKey: e.target.value }))}
-                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Default model (e.g. deepseek-chat)"
-                        value={newProvider.defaultModel}
-                        onChange={(e) => setNewProvider((p) => ({ ...p, defaultModel: e.target.value }))}
-                        className="w-full rounded-md ide-surface-input border ide-border px-3 py-1.5 text-sm ide-text focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                    {providerError && (
-                      <p className="text-xs text-red-500">{providerError}</p>
-                    )}
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setShowAddProvider(false); setProviderError(null); }}
-                        className="px-3 py-1.5 text-xs font-medium ide-text-3 hover:ide-text-2 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddProvider}
-                        disabled={providerSaving || !newProvider.name || !newProvider.baseURL || !newProvider.apiKey || !newProvider.defaultModel}
-                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {providerSaving ? 'Adding...' : 'Add Provider'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Provider list */}
-                {providersLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <p className="text-xs ide-text-muted">Loading providers...</p>
-                  </div>
-                ) : providers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="ide-text-quiet mb-2">
-                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                      <path d="M2 17l10 5 10-5" />
-                      <path d="M2 12l10 5 10-5" />
-                    </svg>
-                    <p className="text-sm ide-text-muted">No custom providers configured</p>
-                    <p className="text-xs ide-text-quiet mt-1">Add a provider to use models from DeepSeek, Groq, and more</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {providers.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between py-2 px-3 rounded-lg ide-surface-inset">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${
-                            p.health_status === 'healthy' ? 'bg-emerald-500' :
-                            p.health_status === 'degraded' ? 'bg-amber-500' :
-                            p.health_status === 'down' ? 'bg-red-500' :
-                            'bg-stone-400'
-                          }`} />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium ide-text-2 truncate">{p.display_name}</p>
-                            <p className="text-xs ide-text-muted truncate">{p.default_model} &middot; {p.base_url}</p>
+            {/* ── PROVIDERS TAB ─────────────────────────────────────── */}
+            {activeTab === 'providers' && (
+              <div className="space-y-6">
+                {/* Built-in providers */}
+                <div>
+                  <SectionHeader title="Built-in Providers" />
+                  <div className="space-y-1.5 mt-2">
+                    {[
+                      { name: 'Anthropic', model: 'Claude Sonnet 4.5', status: process.env.NEXT_PUBLIC_HAS_ANTHROPIC === 'true' ? 'configured' : 'needs key' },
+                      { name: 'OpenAI', model: 'GPT-4o', status: process.env.NEXT_PUBLIC_HAS_OPENAI === 'true' ? 'configured' : 'needs key' },
+                      { name: 'Google', model: 'Gemini 2.0 Flash', status: process.env.NEXT_PUBLIC_HAS_GOOGLE === 'true' ? 'configured' : 'needs key' },
+                    ].map((p) => (
+                      <div key={p.name} className="flex items-center justify-between py-2.5 px-3 rounded-lg ide-surface-inset">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-2 h-2 rounded-full ${p.status === 'configured' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          <div>
+                            <p className="text-sm font-medium ide-text-2">{p.name}</p>
+                            <p className="text-xs ide-text-muted">{p.model}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <button
-                            type="button"
-                            onClick={() => handleHealthCheck(p.id)}
-                            disabled={healthCheckingId === p.id}
-                            className="p-1.5 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors disabled:opacity-50"
-                            title="Run health check"
-                          >
-                            {healthCheckingId === p.id ? (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                              </svg>
-                            ) : (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                <polyline points="22 4 12 14.01 9 11.01" />
-                              </svg>
-                            )}
-                          </button>
-                          <Toggle
-                            checked={p.is_enabled}
-                            onChange={(v) => handleToggleProvider(p.id, v)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProvider(p.id)}
-                            className="p-1.5 rounded text-red-400 hover:text-red-300 ide-hover transition-colors"
-                            title="Delete provider"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                          p.status === 'configured'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        }`}>
+                          {p.status === 'configured' ? 'Active' : 'Not configured'}
+                        </span>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+                </div>
 
-        {/* ── Footer ──────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 py-4 border-t ide-border">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-sm ide-text-3 hover:ide-text-2 transition-colors"
-            title="Start onboarding tour (coming soon)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-            Start Tour
-          </button>
-          <button
-            type="button"
-            onClick={resetToDefaults}
-            className="inline-flex items-center gap-1.5 rounded-md ide-surface-input px-3 py-1.5 text-sm ide-text-2 hover:ide-text ide-hover transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 1 10 7 10" />
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-            </svg>
-            Reset to Defaults
-          </button>
+                {/* Custom providers */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <SectionHeader title="Custom Providers" />
+                    <button
+                      type="button"
+                      onClick={() => setShowAddProvider(!showAddProvider)}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-500 hover:text-sky-400 transition-colors"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Add
+                    </button>
+                  </div>
+
+                  {/* Add provider form */}
+                  {showAddProvider && (
+                    <div className="rounded-lg border ide-border p-4 mb-3 space-y-3 ide-surface-inset">
+                      <p className="text-sm font-medium ide-text-2">
+                        Add OpenAI-Compatible Provider
+                      </p>
+                      <p className="text-xs ide-text-muted">
+                        Works with DeepSeek, Groq, Mistral, Fireworks, Together AI, Ollama, and more.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Provider name"
+                          value={newProvider.name}
+                          onChange={(e) => setNewProvider((prev) => ({ ...prev, name: e.target.value }))}
+                          className="col-span-1 ide-input px-3 py-1.5 text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Display name (optional)"
+                          value={newProvider.displayName}
+                          onChange={(e) => setNewProvider((prev) => ({ ...prev, displayName: e.target.value }))}
+                          className="col-span-1 ide-input px-3 py-1.5 text-sm"
+                        />
+                        <input
+                          type="url"
+                          placeholder="Base URL (e.g. https://api.deepseek.com/v1)"
+                          value={newProvider.baseURL}
+                          onChange={(e) => setNewProvider((prev) => ({ ...prev, baseURL: e.target.value }))}
+                          className="col-span-2 ide-input px-3 py-1.5 text-sm"
+                        />
+                        <input
+                          type="password"
+                          placeholder="API Key"
+                          value={newProvider.apiKey}
+                          onChange={(e) => setNewProvider((prev) => ({ ...prev, apiKey: e.target.value }))}
+                          className="col-span-1 ide-input px-3 py-1.5 text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Default model"
+                          value={newProvider.defaultModel}
+                          onChange={(e) => setNewProvider((prev) => ({ ...prev, defaultModel: e.target.value }))}
+                          className="col-span-1 ide-input px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                      {providerError && (
+                        <p className="text-xs text-red-500 dark:text-red-400">{providerError}</p>
+                      )}
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddProvider(false); setProviderError(null); }}
+                          className="px-3 py-1.5 text-xs font-medium ide-text-3 hover:ide-text-2 transition-colors rounded-md ide-hover"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddProvider}
+                          disabled={providerSaving || !newProvider.name || !newProvider.baseURL || !newProvider.apiKey || !newProvider.defaultModel}
+                          className="px-3 py-1.5 text-xs font-medium rounded-md bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {providerSaving ? 'Adding...' : 'Add Provider'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Provider list */}
+                  {providersLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <p className="text-xs ide-text-muted">Loading providers...</p>
+                    </div>
+                  ) : providers.length === 0 && !showAddProvider ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg border border-dashed ide-border">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="ide-text-quiet mb-2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5" />
+                        <path d="M2 12l10 5 10-5" />
+                      </svg>
+                      <p className="text-sm ide-text-muted">No custom providers</p>
+                      <p className="text-xs ide-text-quiet mt-1">Add one to use DeepSeek, Groq, and more</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {providers.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg ide-surface-inset">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                              p.health_status === 'healthy' ? 'bg-emerald-500' :
+                              p.health_status === 'degraded' ? 'bg-amber-500' :
+                              p.health_status === 'down' ? 'bg-red-500' :
+                              'bg-stone-400 dark:bg-stone-600'
+                            }`} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium ide-text-2 truncate">{p.display_name}</p>
+                              <p className="text-xs ide-text-muted truncate">{p.default_model} &middot; {p.base_url}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => handleHealthCheck(p.id)}
+                              disabled={healthCheckingId === p.id}
+                              className="p-1.5 rounded ide-text-muted hover:ide-text-2 ide-hover transition-colors disabled:opacity-50"
+                              title="Run health check"
+                            >
+                              {healthCheckingId === p.id ? (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                </svg>
+                              ) : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                  <polyline points="22 4 12 14.01 9 11.01" />
+                                </svg>
+                              )}
+                            </button>
+                            <Toggle
+                              checked={p.is_enabled}
+                              onChange={(v) => handleToggleProvider(p.id, v)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProvider(p.id)}
+                              className="p-1.5 rounded text-red-400 hover:text-red-300 ide-hover transition-colors"
+                              title="Delete provider"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

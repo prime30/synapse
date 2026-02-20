@@ -220,7 +220,7 @@ function CollaboratorPopover({
       <div
         role="button"
         tabIndex={0}
-        className="ring-2 ring-[var(--background)] rounded-full cursor-pointer hover:ring-gray-500 transition-all"
+        className="ring-2 ring-[var(--background)] rounded-full cursor-pointer hover:ring-stone-500 transition-all"
         onClick={() => setOpen((prev) => !prev)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -240,7 +240,7 @@ function CollaboratorPopover({
       </div>
 
       {open && (
-        <div className="absolute top-full right-0 mt-2 min-w-[200px] bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-3">
+        <div className="absolute top-full right-0 mt-2 min-w-[200px] ide-surface-panel border ide-border rounded-lg shadow-xl z-50 p-3">
           <div className="flex items-center gap-2.5 mb-2">
             <UserAvatar
               avatarUrl={avatarUrl}
@@ -251,7 +251,7 @@ function CollaboratorPopover({
             />
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-medium text-white truncate">{displayName}</span>
-              <span className="flex items-center gap-1.5 text-[10px] text-gray-400">
+              <span className="flex items-center gap-1.5 text-[10px] ide-text-muted">
                 <span
                   className="inline-block w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: color }}
@@ -261,29 +261,29 @@ function CollaboratorPopover({
             </div>
           </div>
 
-          <div className="border-t border-gray-700 my-2" />
+          <div className="border-t ide-border my-2" />
 
           {filePath && basename ? (
             <div>
               <button
                 type="button"
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-800 rounded-md transition-colors text-left"
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs ide-text-2 ide-hover rounded-md transition-colors text-left"
                 onClick={() => {
                   onNavigateToFile?.(filePath);
                   setOpen(false);
                 }}
               >
-                <FileText className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                <FileText className="w-3.5 h-3.5 ide-text-3 shrink-0" />
                 <span className="truncate">{basename}</span>
               </button>
               {cursor && (
-                <span className="block px-2 mt-0.5 text-[10px] text-gray-500">
+                <span className="block px-2 mt-0.5 text-[10px] ide-text-3">
                   Line {cursor.lineNumber}, Col {cursor.column}
                 </span>
               )}
             </div>
           ) : (
-            <span className="block px-2 text-[11px] text-gray-500">No file open</span>
+            <span className="block px-2 text-[11px] ide-text-3">No file open</span>
           )}
         </div>
       )}

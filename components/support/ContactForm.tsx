@@ -162,7 +162,7 @@ export function ContactForm({ className = '' }: ContactFormProps) {
       <button
         type="submit"
         disabled={!subject || !message.trim() || status === 'submitting'}
-        className="w-full px-3 py-2 text-xs font-medium rounded bg-white ide-text hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="w-full px-3 py-2 text-xs font-medium rounded bg-white dark:bg-white/10 ide-text hover:bg-stone-100 dark:hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {status === 'submitting' ? 'Sending...' : 'Send message'}
       </button>

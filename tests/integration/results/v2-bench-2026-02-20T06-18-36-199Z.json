@@ -1,0 +1,314 @@
+{
+  "timestamp": "2026-02-20T06:18:36.200Z",
+  "runsPerPrompt": 3,
+  "features": [
+    "prompt-caching",
+    "adaptive-thinking",
+    "context-editing",
+    "auto-review",
+    "tier-routing",
+    "fast-edit-path",
+    "hallucination-reduction"
+  ],
+  "contenderDefinitions": [
+    {
+      "key": "synapse",
+      "name": "Synapse (Haiku 4.5)",
+      "runner": "v2",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Haiku 4.5)",
+      "runner": "baseline",
+      "model": "claude-haiku-4-5-20251001",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Haiku 4.5)",
+      "runner": "cursor",
+      "model": "claude-haiku-4-5-20251001",
+      "features": [
+        "cursor-production"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse (Opus 4.6)",
+      "runner": "v2",
+      "model": "claude-opus-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Opus 4.6)",
+      "runner": "baseline",
+      "model": "claude-opus-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Opus 4.6)",
+      "runner": "cursor",
+      "model": "claude-opus-4-6",
+      "features": [
+        "cursor-production"
+      ]
+    },
+    {
+      "key": "synapse",
+      "name": "Synapse (Sonnet 4.6)",
+      "runner": "v2",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "prompt-caching",
+        "adaptive-thinking",
+        "context-editing",
+        "auto-review",
+        "tier-routing",
+        "fast-edit-path",
+        "hallucination-reduction"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "Baseline (Sonnet 4.6)",
+      "runner": "baseline",
+      "model": "claude-sonnet-4-6",
+      "features": []
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor production (Sonnet 4.6)",
+      "runner": "cursor",
+      "model": "claude-sonnet-4-6",
+      "features": [
+        "cursor-production"
+      ]
+    }
+  ],
+  "scenarios": {
+    "trivial-color": {
+      "name": "Trivial: Change background color",
+      "intentMode": "code",
+      "prompt": "Change the announcement bar background color to #1a1a2e and the text color to white.",
+      "files": [
+        "sections/announcement-bar.liquid"
+      ],
+      "expectedTier": "TRIVIAL",
+      "contenders": {
+        "synapse": {
+          "name": "Synapse (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 2829,
+          "firstChunkMs": 1290,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "TRIVIAL",
+          "inputTokens": 3,
+          "outputTokens": 284,
+          "cacheRead": 7377,
+          "cacheWrite": 3688,
+          "costUSD": 0.005418200000000001,
+          "toolCalls": 1,
+          "toolsUsed": [
+            "search_replace"
+          ],
+          "changes": 1,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "prompt-caching",
+            "adaptive-thinking",
+            "context-editing",
+            "auto-review",
+            "tier-routing",
+            "fast-edit-path",
+            "hallucination-reduction"
+          ],
+          "totalTimeMsLow": 2281,
+          "totalTimeMsHigh": 3161,
+          "firstChunkMsLow": 749,
+          "firstChunkMsHigh": 1707,
+          "costUSDLow": 0.0020236,
+          "costUSDHigh": 0.0122034
+        },
+        "baseline": {
+          "name": "Baseline (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 88806,
+          "firstChunkMs": 4027,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "BASELINE",
+          "inputTokens": 89516,
+          "outputTokens": 11034,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0.11575013333333332,
+          "toolCalls": 9,
+          "toolsUsed": [
+            "search_replace",
+            "list_files",
+            "glob_files",
+            "read_file",
+            "propose_code_edit",
+            "create_file",
+            "grep_content"
+          ],
+          "changes": 5,
+          "filesCreated": 1,
+          "thinkingN": 0,
+          "features": [],
+          "totalTimeMsLow": 77225,
+          "totalTimeMsHigh": 107926,
+          "firstChunkMsLow": 2782,
+          "firstChunkMsHigh": 6001,
+          "costUSDLow": 0.1057344,
+          "costUSDHigh": 0.1287552
+        },
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 37278,
+          "firstChunkMs": 53,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 33880,
+          "totalTimeMsHigh": 39703,
+          "firstChunkMsLow": 44,
+          "firstChunkMsHigh": 66,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    },
+    "simple-ask": {
+      "name": "Simple: Accessibility audit",
+      "intentMode": "ask",
+      "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? Give specific WCAG violations and fixes.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "snippets/product-img.liquid"
+      ],
+      "expectedTier": "SIMPLE",
+      "contenders": {
+        "cursor": {
+          "name": "Cursor production (Haiku 4.5)",
+          "success": true,
+          "totalTimeMs": 55966,
+          "firstChunkMs": 62,
+          "model": "claude-haiku-4-5-20251001",
+          "tier": "CURSOR",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "costUSD": 0,
+          "toolCalls": 0,
+          "toolsUsed": [],
+          "changes": 0,
+          "filesCreated": 0,
+          "thinkingN": 0,
+          "features": [
+            "cursor-production"
+          ],
+          "totalTimeMsLow": 44489,
+          "totalTimeMsHigh": 63363,
+          "firstChunkMsLow": 55,
+          "firstChunkMsHigh": 67,
+          "costUSDLow": 0,
+          "costUSDHigh": 0
+        }
+      }
+    },
+    "complex-section": {
+      "name": "Complex: Build announcement bar section",
+      "intentMode": "code",
+      "prompt": "Add a new section for an announcement bar with a background color picker, text content, a link URL, and a dismissible toggle. Follow existing section patterns in the theme.",
+      "files": [
+        "sections/announcement-bar.liquid",
+        "layout/theme.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {}
+    },
+    "arch-rebuild": {
+      "name": "Architectural: Rebuild product template",
+      "intentMode": "code",
+      "prompt": "Rebuild the entire product page template to use a modular section-based architecture with separate blocks for gallery, description, variants, and add-to-cart. Restructure the existing monolithic template.",
+      "files": [
+        "templates/product.json",
+        "sections/main-product.liquid"
+      ],
+      "expectedTier": "ARCHITECTURAL",
+      "contenders": {}
+    },
+    "compound-quickview": {
+      "name": "Compound: Multi-Turn Quick-View Workflow",
+      "intentMode": "code",
+      "prompt": "Now make the modal responsive for mobile with a slide-up animation, and add a loading spinner while product data loads.",
+      "files": [
+        "sections/main-collection.liquid",
+        "snippets/product-thumbnail.liquid",
+        "layout/theme.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {}
+    },
+    "crossfile-consistency": {
+      "name": "Cross-File: Sale Badge Consistency",
+      "intentMode": "code",
+      "prompt": "Add a sale badge to product cards that shows the discount percentage. Make sure it appears consistently across collection pages, search results, and featured product sections. Follow existing badge patterns in the theme.",
+      "files": [
+        "snippets/product-thumbnail.liquid",
+        "sections/main-collection.liquid",
+        "sections/featured-product.liquid",
+        "sections/main-search.liquid"
+      ],
+      "expectedTier": "COMPLEX",
+      "contenders": {}
+    }
+  },
+  "gapAnalysis": [
+    {
+      "scenario": "trivial-color",
+      "metric": "cost",
+      "synapseValue": "5.42m",
+      "cursorValue": "0.00m",
+      "delta": "+442%",
+      "severity": "cache-priming",
+      "likelyCause": "First-request cache write cost.",
+      "recommendation": "Not a gap. Request #2+ will hit cache."
+    }
+  ]
+}

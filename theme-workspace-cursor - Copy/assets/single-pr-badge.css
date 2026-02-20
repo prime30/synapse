@@ -1,0 +1,91 @@
+.t4s-single-product-badge {
+    opacity: 1 !important;
+    top: 15px;
+    right: 15px;
+    z-index: 100;
+    transform: scale(.9);
+    -webkit-transform: scale(.9);
+    transform-origin: 100% 0;
+    -webkit-transform-origin: 100% 0;    
+    justify-content: center;
+    flex-direction: column;
+    align-items: flex-end;
+}
+.t4s-badge-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    word-break: break-word;
+    padding: 0 5px;
+    min-width: 50px;
+    margin-bottom: 5px;
+    text-transform: capitalize;
+    font-size: 12px;
+    text-align: center;
+    line-height: 21px;
+    background-color: var(--badge-color-primary);
+    color: var(--badge-color-secondary);
+}
+.t4s-badge-item:last-child {
+    margin: 0;
+}
+.badge_shape_1 .t4s-badge-item {
+    border-radius: 20px;
+    height: 31px;
+    padding: 0 15px;
+}
+.badge_shape_2 .t4s-badge-item {
+    border-radius: 0;
+}
+.badge_shape_3 .t4s-badge-item {
+    border-radius: 12px;
+}
+.badge_reverse_color_true .t4s-badge-item {
+    background-color: var(--badge-color-secondary);
+    color: var(--badge-color-primary);
+}
+
+.t4s-badge-sale {
+    --badge-color-primary:  var(--sale-badge-primary);
+    --badge-color-secondary: var(--sale-badge-secondary);
+}
+.t4s-badge-new {
+    --badge-color-primary:  var(--new-badge-primary);
+    --badge-color-secondary: var(--new-badge-secondary);
+}
+.t4s-badge-hot { 
+    --badge-color-primary:  var(--hot-badge-primary);
+    --badge-color-secondary: var(--hot-badge-secondary);
+}
+.t4s-badge-soldout {
+    --badge-color-primary:  var(--soldout-badge-primary);
+    --badge-color-secondary: var(--soldout-badge-secondary);
+}
+.t4s-badge-preorder {
+    --badge-color-primary:  var(--preorder-badge-primary);
+    --badge-color-secondary: var(--preorder-badge-secondary);
+}
+.t4s-badge-custom {
+    --badge-color-primary:  var(--custom-badge-primary);
+    --badge-color-secondary: var(--custom-badge-secondary);
+} 
+.t4s-single-product-badge > .t4s-badge-item {
+    display: none;
+}
+.t4s-single-product-badge > .t4s-badge-item:not([hidden]) {
+    display: inline-flex;
+    -webkit-animation: 1s t4s-ani-fadeIn;
+    animation: 1s t4s-ani-fadeIn;
+}
+[data-main-media] {
+    z-index: 1;
+}
+@media (min-width: 1025px) {
+    .t4s-single-product-badge {
+        transform:scale(1);
+        -webkit-transform: scale(1)
+    }
+    .t4s-single-product-badge>span {
+        margin-bottom: 10px;
+    }
+}

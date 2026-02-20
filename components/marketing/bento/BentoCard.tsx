@@ -27,7 +27,7 @@ const sizeClasses: Record<CardSize, string> = {
 };
 
 function getVariantClasses(variant: CardVariant, theme: CardTheme): string {
-  if (variant === 'accent') return 'gradient-accent text-white border border-sky-600/30 shadow-[0_0_24px_rgba(14,165,233,0.25)]';
+  if (variant === 'accent') return 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_rgba(40,205,86,0.25)]';
   const glass = theme === 'light' ? 'glass-light' : 'glass-dark';
   return variant === 'code-texture' ? glass : glass;
 }
@@ -78,7 +78,7 @@ export function BentoCard({
 
       {variant === 'code-texture' && (
         <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-[0.04] pointer-events-none font-mono text-[8px] leading-[10px] text-sky-500 overflow-hidden whitespace-pre select-none transition-opacity duration-500"
+          className="absolute inset-0 opacity-0 group-hover:opacity-[0.04] pointer-events-none font-mono text-[8px] leading-[10px] text-stone-500 dark:text-stone-400 overflow-hidden whitespace-pre select-none transition-opacity duration-500"
           aria-hidden="true"
         >
           {`{% for product in collection.products %}
@@ -120,7 +120,7 @@ export function BentoCard({
             animate={isHovered ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
             transition={{ duration: 0.2 }}
           >
-            <span className={`text-sm font-medium ${variant === 'accent' ? 'text-white' : theme === 'light' ? 'text-sky-500' : 'text-sky-400'}`}>
+            <span className={`text-sm font-medium ${variant === 'accent' ? 'text-white' : 'text-accent'}`}>
               Learn more &rarr;
             </span>
           </motion.div>
@@ -138,7 +138,7 @@ export function BentoCard({
         ${getVariantClasses(variant, theme)}
         cursor-pointer
         transition-all duration-300
-        hover:border-sky-500/20 hover:shadow-[0_8px_30px_rgba(14,165,233,0.08)]
+        hover:border-accent/20 hover:shadow-[0_8px_30px_rgba(40,205,86,0.08)]
         ${className}
       `}
       variants={itemVariants}

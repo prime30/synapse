@@ -9,10 +9,18 @@ export const PREVIEW_TAB_ID = '__preview__';
 const STORAGE_KEY_PREFIX = 'synapse-file-tabs-';
 const GROUPS_KEY_PREFIX = 'synapse-tab-groups-';
 const LOCKED_KEY_PREFIX = 'synapse-locked-files-';
+const RECENT_EDITS_KEY_PREFIX = 'synapse-recent-edits-';
+
+const MAX_RECENT_EDITS = 12;
 
 export interface RecentFile {
   fileId: string;
   openedAt: number; // Date.now()
+}
+
+export interface RecentEdit {
+  fileId: string;
+  editedAt: number;
 }
 
 interface UseFileTabsOptions {
@@ -23,6 +31,7 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
   const storageKey = `${STORAGE_KEY_PREFIX}${projectId}`;
   const groupsKey = `${GROUPS_KEY_PREFIX}${projectId}`;
   const lockedKey = `${LOCKED_KEY_PREFIX}${projectId}`;
+  const recentEditsKey = `${RECENT_EDITS_KEY_PREFIX}${projectId}`;
 
   // Initial state must match server and client to avoid hydration mismatch.
   // Restore from localStorage only after mount (useEffect below).
@@ -31,6 +40,7 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [unsavedFileIds, setUnsavedFileIds] = useState<Set<string>>(new Set());
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [recentlyEdited, setRecentlyEdited] = useState<RecentEdit[]>([]);
 
   // ── Workset / group state (same: no localStorage in initial state) ───────
   const [tabGroups, setTabGroups] = useState<FileGroup[]>([]);
@@ -57,10 +67,15 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
           setActiveGroupId(parsed[0].id);
         }
       }
+      const recentEditsStored = localStorage.getItem(recentEditsKey);
+      if (recentEditsStored) {
+        const parsed = JSON.parse(recentEditsStored) as RecentEdit[];
+        if (Array.isArray(parsed)) setRecentlyEdited(parsed.slice(0, MAX_RECENT_EDITS));
+      }
     } catch {
       // Ignore storage errors
     }
-  }, [storageKey, groupsKey]);
+  }, [storageKey, groupsKey, recentEditsKey]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -161,6 +176,21 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
       return next;
     });
   }, []);
+
+  const recordEdit = useCallback((fileId: string) => {
+    if (!fileId || fileId === PREVIEW_TAB_ID) return;
+    setRecentlyEdited((prev) => {
+      const filtered = prev.filter((r) => r.fileId !== fileId);
+      return [{ fileId, editedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT_EDITS);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || recentlyEdited.length === 0) return;
+    try {
+      localStorage.setItem(recentEditsKey, JSON.stringify(recentlyEdited));
+    } catch { /* ignore */ }
+  }, [recentlyEdited, recentEditsKey]);
 
   // ── Locked files state (persisted); restore from localStorage after mount ───
   const [lockedFileIds, setLockedFileIds] = useState<Set<string>>(new Set());
@@ -333,5 +363,9 @@ export function useFileTabs({ projectId }: UseFileTabsOptions) {
     previewTabOpen,
     openPreviewTab,
     closePreviewTab,
+
+    // Recently edited (persisted)
+    recentlyEdited,
+    recordEdit,
   };
 }

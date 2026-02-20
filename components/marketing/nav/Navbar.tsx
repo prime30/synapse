@@ -13,6 +13,7 @@ import { MagneticElement } from '@/components/marketing/interactions/MagneticEle
 import { useTheme } from '@/hooks/useTheme';
 import { createClient } from '@/lib/supabase/client';
 import { NavbarUserMenu } from './NavbarUserMenu';
+import { Download } from 'lucide-react';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
@@ -112,8 +113,18 @@ export function Navbar() {
               ))}
             </nav>
 
-            {/* Right side — Auth controls, CTA, theme toggle, hamburger */}
+            {/* Right side — Download, Auth controls, CTA, theme toggle, hamburger */}
             <div className="flex items-center gap-3 md:gap-4">
+              <MagneticElement strength={4} radius={80} className="hidden md:inline-flex">
+                <Link
+                  href="/download"
+                  className="flex items-center gap-1.5 text-sm text-stone-500 dark:text-white/50 hover:text-stone-900 dark:hover:text-white transition-colors"
+                  aria-label="Download desktop app"
+                >
+                  <Download size={16} strokeWidth={2} />
+                </Link>
+              </MagneticElement>
+
               {isAuthenticated ? (
                 <>
                   <MagneticElement strength={5} radius={100} className="hidden md:inline-flex">
@@ -215,6 +226,21 @@ export function Navbar() {
                 </Link>
               </motion.div>
             ))}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ delay: NAV_LINKS.length * 0.1, duration: 0.3 }}
+            >
+              <Link
+                href="/download"
+                className="flex items-center gap-2 text-2xl text-white font-medium"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Download size={22} strokeWidth={2} />
+                Download
+              </Link>
+            </motion.div>
             {isAuthenticated ? (
               <>
                 {/* Account links for mobile */}

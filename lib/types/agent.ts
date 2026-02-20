@@ -1,5 +1,5 @@
 /** Agent type identifiers for the multi-agent orchestration system */
-export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'json' | 'review';
+export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'json' | 'schema' | 'review' | 'general' | 'general_1' | 'general_2' | 'general_3' | 'general_4';
 
 /** Routing tier for smart request classification */
 export type RoutingTier = 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
@@ -11,7 +11,7 @@ export type MessageType = 'task' | 'result' | 'error' | 'question';
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
 /** Execution status for agent runs */
-export type ExecutionStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+export type ExecutionStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'awaiting_approval';
 
 /** A message exchanged between agents through the coordinator */
 export interface AgentMessage {
@@ -50,6 +50,8 @@ export interface CodeChange {
   agentType: AgentType;
   /** Agent's confidence in this change (0-1). Below 0.7 shown as "Suggestion". */
   confidence?: number;
+  /** Optional line range for scoped apply — only lines startLine–endLine are replaced. */
+  range?: { startLine: number; endLine: number };
 }
 
 /**
@@ -158,6 +160,20 @@ export interface AgentResult {
   suggestVerification?: boolean;
   /** PM's self-assessed routing tier (may trigger tier escalation). */
   selfAssessedTier?: string;
+  /** Whether the PM used exploration tools before producing its JSON decision. */
+  pmUsedTools?: boolean;
+  /** True when content was streamed directly to the client (no summary needed). */
+  directStreamed?: boolean;
+  /** Token usage breakdown for the request (v2 coordinator). */
+  usage?: {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCacheReadTokens?: number;
+    totalCacheWriteTokens?: number;
+    model: string;
+    provider: string;
+    tier: string;
+  };
 }
 
 /** In-memory state for an active execution */

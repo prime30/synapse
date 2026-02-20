@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { mapCoordinatorPhase, RAIL_PHASE_LABELS } from '@/lib/agents/phase-mapping';
 import type { RailPhase } from '@/lib/agents/phase-mapping';
 import { safeTransition } from '@/lib/accessibility';
+import { getAgentColor, formatAgentLabel } from '@/lib/agents/agent-colors';
 import { AgentCard } from './AgentCard';
 import { OrchestrationTimeline, type TimelineEntry } from './OrchestrationTimeline';
 
@@ -57,6 +58,10 @@ export interface ThinkingStep {
     cost?: { inputTokens: number; outputTokens: number; perAgent?: Array<{ agentType: string; inputTokens: number; outputTokens: number }> };
     [key: string]: unknown;
   };
+  /** Live LLM reasoning text accumulated from streaming 'reasoning' SSE events. */
+  reasoning?: string;
+  /** Which agent is producing the current reasoning stream. */
+  reasoningAgent?: string;
 }
 
 interface ThinkingBlockProps {
@@ -226,19 +231,11 @@ function ElapsedBadge({ startedAt }: { startedAt: number }) {
   );
 }
 
-// ── Agent badges ────────────────────────────────────────────────────────
-
-const AGENT_BADGE_CLASSES: Record<string, string> = {
-  project_manager: 'text-sky-600 dark:text-sky-400 border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950',
-  liquid: 'text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950',
-  javascript: 'text-sky-600 dark:text-sky-400 border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950',
-  css: 'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950',
-  json: 'text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950',
-  review: 'text-green-600 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950',
-};
+// ── Agent badges (from shared agent-colors.ts) ─────────────────────────
 
 function getAgentBadgeClasses(agent: string): string {
-  return AGENT_BADGE_CLASSES[agent] ?? 'ide-text-muted border-stone-200 dark:border-white/10 ide-surface-input';
+  const c = getAgentColor(agent);
+  return `${c.text} ${c.border} ${c.bg}`;
 }
 
 // ── Routing tier badge classes ──────────────────────────────────────────
@@ -258,7 +255,7 @@ function RoutingTierBadge({ tier, model }: { tier: string; model?: string }) {
         {tier}
       </span>
       {model && (
-        <span className="text-[10px] text-stone-500 dark:text-gray-500">
+        <span className="text-[10px] text-stone-500 dark:text-stone-500">
           {model}
         </span>
       )}
@@ -370,7 +367,7 @@ function StepMetadata({ step, onOpenFile }: { step: ThinkingStep; onOpenFile?: (
           {meta.delegations.map((d, i) => (
             <div key={`${d.agentType}-${i}`} className="flex items-start gap-1.5">
               <span className={`shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${getAgentBadgeClasses(d.agentType)}`}>
-                {d.agentType}
+                {formatAgentLabel(d.agentType)}
               </span>
               <div className="flex flex-wrap gap-1 min-w-0">
                 {d.affectedFiles.slice(0, 4).map((f) => (
@@ -393,7 +390,7 @@ function StepMetadata({ step, onOpenFile }: { step: ThinkingStep; onOpenFile?: (
 function PhaseCheckbox({ checked, active }: { checked: boolean; active: boolean }) {
   if (checked) {
     return (
-      <div className="w-4 h-4 rounded border-2 border-[#28CD56] bg-[#28CD56] flex items-center justify-center shrink-0">
+      <div className="w-4 h-4 rounded border-2 border-[#28CD56] bg-[#28CD56] flex items-center justify-center shrink-0" role="checkbox" aria-checked="true">
         <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
@@ -402,11 +399,11 @@ function PhaseCheckbox({ checked, active }: { checked: boolean; active: boolean 
   }
   if (active) {
     return (
-      <div className="w-4 h-4 rounded border-2 border-sky-500 dark:border-sky-400 flex items-center justify-center shrink-0 bg-sky-500/10 dark:bg-sky-400/10" aria-hidden />
+      <div className="w-4 h-4 rounded border-2 border-sky-500 dark:border-sky-400 flex items-center justify-center shrink-0 bg-sky-500/10 dark:bg-sky-400/10" role="checkbox" aria-checked="mixed" />
     );
   }
   return (
-    <div className="w-4 h-4 rounded border-2 border-stone-300 dark:border-white/10 bg-white dark:bg-white/5 shrink-0" />
+    <div className="w-4 h-4 rounded border-2 border-stone-300 dark:border-white/10 bg-white dark:bg-white/5 shrink-0" role="checkbox" aria-checked="false" />
   );
 }
 
@@ -497,10 +494,16 @@ export function ThinkingBlock({
             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
           </svg>
         )}
-        <span className={`text-xs ide-text-2 font-medium flex-1 min-w-0 ${!isComplete ? 'animate-pulse' : ''}`}>
+        <span className={`text-xs ide-text-2 font-medium flex-1 min-w-0 truncate ${!isComplete ? 'animate-pulse' : ''}`}>
           {isComplete
             ? `Thinking (${steps.length} steps)`
             : `Thinking... (${completedCount}/${steps.length})`}
+          {!isComplete && latestActiveStep?.label && (
+            <span className="ide-text-muted font-normal ml-1">
+              {'· '}
+              {stripIDEAndPreview(latestActiveStep.label)}
+            </span>
+          )}
           {!isComplete && latestActiveStep?.agent && (
             <span className={`ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${getAgentBadgeClasses(latestActiveStep.agent)}`}>
               {latestActiveStep.agent}
@@ -640,6 +643,21 @@ export function ThinkingBlock({
                                   {step.detail && step.phase !== 'clarification' && (
                                     <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed">{stripIDEAndPreview(step.detail)}</p>
                                   )}
+                                  {/* Live LLM reasoning stream */}
+                                  {step.reasoning && (
+                                    <details className="mt-1 group/reasoning" open={!step.done}>
+                                      <summary className="text-[10px] ide-text-muted cursor-pointer select-none hover:ide-text-2 transition-colors flex items-center gap-1">
+                                        <svg className="w-3 h-3 transition-transform group-open/reasoning:rotate-90" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                          <path d="M4.5 2.5l4 3.5-4 3.5" />
+                                        </svg>
+                                        {step.reasoningAgent ?? 'agent'} reasoning
+                                        {!step.done && <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse ml-1" />}
+                                      </summary>
+                                      <pre className="mt-1 text-[11px] ide-text-3 leading-relaxed whitespace-pre-wrap break-words font-mono bg-black/5 dark:bg-white/5 rounded-md p-2 max-h-48 overflow-y-auto border border-stone-200/50 dark:border-white/5">
+                                        {step.reasoning}
+                                      </pre>
+                                    </details>
+                                  )}
                                   {/* Phase 4b: Analysis only in verbose mode */}
                                   {verbose && step.analysis && (
                                     <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed italic border-l-2 border-purple-500/30 pl-2">{stripIDEAndPreview(step.analysis)}</p>
@@ -687,7 +705,7 @@ export function ThinkingBlock({
       {/* Phase 8b: Per-agent progress cards */}
       {workers && workers.length > 0 && (
         <div className="mt-2 pt-2 border-t border-stone-200 dark:border-white/5 space-y-1" aria-label="Parallel agent workers" role="region">
-          <p className="text-[10px] text-stone-500 dark:text-gray-500 uppercase tracking-wider mb-1" aria-live="polite">
+          <p className="text-[10px] text-stone-500 dark:text-stone-500 uppercase tracking-wider mb-1" aria-live="polite">
             {'Parallel Agents (' + workers.filter(w => w.status === 'running').length + ' active, ' + workers.filter(w => w.status === 'complete').length + ' done)'}
           </p>
           {workers.map(worker => (

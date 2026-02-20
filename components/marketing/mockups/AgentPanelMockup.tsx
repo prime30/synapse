@@ -28,7 +28,7 @@ export function AgentPanelMockup() {
       {/* Top bar */}
       <div className="h-10 bg-[#0a0a0a] border-b border-white/5 flex items-center px-4">
         <span className="text-[11px] text-white/60">Agent Orchestration</span>
-        <span className="ml-auto text-[10px] text-sky-400">3 active</span>
+        <span className="ml-auto text-[10px] text-accent">3 active</span>
       </div>
 
       {/* Panels */}
@@ -64,3 +64,5 @@ export function AgentPanelMockup() {
     </div>
   );
 }
+
+

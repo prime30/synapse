@@ -21,11 +21,11 @@ function FoldVisual({ foldIndex, onTypingComplete }: { foldIndex: number; onTypi
   const visuals = [
     <div key="empty" className="h-full flex flex-col p-4 font-mono text-sm">
       <div className="flex items-center gap-2 mb-3 text-white/30 text-xs">
-        <span className="px-2 py-0.5 bg-white/5 rounded text-sky-500/60">theme.liquid</span>
+        <span className="px-2 py-0.5 bg-white/5 rounded text-stone-500/60">theme.liquid</span>
       </div>
       <div className="flex-1 flex items-start">
         <div className="text-white/20 mr-4 text-right select-none" style={{ minWidth: '2ch' }}>{Array.from({ length: 12 }, (_, i) => <div key={i}>{i + 1}</div>)}</div>
-        <div className="flex-1"><span className="inline-block w-[2px] h-[18px] bg-sky-500 animate-pulse" /></div>
+        <div className="flex-1"><span className="inline-block w-[2px] h-[18px] bg-accent animate-pulse" /></div>
       </div>
     </div>,
     <TypewriterCode key="typing" onComplete={onTypingComplete} />,
@@ -33,12 +33,12 @@ function FoldVisual({ foldIndex, onTypingComplete }: { foldIndex: number; onTypi
       <div className="w-1/4 border-r border-white/5 p-3 text-xs">
         <div className="text-white/50 font-pixel text-[8px] tracking-wider mb-2">FILES</div>
         {['layout/theme.liquid', 'sections/hero.liquid', 'sections/product.liquid', 'assets/theme.css', 'snippets/price.liquid'].map((f, i) => (
-          <div key={f} className={`py-1.5 px-2 rounded text-[11px] ${i === 1 ? 'bg-sky-500/10 text-sky-400' : 'text-white/60'}`}>{f.split('/').pop()}</div>
+          <div key={f} className={`py-1.5 px-2 rounded text-[11px] ${i === 1 ? 'bg-accent/10 text-accent' : 'text-white/60'}`}>{f.split('/').pop()}</div>
         ))}
         <div className="mt-6 space-y-2">
           {['Code', 'Design', 'QA'].map((name, i) => (
             <div key={name} className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${['bg-green-500', 'bg-blue-400', 'bg-purple-400'][i]} animate-pulse`} style={{ animationDelay: `${i * 0.5}s` }} />
+              <div className={`w-1.5 h-1.5 rounded-full ${['bg-green-500', 'bg-accent', 'bg-purple-400'][i]} animate-pulse`} style={{ animationDelay: `${i * 0.5}s` }} />
               <span className="text-[10px] text-white/60">{name} Agent</span>
             </div>
           ))}
@@ -46,13 +46,13 @@ function FoldVisual({ foldIndex, onTypingComplete }: { foldIndex: number; onTypi
       </div>
       <div className="flex-1 p-3 font-mono text-[11px] leading-5 text-white/70">
         <div><span className="text-cyan-500">{'{% schema %}'}</span></div>
-        <div>{'  { '}<span className="text-sky-400">&quot;name&quot;</span>{': '}<span className="text-sky-400">&quot;Hero Banner&quot;</span>{' }'}</div>
+        <div>{'  { '}<span className="text-accent">&quot;name&quot;</span>{': '}<span className="text-accent">&quot;Hero Banner&quot;</span>{' }'}</div>
         <div><span className="text-cyan-500">{'{% endschema %}'}</span></div>
         <div className="mt-2"><span className="text-white/30">{'<!-- AI-generated section -->'}</span></div>
-        <div>{'<section class='}<span className="text-sky-400">&quot;hero&quot;</span>{'>'}</div>
+        <div>{'<section class='}<span className="text-accent">&quot;hero&quot;</span>{'>'}</div>
         <div>{'  <h1>'}<span className="text-cyan-500">{'{{ heading }}'}</span>{'</h1>'}</div>
-        <div>{'  <div class='}<span className="text-sky-400">&quot;hero__cta&quot;</span>{'>'}</div>
-        <div>{'    <a href='}<span className="text-sky-400">&quot;#&quot;</span>{'>'}<span className="text-cyan-500">{'{{ cta_text }}'}</span>{'</a>'}</div>
+        <div>{'  <div class='}<span className="text-accent">&quot;hero__cta&quot;</span>{'>'}</div>
+        <div>{'    <a href='}<span className="text-accent">&quot;#&quot;</span>{'>'}<span className="text-cyan-500">{'{{ cta_text }}'}</span>{'</a>'}</div>
         <div>{'  </div>'}</div><div>{'</section>'}</div>
       </div>
     </div>,
@@ -66,25 +66,25 @@ function FoldVisual({ foldIndex, onTypingComplete }: { foldIndex: number; onTypi
         </div>
       </div>
       <div className="flex-1 bg-white p-4 flex flex-col">
-        <div className="bg-gray-50 rounded-lg flex-1 p-6 flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-gray-200 rounded-lg mb-4" />
-          <div className="h-3 w-32 bg-gray-300 rounded mb-2" />
-          <div className="h-2 w-48 bg-gray-200 rounded mb-4" />
-          <div className="h-8 w-24 bg-sky-500 rounded-full" />
+        <div className="bg-stone-50 dark:bg-stone-900 rounded-lg flex-1 p-6 flex flex-col items-center justify-center">
+          <div className="w-16 h-16 bg-stone-200 dark:bg-stone-800 rounded-lg mb-4" />
+          <div className="h-3 w-32 bg-stone-300 dark:bg-stone-700 rounded mb-2" />
+          <div className="h-2 w-48 bg-stone-200 dark:bg-stone-800 rounded mb-4" />
+          <div className="h-8 w-24 bg-accent rounded-full" />
         </div>
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded">Lighthouse 98</span>
-            <span className="text-[10px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded inline-flex items-center gap-1">WCAG AA <Check size={10} strokeWidth={2} /></span>
+            <span className="text-[10px] text-accent font-medium bg-accent/10 px-2 py-0.5 rounded inline-flex items-center gap-1">WCAG AA <Check size={10} strokeWidth={2} /></span>
           </div>
-          <button className="text-[10px] bg-sky-500 text-white px-3 py-1 rounded-full font-medium">Deploy</button>
+          <button className="text-[10px] bg-accent text-white px-3 py-1 rounded-full font-medium">Deploy</button>
         </div>
       </div>
     </div>,
     <div key="cta" className="h-full flex items-center justify-center">
       <div className="text-center space-y-4">
-        <div className="w-12 h-12 mx-auto rounded-xl bg-sky-500/20 flex items-center justify-center">
-          <span className="text-sky-500 text-lg font-semibold font-pixel">S</span>
+        <div className="w-12 h-12 mx-auto rounded-xl bg-accent/20 flex items-center justify-center">
+          <span className="text-accent text-lg font-semibold font-pixel">S</span>
         </div>
         <p className="text-white/60 text-sm">Ready when you are.</p>
       </div>
@@ -129,7 +129,7 @@ export function ScrollHero() {
         <motion.div className="absolute inset-0 bg-[#0a0a0a]" style={{ background: backgroundGradient }} />
 
         <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-[0.03] pointer-events-none font-mono text-[9px] leading-[13px] text-sky-500 whitespace-pre overflow-hidden select-none transition-opacity duration-500"
+          className="absolute inset-0 opacity-0 group-hover:opacity-[0.03] pointer-events-none font-mono text-[9px] leading-[13px] text-stone-500 dark:text-stone-400 whitespace-pre overflow-hidden select-none transition-opacity duration-500"
           aria-hidden="true"
           style={{ animation: 'code-scroll-up 60s linear infinite' }}
         >
@@ -161,8 +161,8 @@ export function ScrollHero() {
                   ctaButtons={
                     index === 4 ? (
                       <>
-                        <a href="/signup" className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
-                        <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium text-lg focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
+                        <a href="/signup" className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
+                        <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium text-lg focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
                       </>
                     ) : undefined
                   }
@@ -173,12 +173,12 @@ export function ScrollHero() {
                         <input
                           type="email"
                           placeholder="Enter your email"
-                          className="w-full sm:flex-1 h-12 px-4 rounded-full glass-dark text-white placeholder:text-white/40 focus:outline-none focus:border-sky-500/50 focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] transition-colors"
+                          className="w-full sm:flex-1 h-12 px-4 rounded-full glass-dark text-white placeholder:text-white/40 focus:outline-none focus:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] transition-colors"
                           aria-label="Email"
                         />
-                        <a href="/signup" className="w-full sm:w-auto inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow shrink-0 focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
+                        <a href="/signup" className="w-full sm:w-auto inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow shrink-0 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
                       </div>
-                      <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
+                      <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
                     </div>
                   )}
                 </ScrollFold>
@@ -189,7 +189,7 @@ export function ScrollHero() {
               className="absolute left-6 lg:left-12 bottom-12 w-[90%] max-w-md glass-dark rounded-2xl p-6 md:p-8"
               style={{ opacity: copyOpacity2 }}
             >
-              <span className="font-pixel text-[11px] tracking-[0.3em] text-sky-500 mb-3 block">{FOLDS[2].label}</span>
+              <span className="font-pixel text-[11px] tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-3 block">{FOLDS[2].label}</span>
               <h2 className="text-2xl md:text-3xl font-semibold text-white mb-3">{FOLDS[2].headline}</h2>
               <p className="text-white/70 text-sm md:text-base">{FOLDS[2].description}</p>
             </motion.div>
@@ -213,3 +213,8 @@ export function ScrollHero() {
     </section>
   );
 }
+
+
+
+
+

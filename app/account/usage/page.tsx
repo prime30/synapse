@@ -8,7 +8,7 @@ import { Download, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'luc
 /* ------------------------------------------------------------------ */
 
 const MOCK_MODELS = [
-  'claude-sonnet-4-5-20250929',
+  'claude-sonnet-4-6',
   'claude-haiku-4-5-20251001',
   'gpt-4o-mini',
 ] as const;
@@ -16,7 +16,7 @@ const MOCK_MODELS = [
 const MOCK_TYPES = ['agent', 'summary', 'review', 'completion'] as const;
 
 const MODEL_DISPLAY: Record<string, string> = {
-  'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5',
+  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
   'claude-opus-4-6': 'Claude Opus 4.6',
   'claude-haiku-4-5-20251001': 'Claude Haiku 4.5',
   'gpt-4o-mini': 'GPT-4o Mini',
@@ -24,7 +24,7 @@ const MODEL_DISPLAY: Record<string, string> = {
 
 /** Cost per 1 000 tokens (input / output) */
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  'claude-sonnet-4-5-20250929': { input: 0.003, output: 0.015 },
+  'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
 };

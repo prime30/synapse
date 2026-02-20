@@ -1,0 +1,24 @@
+{
+  "scenario": "code",
+  "prompt": "Add lazy loading to all images in snippets/product-thumbnail.liquid using loading=\"lazy\" and add descriptive alt text using product title.",
+  "capturedAt": "2026-02-17T13:37:18.860Z",
+  "cursorModel": "claude-4.6-opus",
+  "responseText": "3 targeted edits on product-thumbnail.liquid:\n\n1. Line 4: assign img_alt = image.alt → assign img_alt = image.alt | default: product.title (alt text fallback)\n2. Line 52: Add loading=\"lazy\" to image media img tag\n3. Line 60: Add loading=\"lazy\" to video/model media img tag",
+  "codeChanges": [
+    {
+      "fileName": "snippets/product-thumbnail.liquid",
+      "content": "assign img_alt = image.alt | default: product.title"
+    },
+    {
+      "fileName": "snippets/product-thumbnail.liquid",
+      "content": "loading=\"lazy\" added to image media <img> tag"
+    },
+    {
+      "fileName": "snippets/product-thumbnail.liquid",
+      "content": "loading=\"lazy\" added to video/model media <img> tag"
+    }
+  ],
+  "totalTimeMs": 12227,
+  "toolsObserved": [],
+  "notes": "Cursor agent already had file context from Ask scenario. 0 extra file reads needed, 3 search_replace edits identified."
+}

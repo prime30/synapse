@@ -1,0 +1,111 @@
+{%-liquid
+	assign image = article.image 
+	assign article_metafields = article.metafields.theme 
+	assign article_url = article.url 
+ -%}
+<article class="t4s-col-item t4s-article-item">
+	<div class="t4s-article-inner t4s-pr t4s-oh">
+		{%- if image != blank -%}
+			<div class="t4s-article-thumb t4s-pr">
+				<a class="t4s-eff t4s-eff-{{ b_effect }} t4s-eff-img-{{ img_effect }} t4s-d-block" href="{{ article_url }}">
+					<div class="t4s_ratio t4s-bg-11" style="background: url({{ image | image_url: width: 1 }});--aspect-ratioapt: {{ image.aspect_ratio | default: 2 }}"  data-cacl-slide>
+						<img class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+					</div>
+				</a>
+				{%- if show_date -%}
+					{%- liquid
+						assign published_at = article.published_at
+						case date
+							when "abbreviated_date"
+								assign date_array = published_at | date: "%b %d;%Y" | split: ";"
+							when "basic"
+								assign date_array = published_at | date: "%b / %d;%Y" | split: ";"
+							when "%b %d"
+								assign date_array = published_at | date: "%d;%b" | split: ";"	
+							else
+								assign date_array = published_at | date: "%B %d;%Y" | split: ";"		
+						endcase					
+					 -%}
+					<div class="t4s-article-time{% if date == '%b %d' %}2{% endif %}">
+						<div class="t4s-article-time__top">{{ date_array[0] }}</div>
+						<div class="t4s-article-time__bottom">{{ date_array[1] }}</div>
+					</div>
+				{%- endif -%}
+				{%- if article_metafields.video_url != blank or article_metafields.gallery != blank -%}
+					<div class="t4s-article-metafields">
+						{%- if article_metafields.video_url != blank -%}
+							<div data-open-mfp-iframe class="t4s-article-metafields__video" href="{{ article_metafields.video_url }}" data-tooltip="right" title="{{ 'blogs.article.click_video' | t }}">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 512 512"><path d="M443.9,196.9L141.5,10.5C119.6-3,93.1-3.5,70.7,9c-22.4,12.5-35.8,35.3-35.8,61v371.1c0,38.8,31.3,70.6,69.8,70.8c0.1,0,0.2,0,0.3,0c12,0,24.6-3.8,36.3-10.9c9.4-5.7,12.4-18,6.6-27.4c-5.7-9.4-18-12.4-27.4-6.6c-5.5,3.3-10.8,5.1-15.6,5.1 c-14.5-0.1-30.1-12.5-30.1-30.9V70.1c0-11,5.7-20.8,15.4-26.2c9.6-5.4,21-5.1,30.3,0.6l302.4,186.4c9.1,5.6,14.3,14.9,14.3,25.6 c0,10.7-5.3,20-14.4,25.6L204.1,415.9c-9.4,5.8-12.4,18-6.6,27.5c5.8,9.4,18,12.4,27.5,6.6l218.6-133.9 c20.9-12.8,33.5-35,33.5-59.5C477.2,232.1,464.7,209.8,443.9,196.9z"/></svg>
+							</div>
+						{%- endif -%}
+						{%- if article_metafields.gallery != blank -%}
+							{%- capture gallery_json %}[{% for image in article_metafields.gallery.value -%}
+							{ "src": {{ image.src | image_url | json }}, "w": {{ image.width }}, "h": {{ image.height }}, "alt": {{ image.alt | json }} }{% unless forloop.last %},{% endunless -%}
+							{%- endfor %}]{% endcapture -%}
+							<div class="t4s-article-metafields__images" data-pswp-images-trigger='{{ gallery_json }}' data-tooltip="right" title="{{ 'blogs.article.click_gallery' | t }}">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 512 512">
+									<polygon points="480,480 224,480 224,512 512,512 512,224 480,224"/>
+									<path d="M448,0H0v448h448V0z M416,416H32v-57.4L134.6,256h50.8l64,64h48.5l64-128H416V416z M416,160h-73.9l-64,128h-15.5l-64-64 h-77.2L32,313.4V32h384V160z"/>
+									<rect x="480" y="160" width="32" height="32"/>
+									<rect x="160" y="480" width="32" height="32"/>
+									<path d="M128,192c35.3,0,64-28.7,64-64s-28.7-64-64-64s-64,28.7-64,64S92.7,192,128,192z M128,96c17.7,0,32,14.3,32,32 s-14.3,32-32,32s-32-14.3-32-32S110.3,96,128,96z"/>
+								</svg>
+							</div>
+						{%- endif -%}
+					</div>
+				{%- endif -%}
+			</div>
+		{%- endif -%}
+		<div class="t4s-article-content__wrapper">
+			<div class="t4s-article-info">
+				{%- if show_blog_title != 'disable' -%}
+					<div class="t4s-article-category">
+						{%- if show_blog_title == 'blog_current' -%}
+							<a href="{{ blog_url }}">{{ blog_title }}</a>
+						{%- else -%}
+							{%- assign article_tags = article.tags | join: ';' | split: ';' -%}
+							{%- assign blog_tags = article_tags | where: 'blog_' -%}
+							{%- for tag in blog_tags -%}
+								<a href="{{ blog_url }}/tagged/{{ tag | handle }}">{{ tag | remove : 'blog_' | strip }}</a> {%- unless forloop.last -%} ,  {% endunless -%}
+							{%- endfor -%}
+						{%- endif -%}
+					</div>
+				{%- endif -%}
+				<h3 class="t4s-article-title"><a href="{{ article_url }}">{{ article.title }}</a></h3>
+			</div>
+			{%- if show_content -%}
+				<div class="t4s-article-content t4s-rte">{%- if article.excerpt.size > 0 -%}{{ article.excerpt }}{%- else -%}{{ article.content | strip_html | truncate: 118 }}{%- endif -%}</div>
+			{%- endif -%}
+			{%- if show_tags -%}
+				{%- assign article_tags = article.tags | join: ';' | split: ';' -%}
+				<div class="t4s-article-tags">
+					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+					{%- for tag in article_tags -%} 
+						{%- if tag contains 'blog_' -%}{%- continue -%}{%- endif -%}
+						<a href="{{ blog_url }}/tagged/{{ tag | handle }}">{{ tag }}</a> {%- unless forloop.last -%} ,  {% endunless -%}
+					{%- endfor -%} 
+				</div>
+			{%- endif -%}
+			{%- if show_author or show_comment -%}
+				<div class="t4s-article-metas">
+					{%- if show_author -%}
+						<div class="t4s-article-author">
+							<span class="t4s-article-author__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="t4s-article-author__name">{{ by_txt }} : {{ article.author | replace_first: 'ad clnt', 'admin' }}</span>
+						</div>
+					{%- endif -%}
+					{%- if show_comment -%}
+						{%- if article.comments_count > 0 %}{% assign cm_link = '#comments' %}{% else %}{% assign cm_link = '#CommentForm' %}{% endif -%}
+						<div class="t4s-article-comment">
+							<a href="{{ article_url }}{{ cm_link }}" class="t4s-d-inline-block">
+								<span class="t4s-article-comment__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="t4s-article-comment__count">{{ 'blogs.comments.with_count_html' | t: count: article.comments_count }}</span>
+							</a>
+						</div>
+					{%- endif -%}
+				</div>	
+			{%- endif -%}
+			{%- if show_readmore -%}
+				<div class="t4s-article-btn"><a href="{{ article_url }}" class="t4s-article-btn__readmore">{{ readmore_txt }}</a></div>
+			{%- endif -%}
+		</div>
+	</div>
+</article>

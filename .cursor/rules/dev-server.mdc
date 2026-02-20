@@ -1,0 +1,15 @@
+---
+description: Dev server must always run on port 3000. Use this when starting or restarting the server.
+globs: 
+alwaysApply: true
+---
+
+# Dev server: port 3000
+
+- The Next.js dev server **must always run on port 3000**.
+- **Hard rule: Restart the server yourself whenever needed.** Do not ask the user to restart. After changing `next.config.*`, env or build-related code, fixing "Module not found" or other build errors, or when a restart is required to verify a fix, kill the process on port 3000 and start `npm run dev` in the background. Do this proactively; do not say "restart the dev server" to the user.
+- When the user asks to "restart server", "restart", "restart on port 3000", or similar:
+  1. Kill any process already using port 3000 (e.g. `Get-NetTCPConnection -LocalPort 3000` then `Stop-Process` on Windows).
+  2. Remove `.next/dev/lock` if it exists.
+  3. Start the server with `npm run dev` (script is `next dev -p 3000`).
+- Do not start the dev server on any other port unless the user explicitly requests a different port.

@@ -301,6 +301,41 @@ export function getContextualSuggestions(
  * Get response-based suggestions after an agent reply.
  * Analyzes the response content and returns top 3 next-best-actions.
  */
+/**
+ * Extract modified file names from an agent response.
+ * Looks for common patterns like "Edited sections/foo.liquid" or "`snippets/bar.liquid`".
+ */
+function extractModifiedFiles(response: string): string[] {
+  const patterns = [
+    /(?:edited|modified|updated|created|changed|wrote to)\s+[`"]?([a-zA-Z0-9_\-/.]+\.(?:liquid|css|js|json|scss))[`"]?/gi,
+    /`([a-zA-Z0-9_\-/.]+\.(?:liquid|css|js|json|scss))`/g,
+  ];
+  const files = new Set<string>();
+  for (const pat of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = pat.exec(response)) !== null) {
+      files.add(m[1]);
+    }
+  }
+  return [...files].slice(0, 5);
+}
+
+/**
+ * Extract the primary subject/feature from the response.
+ * Looks for what was built, changed, or explained.
+ */
+function extractSubject(response: string): string | null {
+  const subjectPatterns = [
+    /(?:added|created|built|implemented|updated|modified)\s+(?:a\s+|the\s+)?(.{5,60}?)(?:\.|,|\n|$)/i,
+    /(?:badge|section|button|form|card|grid|slider|banner|menu|header|footer|cart|product|collection|modal|popup|notification|toast|filter|search|pagination|breadcrumb|tab|accordion|tooltip)/i,
+  ];
+  const m = subjectPatterns[0].exec(response);
+  if (m) return m[1].replace(/[`"*]/g, '').trim();
+  const feature = subjectPatterns[1].exec(response);
+  if (feature) return feature[0];
+  return null;
+}
+
 export function getResponseSuggestions(
   responseContent: string,
   ctx: SuggestionContext,
@@ -308,22 +343,126 @@ export function getResponseSuggestions(
   projectId?: string,
 ): Suggestion[] {
   const stats = projectId ? getSuggestionStats(projectId) : {};
+  const suggestions: Suggestion[] = [];
+  const modifiedFiles = extractModifiedFiles(responseContent);
+  const subject = extractSubject(responseContent);
+  const hasCodeChanges = /\b(created|added|updated|modified|changed|wrote)\b/i.test(responseContent) &&
+    /\b(file|section|template|snippet|css|javascript)\b/i.test(responseContent);
+  const hasExplanation = /\b(you (could|can|should)|approach|strategy|option|consider)\b/i.test(responseContent) &&
+    !/\b(created|wrote|added)\b/i.test(responseContent);
+  const hasError = /\b(fix|fixed|error|bug|issue|problem|resolved)\b/i.test(responseContent);
+  const isShort = responseContent.trim().length < 200;
 
-  const matched = RESPONSE_PATTERNS
-    .filter((p) => p.detect(responseContent))
-    .sort((a, b) => a.priority - b.priority)
-    .slice(0, 4);
+  // Short response — retry with more context
+  if (isShort) {
+    suggestions.push({
+      id: 'post-retry-context',
+      label: 'Retry with full context',
+      prompt: '[RETRY_WITH_FULL_CONTEXT] Retry with full file context',
+      category: 'fix',
+      score: 9,
+      reason: 'The response was brief — retrying with the full file may give better results',
+    });
+  }
 
-  return matched
-    .map((p) => ({
-      id: p.id,
-      label: p.label,
-      prompt: p.prompt,
-      category: p.category,
-      score: (10 - p.priority - (recentlyShownIds.has(p.id) ? FREQUENCY_PENALTY : 0)) * getDampeningFactor(stats[p.id]),
-      reason: p.reason ?? 'Based on the AI response',
+  if (hasCodeChanges && subject) {
+    const shortSubject = subject.length > 40 ? subject.slice(0, 40) + '...' : subject;
+
+    suggestions.push({
+      id: 'ctx-mobile-' + subject.slice(0, 10),
+      label: `Make ${shortSubject} responsive`,
+      prompt: `Make the ${subject} fully responsive — ensure it looks great on mobile (375px), tablet (768px), and desktop. Adjust spacing, font sizes, and layout as needed.`,
+      category: 'optimize',
+      score: 8,
+      reason: `Ensure ${shortSubject} works across all devices`,
+    });
+
+    suggestions.push({
+      id: 'ctx-extend-' + subject.slice(0, 10),
+      label: `Extend ${shortSubject}`,
+      prompt: `What additional settings or features would make the ${subject} more useful for merchants? Add them to the theme editor schema and implement the rendering logic.`,
+      category: 'build',
+      score: 7,
+      reason: `Add more customization to ${shortSubject}`,
+    });
+
+    if (modifiedFiles.length > 0) {
+      suggestions.push({
+        id: 'ctx-a11y-' + modifiedFiles[0].slice(0, 10),
+        label: 'Check accessibility',
+        prompt: `Review ${modifiedFiles.join(', ')} for accessibility issues — check ARIA labels, color contrast, keyboard navigation, and screen reader support. Fix any problems found.`,
+        category: 'test',
+        score: 6,
+        reason: `Ensure ${modifiedFiles[0]} is accessible`,
+      });
+    }
+  } else if (hasCodeChanges) {
+    // Code changes but couldn't extract subject — use file names
+    const fileRef = modifiedFiles.length > 0 ? modifiedFiles[0] : 'the changes';
+    suggestions.push({
+      id: 'ctx-verify',
+      label: 'Verify in preview',
+      prompt: 'Check the preview to verify the changes render correctly on both desktop and mobile.',
+      category: 'test',
+      score: 8,
+      reason: `Verify ${fileRef} looks correct`,
+    });
+    suggestions.push({
+      id: 'ctx-push',
+      label: 'Push to Shopify',
+      prompt: 'Push these changes to the Shopify dev theme so I can see them live.',
+      category: 'deploy',
+      score: 7,
+    });
+    suggestions.push({
+      id: 'ctx-gaps',
+      label: 'Close any gaps',
+      prompt: 'Review what was just implemented. Are there any edge cases, missing states (loading, empty, error), or cross-browser issues that should be addressed?',
+      category: 'fix',
+      score: 6,
+      reason: 'Check for missing edge cases',
+    });
+  }
+
+  if (hasExplanation && subject) {
+    suggestions.push({
+      id: 'ctx-implement',
+      label: `Build ${subject.length > 30 ? 'it' : subject}`,
+      prompt: `Great explanation. Now implement it in the actual code — write the ${subject} with all the details you described.`,
+      category: 'build',
+      score: 9,
+      reason: 'Turn the explanation into working code',
+    });
+  } else if (hasExplanation) {
+    suggestions.push({
+      id: 'ctx-implement-generic',
+      label: 'Implement this',
+      prompt: 'Great explanation. Now implement it in the actual code.',
+      category: 'build',
+      score: 9,
+      reason: 'Turn the explanation into working code',
+    });
+  }
+
+  if (hasError && subject) {
+    suggestions.push({
+      id: 'ctx-similar',
+      label: 'Check for similar issues',
+      prompt: `Check the rest of the theme for similar issues to the ${subject} problem and fix them all.`,
+      category: 'fix',
+      score: 7,
+      reason: 'Prevent the same bug elsewhere',
+    });
+  }
+
+  // Apply dampening and filter
+  return suggestions
+    .map((s) => ({
+      ...s,
+      score: (s.score - (recentlyShownIds.has(s.id) ? FREQUENCY_PENALTY : 0)) * getDampeningFactor(stats[s.id]),
     }))
     .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 }
 

@@ -61,20 +61,20 @@ export function GitStatusBar({
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-t border-gray-800 text-sm">
+    <div className="flex items-center justify-between px-4 py-2 ide-surface-panel border-t ide-border text-sm">
       {/* Left side */}
       <div className="flex items-center gap-4">
         <button
           onClick={onBranchClick}
-          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-800 transition-colors"
+          className="flex items-center gap-2 px-2 py-1 rounded ide-hover transition-colors"
         >
-          <GitBranch className="w-4 h-4 text-gray-400" />
-          <span className="text-gray-300 font-medium">
+          <GitBranch className="w-4 h-4 ide-text-muted" />
+          <span className="ide-text font-medium">
             {currentBranch || 'No branch'}
           </span>
         </button>
         {changedFilesCount > 0 && (
-          <span className="text-gray-400">
+          <span className="ide-text-muted">
             {changedFilesCount} {changedFilesCount === 1 ? 'change' : 'changes'}
           </span>
         )}
@@ -84,16 +84,16 @@ export function GitStatusBar({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           {getStatusIcon()}
-          <span className="text-gray-400">{getLastSyncText()}</span>
+          <span className="ide-text-muted">{getLastSyncText()}</span>
         </div>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-2">
         {peers.length > 0 && (
-          <div className="flex items-center gap-2 px-2 py-1 rounded bg-gray-800">
-            <Users className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-300">{peers.length}</span>
+          <div className="flex items-center gap-2 px-2 py-1 rounded ide-surface-inset">
+            <Users className="w-4 h-4 ide-text-muted" />
+            <span className="ide-text">{peers.length}</span>
             <div className="flex gap-1">
               {peers.slice(0, 3).map((peer, idx) => (
                 <div
@@ -104,7 +104,7 @@ export function GitStatusBar({
                 />
               ))}
               {peers.length > 3 && (
-                <span className="text-gray-500 text-xs">+{peers.length - 3}</span>
+                <span className="ide-text-3 text-xs">+{peers.length - 3}</span>
               )}
             </div>
           </div>
@@ -113,45 +113,45 @@ export function GitStatusBar({
           onClick={onPull}
           disabled={isActive}
           className={
-            'p-1.5 rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
+            'p-1.5 rounded ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
             (isActive ? '' : '')
           }
           title="Pull changes"
         >
-          <ArrowDown className="w-4 h-4 text-gray-400" />
+          <ArrowDown className="w-4 h-4 ide-text-muted" />
         </button>
         <button
           onClick={onPush}
           disabled={isActive}
           className={
-            'p-1.5 rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
+            'p-1.5 rounded ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
             (isActive ? '' : '')
           }
           title="Push changes"
         >
-          <ArrowUp className="w-4 h-4 text-gray-400" />
+          <ArrowUp className="w-4 h-4 ide-text-muted" />
         </button>
         <button
           onClick={onCommit}
           disabled={isActive}
           className={
-            'p-1.5 rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
+            'p-1.5 rounded ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
             (isActive ? '' : '')
           }
           title="Commit changes"
         >
-          <GitCommit className="w-4 h-4 text-gray-400" />
+          <GitCommit className="w-4 h-4 ide-text-muted" />
         </button>
         <button
           onClick={onRefresh}
           disabled={isActive}
           className={
-            'p-1.5 rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
+            'p-1.5 rounded ide-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed' +
             (isActive ? '' : '')
           }
           title="Refresh status"
         >
-          <RefreshCw className={'w-4 h-4 text-gray-400' + (isActive ? ' animate-spin' : '')} />
+          <RefreshCw className={'w-4 h-4 ide-text-muted' + (isActive ? ' animate-spin' : '')} />
         </button>
       </div>
     </div>

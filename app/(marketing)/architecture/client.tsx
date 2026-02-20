@@ -93,7 +93,7 @@ export function ArchitecturePageClient({ content }: ArchitecturePageClientProps)
                 href={link.href}
                 className="group rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 hover:border-stone-300 dark:hover:border-white/20 hover:shadow-lg hover:shadow-stone-200/50 dark:hover:shadow-none transition-all"
               >
-                <h3 className="text-sm font-medium text-stone-900 dark:text-white mb-1 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                <h3 className="text-sm font-medium text-stone-900 dark:text-white mb-1 group-hover:text-accent transition-colors">
                   {link.title}
                 </h3>
                 <p className="text-xs text-stone-500 dark:text-white/50">

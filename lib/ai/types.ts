@@ -3,8 +3,8 @@ export type AIProvider = 'openai' | 'anthropic' | 'google' | (string & {});
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
-  /** Mark this message for Anthropic prompt caching. */
-  cacheControl?: { type: 'ephemeral' };
+  /** Mark this message for Anthropic prompt caching with optional TTL. */
+  cacheControl?: { type: 'ephemeral'; ttl?: '5m' | '1h' };
   /** Enable citations on document-source messages. */
   citations?: { enabled: boolean };
 }
@@ -27,6 +27,36 @@ export interface AICompletionOptions {
   cacheEnabled?: boolean;
   /** Enable citations for this request. */
   citationsEnabled?: boolean;
+  /** PTC: reuse a sandbox container across requests. */
+  container?: string;
+  /** Server-side context editing: automatically clear old tool results and thinking blocks. */
+  contextManagement?: {
+    edits: Array<ContextEditStrategy>;
+  };
+}
+
+// ── Context editing strategy types ──────────────────────────────────
+
+export type ContextEditStrategy =
+  | {
+      type: 'clear_tool_uses_20250919';
+      trigger?: { type: 'input_tokens'; value: number };
+      keep?: { type: 'tool_uses'; value: number };
+      clear_at_least?: { type: 'input_tokens'; value: number };
+      exclude_tools?: string[];
+      clear_tool_inputs?: boolean;
+    }
+  | {
+      type: 'clear_thinking_20251015';
+      keep?: 'all' | { type: 'thinking_turns'; value: number };
+    };
+
+/** Result of an applied context edit from the API response. */
+export interface ContextEditResult {
+  type: string;
+  cleared_input_tokens?: number;
+  cleared_tool_uses?: number;
+  cleared_thinking_turns?: number;
 }
 
 export interface AICompletionResult {
@@ -74,12 +104,20 @@ export interface ToolDefinition {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  /** PTC: which contexts can invoke this tool. */
+  allowed_callers?: ('direct' | 'code_execution_20250825')[];
+  /** PTC: tool type. Omit for standard tools; set for server-managed tools like code_execution. */
+  type?: string;
+  /** Stream tool input params without buffering for JSON validation — reduces TTFB on large params. */
+  eager_input_streaming?: boolean;
 }
 
 export interface ToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** PTC: how this tool was invoked. */
+  caller?: { type: 'direct' } | { type: 'code_execution_20250825'; tool_id: string };
 }
 
 export interface ToolResult {
@@ -92,22 +130,36 @@ export interface ToolResult {
 export interface AIToolCompletionResult extends AICompletionResult {
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens';
   toolCalls?: ToolCall[];
+  /** PTC: container info for sandbox reuse across requests. */
+  container?: { id: string; expires_at: string };
 }
 
 // ── Streaming tool-use types ────────────────────────────────────────
 
 /** Provider-level events emitted by streamWithTools() from Anthropic SSE. */
 export type ToolStreamEvent =
+  | { type: 'stream_start' }
   | { type: 'text_delta'; text: string }
+  | { type: 'thinking_delta'; text: string }
   | { type: 'tool_start'; id: string; name: string }
   | { type: 'tool_delta'; id: string; partialJson: string }
-  | { type: 'tool_end'; id: string; name: string; input: Record<string, unknown> };
+  | { type: 'tool_end'; id: string; name: string; input: Record<string, unknown>; caller?: ToolCall['caller'] }
+  | { type: 'server_tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'code_execution_result'; toolUseId: string; stdout: string; stderr: string; returnCode: number };
 
 /** Result of streamWithTools() — a stream of ToolStreamEvents plus usage. */
 export interface ToolStreamResult {
   stream: ReadableStream<ToolStreamEvent>;
   /** Resolves when the stream closes with accumulated token usage. */
   getUsage: () => Promise<UsageInfo>;
+  /** Resolves when the stream closes with the stop reason (end_turn, tool_use, or max_tokens). */
+  getStopReason: () => Promise<'end_turn' | 'tool_use' | 'max_tokens'>;
+  /** Resolves when the stream closes with the raw Anthropic content blocks (text + tool_use). */
+  getRawContentBlocks: () => Promise<unknown[]>;
+  /** PTC: container info for sandbox reuse across requests. */
+  getContainer?: () => Promise<{ id: string; expires_at: string } | null>;
+  /** Context editing: applied edits from the API response. */
+  getContextEdits?: () => Promise<ContextEditResult[]>;
 }
 
 // ── Citation types ──────────────────────────────────────────────────

@@ -117,6 +117,7 @@ describe('flattenRelevantFiles', () => {
     const result = flattenRelevantFiles({
       templatePath: 'templates/product.liquid',
       sectionPaths: ['sections/header.liquid', 'sections/main-product.liquid'],
+      snippetPaths: [],
     });
     expect(result).toEqual([
       'templates/product.liquid',
@@ -129,6 +130,7 @@ describe('flattenRelevantFiles', () => {
     const result = flattenRelevantFiles({
       templatePath: null,
       sectionPaths: ['sections/header.liquid'],
+      snippetPaths: [],
     });
     expect(result).toEqual(['sections/header.liquid']);
   });
@@ -137,6 +139,7 @@ describe('flattenRelevantFiles', () => {
     const result = flattenRelevantFiles({
       templatePath: null,
       sectionPaths: [],
+      snippetPaths: [],
     });
     expect(result).toEqual([]);
   });

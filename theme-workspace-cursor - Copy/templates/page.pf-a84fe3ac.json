@@ -1,0 +1,26 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "1704876952c3fe70f8": {
+      "type": "apps",
+      "settings": {}
+    },
+    "pf-a84fe3ac": {
+      "type": "pf-a84fe3ac",
+      "settings": {}
+    }
+  },
+  "order": [
+    "1704876952c3fe70f8",
+    "pf-a84fe3ac"
+  ],
+  "layout": "theme.pagefly"
+}

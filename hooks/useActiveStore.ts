@@ -120,6 +120,7 @@ export function useActiveStore(projectId?: string) {
       themeId,
       themeName,
       createDevThemeForPreview,
+      syncToLocal,
       note,
       projectId,
     }: {
@@ -127,6 +128,8 @@ export function useActiveStore(projectId?: string) {
       themeId: number;
       themeName?: string;
       createDevThemeForPreview?: boolean;
+      /** Pull theme files to local disk (.synapse-themes/) for local editing */
+      syncToLocal?: boolean;
       note?: string;
       /** Optional client-generated UUID so polling can start before the POST returns */
       projectId?: string;
@@ -134,7 +137,7 @@ export function useActiveStore(projectId?: string) {
       const res = await fetch(`/api/stores/${connectionId}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themeId, themeName, createDevThemeForPreview, note, projectId }),
+        body: JSON.stringify({ themeId, themeName, createDevThemeForPreview, syncToLocal, note, projectId }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -150,6 +153,7 @@ export function useActiveStore(projectId?: string) {
         conflicts: string[];
         previewThemeId: string | null;
         binaryPending: number;
+        localPath: string | null;
       };
     },
     onSuccess: () => {

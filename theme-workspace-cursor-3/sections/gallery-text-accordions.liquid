@@ -1,0 +1,1627 @@
+<!-- sections/custom-section.liquid -->
+{{ 'section.css' | asset_url | stylesheet_tag }}
+{{ 'content-position.css' | asset_url | stylesheet_tag }}
+{{ 'gallery-text-accordions.css' | asset_url | stylesheet_tag }}
+<link href="{{ 't4s-animation.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- liquid
+  assign sid = section.id
+  assign se_stts = section.settings
+  assign se_blocks = section.blocks
+  assign stt_layout = se_stts.layout
+  assign stt_image_bg = se_stts.image_bg
+  if stt_layout == 't4s-se-container' 
+    assign html_layout = '<div class="t4s-container">__</div></div>' | split: '__'
+  elsif stt_layout == 't4s-container-wrap'
+    assign html_layout = '<div class="t4s-container">__</div>' | split: '__'
+  else
+    assign html_layout = '__' | split: '__'
+  endif
+  assign no_image_parent = true
+  assign first_item = true
+ -%} 
+<div class="t4s-section-inner t4s_se_{{ sid }} {{ stt_layout }} {%- if stt_image_bg != blank and stt_layout != 't4s-se-container' -%}  t4s-has-imgbg lazyloadt4s {%- endif -%}"  {% if stt_image_bg != blank and stt_layout != 't4s-se-container' %}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {% endif %} {% render 'section_style', se_stts: se_stts %}>
+    {{- html_layout[0] -}}
+    {%- if stt_layout == 't4s-se-container' -%}<div class="t4s-container-inner {% if stt_image_bg != blank %} t4s-has-imgbg lazyloadt4s {% endif %}"  {% if stt_image_bg != blank %}  data-bgset="{{ stt_image_bg | image_url: width: 1 }}" data-sizes="auto"  data-optimumx="1.5" {% endif %}> {%- endif -%} 
+    <div class="t4s-gallery-txt-accordions-wrap t4s-row t4s-gx-0 carousel-disable-md t4s-flickity-slider flickityt4s" data-flickityt4s-js='{"watchCSS": 1,"setPrevNextButtons": false,"arrowIcon": "1","imagesLoaded": 0,"adaptiveHeight": 0, "contain": 1, "groupCells": "100%", "dragThreshold" : 5, "cellAlign": "left","wrapAround": false,"prevNextButtons": false,"percentPosition": 1,"pageDots": false, "autoPlay" : false, "pauseAutoPlayOnHover" : true }' style="--height-dk: {{ se_stts.height_dk }}px;--height-tb: {{ se_stts.height_tb }}px;--height-mb: {{ se_stts.height_mb }}px"> 
+    {%- if se_blocks.size > 0 -%}
+        {%- for block in se_blocks -%}{% assign block_type = block.type -%}{% assign bk_stts = block.settings -%}
+            {%- if block_type != 'gallery_item' and no_image_parent %}{% continue -%}
+            {%- elsif block_type == 'gallery_item' -%}
+                {%-liquid 
+                    if is_prev_block_image
+                        echo '</div></div></div>'
+                    endif
+                    assign no_image_parent = false
+                    assign is_prev_block_image = true 
+                    assign image = bk_stts.img_gallery
+                    assign ani_delay = 0   
+                    assign percent_delay = bk_stts.animation_delay | divided_by: 100.0
+                    assign time_ani_delay = bk_stts.time_animation | times: percent_delay  
+                    assign bg_opacity = bk_stts.bg_opacity | divided_by: 100.0
+                    assign bg_overlay = bk_stts.bg_overlay | color_modify: 'alpha', bg_opacity
+                   
+                -%}
+                <div class="t4s-gallery-txt-accordions t4s-col-item t4s-col-10 t4s-col-md{% if first_item %} is--hover{% assign first_item = false %}{% endif %}" style="--bg-overlay: {{ bg_overlay }};" data-hover-t4s data-has-group>
+                  <div class="t4s-gallery-txt-accordions-inner t4s-pr t4s-oh t4s_position_8 t4s_ratioadapt t4s_cover" style="--aspect-ratioapt: {{ image.aspect_ratio | default: 1 }};">
+                      <div class="t4s-gallery-txt-img t4s-pr t4s-oh t4s-d-block t4s_ratio t4s-bg-11"{% if image != blank %} style="background: url({{ image | image_url: width: 1 }});"{% endif %}>
+                        {%- if image != blank -%}
+                            <img class="lazyloadt4s t4s-lz--fadeIn t4s-obj-eff" data-src="{{ image | image_url: width: 1 }}" data-widths="[100,200,400,600,700,800,900,1000,1200,1400,1600]" data-optimumx="2" data-sizes="auto" src="{% render 'img_svg', w: image.width, h: image.height %}" width="{{ image.width }}" height="{{ image.height }}" alt="{{ image.alt | escape }}">
+                        {%- else -%}
+                          {%- capture current -%}{% cycle 1, 2 %}{%- endcapture -%}
+                          {{ 'lifestyle-' | append: current | placeholder_svg_tag: 't4s-placeholder-svg t4s-svg-bg1' }}  
+                        {%- endif -%}
+                        
+                        {%- if bk_stts.label_text != blank -%}
+                          <h3 class="gallery-with-text-label t4s-not-style" style="--cl-label: {{ bk_stts.cl_label }};">{{ bk_stts.label_text }}</h3>
+                        {%- endif -%} 
+                      </div>
+                    <div class="gallery-text-content t4s-content-position t4s-pa t4s-text-lg-{{ bk_stts.content_align }} t4s-text-md-{{ bk_stts.content_align_tb }} t4s-text-{{ bk_stts.content_align_mb }}" style="--time-delay: 1s;--time-animation: {{ bk_stts.time_animation }}s;{%- render 'content_position', ch_pos: bk_stts.ch_pos, cv_pos: bk_stts.cv_pos, ch_pos_tb: bk_stts.ch_pos_tb, cv_pos_tb: bk_stts.cv_pos_tb, ch_pos_mb: bk_stts.ch_pos_mb, cv_pos_mb: bk_stts.cv_pos_mb -%}">          
+            {%- else  -%}
+                {%- liquid
+                    assign next_block = se_blocks[forloop.index]
+                    assign is_prev_block_image = false -%}
+                      {%- if block_type == 'custom_text' -%}
+                        {% if bk_stts.text != blank %}
+                          {%- assign general_block = true -%}
+                          <div class="t4s-oh"><{{ bk_stts.tag }} class="t4s-bl-item t4s-text-bl t4s-animation-{{ bk_stts.animation }} t4s-fnt-fm-{{ bk_stts.fontf }} t4s-font-italic-{{ bk_stts.font_italic }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-hidden-br-mb-{{ bk_stts.remove_br_tag }} t4s-text-shadow-{{ bk_stts.text_shadow }}" id="b_{{ block.id }}" {%- render 'bk_cus_style', type: 'custom_text', bk_stts: bk_stts, ani_delay: ani_delay -%}>{{ bk_stts.text }}</{{ bk_stts.tag }}></div>
+                        {% endif %}
+                      {%- elsif block_type ==  'space_html' -%}
+                        {%- assign general_block = true -%}
+                        <div class="t4s-bl-item t4s-space-html t4s-hidden-tablet-{{ bk_stts.hidden_tablet }} t4s-animation-{{ bk_stts.animation }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }}" {%- render 'bk_cus_style', type: 'space_html', bk_stts: bk_stts, ani_delay: ani_delay -%}></div>
+                      {%- elsif block_type ==  'custom_button' -%}
+                        {%- if bk_stts.button_link != blank and bk_stts.button_text != blank -%}
+                          {%- assign custom_button = true -%}
+                          {%- assign  button_style = bk_stts.button_style -%}
+                          <a href="{{ bk_stts.button_link }}" target="{{ bk_stts.target_link }}" class="t4s-bl-item t4s-btn t4s-animation-{{ bk_stts.animation }} t4s-btn-custom  t4s-pe-auto t4s-fnt-fm-{{ bk_stts.fontf }} t4s-hidden-mobile-{{ bk_stts.hidden_mobile }} t4s-btn-style-{{ button_style }} {% if button_style == 'default' or button_style == 'outline' or button_style == 'highlights_icon' %}t4s-btn-effect-{{ bk_stts.button_effect }}{% endif %}" id="b_{{ block.id }}" {{ block.shopify_attributes }} {%- render 'bk_cus_style', type: 'custom_button', bk_stts: bk_stts, ani_delay: ani_delay -%}>{{ bk_stts.button_text }} {%- if bk_stts.button_icon_w > 0 -%}<svg  class="t4s-btn-icon" viewBox="0 0 14 10"><use xlink:href="#t4s-icon-btn"></use></svg>{%- endif -%}</a>
+                          <a href="{{ bk_stts.button_link }}" target="{{ bk_stts.target_link }}" class="t4s-link-overlay"></a>
+                        {%- endif -%}
+                      {%- endif -%}
+              {%- if bk_stts.animation != 'none' %}{% assign ani_delay = ani_delay | plus: time_ani_delay %}{% endif -%}
+              {%- if forloop.last or next_block and next_block.type == 'gallery_item' -%}
+                    </div>
+                  </div>
+              </div>
+              {%- endif -%}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+    </div>
+    {{- html_layout[1] -}}
+</div>
+{%- if general_block or custom_button -%}
+  {{ 'general-block.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+{%- if custom_button -%}
+  {{ 'button-style.css' | asset_url | stylesheet_tag }}
+  <link href="{{ 'custom-effect.css' | asset_url }}" rel="stylesheet" media="print" onload="this.media='all'">
+{%- endif -%}
+{% schema %}
+  {
+    "name": "Gallery text accordions",
+    "tag": "section",
+    "class": "t4s-section t4s-section-all t4s-gallery-txt-accordions", 
+    "settings": [
+      {
+        "type": "header",
+        "content": "1.General options" 
+      },
+      {
+          "type": "number",
+          "id": "height_dk",
+          "label": "Section height (Desktop)",
+          "default": 600
+      },
+      {
+          "type": "number",
+          "id": "height_tb",
+          "label": "Section height (Tablet)",
+          "default": 500
+      },
+      {
+          "type": "number",
+          "id": "height_mb",
+          "label": "Section height (Mobile)",
+          "default": 350
+      }, 
+      {
+        "type": "header",
+        "content": "2. Design options"
+      },
+      {
+        "type": "select","id": "layout","default": "t4s-container-wrap","label": "Layout",
+        "options": [
+            { "value": "t4s-se-container", "label": "Container"},
+            { "value": "t4s-container-wrap", "label": "Wrapped container"},
+            { "value": "t4s-container-fluid", "label": "Full width"}
+        ]
+      },
+      {
+        "type": "color",
+        "id": "cl_bg",
+        "label": "Background"
+      },
+      {
+        "type": "color_background",
+        "id": "cl_bg_gradient",
+        "label": "Background gradient"
+      },
+      {
+        "type": "image_picker",
+        "id": "image_bg",
+        "label": "Background image" 
+      },
+      {
+          "type": "text",
+          "id": "mg",
+          "label": "Margin",
+          "info": "Margin top, margin right, margin bottom, margin left. If you do not use it please blank.",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd",
+          "label": "Padding",
+          "info": "Padding top, padding right, padding bottom, padding left. If you do not use it please blank.",
+          "placeholder": "50px,,50px,"
+      }, 
+      {
+        "type": "header",
+        "content": "+ Design Tablet Options"
+      },
+      {
+          "type": "text",
+          "id": "mg_tb",
+          "label": "Margin",
+          "default": ",,50px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_tb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      },
+      {
+        "type": "header",
+        "content": "+ Design mobile options"
+      },
+      {
+          "type": "text",
+          "id": "mg_mb",
+          "label": "Margin",
+          "default": ",,30px,",
+          "placeholder": ",,50px,"
+      },
+      {
+          "type": "text",
+          "id": "pd_mb",
+          "label": "Padding",
+          "placeholder": ",,50px,"
+      }
+
+    ],
+    "blocks": [
+      {
+        "type": "gallery_item",
+        "name": "Gallery item (Parent)",
+        "settings": [
+          {
+            "type": "image_picker",
+            "id": "img_gallery",
+            "label": "Image gallery"
+          },
+          {
+              "type": "text",
+              "id": "label_text",
+              "label": "Label text",
+              "default": "Label text",
+              "info": "Waring: The label should not be too long"
+          },
+          {
+              "type": "color",
+              "id": "cl_label",
+              "label": "Color label",
+              "default": "#000"
+          },
+          {
+              "type": "header",
+              "content": "+ Background overlay"
+          },
+          {
+              "type": "color",
+              "id": "bg_overlay",
+              "label": "Overlay",
+              "default": "#000"
+          },
+          {
+              "type": "range",
+              "id": "bg_opacity",
+              "label": "Overlay opacity", 
+              "default": 0,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "unit": "%"
+          },
+          {
+            "type": "header","content": "Content Position"
+          },
+          {
+            "type": "select",
+            "id": "content_align",
+            "label": "Content align",
+            "default": "center",
+            "options": [
+                {
+                  "label": "Left",
+                  "value": "start"
+                },
+                {
+                  "label": "Center",
+                  "value": "center"
+                },
+                {
+                  "label": "Right",
+                  "value": "end"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "content_align_tb",
+            "label": "Content align (Tablet)",
+            "default": "center",
+            "options": [
+                {
+                  "label": "Left",
+                  "value": "start"
+                },
+                {
+                  "label": "Center",
+                  "value": "center"
+                },
+                {
+                  "label": "Right",
+                  "value": "end"
+                }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "content_align_mb",
+            "label": "Content align (Mobile)",
+            "default": "center",
+            "options": [
+                {
+                    "label": "Left",
+                    "value": "start"
+                },
+                {
+                    "label": "Center",
+                    "value": "center"
+                },
+                {
+                    "label": "Right",
+                    "value": "end"
+                }
+            ]
+          },
+          
+          {
+            "type": "header",
+            "content": "+ Content position options"
+          },
+          {
+             "type": "range",
+             "id": "cv_pos",
+             "label": "Content vertical position",
+             "info": " <= 50: Top position , > 50 bottom position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,
+             "unit": "%"
+          },
+          {
+             "type": "range",
+             "id": "ch_pos",
+             "label": "Content horizontal position",
+             "info": " <= 50: Left position , > 50 right position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,
+             "unit": "%"
+          },
+          {
+            "type": "header",
+            "content": "+ Content position options (Tablet)"
+          },
+          {
+             "type": "range",
+             "id": "cv_pos_tb",
+             "label": "Content vertical position",
+             "info": " <= 50: Top position , > 50 bottom position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,
+             "unit": "%"
+          },
+          {
+             "type": "range",
+             "id": "ch_pos_tb",
+             "label": "Content horizontal position",
+             "info": " <= 50: Left position , > 50 right position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,
+             "unit": "%"
+          },
+          {
+            "type": "header",
+            "content": "+ Content position options (Mobile)"
+          },
+          {
+             "type": "range",
+             "id": "cv_pos_mb",
+             "label": "Content vertical position",
+             "info": " <= 50: Top position , > 50 bottom position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,  
+             "unit": "%"
+          },
+          {
+             "type": "range",
+             "id": "ch_pos_mb",
+             "label": "Content horizontal position",
+             "info": " <= 50: Left position , > 50 right position",
+             "default": 50,
+             "min": 0,
+             "max": 100,
+             "step": 1,
+             "unit": "%"
+          },
+          {
+              "type": "header",
+              "content": "--Animation Options--"
+          },
+          {
+              "type": "range",
+              "id": "time_animation",
+              "label": "Duration animation each block",
+              "max": 5,
+              "min": 1,
+              "default": 1.5,
+              "unit": "s",
+              "step": 0.5
+          },
+          {
+              "type": "range",
+              "id": "animation_delay",
+              "label": "Time animation delay",
+              "max": 110,
+              "min": 10,
+              "step": 5,
+              "unit": "%",
+              "default": 25,
+              "info": "Defines the number of time to wait when the animation previous end, before the animation next will start."
+          }  
+        ]
+      },
+      {
+        "type": "custom_text",
+        "name": "Text (Child)",
+        "settings": [
+            {
+                "type": "textarea",
+                "id": "text",
+                "label": "Input text",
+                "default": "Text",
+                "info": "If you want to line break, please add a <br> tag in the text"
+            },
+            {
+                "type": "checkbox",
+                "id": "remove_br_tag",
+                "label": "Remove <br> tag on tablet & mobile",
+                "default": false
+            },
+            {
+              "type": "select",
+              "id": "tag",
+              "default": "p",
+              "options": [
+                 {
+                    "value": "h2",
+                    "label": "H2"
+                 },
+                 {
+                    "value": "h3",
+                    "label": "H3"
+                 },
+                 {
+                    "value": "h4",
+                    "label": "H4"
+                 },
+                 {
+                    "value": "h5",
+                    "label": "H5"
+                 },
+                 {
+                    "value": "h6",
+                    "label": "H6"
+                 },
+                 {
+                    "value": "p",
+                    "label": "P"
+                  },
+                 {
+                    "value": "div",
+                    "label": "DIV"
+                  }
+              ],
+              "label": "Html tag"
+            },
+            {
+                "type": "select",
+                "id": "fontf",
+                "default": "inherit",
+                "label": "Font family",
+                "options": [
+                    {
+                        "label": "Inherit",
+                        "value": "inherit"
+                    },
+                    {
+                        "label": "Font family #1",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Font family #2",
+                        "value": "2"
+                    },
+                    {
+                        "label": "Font family #3",
+                        "value": "3"
+                    }
+                ]
+            },
+            
+            {
+                "type": "color",
+                "id": "text_cl",
+                "label": "Color text",
+                "default": "#fff"
+            },
+            {
+                "type": "range",
+                "id": "text_fs",
+                "label": "Font size",
+                "max": 100,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh",
+                "label": "Line height",
+                "max": 100,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_fw",
+                "label": "Font weight",
+                "min": 100,
+                "max": 900,
+                "step": 100,
+                "default": 400
+            },
+            {
+                "type": "range",
+                "id": "text_ls",
+                "label": "Letter spacing",
+                "max": 10,
+                "min": 0,
+                "default": 0,
+                "step": 0.1,
+                "unit": "px"
+            },
+            {
+                "type": "checkbox",
+                "id": "font_italic",
+                "label": "Enable font italic style",
+                "default": false
+            },
+            {
+                "type": "checkbox",
+                "id": "text_shadow",
+                "label": "Enable text shadow",
+                "default": false
+            },
+            {
+                "type": "number",
+                "id": "mgb",
+                "label": "Margin bottom (Unit: px)",
+                "default": 15
+            },
+            {
+                "type": "header",
+                "content": "+ Option on tablet"
+            },
+            {
+                "type": "range",
+                "id": "text_fs_tb",
+                "label": "Font size (Tablet)",
+                "max": 60,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh_tb",
+                "label": "Line height (Tablet)",
+                "max": 70,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_ls_tb",
+                "label": "Letter spacing (Tablet)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_tb",
+                "label": "Margin bottom (Tablet) (Unit: px)",
+                "default": 10
+            },
+            {
+                "type": "header",
+                "content": "+ Option mobile"
+            },
+            {
+                "type": "checkbox",
+                "id": "hidden_mobile",
+                "label": "Hidden on mobile ",
+                "default": false
+            },
+            {
+                "type": "range",
+                "id": "text_fs_mb",
+                "label": "Font size (Mobile)",
+                "max": 60,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 16
+            },
+            {
+                "type": "range",
+                "id": "text_lh_mb",
+                "label": "Line height (Mobile)",
+                "max": 70,
+                "min": 0,
+                "step": 1,
+                "default": 0,
+                "unit": "px",
+                "info": "Set '0' to use default"            
+            },
+            {
+                "type": "range",
+                "id": "text_ls_mb",
+                "label": "Letter spacing (Mobile)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_mb",
+                "label": "Margin bottom (Mobile) (Unit: px)",
+                "default": 10
+            },
+            {
+                "type": "paragraph",
+                "content": "————————————————"
+            },
+            {
+              "type": "select",
+              "id": "animation",
+              "label": "Animation",
+              "default": "fadeInUp",
+              "options": [
+                {
+                    "label": "None",
+                    "value": "none"
+                },
+                {
+                    "label": "fadeIn",
+                    "value": "fadeIn"
+                },
+                {
+                    "label": "fadeInDown",
+                    "value": "fadeInDown"
+                },
+                {
+                    "label": "fadeInDownBig",
+                    "value": "fadeInDownBig"
+                },
+                {
+                    "label": "fadeInLeft",
+                    "value": "fadeInLeft"
+                },
+                {
+                    "label": "fadeInLeftBig",
+                    "value": "fadeInLeftBig"
+                },
+                {
+                    "label": "fadeInRight",
+                    "value": "fadeInRight"
+                },
+                {
+                    "label": "fadeInRightBig",
+                    "value": "fadeInRightBig"
+                },
+                {
+                    "label": "fadeInUp",
+                    "value": "fadeInUp"
+                },
+                {
+                    "label": "fadeInUpBig",
+                    "value": "fadeInUpBig"
+                },
+                {
+                    "label": "fadeInTopLeft",
+                    "value": "fadeInTopLeft"
+                },
+                {
+                    "label": "fadeInTopRight",
+                    "value": "fadeInTopRight"
+                },
+                {
+                    "label": "fadeInBottomLeft",
+                    "value": "fadeInBottomLeft"
+                },
+                {
+                    "label": "fadeInBottomRight",
+                    "value": "fadeInBottomRight"
+                },
+                {
+                    "label": "bounceIn",
+                    "value": "bounceIn"
+                },
+                {
+                    "label": "bounceInDown",
+                    "value": "bounceInDown"
+                },
+                {
+                    "label": "bounceInLeft",
+                    "value": "bounceInLeft"
+                },
+                {
+                    "label": "bounceInRight",
+                    "value": "bounceInRight"
+                },
+                {
+                    "label": "bounceInUp",
+                    "value": "bounceInUp"
+                },
+                {
+                    "label": "zoomIn",
+                    "value": "zoomIn"
+                },
+                {
+                    "label": "zoomInDown",
+                    "value": "zoomInDown"
+                },
+                {
+                    "label": "zoomInLeft",
+                    "value": "zoomInLeft"
+                },
+                {
+                    "label": "zoomInRight",
+                    "value": "zoomInRight"
+                },
+                {
+                    "label": "zoomInUp",
+                    "value": "zoomInUp"
+                },
+                {
+                    "label": "slideInDown",
+                    "value": "slideInDown"
+                },
+                {
+                    "label": "slideInLeft",
+                    "value": "slideInLeft"
+                },
+                {
+                    "label": "slideInRight",
+                    "value": "slideInRight"
+                },
+                {
+                    "label": "slideInUp",
+                    "value": "slideInUp"
+                },
+                {
+                    "label": "lightSpeedInRight",
+                    "value": "lightSpeedInRight"
+                },
+                {
+                    "label": "lightSpeedInLeft",
+                    "value": "lightSpeedInLeft"
+                },
+                {
+                    "label": "lightSpeedOutRight",
+                    "value": "lightSpeedOutRight"
+                },
+                {
+                    "label": "lightSpeedOutLeft",
+                    "value": "lightSpeedOutLeft"
+                },
+                {
+                    "label": "jello",
+                    "value": "jello"
+                },
+                {
+                    "label": "tada",
+                    "value": "tada"
+                },
+                {
+                    "label": "pulse",
+                    "value": "pulse"
+                }
+              ]
+            }
+        ]
+      },
+      {
+        "type": "custom_button",
+        "name": "Button (Child)",
+        "settings": [
+            {
+                "type": "text",
+                "id": "button_text",
+                "label": "Button label",
+                "default": "Button label",
+                "info": "If set blank will not show"
+            },
+            {
+                "type": "url",
+                "id": "button_link",
+                "label": "Button link",
+                "info": "If set blank will not show"
+            },
+            {
+                "type": "select",
+                "id": "target_link",
+                "label": "Open link in",
+                "default": "_self",
+                "options": [
+                    {
+                        "value": "_self",
+                        "label": "Current window"
+                    },
+                    {
+                        "value": "_blank",
+                        "label": "New window"
+                    }
+                ]
+            },
+            {
+                "type": "select",
+                "id": "fontf",
+                "default": "inherit",
+                "label": "Font family",
+                "options": [
+                    {
+                        "label": "Inherit",
+                        "value": "inherit"
+                    },
+                    {
+                        "label": "Font family #1",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Font family #2",
+                        "value": "2" 
+                    },
+                    {
+                        "label": "Font family #3",
+                        "value": "3"
+                    }
+                ]
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w",
+                "label": "Button icon width",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "select",
+                "id": "button_style",
+                "label": "Button style",
+                "options": [
+                    {
+                        "label": "Default",
+                        "value": "default"
+                    },
+                    {
+                        "label": "Outline",
+                        "value": "outline"
+                    },
+                    {
+                        "label": "Bordered top",
+                        "value": "bordered_top"
+                    },
+                    {
+                        "label": "Bordered bottom", 
+                        "value": "bordered"
+                    },
+                    {
+                        "label": "Link",
+                        "value": "link"
+                    }
+                ]
+             },
+             {
+                "type": "range",
+                "id": "border_w",
+                "label": "Border width",
+                "min": 1,
+                "max": 3,
+                "step": 1,
+                "default": 1,
+                "unit": "px"
+            },
+             {
+                "type": "select",
+                "id": "button_effect",
+                "label": "Hover button effect",
+                "default": "default",
+                "info": "Only working button style default, outline",
+                "options": [
+                    {
+                        "label": "Default",
+                        "value": "default"
+                    },
+                    {
+                        "label": "Fade",
+                        "value": "fade"
+                    },
+                    {
+                        "label": "Rectangle out",
+                        "value": "rectangle-out"
+                    },
+                    {
+                        "label": "Sweep to right",
+                        "value": "sweep-to-right"
+                    },
+                    {
+                        "label": "Sweep to left",
+                        "value": "sweep-to-left"
+                    },
+                    {
+                        "label": "Sweep to bottom",
+                        "value": "sweep-to-bottom"
+                    },
+                    {
+                        "label": "Sweep to top",
+                        "value": "sweep-to-top"
+                    },
+                    {
+                        "label": "Shutter out horizontal",
+                        "value": "shutter-out-horizontal"
+                    },
+                    {
+                        "label": "Outline",
+                        "value": "outline"
+                    },
+                    {
+                        "label": "Shadow",
+                        "value": "shadow"
+                    }
+                ]
+            },
+            {
+                "type": "color",
+                "id": "pri_cl",
+                "label": "Primary color",
+                "default": "#222"
+            },
+            {
+                "type": "color",
+                "id": "second_cl",
+                "label": "Secondary color"
+            },
+            {
+                "type": "color",
+                "id": "pri_cl_hover",
+                "label": "Primary hover color",
+                "default": "#0ec1ae"
+            },
+            {
+                "type": "color",
+                "id": "second_cl_hover",
+                "label": "Secondary hover color",
+                "info": "Only working button style default, outline",
+                "default": "#fff"
+            },
+            {
+                "type": "range",
+                "id": "fsbutton",
+                "label": "Font size",
+                "max": 50,
+                "min": 10,
+                "step": 1,
+                "unit": "px",
+                "default": 14
+            },
+            {
+                "type": "range",
+                "id": "fwbutton",
+                "label": "Font weight",
+                "min": 100,
+                "max": 900,
+                "step": 100,
+                "default": 400
+            },
+            {
+                "type": "range",
+                "id": "button_ls",
+                "label": "Letter spacing",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "button_mh",
+                "label": "Min height",
+                "min": 26,
+                "max": 80,
+                "step": 1,
+                "unit": "px",
+                "default": 42,
+                "info": "Only working button style default, outline, bordered top"
+            },
+            {
+                "type": "range",
+                "id": "button_bdr",
+                "label": "Border radius",
+                "min": 0,
+                "max": 40,
+                "step": 1,
+                "unit": "px",
+                "default": 0,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr",
+                "label": "Padding left/right",
+                "min": 0,
+                "max": 70,
+                "step": 1,
+                "unit": "px",
+                "default": 30,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "number",
+                "id": "mgb",
+                "label": "Margin bottom (Unit: px)",
+                "default": 0
+            },
+            {
+                "type": "header",
+                "content": "+ Options tablet"
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w_tb",
+                "label": "Button icon width",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "fsbutton_tb",
+                "label": "Font size",
+                "max": 50,
+                "min": 0,
+                "step": 1,
+                "unit": "px",
+                "default": 12
+            },
+            {
+                "type": "range",
+                "id": "button_mh_tb",
+                "label": "Min height",
+                "min": 10,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 36,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr_tb",
+                "label": "Padding left/right",
+                "min": 0,
+                "max": 60,
+                "step": 1,
+                "unit": "px",
+                "default": 15,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_ls_tb",
+                "label": "Letter spacing",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_tb",
+                "label": "Margin bottom",
+                "default": 0
+            },
+            {
+                "type": "header",
+                "content": "+ Option mobile"
+            },
+            {
+                "type": "checkbox",
+                "id": "hidden_mobile",
+                "label": "Hidden on mobile ",
+                "default": false
+            },
+            {
+                "type": "range",
+                "id": "button_icon_w_mb",
+                "label": "Button icon width (Mobile)",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "range",
+                "id": "fsbutton_mb",
+                "label": "Font size (Mobile)",
+                "max": 50,
+                "min": 0,
+                "step": 1,
+                "unit": "px",
+                "default": 12
+            },
+            {
+                "type": "range",
+                "id": "button_mh_mb",
+                "label": "Min height (Mobile)",
+                "min": 10,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 36,
+                "info": "Only working button style default, outline, bordered top"
+            },
+            {
+                "type": "range",
+                "id": "button_pd_lr_mb",
+                "label": "Padding left/right (Mobile)",
+                "min": 0,
+                "max": 50,
+                "step": 1,
+                "unit": "px",
+                "default": 15,
+                "info": "Only working button style default, outline"
+            },
+            {
+                "type": "range",
+                "id": "button_ls_mb",
+                "label": "Letter spacing (Mobile)",
+                "min": 0,
+                "max": 10,
+                "step": 0.1,
+                "unit": "px",
+                "default": 0
+            },
+            {
+                "type": "number",
+                "id": "mgb_mb",
+                "label": "Margin bottom (Mobile) (Unit: px)",
+                "default": 0
+            },
+            {
+                "type": "paragraph",
+                "content": "————————————————"
+            },
+            {
+              "type": "select",
+              "id": "animation",
+              "label": "Animation",
+              "default": "fadeInUp",
+              "options": [
+                {
+                    "label": "None",
+                    "value": "none"
+                },
+                {
+                    "label": "fadeIn",
+                    "value": "fadeIn"
+                },
+                {
+                    "label": "fadeInDown",
+                    "value": "fadeInDown"
+                },
+                {
+                    "label": "fadeInDownBig",
+                    "value": "fadeInDownBig"
+                },
+                {
+                    "label": "fadeInLeft",
+                    "value": "fadeInLeft"
+                },
+                {
+                    "label": "fadeInLeftBig",
+                    "value": "fadeInLeftBig"
+                },
+                {
+                    "label": "fadeInRight",
+                    "value": "fadeInRight"
+                },
+                {
+                    "label": "fadeInRightBig",
+                    "value": "fadeInRightBig"
+                },
+                {
+                    "label": "fadeInUp",
+                    "value": "fadeInUp"
+                },
+                {
+                    "label": "fadeInUpBig",
+                    "value": "fadeInUpBig"
+                },
+                {
+                    "label": "fadeInTopLeft",
+                    "value": "fadeInTopLeft"
+                },
+                {
+                    "label": "fadeInTopRight",
+                    "value": "fadeInTopRight"
+                },
+                {
+                    "label": "fadeInBottomLeft",
+                    "value": "fadeInBottomLeft"
+                },
+                {
+                    "label": "fadeInBottomRight",
+                    "value": "fadeInBottomRight"
+                },
+                {
+                    "label": "bounceIn",
+                    "value": "bounceIn"
+                },
+                {
+                    "label": "bounceInDown",
+                    "value": "bounceInDown"
+                },
+                {
+                    "label": "bounceInLeft",
+                    "value": "bounceInLeft"
+                },
+                {
+                    "label": "bounceInRight",
+                    "value": "bounceInRight"
+                },
+                {
+                    "label": "bounceInUp",
+                    "value": "bounceInUp"
+                },
+                {
+                    "label": "zoomIn",
+                    "value": "zoomIn"
+                },
+                {
+                    "label": "zoomInDown",
+                    "value": "zoomInDown"
+                },
+                {
+                    "label": "zoomInLeft",
+                    "value": "zoomInLeft"
+                },
+                {
+                    "label": "zoomInRight",
+                    "value": "zoomInRight"
+                },
+                {
+                    "label": "zoomInUp",
+                    "value": "zoomInUp"
+                },
+                {
+                    "label": "slideInDown",
+                    "value": "slideInDown"
+                },
+                {
+                    "label": "slideInLeft",
+                    "value": "slideInLeft"
+                },
+                {
+                    "label": "slideInRight",
+                    "value": "slideInRight"
+                },
+                {
+                    "label": "slideInUp",
+                    "value": "slideInUp"
+                },
+                {
+                    "label": "lightSpeedInRight",
+                    "value": "lightSpeedInRight"
+                },
+                {
+                    "label": "lightSpeedInLeft",
+                    "value": "lightSpeedInLeft"
+                },
+                {
+                    "label": "lightSpeedOutRight",
+                    "value": "lightSpeedOutRight"
+                },
+                {
+                    "label": "lightSpeedOutLeft",
+                    "value": "lightSpeedOutLeft"
+                },
+                {
+                    "label": "jello",
+                    "value": "jello"
+                },
+                {
+                    "label": "tada",
+                    "value": "tada"
+                },
+                {
+                    "label": "pulse",
+                    "value": "pulse"
+                }
+              ]
+            }
+        ]
+      },
+      {
+        "type": "space_html",
+        "name": "Space HTML (Child)",
+        "settings": [
+          {
+            "type": "color",
+            "id": "color",
+            "label": "Color",
+            "default": "#fff"
+          },
+          {
+              "type": "range",
+              "id": "width",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height",
+              "unit": "px",
+              "default": 2
+          },
+          {
+              "type": "number",
+              "id": "mgb",
+              "label": "Margin bottom (Unit: px)",
+              "default": 20
+          },
+          {
+              "type": "paragraph",
+              "content": "————————————————"
+          },
+          {
+              "type": "range",
+              "id": "width_tb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width (Tablet)",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height_tb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height (Tablet)",
+              "default": 2
+          },
+          {
+              "type": "checkbox",
+              "id": "hidden_tb",
+              "label": "Hidden on tablet",
+              "default": false
+          },
+          {
+              "type": "number",
+              "id": "mgb_tb",
+              "label": "Margin bottom on tablet(Unit: px)",
+              "default": 20
+          },
+          {
+              "type": "paragraph",
+              "content": "————————————————"
+          },
+          {
+              "type": "range",
+              "id": "width_mb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Width (Mobile)",
+              "unit": "px",
+              "default": 40
+          },
+          {
+              "type": "range",
+              "id": "height_mb",
+              "min": 1,
+              "max": 100,
+              "step": 1,
+              "label": "Height (Mobile)",
+              "default": 2
+          },
+          {
+              "type": "checkbox",
+              "id": "hidden_mobile",
+              "label": "Hidden on mobile",
+              "default": false
+          },
+          {
+              "type": "number",
+              "id": "mgb_mb",
+              "label": "Margin bottom on mobile(Unit: px)",
+              "default": 20
+          },
+          {
+              "type": "paragraph",
+              "content": "————————————————"
+          },
+          {
+            "type": "select",
+            "id": "animation",
+            "label": "Animation",
+            "default": "fadeInUp",
+            "options": [
+              {
+                  "label": "None",
+                  "value": "none"
+              },
+              {
+                  "label": "fadeIn",
+                  "value": "fadeIn"
+              },
+              {
+                  "label": "fadeInDown",
+                  "value": "fadeInDown"
+              },
+              {
+                  "label": "fadeInDownBig",
+                  "value": "fadeInDownBig"
+              },
+              {
+                  "label": "fadeInLeft",
+                  "value": "fadeInLeft"
+              },
+              {
+                  "label": "fadeInLeftBig",
+                  "value": "fadeInLeftBig"
+              },
+              {
+                  "label": "fadeInRight",
+                  "value": "fadeInRight"
+              },
+              {
+                  "label": "fadeInRightBig",
+                  "value": "fadeInRightBig"
+              },
+              {
+                  "label": "fadeInUp",
+                  "value": "fadeInUp"
+              },
+              {
+                  "label": "fadeInUpBig",
+                  "value": "fadeInUpBig"
+              },
+              {
+                  "label": "fadeInTopLeft",
+                  "value": "fadeInTopLeft"
+              },
+              {
+                  "label": "fadeInTopRight",
+                  "value": "fadeInTopRight"
+              },
+              {
+                  "label": "fadeInBottomLeft",
+                  "value": "fadeInBottomLeft"
+              },
+              {
+                  "label": "fadeInBottomRight",
+                  "value": "fadeInBottomRight"
+              },
+              {
+                  "label": "bounceIn",
+                  "value": "bounceIn"
+              },
+              {
+                  "label": "bounceInDown",
+                  "value": "bounceInDown"
+              },
+              {
+                  "label": "bounceInLeft",
+                  "value": "bounceInLeft"
+              },
+              {
+                  "label": "bounceInRight",
+                  "value": "bounceInRight"
+              },
+              {
+                  "label": "bounceInUp",
+                  "value": "bounceInUp"
+              },
+              {
+                  "label": "zoomIn",
+                  "value": "zoomIn"
+              },
+              {
+                  "label": "zoomInDown",
+                  "value": "zoomInDown"
+              },
+              {
+                  "label": "zoomInLeft",
+                  "value": "zoomInLeft"
+              },
+              {
+                  "label": "zoomInRight",
+                  "value": "zoomInRight"
+              },
+              {
+                  "label": "zoomInUp",
+                  "value": "zoomInUp"
+              },
+              {
+                  "label": "slideInDown",
+                  "value": "slideInDown"
+              },
+              {
+                  "label": "slideInLeft",
+                  "value": "slideInLeft"
+              },
+              {
+                  "label": "slideInRight",
+                  "value": "slideInRight"
+              },
+              {
+                  "label": "slideInUp",
+                  "value": "slideInUp"
+              },
+              {
+                  "label": "lightSpeedInRight",
+                  "value": "lightSpeedInRight"
+              },
+              {
+                  "label": "lightSpeedInLeft",
+                  "value": "lightSpeedInLeft"
+              },
+              {
+                  "label": "lightSpeedOutRight",
+                  "value": "lightSpeedOutRight"
+              },
+              {
+                  "label": "lightSpeedOutLeft",
+                  "value": "lightSpeedOutLeft"
+              },
+              {
+                  "label": "jello",
+                  "value": "jello"
+              },
+              {
+                  "label": "tada",
+                  "value": "tada"
+              },
+              {
+                  "label": "pulse",
+                  "value": "pulse"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "presets": [
+      {
+        "name": "Gallery text accordions",
+        "category": "Homepage",
+        "blocks": [
+          {
+            "type": "gallery_item",
+            "settings": {
+              "label_text": "SHOP MEN", 
+              "cl_label": "#f86f29"
+            }
+          },
+          {
+            "type": "gallery_item",
+            "settings": {
+              "label_text": "SHOP SHOSE",
+              "cl_label": "#000000"
+            }
+          },
+          {
+            "type": "gallery_item",
+            "settings": {
+              "label_text": "SHOP WOMEN",
+              "cl_label": "#000000"
+            }
+          },
+          {
+            "type": "gallery_item",
+            "settings": {
+              "label_text": "SHOP ACCESSORIES",
+              "cl_label": "#000000"
+            }
+          }
+        ]
+      }
+    ]
+  }
+{% endschema %}

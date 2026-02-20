@@ -60,13 +60,13 @@ export function HowItWorksV2() {
 
         {/* ── Steps ────────────────────────────────────────────────── */}
         <div className="relative">
-          {/* Connecting line (desktop only) */}
+          {/* Connecting line (desktop only); z-0 so it stays behind the circles */}
           <div
-            className="hidden md:block absolute top-10 left-[calc(16.667%+1rem)] right-[calc(16.667%+1rem)] h-px bg-stone-200 dark:bg-white/10"
+            className="hidden md:block absolute top-10 left-[calc(16.667%+1rem)] right-[calc(16.667%+1rem)] h-px bg-stone-200 dark:bg-white/10 z-0"
             aria-hidden="true"
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 relative z-10">
             {STEPS.map((step, index) => (
               <motion.div
                 key={step.number}
@@ -83,19 +83,11 @@ export function HowItWorksV2() {
                   ease,
                 }}
               >
-                {/* Step number */}
+                {/* Step number — opaque background so line doesn't show through */}
                 <div className="relative z-10 mb-5">
-                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
+                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-white dark:bg-[#0a0a0a] border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
                     <PixelAccent className="!text-2xl md:!text-3xl">{step.number}</PixelAccent>
                   </div>
-
-                  {/* Dot connectors on the line (desktop only) */}
-                  {index < STEPS.length - 1 && (
-                    <div
-                      className="hidden md:block absolute top-1/2 -translate-y-1/2 -right-4 w-2 h-2 rounded-full bg-stone-300 dark:bg-white/20"
-                      aria-hidden="true"
-                    />
-                  )}
                 </div>
 
                 <h3 className="text-lg font-semibold text-stone-900 dark:text-white mb-3">

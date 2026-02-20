@@ -59,7 +59,7 @@ function GateSkeleton() {
   return (
     <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex flex-col" role="presentation" aria-hidden="true">
       {/* Top bar skeleton */}
-      <div className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
+      <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-stone-200 dark:bg-white/10 animate-pulse" />
           <div className="h-4 w-16 bg-stone-200 dark:bg-white/10 rounded animate-pulse" />
@@ -338,7 +338,7 @@ function WizardInner({
   return (
     <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex flex-col">
       {/* Top bar with progress + skip */}
-      <header className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
+      <header className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
         {/* Logo + theme toggle */}
         <div className="flex items-center gap-3">
           <SynapseLogo className="text-sm text-stone-900 dark:text-white" />
@@ -360,7 +360,7 @@ function WizardInner({
       </header>
 
       {/* Step content */}
-      <main className="flex-1 flex items-center justify-center px-6 py-8 overflow-hidden" aria-live="polite">
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden" aria-live="polite">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentStep.id}

@@ -1,0 +1,27 @@
+{%- comment -%}
+  Product Title Block
+  Renders the product title with customizable typography settings
+  and optional JudgeMe review badge.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - bk_stts: {Object} Block settings (font, size, weight, etc.)
+  - block: {Object} Block Liquid object (for shopify_attributes)
+{%- endcomment -%}
+
+{%- liquid
+  if bk_stts.lh_pr == 0
+    assign lh_pr = 1
+  else
+    assign lh_pr = bk_stts.lh_pr | append: 'px'
+  endif
+-%}
+
+<h1
+  class="t4s-product__title"
+  style="--title-family: var(--font-family-{{ bk_stts.fnt_df_pr }});--title-style: {{ bk_stts.txt_tr_pr }};--title-size: {{ bk_stts.size_pr }}px;--title-weight: {{ bk_stts.fw_pr }};--title-line-height: {{ lh_pr }};--title-spacing: {{ bk_stts.ls_pr }}px;--title-color: {{ bk_stts.pr_title_color }};"
+  {{ block.shopify_attributes }}
+>
+  {{ product.title }}
+</h1>
+{% render 'judgeme_widgets', widget_type: 'judgeme_preview_badge', jm_style: '', concierge_install: true, product: product %}

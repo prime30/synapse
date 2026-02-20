@@ -57,12 +57,12 @@ const USER_MESSAGES: Record<AIErrorCode, string> = {
   AUTH_ERROR: 'AI is not configured. Please ask your admin to add API keys in Settings.',
   MODEL_UNAVAILABLE: 'The selected AI model is currently unavailable. Try switching to a different model.',
   NETWORK_ERROR: 'Connection lost. Check your internet and try again.',
-  TIMEOUT: 'The AI took too long to respond. Try a simpler request or switch to Solo mode.',
+  TIMEOUT: 'The AI took too long to respond. Try a simpler request or try with a single agent (1x).',
   EMPTY_RESPONSE: 'The AI returned an empty response. Retrying...',
   PARSE_ERROR: 'Received an unexpected response from the AI. Please try again.',
   PROVIDER_ERROR: 'The AI service is experiencing issues. Please try again in a moment.',
   QUOTA_EXCEEDED: 'Your AI usage quota has been reached. Please upgrade your plan or wait for the quota to reset.',
-  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or switch to Team mode.',
+  SOLO_EXECUTION_FAILED: 'The AI agent encountered an error. Please try again or try with more agents.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 

@@ -443,7 +443,7 @@ export function buildBatchRequests(
         { role: 'user', content: userPromptBuilder(file) },
       ],
       {
-        model: options?.model ?? 'claude-sonnet-4-5-20250929',
+        model: options?.model ?? 'claude-sonnet-4-6',
         maxTokens: options?.maxTokens ?? 4096,
         temperature: 0.3,
       },

@@ -43,7 +43,18 @@ const ARCHITECTURAL_KEYWORDS = /\b(entire theme|full refactor|migrate from|restr
 
 const FILE_REFERENCE_PATTERN = /\b[\w-]+\.(liquid|css|js|json|scss)\b/gi;
 
+// Signals that prior conversation involved code generation (not just Q&A).
+const CODE_GENERATION_SIGNALS = /\b(created|added|built|implemented|wrote|generated|modified|updated|refactored|inserted|snippet|section|component|template|file)\b/i;
+
+// Follow-up language that implies iterating on prior work.
+const FOLLOW_UP_SIGNALS = /\b(now|also|next|then|additionally|make it|update it|fix it|add to it|extend|improve|adjust|tweak)\b/i;
+
 // ── Stage 1: Heuristic pre-filter ─────────────────────────────────────────
+
+export interface HeuristicOptions {
+  recentDelegationCount?: number;
+  recentMessages?: string[];
+}
 
 /**
  * Fast, zero-cost heuristic classification.
@@ -52,10 +63,19 @@ const FILE_REFERENCE_PATTERN = /\b[\w-]+\.(liquid|css|js|json|scss)\b/gi;
 export function heuristicClassify(
   request: string,
   fileCount: number,
-  recentDelegationCount?: number,
+  options?: number | HeuristicOptions,
 ): RoutingTier | null {
+  const opts: HeuristicOptions = typeof options === 'number'
+    ? { recentDelegationCount: options }
+    : options ?? {};
+
   const wordCount = request.trim().split(/\s+/).length;
   const fileRefs = request.match(FILE_REFERENCE_PATTERN) ?? [];
+
+  // ── Mode-switch acceleration: Ask → Code with prior code suggestions.
+  if (request.includes('[Mode switch:')) {
+    return 'SIMPLE';
+  }
 
   // ── ARCHITECTURAL: clear signals for theme-wide changes
   if (ARCHITECTURAL_KEYWORDS.test(request)) {
@@ -69,13 +89,23 @@ export function heuristicClassify(
   if (fileRefs.length >= 3) {
     return 'COMPLEX';
   }
-  if (recentDelegationCount && recentDelegationCount >= 3) {
+  if (opts.recentDelegationCount && opts.recentDelegationCount >= 3) {
     return 'COMPLEX';
   }
 
+  // ── Multi-turn conversation floor: if prior messages describe code
+  // generation and the current request iterates on that work, the task
+  // is at least COMPLEX — the agent needs full context of what was built.
+  if (opts.recentMessages && opts.recentMessages.length >= 2) {
+    const history = opts.recentMessages.join(' ');
+    const historyHasCodeGen = CODE_GENERATION_SIGNALS.test(history);
+    const requestIsFollowUp = FOLLOW_UP_SIGNALS.test(request);
+    if (historyHasCodeGen && requestIsFollowUp) {
+      return 'COMPLEX';
+    }
+  }
+
   // ── TRIVIAL: short cosmetic request targeting one file/element
-  // Must match a cosmetic keyword or value-change pattern to avoid
-  // mis-classifying short feature requests (e.g. "Add a hamburger menu").
   if (wordCount <= 25 && COSMETIC_KEYWORDS.test(request)) {
     return 'TRIVIAL';
   }
@@ -95,7 +125,14 @@ Tiers:
 - TRIVIAL: Single-file cosmetic change (color, font, spacing, text, visibility)
 - SIMPLE: 1-2 files, clear scope, no cross-file dependencies
 - COMPLEX: 3+ files, architectural decisions, cross-file dependencies, new features
-- ARCHITECTURAL: Theme-wide restructuring, migration, full redesign`;
+- ARCHITECTURAL: Theme-wide restructuring, migration, full redesign
+
+Important: If the request is a follow-up in a multi-turn conversation where code was previously generated, classify based on the CUMULATIVE complexity of the full feature, not just the follow-up message in isolation.`;
+
+export interface LLMClassifyOptions {
+  lastMessageSummary?: string;
+  recentMessages?: string[];
+}
 
 /**
  * LLM-based classification using Haiku (~$0.005 per call).
@@ -104,17 +141,37 @@ Tiers:
 export async function classifyWithLLM(
   request: string,
   fileCount: number,
-  lastMessageSummary?: string,
+  options?: string | LLMClassifyOptions,
 ): Promise<ClassificationResult> {
+  const opts: LLMClassifyOptions = typeof options === 'string'
+    ? { lastMessageSummary: options }
+    : options ?? {};
+
+  const hasConversation = (opts.recentMessages?.length ?? 0) >= 2;
+  const conversationFloor: RoutingTier | null = hasConversation ? 'COMPLEX' : null;
+
   try {
     const model = resolveModel({ action: 'classify' });
     const providerName = getProviderForModel(model);
     const provider = getAIProvider(providerName as 'anthropic' | 'openai' | 'google');
 
+    const contextLines: string[] = [];
+    if (opts.recentMessages && opts.recentMessages.length > 0) {
+      contextLines.push('Conversation history (oldest first):');
+      for (let i = 0; i < opts.recentMessages.length; i++) {
+        const role = i % 2 === 0 ? 'User' : 'Assistant';
+        const msg = opts.recentMessages[i].slice(0, 200);
+        contextLines.push(`  ${role}: ${msg}`);
+      }
+      contextLines.push('(This is a follow-up to the conversation above.)');
+    } else if (opts.lastMessageSummary) {
+      contextLines.push(`Recent context: ${opts.lastMessageSummary}`);
+    }
+
     const userPrompt = [
       `Request: "${request}"`,
       `File count: ${fileCount}`,
-      lastMessageSummary ? `Recent context: ${lastMessageSummary}` : '',
+      ...contextLines,
       '',
       'Respond: {"tier":"TRIVIAL|SIMPLE|COMPLEX|ARCHITECTURAL","confidence":0.0-1.0}',
     ].filter(Boolean).join('\n');
@@ -127,27 +184,33 @@ export async function classifyWithLLM(
       { model, maxTokens: 64, temperature: 0 },
     );
 
-    // Parse response
     const jsonMatch = result.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return { tier: 'SIMPLE', confidence: 0.5, source: 'default' };
+      const fallbackTier = conversationFloor ?? 'SIMPLE';
+      return { tier: fallbackTier, confidence: 0.5, source: 'default' };
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as { tier?: string; confidence?: number };
-    const tier = validateTier(parsed.tier);
+    let tier = validateTier(parsed.tier);
     const confidence = typeof parsed.confidence === 'number'
       ? Math.max(0, Math.min(1, parsed.confidence))
       : 0.5;
 
-    // Low confidence → default to SIMPLE (safe middle ground)
-    if (confidence < 0.7) {
+    // Apply conversation floor: multi-turn code generation is at least COMPLEX
+    if (conversationFloor && TIER_ORDER[tier] < TIER_ORDER[conversationFloor]) {
+      tier = conversationFloor;
+    }
+
+    // Low confidence without conversation context → default to SIMPLE
+    if (confidence < 0.7 && !conversationFloor) {
       return { tier: 'SIMPLE', confidence, source: 'classifier' };
     }
 
     return { tier, confidence, source: 'classifier' };
   } catch (err) {
-    console.warn('[classifier] LLM classification failed, defaulting to SIMPLE:', err);
-    return { tier: 'SIMPLE', confidence: 0.5, source: 'default' };
+    console.warn('[classifier] LLM classification failed:', err);
+    const fallbackTier = conversationFloor ?? 'SIMPLE';
+    return { tier: fallbackTier, confidence: 0.5, source: 'default' };
   }
 }
 
@@ -162,16 +225,16 @@ export async function classifyRequest(
   fileCount: number,
   options?: {
     lastMessageSummary?: string;
+    recentMessages?: string[];
     recentDelegationCount?: number;
     skipLLM?: boolean;
   },
 ): Promise<ClassificationResult> {
   // Stage 1: Heuristic (free)
-  const heuristicResult = heuristicClassify(
-    request,
-    fileCount,
-    options?.recentDelegationCount,
-  );
+  const heuristicResult = heuristicClassify(request, fileCount, {
+    recentDelegationCount: options?.recentDelegationCount,
+    recentMessages: options?.recentMessages,
+  });
 
   if (heuristicResult !== null) {
     return { tier: heuristicResult, confidence: 0.9, source: 'heuristic' };
@@ -179,10 +242,16 @@ export async function classifyRequest(
 
   // Stage 2: LLM classifier (if not skipped)
   if (!options?.skipLLM) {
-    return classifyWithLLM(request, fileCount, options?.lastMessageSummary);
+    return classifyWithLLM(request, fileCount, {
+      lastMessageSummary: options?.lastMessageSummary,
+      recentMessages: options?.recentMessages,
+    });
   }
 
-  // Default fallback
+  // Default fallback -- respect multi-turn conversation floor
+  if (options?.recentMessages && options.recentMessages.length >= 2) {
+    return { tier: 'COMPLEX', confidence: 0.5, source: 'default' };
+  }
   return { tier: 'SIMPLE', confidence: 0.5, source: 'default' };
 }
 

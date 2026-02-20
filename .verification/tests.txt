@@ -1,0 +1,1555 @@
+﻿
+> synapse1@0.1.0 test:run
+> vitest run
+
+
+ RUN  v4.0.18 C:/Users/alexm/synapse1
+
+stdout | tests/integration/agents-e2e-live.test.ts > Live agent API (real Anthropic)
+[live-agents] ANTHROPIC_API_KEY loaded, length: 108 prefix: sk-ant-api03-C...
+
+ Γåô tests/integration/v2-live-benchmark.test.ts (1 test | 1 skipped)
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[warm-up] Sending trivial call to warm API connection...
+
+node.exe : stderr | lib/design-tokens/drift/__tests__/versions-api.test.ts > POST 
+/api/projects/[projectId]/design-tokens/versions/[versionId]/rollback > returns error when rollback throws
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\alexm\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (stderr | lib/de...rollback throws:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Unhandled error: Error: Version not found
+    at C:/Users/alexm/synapse1/lib/design-tokens/drift/__tests__/versions-api.test.ts:126:36
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ Γ£ô lib/design-tokens/drift/__tests__/versions-api.test.ts (4 tests) 668ms
+     Γ£ô succeeds with valid versionId  458ms
+stderr | lib/design-tokens/drift/__tests__/cleanup-suggest.test.ts > POST 
+/api/projects/[projectId]/design-tokens/cleanup-suggest > falls back to deterministic when LLM call fails
+[cleanup-suggest] LLM suggestion failed, falling back to deterministic: Error: LLM timeout
+    at C:/Users/alexm/synapse1/lib/design-tokens/drift/__tests__/cleanup-suggest.test.ts:122:36
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ Γ£ô lib/design-tokens/drift/__tests__/cleanup-suggest.test.ts (5 tests) 473ms
+     Γ£ô returns deterministic changes when no API key is set  451ms
+ Γ£ô tests/integration/orchestrator/performance.test.ts (3 tests) 588ms
+     Γ£ô 15 agents can be provisioned without errors  403ms
+ Γ£ô tests/integration/orchestrator/simple-parallel.test.ts (2 tests) 536ms
+     Γ£ô all 3 tasks can be assigned to different agents  483ms
+ Γ£ô lib/coordination/__tests__/tasks.test.ts (4 tests) 110ms
+ Γ£ô tests/integration/orchestrator/blocker-resolution.test.ts (4 tests) 149ms
+ Γ£ô lib/design-tokens/drift/__tests__/create-token-api.test.ts (5 tests) 348ms
+     Γ£ô creates token with valid input and returns 201  343ms
+ Γ£ô components/features/file-management/__tests__/FileTabs.test.tsx (2 tests) 171ms
+ Γ£ô mcp-server/src/fs/__tests__/reader.test.ts (23 tests) 247ms
+ Γ£ô lib/coordination/__tests__/locking.test.ts (5 tests) 318ms
+ Γ£ô components/features/file-management/__tests__/FileOperations.test.tsx (19 tests) 448ms
+ Γ£ô hooks/__tests__/useFileOperations.test.ts (15 tests) 273ms
+ Γ£ô components/features/suggestions/__tests__/SuggestionPanel.test.tsx (5 tests) 88ms
+ Γ£ô components/features/shopify/__tests__/ShopifyConnectPanel.test.tsx (2 tests) 60ms
+ Γ£ô tests/integration/orchestrator/failure-recovery.test.ts (2 tests) 464ms
+     Γ£ô recovers from stale agent: releases locks, unassigns task  426ms
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[warm-up] Done.
+
+
+ Γ£ô mcp-server/src/fs/__tests__/writer.test.ts (12 tests) 611ms
+ Γ£ô hooks/__tests__/useRequireAuth.test.ts (5 tests) 167ms
+ Γ£ô components/features/file-management/__tests__/FileListItem.test.tsx (11 tests) 237ms
+ Γ£ô components/features/file-management/__tests__/FileListControls.test.tsx (12 tests) 577ms
+     Γ£ô renders filter buttons (All, Liquid, JavaScript, CSS)  311ms
+ Γ£ô app/auth/signin/__tests__/page.test.tsx (7 tests) 341ms
+ Γ£ô components/features/design-system/__tests__/DesignTokenBrowser.test.tsx (9 tests) 438ms
+ Γ£ô components/features/file-management/__tests__/FileEditor.test.tsx (7 tests) 194ms
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+
+################################################################################
+# Scenario: Ask: Accessibility Analysis
+# Prompt: What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?
+################################################################################
+
+  Files loaded: snippets/product-thumbnail.liquid, snippets/product-img.liquid
+  [Baseline (Sonnet)] Running...
+
+stdout | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > solo pipeline completes and returns success with code changes
+[selectPMFiles] tier=SIMPLE, selected=1, excluded=0, total=1, budget=20000
+
+stderr | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > solo pipeline completes and returns 
+success with code changes
+[DesignSystemContextProvider] Failed to load design tokens: Error: `cookies` was called outside a request scope. Read 
+more: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+    at throwForMissingRequestStore 
+(C:\Users\alexm\synapse1\node_modules\next\dist\server\app-render\work-unit-async-storage.external.js:63:33)
+    at cookies (C:\Users\alexm\synapse1\node_modules\next\dist\server\request\cookies.js:112:67)
+    at createClient (C:/Users/alexm/synapse1/lib/supabase/server.ts:5:29)
+    at getClient (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:25:10)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at listByProject (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:162:20)
+    at DesignSystemContextProvider.getDesignContext 
+(C:/Users/alexm/synapse1/lib/design-tokens/agent-integration/context-provider.ts:26:22)
+    at AgentCoordinator.executeSolo (C:/Users/alexm/synapse1/lib/agents/coordinator.ts:2560:23)
+    at C:/Users/alexm/synapse1/tests/integration/agents-e2e.test.ts:68:20
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > solo pipeline completes and returns success with code changes
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+stderr | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > progress events are emitted during 
+solo run
+[DesignSystemContextProvider] Failed to load design tokens: Error: `cookies` was called outside a request scope. Read 
+more: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+    at throwForMissingRequestStore 
+(C:\Users\alexm\synapse1\node_modules\next\dist\server\app-render\work-unit-async-storage.external.js:63:33)
+    at cookies (C:\Users\alexm\synapse1\node_modules\next\dist\server\request\cookies.js:112:67)
+    at createClient (C:/Users/alexm/synapse1/lib/supabase/server.ts:5:29)
+    at getClient (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:25:10)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at listByProject (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:162:20)
+    at DesignSystemContextProvider.getDesignContext 
+(C:/Users/alexm/synapse1/lib/design-tokens/agent-integration/context-provider.ts:26:22)
+    at AgentCoordinator.executeSolo (C:/Users/alexm/synapse1/lib/agents/coordinator.ts:2560:23)
+    at C:/Users/alexm/synapse1/tests/integration/agents-e2e.test.ts:105:5
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20
+stdout | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > progress events are emitted during solo run
+[selectPMFiles] tier=SIMPLE, selected=1, excluded=0, total=1, budget=20000
+
+stdout | tests/integration/agents-e2e.test.ts > Agents E2E: task accomplishment > progress events are emitted during solo run
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+ Γ£ô tests/integration/agents-e2e.test.ts (2 tests) 3750ms
+     Γ£ô solo pipeline completes and returns success with code changes  3740ms
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > completes successfully with code changes
+[V2] Starting for execution v2-basic-1771370748350, mode=code
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > executeSolo completes with code changes
+[selectPMFiles] tier=SIMPLE, selected=1, excluded=0, total=1, budget=20000
+
+stderr | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > executeSolo completes with code 
+changes
+[DesignSystemContextProvider] Failed to load design tokens: Error: `cookies` was called outside a request scope. Read 
+more: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+    at throwForMissingRequestStore 
+(C:\Users\alexm\synapse1\node_modules\next\dist\server\app-render\work-unit-async-storage.external.js:63:33)
+    at cookies (C:\Users\alexm\synapse1\node_modules\next\dist\server\request\cookies.js:112:67)
+    at createClient (C:/Users/alexm/synapse1/lib/supabase/server.ts:5:29)
+    at getClient (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:25:10)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at listByProject (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:162:20)
+    at DesignSystemContextProvider.getDesignContext 
+(C:/Users/alexm/synapse1/lib/design-tokens/agent-integration/context-provider.ts:26:22)
+    at AgentCoordinator.executeSolo (C:/Users/alexm/synapse1/lib/agents/coordinator.ts:2560:23)
+    at C:/Users/alexm/synapse1/tests/integration/agent-loop-compare.test.ts:199:20
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > executeSolo completes with code changes
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > completes successfully with code changes
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Fast edit path activated (MAX_ITERATIONS=2)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > streamAgentLoop completes with streaming and tool events
+[AgentLoop] Starting for execution loop-1771370749944, mode=code
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > streamAgentLoop completes with streaming and tool events
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > streamAgentLoop completes with streaming and tool events
+[AgentLoop] Complete after 1 iterations, 27 chars, 1 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > completes successfully with code changes
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent changes
+[selectPMFiles] tier=SIMPLE, selected=1, excluded=0, total=1, budget=20000
+
+stderr | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent 
+changes
+[DesignSystemContextProvider] Failed to load design tokens: Error: `cookies` was called outside a request scope. Read 
+more: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+    at throwForMissingRequestStore 
+(C:\Users\alexm\synapse1\node_modules\next\dist\server\app-render\work-unit-async-storage.external.js:63:33)
+    at cookies (C:\Users\alexm\synapse1\node_modules\next\dist\server\request\cookies.js:112:67)
+    at createClient (C:/Users/alexm/synapse1/lib/supabase/server.ts:5:29)
+    at getClient (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:25:10)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at listByProject (C:/Users/alexm/synapse1/lib/design-tokens/models/token-model.ts:162:20)
+    at DesignSystemContextProvider.getDesignContext 
+(C:/Users/alexm/synapse1/lib/design-tokens/agent-integration/context-provider.ts:26:22)
+    at AgentCoordinator.executeSolo (C:/Users/alexm/synapse1/lib/agents/coordinator.ts:2560:23)
+    at C:/Users/alexm/synapse1/tests/integration/agent-loop-compare.test.ts:264:23
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent changes
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > includes usage data in result
+[V2] Starting for execution v2-usage-1771370749978, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > includes usage data in result
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Fast edit path activated (MAX_ITERATIONS=2)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > includes usage data in result
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent changes
+[AgentLoop] Starting for execution cmp-a-1771370749981, mode=code
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent changes
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/agent-loop-compare.test.ts > Agent Loop vs Legacy Solo > both pipelines produce equivalent changes
+[AgentLoop] Complete after 1 iterations, 27 chars, 1 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[V2] Starting for execution v2-tier-1771370749983, mode=code
+
+stdout | tests/integration/agent-loop-compare.test.ts > Stream fallback: hanging stream > falls back to completeWithTools when stream hangs
+[AgentLoop] Starting for execution hang-1771370749984, mode=code
+
+stdout | tests/integration/agent-loop-compare.test.ts > Stream fallback: hanging stream > falls back to completeWithTools when stream hangs
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[V2] Classified as COMPLEX (source=heuristic, confidence=0.9)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[V2ToolExecutor] Running review -- 1 change(s), scope="all"
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[Agent:review] Budget: before=3450, after=3450, truncated=false, truncatedCount=0, budgetTruncated=false, limit=180000
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[V2ToolExecutor] Review done -- approved=true
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > classification tier emitted in thinking event metadata
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[V2] Starting for execution v2-autoreview-1771370750024, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[V2] Classified as COMPLEX (source=heuristic, confidence=0.9)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[V2ToolExecutor] Running review -- 1 change(s), scope="all"
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[Agent:review] Budget: before=3444, after=3444, truncated=false, truncatedCount=0, budgetTruncated=false, limit=180000
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[V2ToolExecutor] Review done -- approved=true
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > auto-review triggers on COMPLEX tier
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > verification errors emitted as diagnostics
+[V2] Starting for execution v2-verify-1771370750039, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > verification errors emitted as diagnostics
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Fast edit path activated (MAX_ITERATIONS=2)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > verification errors emitted as diagnostics
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > file context rule rejects out-of-context changes
+[V2] Starting for execution v2-fcrule-1771370750041, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > file context rule rejects out-of-context changes
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Fast edit path activated (MAX_ITERATIONS=2)
+[V2] Iteration 0, messages=2, truncated=false
+
+stderr | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > file context rule rejects 
+out-of-context changes
+[V2] File Context Rule rejected 1 change(s)
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > file context rule rejects out-of-context changes
+[V2] Complete after 1 iterations, 41 chars, 0 changes
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > handles ask mode text-only response
+[V2] Starting for execution v2-ask-1771370750052, mode=ask
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > handles ask mode text-only response
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 Coordinator: streamV2 > handles ask mode text-only response
+[V2] Complete after 1 iterations, 70 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic
+
+========================================
+PIPELINE 1: executeSolo (legacy)
+Prompt: What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?
+Files in context: 2
+========================================
+
+[selectPMFiles] tier=SIMPLE, selected=2, excluded=0, total=2, budget=20000
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[V2] Starting for execution cmp-v2-1771370750141, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[V2] Classified as SIMPLE (source=heuristic, confidence=0.9)
+[V2] Fast edit path activated (MAX_ITERATIONS=2)
+[V2] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[V2] Complete after 1 iterations, 41 chars, 1 changes
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic
+[progress] Single agent ΓÇö generating changes directly
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[AgentLoop] Starting for execution cmp-v1-1771370750145, mode=code
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/v2-coordinator.test.ts > V2 vs V1 Comparative > v2 produces equivalent results to v1 streamAgentLoop
+[AgentLoop] Complete after 1 iterations, 41 chars, 1 changes
+
+ Γ£ô tests/integration/v2-coordinator.test.ts (8 tests) 3057ms
+     Γ£ô completes successfully with code changes  2867ms
+ Γ£ô tests/integration/ai-chat-errors.test.ts (109 tests) 142ms
+stderr | tests/integration/agent-loop-compare.test.ts > Stream fallback: hanging stream > falls back to 
+completeWithTools when stream hangs
+[StreamHealth] Streaming marked broken (TTL=5m)
+[AgentLoop] Stream timeout (500ms), falling back to completeWithTools (persistent)
+
+stdout | tests/integration/agent-loop-compare.test.ts > Stream fallback: hanging stream > falls back to completeWithTools when stream hangs
+[AgentLoop] Complete after 1 iterations, 27 chars, 1 changes
+
+ Γ£ô tests/integration/agent-loop-compare.test.ts (4 tests) 4579ms
+     Γ£ô executeSolo completes with code changes  4023ms
+     Γ£ô falls back to completeWithTools when stream hangs  514ms
+ Γ£ô mcp-server/src/tools/__tests__/agents.test.ts (8 tests) 4084ms
+     Γ£ô poll polls multiple times until terminal status  3057ms
+     Γ£ô cancel stops polling  1018ms
+ Γ£ô tests/integration/orchestrator/wave-execution.test.ts (2 tests) 98ms
+ Γ£ô app/__tests__/page.test.tsx (1 test) 730ms
+     Γ£ô should render the page  728ms
+ Γ£ô lib/orchestrator/__tests__/dependency-analysis.test.ts (3 tests) 89ms
+ Γ£ô lib/context/__tests__/updater.test.ts (11 tests) 84ms
+ Γ£ô lib/coordination/__tests__/initialize.test.ts (3 tests) 75ms
+ Γ£ô lib/liquid/__tests__/liquid-ast.test.ts (114 tests) 33ms
+ Γ£ô lib/coordination/__tests__/recovery.test.ts (2 tests) 167ms
+ Γ£ô lib/coordination/__tests__/atomic.test.ts (5 tests) 30ms
+ Γ£ô components/features/file-management/__tests__/FileUploadModal.test.tsx (2 tests) 44ms
+ Γ£ô lib/coordination/__tests__/validation.test.ts (3 tests) 65ms
+ Γ£ô lib/supabase/__tests__/client.test.ts (1 test) 24ms
+stderr | tests/integration/anthropic-api-features.test.ts > Anthropic API Features > Stream error recovery > resolves 
+promises even on mid-stream error
+[anthropic] streamWithTools() stream error: anthropic network error: Network lost
+
+ Γ£ô tests/integration/anthropic-api-features.test.ts (12 tests) 18ms
+ Γ£ô mcp-server/src/__tests__/server-lifecycle.test.ts (12 tests) 23ms
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö metadata layer > first call hits DB for metadata, second call uses cache
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö metadata layer > first call hits DB for metadata, second call uses cache
+[file-loader] Metadata cache hit for proj-cache-test-001: 2 files
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö metadata layer > invalidation clears metadata cache and forces DB query
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö metadata layer > invalidation clears metadata cache and forces DB query
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > loadContent fetches content on demand (async)
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > loadContent fetches content on demand (async)
+[file-loader] loadContent: hydrated 1/1 files (2 cached, 1 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > second loadContent call uses per-file cache (no DB)
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > second loadContent call uses per-file cache (no DB)
+[file-loader] loadContent: hydrated 1/1 files (2 cached, 1 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > second loadContent call uses per-file cache (no DB)
+[file-loader] loadContent: hydrated 1/1 files (1 cached, 0 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > loadContent hydrates multiple files in a single batch
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > loadContent hydrates multiple files in a single batch
+[file-loader] loadContent: hydrated 2/2 files (2 cached, 2 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateFileContent busts a single file cache entry
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateFileContent busts a single file cache entry
+[file-loader] loadContent: hydrated 2/2 files (2 cached, 2 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateFileContent busts a single file cache entry
+[file-loader] loadContent: hydrated 2/2 files (2 cached, 1 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateAllProjectCaches clears metadata and all content
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateAllProjectCaches clears metadata and all content
+[file-loader] loadContent: hydrated 2/2 files (2 cached, 2 fetched)
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateAllProjectCaches clears metadata and all content
+[file-loader] Loaded metadata for 2 files in proj-cache-test-001
+
+stdout | tests/integration/file-cache.test.ts > Project files cache ΓÇö per-file content layer > invalidateAllProjectCaches clears metadata and all content
+[file-loader] loadContent: hydrated 1/1 files (2 cached, 1 fetched)
+
+ Γ£ô tests/integration/file-cache.test.ts (7 tests) 16ms
+ Γ£ô lib/coordination/__tests__/heartbeat.test.ts (4 tests) 107ms
+ Γ£ô components/features/file-management/__tests__/FileList.test.tsx (1 test) 30ms
+ Γ£ô lib/shopify/__tests__/theme-structure.test.ts (13 tests) 17ms
+ Γ£ô lib/shopify/__tests__/oauth.test.ts (9 tests) 64ms
+ Γ£ô lib/liquid/__tests__/validator.test.ts (26 tests) 16ms
+ Γ£ô components/features/versions/__tests__/VersionHistoryPanel.test.tsx (6 tests) 91ms
+ Γ£ô lib/design-tokens/__tests__/component-detector.test.ts (9 tests) 16ms
+ Γ£ô hooks/__tests__/useFileTabs.test.ts (4 tests) 27ms
+ Γ£ô app/api/v1/templates/__tests__/validate.test.ts (5 tests) 16ms
+ Γ£ô lib/design-tokens/__tests__/token-applicator.test.ts (28 tests) 14ms
+ Γ£ô mcp-server/src/api/__tests__/client.test.ts (15 tests) 13ms
+stderr | tests/integration/api-middleware.test.ts > API Error Handling > should handle unknown errors gracefully
+Unhandled error: Error: Unexpected
+    at C:/Users/alexm/synapse1/tests/integration/api-middleware.test.ts:38:37
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ Γ£ô tests/integration/api-middleware.test.ts (9 tests) 15ms
+ Γ£ô lib/design-tokens/__tests__/inference.test.ts (24 tests) 13ms
+ Γ£ô lib/context/__tests__/detector.test.ts (28 tests) 15ms
+ Γ£ô __tests__/middleware.test.ts (10 tests) 13ms
+ Γ£ô components/features/file-management/__tests__/FileViewer.test.tsx (1 test) 31ms
+ Γ£ô lib/liquid/__tests__/schema-loader.test.ts (19 tests) 12ms
+ Γ£ô lib/shopify/__tests__/push-history.test.ts (11 tests) 11ms
+ Γ£ô lib/design-tokens/__tests__/token-model.test.ts (17 tests) 9ms
+ Γ£ô mcp-server/src/auth/__tests__/manager.test.ts (16 tests) 12ms
+ Γ£ô lib/design-tokens/__tests__/parsers.test.ts (27 tests) 10ms
+ Γ£ô lib/ai/__tests__/url-to-markdown.test.ts (5 tests) 9ms
+ Γ£ô mcp-server/src/tools/__tests__/files.test.ts (6 tests) 11ms
+stderr | lib/shopify/__tests__/theme-provisioning.test.ts > ensureDevTheme > creates empty theme (no ZIP) when 
+sourceThemeId is provided
+[ensureDevTheme] themeDuplicate failed, falling back to empty theme: api.duplicateTheme is not a function
+
+stderr | lib/shopify/__tests__/theme-provisioning.test.ts > ensureDevTheme > falls back to ZIP URL when empty theme 
+creation fails with sourceThemeId
+[ensureDevTheme] themeDuplicate failed, falling back to empty theme: api.duplicateTheme is not a function
+
+ Γ£ô lib/shopify/__tests__/theme-provisioning.test.ts (6 tests) 9ms
+ Γ£ô lib/design-tokens/__tests__/chromatic-engine.test.ts (27 tests) 11ms
+stderr | lib/design-tokens/__tests__/agent-integration.test.ts > DesignSystemContextProvider > returns empty string on 
+error (graceful fallback)
+[DesignSystemContextProvider] Failed to load design tokens: Error: DB error
+    at C:/Users/alexm/synapse1/lib/design-tokens/__tests__/agent-integration.test.ts:129:41
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///C:/Users/alexm/synapse1/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ Γ£ô lib/design-tokens/__tests__/agent-integration.test.ts (8 tests) 10ms
+ Γ£ô mcp-server/src/tools/__tests__/apply-changes.test.ts (5 tests) 10ms
+ Γ£ô lib/suggestions/__tests__/static-rules.test.ts (23 tests) 7ms
+ Γ£ô mcp-server/src/__tests__/config.test.ts (9 tests) 9ms
+ Γ£ô lib/liquid/__tests__/flow-graph-builder.test.ts (19 tests) 8ms
+ Γ£ô lib/design-tokens/__tests__/extract.test.ts (21 tests) 9ms
+ Γ£ô tests/integration/end-to-end.test.ts (8 tests) 9ms
+ Γ£ô mcp-server/src/tools/__tests__/projects.test.ts (6 tests) 10ms
+ Γ£ô lib/context/__tests__/symbol-extractor.test.ts (27 tests) 8ms
+ Γ£ô mcp-server/src/tools/__tests__/preferences.test.ts (3 tests) 7ms
+ Γ£ô lib/shopify/__tests__/sync-service.test.ts (8 tests) 6ms
+ Γ£ô lib/database/__tests__/suggestions.test.ts (20 tests) 7ms
+ Γ£ô lib/design-tokens/__tests__/drift-detector.test.ts (13 tests) 10ms
+ Γ£ô app/api/shopify/__tests__/routes.test.ts (7 tests) 6ms
+ Γ£ô lib/shopify/__tests__/admin-api.test.ts (16 tests) 10ms
+ Γ£ô lib/shopify/__tests__/token-manager.test.ts (9 tests) 9ms
+ Γ£ô lib/preview/__tests__/relevant-liquid-files.test.ts (24 tests) 7ms
+ Γ£ô tests/integration/agents.test.ts (25 tests) 8ms
+ Γ£ô lib/suggestions/__tests__/ai-generator.test.ts (12 tests) 6ms
+ Γ£ô lib/database/__tests__/shopify.test.ts (21 tests) 8ms
+ Γ£ô tests/integration/auth-flow.test.ts (7 tests) 7ms
+ Γ£ô lib/context/__tests__/provider.test.ts (5 tests) 4ms
+ Γ£ô app/api/files/__tests__/versions.test.ts (9 tests) 6ms
+ Γ£ô mcp-server/src/streaming/__tests__/notifier.test.ts (11 tests) 7ms
+ Γ£ô lib/liquid/__tests__/formatter.test.ts (12 tests) 5ms
+ Γ£ô lib/context/__tests__/integration.test.ts (3 tests) 7ms
+ Γ£ô lib/auth/__tests__/route-guard.test.ts (15 tests) 7ms
+ Γ£ô lib/liquid/__tests__/validation-cache.test.ts (6 tests) 7ms
+ Γ£ô lib/auth/__tests__/oauth-config.test.ts (12 tests) 6ms
+ Γ£ô lib/design-tokens/drift/__tests__/suggestion-generator.test.ts (7 tests) 6ms
+ Γ£ô lib/context/__tests__/cache.test.ts (8 tests) 7ms
+ Γ£ô lib/context/__tests__/packager.test.ts (15 tests) 6ms
+ Γ£ô lib/database/__tests__/custom-registry.test.ts (7 tests) 6ms
+ Γ£ô lib/suggestions/__tests__/application-service.test.ts (10 tests) 5ms
+ Γ£ô lib/ai/providers/__tests__/openai.test.ts (2 tests) 4ms
+ Γ£ô tests/integration/mcp-server.test.ts (10 tests) 7ms
+ Γ£ô app/api/suggestions/__tests__/endpoints.test.ts (8 tests) 6ms
+ Γ£ô app/api/files/__tests__/crud.test.ts (10 tests) 5ms
+ Γ£ô lib/database/__tests__/versions.test.ts (7 tests) 4ms
+ Γ£ô lib/liquid/__tests__/type-checker.test.ts (20 tests) 5ms
+ Γ£ô lib/ai/__tests__/get-provider.test.ts (4 tests) 4ms
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+ Γ£ô tests/integration/database.test.ts (6 tests) 4ms
+ Γ£ô lib/liquid/__tests__/scope-tracker.test.ts (9 tests) 4ms
+ Γ£ô lib/services/__tests__/storage-migration.test.ts (2 tests) 3ms
+ Γ£ô lib/versions/__tests__/version-service.test.ts (10 tests) 4ms
+ Γ£ô lib/context/__tests__/loader.test.ts (5 tests) 7ms
+ Γ£ô tests/integration/ai-providers.test.ts (5 tests) 5ms
+ Γ£ô app/api/projects/[projectId]/files/__tests__/batch.test.ts (2 tests) 4ms
+ Γ£ô tests/integration/file-operations.test.ts (8 tests) 6ms
+ Γ£ô lib/versions/__tests__/undo-redo.test.ts (4 tests) 4ms
+ Γ£ô lib/versions/__tests__/conflict-detector.test.ts (6 tests) 4ms
+ Γ£ô app/api/files/__tests__/duplicate.test.ts (2 tests) 3ms
+ Γ£ô lib/preview/__tests__/url-generator.test.ts (5 tests) 4ms
+ Γ£ô hooks/__tests__/useAutoSave.test.ts (1 test) 2ms
+ Γ£ô lib/services/__tests__/hybrid-storage.test.ts (4 tests) 2ms
+ Γ£ô lib/services/__tests__/file-storage.test.ts (5 tests) 2ms
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic
+[progress] Still generating...
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic
+
+--- Cost Breakdown ---
+  project_manager: claude-sonnet-4-5-20250929 ΓÇö 6170in/1574out ΓÇö $0.0421
+  TOTAL: 6170in/1574out ΓÇö $0.0421
+---
+Response (first 1000 chars):
+I've analyzed both product thumbnail snippets for accessibility issues. These files have several significant WCAG violations and accessibility concerns that need addressing.
+
+## Critical Accessibility Issues Found:
+
+### 1. **Missing alt text handling** (WCAG 1.1.1 - Level A)
+- The alt text logic is overly complex and can result in empty/meaningless alt text
+- When `img_alt` contains underscores and specific conditions aren't met, the alt could be blank
+- The `escape` filter is applied but there's no fallback to product.title if alt is empty
+
+### 2. **Lazy loading without proper fallback** (WCAG 1.4.5 - Level AA)
+- Images use a base64 transparent GIF as src with `data-src` for lazy loading
+- If JavaScript fails, users see nothing (the noscript tag helps but isn't styled properly)
+- No `loading="lazy"` attribute on the main img tag (only in noscript)
+
+### 3. **Missing semantic structure** (WCAG 1.3.1 - Level A)
+- No `<figure>` and `<figcaption>` structure for media items
+- Media type isn
+========================================
+
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+
+========================================
+PIPELINE 2: streamAgentLoop (v1 streaming)
+Prompt: What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?
+Files in context: 2
+========================================
+
+[AgentLoop] Starting for execution h2h-stream-1771370779226, mode=ask
+[progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[progress] Using claude-haiku-4-5-20251001
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/agents-e2e-live.test.ts > Live agent API (real Anthropic) > provider stream() returns streamed content
+[stream timing] time-to-first-token: 0 ms, streaming: 0 ms, total: 56716 ms (stopped at safety timeout)
+stderr | tests/integration/agents-e2e-live.test.ts > Live agent API (real Anthropic) > provider stream() returns 
+streamed content
+[live-agents] Stream produced no data within 55000ms (environment may buffer or block streaming). Passing test but 
+stream not verified.
+
+
+stdout | tests/integration/agents-e2e-live.test.ts > Live agent API (real Anthropic) > coordinator executeSolo with real provider completes or returns API error (no auth failure)
+[selectPMFiles] tier=SIMPLE, selected=1, excluded=0, total=1, budget=20000
+
+stdout | tests/integration/agents-e2e-live.test.ts > Live agent API (real Anthropic) > coordinator executeSolo with real provider completes or returns API error (no auth failure)
+[PM-Exploration] Feature flag: false
+[PM-Exploration] Skipped ΓÇö feature flag disabled
+
+stderr | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop 
+(v1 streaming) ΓÇö live Anthropic
+[StreamHealth] Streaming marked broken (TTL=5m)
+[AgentLoop] Stream timeout (30000ms), falling back to completeWithTools (persistent)
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[progress] Stream unavailable ΓÇö using batch mode
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[tool_start] read_file
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[tool_call] read_file
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[tool_start] read_file
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[tool_call] read_file
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[AgentLoop] Iteration 2, messages=6, truncated=false
+
+ Γ£ô tests/integration/agents-e2e-live.test.ts (3 tests) 66210ms
+     Γ£ô provider complete() returns non-empty answer  2762ms
+     Γ£ô provider stream() returns streamed content  56717ms
+     Γ£ô coordinator executeSolo with real provider completes or returns API error (no auth failure)  6727ms
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1076
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Baseline (Sonnet)] Done in 67.0s, 0 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Sonnet)] Running...
+[AgentLoop] Starting for execution h2h-synapse--sonnet--1771370815051, mode=ask
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-haiku-4-5-20251001
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+[AgentLoop] Complete after 3 iterations, 4826 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic
+
+--- Cost Breakdown ---
+  project_manager: claude-haiku-4-5-20251001 ΓÇö 0in/0out ΓÇö $0.0000c
+  TOTAL: 0in/0out ΓÇö $0.0000c
+---
+Time to first chunk: 31005 ms
+Response (first 1000 chars):
+I'll read the product-thumbnail.liquid file to analyze its accessibility issues.Now let me check the product-img.liquid file to understand the full context:## Accessibility Issues in product-thumbnail.liquid
+
+I've identified **7 significant accessibility issues**:
+
+### 1. **Missing `alt` text on placeholder image** (HIGH)
+The lazy-load placeholder uses a transparent GIF with **no `alt` attribute**:
+```liquid
+src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" width="{{ image.width }}" height="{{ image.height }}" alt="{{ img_alt }}"
+```
+**Issue**: While the actual `<img>` has `alt="{{ img_alt }}"`, screen readers may announce the placeholder before the real image loads.
+
+**Fix**: Add `alt=""` to the placeholder (it's decorative) and ensure the actual image has the alt text:
+```liquid
+src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" width="{{ image.width }}" height="{{ image.height }}"
+```
+
+---
+
+### 2. **No focus indicat
+========================================
+
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 architecture) ΓÇö live Anthropic
+
+========================================
+PIPELINE 3: streamV2 (v2 architecture)
+Prompt: What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?
+Files in context: 2
+========================================
+
+[V2] Starting for execution h2h-v2-1771370824667, mode=ask
+[progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 architecture) ΓÇö live Anthropic
+[V2] Classified as SIMPLE (source=default, confidence=0.5)
+[progress] SIMPLE tier ΓÇö using claude-haiku-4-5-20251001
+[V2] Iteration 0, messages=2, truncated=false
+
+stderr | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 
+architecture) ΓÇö live Anthropic
+[anthropic] streamWithTools() API error: {
+  model: 'claude-haiku-4-5-20251001',
+  status: 400,
+  body: '{"type":"error","error":{"type":"invalid_request_error","message":"\'claude-haiku-4-5-20251001\' only 
+supports `allowed_callers=[\'direct\']` or unset. Invalid `allowed_callers` for tools: read_file, search_files, 
+list_files, get_dependency_graph, grep_content, glob_files, semantic_search, run_diagnostics, 
+check_lint."},"request_id":"req_011CYEWNWZ6YpjhQWG7xLqnB"}'
+}
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 architecture) ΓÇö live Anthropic
+[progress] Stream unavailable - using batch mode
+
+stderr | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 
+architecture) ΓÇö live Anthropic
+[V2] Stream creation failed: AIProviderError: anthropic error (400): 'claude-haiku-4-5-20251001' only supports 
+`allowed_callers=['direct']` or unset. Invalid `allowed_callers` for tools: read_file, search_files, list_files, 
+get_dependency_graph, grep_content, glob_files, semantic_search, run_diagnostics, check_lint.
+    at classifyProviderError (C:/Users/alexm/synapse1/lib/ai/errors.ts:225:10)
+    at Object.streamWithTools (C:/Users/alexm/synapse1/lib/ai/providers/anthropic.ts:579:15)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at C:/Users/alexm/synapse1/lib/agents/coordinator-v2.ts:751:31
+    at streamV2 (C:/Users/alexm/synapse1/lib/agents/coordinator-v2.ts:763:19)
+    at C:/Users/alexm/synapse1/tests/integration/cursor-vs-synapse.test.ts:415:22
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20 {
+  code: 'UNKNOWN',
+  provider: 'anthropic',
+  statusCode: 400,
+  retryable: false,
+  userMessage: 'Something went wrong. Please try again.'
+}
+[V2-StreamHealth] Streaming marked broken (TTL=90s)
+[V2] Stream timeout (10000ms), falling back to completeWithTools
+
+stderr | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 
+architecture) ΓÇö live Anthropic
+[V2] Fatal error: AIProviderError: anthropic error (400): 'claude-haiku-4-5-20251001' only supports 
+`allowed_callers=['direct']` or unset. Invalid `allowed_callers` for tools: read_file, search_files, list_files, 
+get_dependency_graph, grep_content, glob_files, semantic_search, run_diagnostics, check_lint.
+    at classifyProviderError (C:/Users/alexm/synapse1/lib/ai/errors.ts:225:10)
+    at Object.completeWithTools (C:/Users/alexm/synapse1/lib/ai/providers/anthropic.ts:423:17)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at streamV2 (C:/Users/alexm/synapse1/lib/agents/coordinator-v2.ts:782:31)
+    at C:/Users/alexm/synapse1/tests/integration/cursor-vs-synapse.test.ts:415:22
+    at file:///C:/Users/alexm/synapse1/node_modules/@vitest/runner/dist/index.js:915:20 {
+  code: 'UNKNOWN',
+  provider: 'anthropic',
+  statusCode: 400,
+  retryable: false,
+  userMessage: 'Something went wrong. Please try again.'
+}
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 architecture) ΓÇö live Anthropic
+
+--- Cost Breakdown (v2) ---
+  Tier: unknown
+  Model: unknown
+  Provider: unknown
+  Tokens: 0in / 0out
+  Cost: $0.0000c
+---
+Time to first chunk: 0 ms
+Response (first 1000 chars):
+
+========================================
+
+
+stdout | tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Print final scorecard and write results JSON
+
+ΓòöΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòù
+Γòæ                    PERFORMANCE SCORECARD                            Γòæ
+ΓòáΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòú
+Γòæ Pipeline: executeSolo (v1 legacy)                                 Γòæ
+Γòæ   Success:          true                                          Γòæ
+Γòæ   Total time:       30649ms                                       Γòæ
+Γòæ   First chunk:      30649ms                                       Γòæ
+Γòæ   Response:         4522 chars                                    Γòæ
+Γòæ   Changes:          0                                             Γòæ
+Γòæ   Tool calls:       0                                             Γòæ
+Γòæ   Tools used:       none                                          Γòæ
+Γòæ   Input tokens:     6170                                          Γòæ
+Γòæ   Output tokens:    1574                                          Γòæ
+Γòæ   Estimated cost:   $0.0421                                       Γòæ
+Γòæ   Model:            claude-sonnet-4-5-20250929                    Γòæ
+ΓòáΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓòú
+Γòæ Pipeline: streamAgentLoop (v1 streaming)                          Γòæ
+Γòæ   Success:          true                                          Γòæ
+Γòæ   Total time:       45430ms                                       Γòæ
+Γòæ   First chunk:      31005ms                                       Γòæ
+Γòæ   Response:         4826 chars                                    Γòæ
+Γòæ   Changes:          0                                             Γòæ
+Γòæ   Tool calls:       2                                             Γòæ
+Γòæ   Tools used:       read_file                                     Γòæ
+Γòæ   Input tokens:     0                                             Γòæ
+Γòæ   Output tokens:    0                                             Γòæ
+Γòæ   Estimated cost:   $0.0000c                                      Γòæ
+Γòæ   Model:            claude-haiku-4-5-20251001                     Γòæ
+ΓòáΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓòú
+Γòæ Pipeline: streamV2 (v2 architecture)                              Γòæ
+Γòæ   Success:          false                                         Γòæ
+Γòæ   Total time:       1580ms                                        Γòæ
+Γòæ   First chunk:      0ms                                           Γòæ
+Γòæ   Response:         0 chars                                       Γòæ
+Γòæ   Changes:          0                                             Γòæ
+Γòæ   Tool calls:       0                                             Γòæ
+Γòæ   Tools used:       none                                          Γòæ
+Γòæ   Input tokens:     0                                             Γòæ
+Γòæ   Output tokens:    0                                             Γòæ
+Γòæ   Estimated cost:   $0.0000c                                      Γòæ
+Γòæ   Tier:             unknown                                       Γòæ
+Γòæ   Model:            unknown                                       Γòæ
+ΓòáΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓòú
+Γòæ ≡ƒÅå Fastest total:    streamV2 (v2 architecture)                    Γòæ
+Γòæ ≡ƒÅå Cheapest:         streamV2 (v2 architecture)                    Γòæ
+Γòæ ≡ƒÅå Fastest first:    streamV2 (v2 architecture)                    Γòæ
+ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥
+
+Results written to: C:\Users\alexm\synapse1\tests\integration\results\h2h-2026-02-17T23-27-06-251Z.json
+
+ Γ¥» tests/integration/cursor-vs-synapse.test.ts (4 tests | 1 failed) 80170ms
+     Γ£ô Pipeline 1: executeSolo (legacy) ΓÇö live Anthropic  33140ms
+     Γ£ô Pipeline 2: streamAgentLoop (v1 streaming) ΓÇö live Anthropic  45433ms
+     ├ù Pipeline 3: streamV2 (v2 architecture) ΓÇö live Anthropic 1594ms
+     Γ£ô Print final scorecard and write results JSON 2ms
+stderr | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse 
+(Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse Sonnet] FAILED: Error: [Synapse Sonnet] timed out after 180s
+    at Timeout._onTimeout (C:/Users/alexm/synapse1/tests/integration/cursor-vs-synapse-live.test.ts:67:31)
+    at listOnTimeout (node:internal/timers:605:17)
+    at processTimers (node:internal/timers:541:7)
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Running...
+[AgentLoop] Starting for execution h2h-synapse--opus--1771370995015, mode=ask
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-haiku-4-5-20251001
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Stream unavailable ΓÇö using batch mode
+
+stderr | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse 
+(Opus 4.6) > Three-way comparison across all scenarios
+[StreamHealth] Streaming marked broken (TTL=5m)
+[AgentLoop] Stream timeout (30000ms), falling back to completeWithTools (persistent)
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 2, messages=6, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=4723
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Complete after 3 iterations, 4350 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Done in 44.0s, 2 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Cursor] Loaded capture from ask-cursor.json
+
+================================================================================
+  Ask: Accessibility Analysis
+================================================================================
+Metric                           Baseline    Synapse (Sonnet)      Synapse (Opus)              Cursor
+-----------------------------------------------------------------------------------------------------
+Total time                          67.0s                 N/A               44.0s               21.0s
+Time to first chunk                 67.0s                 N/A               31.0s                 N/A
+Input tokens                        2,870                 N/A                 N/A                 N/A
+Output tokens                       4,352                 N/A                 N/A                 N/A
+Tool calls                              0                   0                   2                   2
+Iterations                              1                 N/A                 N/A                 N/A
+Response length                    12,223                   0               4,350               1,029
+Code changes                            0                   0                   0                   0
+Success                               YES                  NO                 YES                 YES
+-----------------------------------------------------------------------------------------------------
+  Baseline tools: none
+  Synapse (Sonnet) tools: none
+  Synapse (Opus) tools: read_file
+  Cursor tools: read_file, read_file
+
+Deltas:
+  Orchestration (Synapse Sonnet vs Baseline): Time -100.0%  Tokens -100.0%  Length -100.0%
+  Model upgrade (Opus vs Sonnet): Time N/A  Tokens N/A  Length N/A
+  vs Cursor (Synapse Sonnet vs Cursor): Length -100.0%  Changes 0 vs 0
+
+
+################################################################################
+# Scenario: Code: Add Lazy Loading
+# Prompt: Add lazy loading to all images in snippets/product-thumbnail.liquid using loading="lazy" and add descriptive alt text using product title.
+################################################################################
+
+  Files loaded: snippets/product-thumbnail.liquid, snippets/product-img.liquid
+  [Baseline (Sonnet)] Running...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] glob_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] list_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Baseline (Sonnet)] Done in 107.4s, 5 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Sonnet)] Running...
+[AgentLoop] Starting for execution h2h-synapse--sonnet--1771371146383, mode=code
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-sonnet-4-5-20250929
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=6182, read=0
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 2, messages=6, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 3, messages=8, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 4, messages=10, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_replace
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 5, messages=12, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 6, messages=14, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] propose_code_edit
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 7, messages=16, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] check_lint
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 8, messages=18, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 9, messages=20, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Complete after 10 iterations, 2225 chars, 7 changes
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Sonnet)] Done in 92.9s, 12 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Running...
+[AgentLoop] Starting for execution h2h-synapse--opus--1771371239330, mode=code
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-sonnet-4-5-20250929
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=6182
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Complete after 2 iterations, 1961 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Done in 13.6s, 1 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Cursor] Loaded capture from code-cursor.json
+
+================================================================================
+  Code: Add Lazy Loading
+================================================================================
+Metric                           Baseline    Synapse (Sonnet)      Synapse (Opus)              Cursor
+-----------------------------------------------------------------------------------------------------
+Total time                         107.4s               92.9s               13.6s               12.2s
+Time to first chunk                 19.7s                2.3s                2.3s                 N/A
+Input tokens                       20,016                 N/A                 N/A                 N/A
+Output tokens                         414                 N/A                 N/A                 N/A
+Tool calls                              5                  12                   1                   0
+Iterations                              6                 N/A                 N/A                 N/A
+Response length                       461               2,225               1,961                 272
+Code changes                            0                   7                   0                   3
+Success                               YES                 YES                 YES                 YES
+-----------------------------------------------------------------------------------------------------
+  Baseline tools: read_file, search_files, glob_files, list_files
+  Synapse (Sonnet) tools: read_file, search_replace, grep_content, propose_code_edit, check_lint
+  Synapse (Opus) tools: read_file
+  Cursor tools: none
+
+Deltas:
+  Orchestration (Synapse Sonnet vs Baseline): Time -13.5%  Tokens -100.0%  Length +382.6%
+  Model upgrade (Opus vs Sonnet): Time -85.4%  Tokens N/A  Length -11.9%
+  vs Cursor (Synapse Sonnet vs Cursor): Length +718.0%  Changes 7 vs 3
+
+
+################################################################################
+# Scenario: Debug: Hero Banner Not Showing
+# Prompt: The hero banner image is not showing on the homepage. The section is hero-banner.liquid. Find the root cause and fix it.
+################################################################################
+
+  Files loaded: templates/index.json, layout/theme.liquid
+  [Baseline (Sonnet)] Running...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] glob_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] glob_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] list_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] semantic_search
+
+stderr | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse 
+(Opus 4.6) > Three-way comparison across all scenarios
+[embeddings] Semantic search unavailable: Error: OPENAI_API_KEY not set ΓÇö required for embedding generation
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] create_file
+
+stderr | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse 
+(Opus 4.6) > Three-way comparison across all scenarios
+  [Baseline] FAILED: Error: [Baseline] timed out after 180s
+    at Timeout._onTimeout (C:/Users/alexm/synapse1/tests/integration/cursor-vs-synapse-live.test.ts:67:31)
+    at listOnTimeout (node:internal/timers:605:17)
+    at processTimers (node:internal/timers:541:7)
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Sonnet)] Running...
+[AgentLoop] Starting for execution h2h-synapse--sonnet--1771371432964, mode=debug
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-sonnet-4-5-20250929
+[StreamHealth] TTL expired ΓÇö will retry streaming
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [baseline] Stream timeout, falling back to completeWithTools
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=1578
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] propose_code_edit
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Baseline (Sonnet)] Done in 189.7s, 11 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Stream unavailable ΓÇö using batch mode
+
+stderr | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse 
+(Opus 4.6) > Three-way comparison across all scenarios
+[StreamHealth] Streaming marked broken (TTL=5m)
+[AgentLoop] Stream timeout (30000ms), falling back to completeWithTools (persistent)
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] glob_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 2, messages=6, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] list_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 3, messages=8, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 4, messages=10, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 5, messages=12, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 6, messages=14, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 7, messages=16, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Complete after 8 iterations, 505 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Sonnet)] Done in 51.3s, 14 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Running...
+[AgentLoop] Starting for execution h2h-synapse--opus--1771371484234, mode=debug
+    [progress] Building context...
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [progress] Using claude-sonnet-4-5-20250929
+[AgentLoop] Iteration 0, messages=2, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 1, messages=4, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] glob_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 2, messages=6, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] list_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 3, messages=8, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 4, messages=10, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] read_file
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 5, messages=12, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Executing 2 server tools in parallel
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 6, messages=14, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] grep_content
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Iteration 7, messages=16, truncated=false
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[anthropic] completeWithTools cache: write=0, read=5982
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+    [tool] search_files
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+[AgentLoop] Complete after 8 iterations, 443 chars, 0 changes
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Synapse (Opus)] Done in 19.3s, 11 tool calls
+
+stdout | tests/integration/cursor-vs-synapse-live.test.ts > Head-to-Head: Baseline vs Synapse (Sonnet) vs Synapse (Opus 4.6) > Three-way comparison across all scenarios
+  [Cursor] Loaded capture from debug-cursor.json
+
+================================================================================
+  Debug: Hero Banner Not Showing
+================================================================================
+Metric                           Baseline    Synapse (Sonnet)      Synapse (Opus)              Cursor
+-----------------------------------------------------------------------------------------------------
+Total time                            N/A               51.3s               19.3s               22.2s
+Time to first chunk                   N/A               32.8s                2.4s                 N/A
+Input tokens                          N/A                 N/A                 N/A                 N/A
+Output tokens                         N/A                 N/A                 N/A                 N/A
+Tool calls                              0                  14                  11                   4
+Iterations                            N/A                 N/A                 N/A                 N/A
+Response length                         0                 505                 443                 393
+Code changes                            0                   0                   0                   0
+Success                                NO                 YES                 YES                 YES
+-----------------------------------------------------------------------------------------------------
+  Baseline tools: none
+  Synapse (Sonnet) tools: read_file, search_files, glob_files, list_files, grep_content
+  Synapse (Opus) tools: read_file, search_files, glob_files, list_files, grep_content
+  Cursor tools: read_file, read_file, glob_files, grep_content
+
+Deltas:
+  Orchestration (Synapse Sonnet vs Baseline): Time N/A  Tokens N/A  Length N/A
+  Model upgrade (Opus vs Sonnet): Time -62.3%  Tokens N/A  Length -12.3%
+  vs Cursor (Synapse Sonnet vs Cursor): Length +28.5%  Changes 0 vs 0
+
+Results saved to C:\Users\alexm\synapse1\tests\integration\results\h2h-2026-02-17T23-38-23-576Z.json
+
+================================================================================
+  FINAL SUMMARY
+================================================================================
+  Total time (all scenarios):
+    Baseline:        174.4s
+    Synapse Sonnet:  144.2s
+    Synapse Opus:    76.9s
+
+  All scenarios passed.
+
+
+ Γ£ô tests/integration/cursor-vs-synapse-live.test.ts (1 test) 756972ms
+     Γ£ô Three-way comparison across all scenarios  756970ms
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 1 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  tests/integration/cursor-vs-synapse.test.ts > Cursor vs Synapse: head-to-head > Pipeline 3: streamV2 (v2 
+architecture) ΓÇö live Anthropic
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ Γ¥» tests/integration/cursor-vs-synapse.test.ts:480:30
+    478|       console.log('========================================\n');
+    479| 
+    480|       expect(result.success).toBe(true);
+       |                              ^
+    481|       expect(fullResponse.length).toBeGreaterThan(50);
+    482|       expect(fullResponse.toLowerCase()).toMatch(/accessib|a11y|alt|arΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ»
+
+
+ Test Files  1 failed | 124 passed | 1 skipped (126)
+      Tests  1 failed | 1351 passed | 1 skipped (1353)
+   Start at  16:25:40
+   Duration  763.02s (transform 22.81s, setup 0ms, import 39.25s, tests 928.90s, environment 589.88s)
+
