@@ -72,3 +72,6 @@ supabase/.temp/
 
 # Verification data (ephemeral analysis artifacts)
 .verification/
+
+# Test benchmark results (generated per-run)
+tests/integration/results/
