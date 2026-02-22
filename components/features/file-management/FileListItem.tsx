@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { FileText } from 'lucide-react';
 import type { FileType } from '@/lib/types/files';
 import { formatFileSize, formatRelativeTime } from '@/hooks/useProjectFiles';
 import type { ProjectFile } from '@/hooks/useProjectFiles';
@@ -85,9 +86,7 @@ export function FileListItem({
         }}
         className="w-full flex items-center gap-2 px-3 py-2 text-left ide-hover rounded transition-colors group"
       >
-        <span className={`flex-shrink-0 ${getFileTypeColor(file.file_type)}`}>
-          📄
-        </span>
+        <FileText className={`flex-shrink-0 w-4 h-4 ${getFileTypeColor(file.file_type)}`} aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm ide-text flex items-center">
             {displayName}

@@ -6,6 +6,7 @@ import type {
   FileContext,
   StandardizationOpportunity,
 } from '@/lib/types/agent';
+import { invalidatePreferences } from '@/lib/cache/agent-context-cache';
 
 /**
  * Pattern learning utilities for the Project Manager agent.
@@ -106,6 +107,7 @@ export class PatternLearning {
         },
       });
     }
+    invalidatePreferences(userId).catch(() => {});
   }
 
   /** Get user patterns, optionally filtered by file type */

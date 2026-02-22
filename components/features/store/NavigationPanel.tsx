@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { Compass } from 'lucide-react';
 import { useShopifyNavigation } from '@/hooks/useShopifyNavigation';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -179,7 +180,7 @@ export function NavigationPanel({ connectionId }: NavigationPanelProps) {
   if (menus.length === 0) {
     return (
       <div className="flex flex-col items-center py-8 px-4 text-center">
-        <span className="text-2xl mb-2">🧭</span>
+        <Compass className="h-7 w-7 mb-2 ide-text-muted" aria-hidden />
         <p className="text-sm ide-text-muted font-medium">No navigation menus</p>
         <p className="text-[11px] ide-text-quiet mt-1 max-w-[240px]">
           This store doesn&apos;t have any navigation menus yet. Create one in Shopify Admin.

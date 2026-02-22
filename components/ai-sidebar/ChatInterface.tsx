@@ -26,7 +26,7 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain } from 'lucide-react';
 import { PromptTemplateLibrary } from './PromptTemplateLibrary';
 import { ShareButton } from './ShareButton';
 import { ConflictResolver } from './ConflictResolver';
@@ -183,7 +183,7 @@ export type ContentBlock =
       status: 'loading' | 'done' | 'error';
       cardType?: 'plan' | 'code_edit' | 'clarification' | 'file_create' |
                  'preview_nav' | 'file_op' | 'shopify_op' | 'screenshot' |
-                 'screenshot_comparison' | 'change_preview';
+                 'screenshot_comparison' | 'change_preview' | 'theme_artifact';
       cardData?: unknown; error?: string }
   | { type: 'thinking'; id: string; startedAt: number;
       reasoningText: string; done: boolean; elapsedMs: number };
@@ -210,7 +210,14 @@ export interface ChatMessage {
   /** Proposed code edits from propose_code_edit tool. */
   codeEdits?: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' }>;
   /** Clarification question from ask_clarification tool or SSE clarification event. */
-  clarification?: { question: string; options: Array<{ id: string; label: string; recommended?: boolean }>; allowMultiple?: boolean };
+  clarification?: {
+    question: string;
+    options: Array<{ id: string; label: string; recommended?: boolean }>;
+    allowMultiple?: boolean;
+    allowFreeform?: boolean;
+    round?: number;
+    maxRounds?: number;
+  };
   /** Preview navigation from navigate_preview tool. */
   previewNav?: { path: string; description?: string };
   /** New file creation from create_file tool. */
@@ -235,10 +242,44 @@ export interface ChatMessage {
   activeModel?: string;
   /** Whether a rate limit was hit during this response, triggering model fallback. */
   rateLimitHit?: boolean;
+  /** Final execution outcome for this assistant run. */
+  executionOutcome?: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input';
 
   // ── Cursor-style content blocks (ephemeral, not persisted) ─────────
   /** Ordered content blocks for interleaved rendering. If present, drives Cursor-style rendering. */
   blocks?: ContentBlock[];
+}
+
+function outcomeBadgeConfig(outcome: NonNullable<ChatMessage['executionOutcome']>): {
+  label: string;
+  className: string;
+} {
+  if (outcome === 'applied') {
+    return {
+      label: 'applied',
+      className:
+        'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    };
+  }
+  if (outcome === 'blocked-policy') {
+    return {
+      label: 'architectural change',
+      className:
+        'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10',
+    };
+  }
+  if (outcome === 'needs-input') {
+    return {
+      label: 'needs input',
+      className:
+        'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10',
+    };
+  }
+  return {
+    label: 'no changes',
+    className:
+      'text-stone-600 dark:text-stone-300 border-stone-400/30 bg-stone-500/10',
+  };
 }
 
 interface ChatInterfaceProps {
@@ -261,6 +302,14 @@ interface ChatInterfaceProps {
   onStop?: () => void;
   /** Called when user clicks Review to trigger review mode */
   onReview?: () => void;
+  /** Called when user clicks transcript review to analyze loop/CX issues in this session. */
+  onReviewTranscript?: () => void;
+  /** Loading state for transcript review action. */
+  isReviewingTranscript?: boolean;
+  /** Open Developer Memory panel. */
+  onOpenMemory?: () => void;
+  /** Whether Developer Memory panel is currently open. */
+  isMemoryOpen?: boolean;
   /** Currently selected AI model */
   currentModel?: string;
   /** Called when model is changed */
@@ -323,6 +372,8 @@ interface ChatInterfaceProps {
   onRegenerateMessage?: () => void;
   /** Called when user clicks a file path in an AI response to open it */
   onOpenFile?: (filePath: string) => void;
+  /** Called while user types, for warmup precomputation. */
+  onDraftChange?: (draft: string) => void;
   /** Current error code from agent (for in-thread display) */
   errorCode?: string | null;
   /** Resolve a file path to a fileId for code block Apply. Returns null if not found. */
@@ -337,6 +388,8 @@ interface ChatInterfaceProps {
   totalFiles?: number;
   /** Whether budget enforcement truncated content (for context meter warning) */
   budgetTruncated?: boolean;
+  /** True while chat history is being fetched (session switch / initial load). */
+  isLoadingHistory?: boolean;
 
   // ── Tool card handlers (Phase 3) ──────────────────────────────────
   /** Called when user clicks "View Plan" — opens the plan file in an editor tab. */
@@ -351,6 +404,8 @@ interface ChatInterfaceProps {
   onEditStatusChange?: (messageId: string, editIndex: number, status: 'applied' | 'rejected') => void;
   /** Phase 3b: Called when attached files change (drag-and-drop from file tree). */
   onAttachedFilesChange?: (files: Array<{ id: string; name: string; path: string }>) => void;
+  /** Add a file chip to chat context from external UI triggers (e.g. breadcrumb). */
+  pendingAttachedFile?: { id: string; name: string; path: string; nonce: number } | null;
   /** Phase 4b: Whether verbose/inner monologue is active */
   verbose?: boolean;
   /** Phase 4b: Toggle verbose mode */
@@ -562,6 +617,98 @@ function ModeSwitchButton({
   );
 }
 
+// ── CollapsedToolGroup ────────────────────────────────────────────────────────
+// Renders N repeated same-label tool_action blocks as a single collapsible row.
+
+interface CollapsedToolGroupProps {
+  label: string;
+  count: number;
+  status: 'loading' | 'done' | 'error';
+  blocks: Extract<ContentBlock, { type: 'tool_action' }>[];
+  onApplyCode?: (code: string, fileId: string, fileName: string) => void;
+  onOpenFile?: (filePath: string) => void;
+  resolveFileId?: (path: string) => string | null;
+  onOpenPlanFile?: (filePath: string) => void;
+  onBuildPlan?: (checkedSteps: Set<number>) => void;
+  onSend?: (content: string) => void;
+  onConfirmFileCreate?: (fileName: string, content: string) => void;
+}
+
+function CollapsedToolGroup({
+  label,
+  count,
+  status,
+  blocks,
+  onApplyCode,
+  onOpenFile,
+  resolveFileId,
+  onOpenPlanFile,
+  onBuildPlan,
+  onSend,
+  onConfirmFileCreate,
+}: CollapsedToolGroupProps) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <div className="my-1 rounded-md border ide-border-subtle overflow-hidden">
+      {/* Summary row */}
+      <button
+        type="button"
+        onClick={() => setExpanded(p => !p)}
+        className="flex items-center gap-2 w-full px-2.5 py-1.5 text-left ide-hover transition-colors"
+      >
+        {/* Status icon */}
+        <div className="shrink-0 h-4 w-4 flex items-center justify-center">
+          {status === 'loading' ? (
+            <svg className="h-4 w-4 animate-spin text-sky-500 dark:text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 text-[#28CD56]" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+            </svg>
+          )}
+        </div>
+
+        {/* Label + count badge */}
+        <span className="flex-1 min-w-0 text-xs ide-text-2 font-medium truncate">
+          {label}
+        </span>
+        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ide-surface-inset ide-text-muted border ide-border-subtle">
+          ×{count}
+        </span>
+
+        {/* Chevron */}
+        <svg
+          className={`shrink-0 h-3 w-3 ide-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          viewBox="0 0 20 20" fill="currentColor"
+        >
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/>
+        </svg>
+      </button>
+
+      {/* Expanded individual rows */}
+      {expanded && (
+        <div className="border-t ide-border-subtle divide-y ide-border-subtle">
+          {blocks.map(block => (
+            <ToolActionItem
+              key={block.id}
+              block={block}
+              onApplyCode={onApplyCode}
+              onOpenFile={onOpenFile}
+              resolveFileId={resolveFileId}
+              onOpenPlanFile={onOpenPlanFile}
+              onBuildPlan={onBuildPlan}
+              onSend={onSend}
+              onConfirmFileCreate={onConfirmFileCreate}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ChatInterface component ───────────────────────────────────────────────────
 
 export function ChatInterface({
@@ -577,6 +724,10 @@ export function ChatInterface({
   fileCount = 0,
   onStop,
   onReview,
+  onReviewTranscript,
+  isReviewingTranscript = false,
+  onOpenMemory,
+  isMemoryOpen = false,
   currentModel,
   onModelChange,
   specialistMode = false,
@@ -614,6 +765,7 @@ export function ChatInterface({
   onTruncateMessages,
   onRegenerateMessage,
   onOpenFile,
+  onDraftChange,
   errorCode,
   resolveFileId: resolveFileIdProp,
   trimmedMessageCount = 0,
@@ -621,12 +773,14 @@ export function ChatInterface({
   summarizedCount,
   totalFiles,
   budgetTruncated,
+  isLoadingHistory,
   onOpenPlanFile,
   onBuildPlan,
   onNavigatePreview,
   onConfirmFileCreate,
   onEditStatusChange,
   onAttachedFilesChange,
+  pendingAttachedFile,
   verbose,
   onToggleVerbose,
   onForkAtMessage,
@@ -715,6 +869,19 @@ export function ChatInterface({
 
   useEffect(() => { onAttachedFilesChange?.(attachedFiles); }, [attachedFiles, onAttachedFilesChange]);
 
+  useEffect(() => {
+    if (!pendingAttachedFile) return;
+    const nextFile = {
+      id: pendingAttachedFile.id,
+      name: pendingAttachedFile.name,
+      path: pendingAttachedFile.path,
+    };
+    setAttachedFiles((prev) => {
+      if (prev.some((f) => f.id === nextFile.id || f.path === nextFile.path)) return prev;
+      return [...prev, nextFile];
+    });
+  }, [pendingAttachedFile]);
+
   // Prompt progress / countdown
   const promptProgress = usePromptProgress(!!isLoading, currentAction, intentMode);
 
@@ -794,12 +961,12 @@ export function ChatInterface({
 
   // ── EPIC 5: Derive plan steps from output mode + last message (no effect) ──
   const planSteps = useMemo((): PlanStep[] => {
-    if (outputMode === 'plan' && lastMessage?.role === 'assistant') {
+    if (outputMode === 'plan' && lastMessage?.role === 'assistant' && intentMode === 'plan') {
       const steps = parsePlanSteps(lastMessage.content);
       return steps.length >= 2 ? steps : [];
     }
     return [];
-  }, [outputMode, lastMessage]);
+  }, [outputMode, lastMessage, intentMode]);
 
   const planKey = planSteps.length > 0
     ? planSteps.map(s => s.description ?? s.text ?? '').join('|')
@@ -807,7 +974,7 @@ export function ChatInterface({
   // Only auto-open the plan modal when the user explicitly chose Plan intent mode.
   // Otherwise, show an inline "Review Plan" button so it's not intrusive.
   const planModalOpen = planSteps.length > 0 && planDismissedKey !== planKey && intentMode === 'plan';
-  const showInlinePlanButton = planSteps.length > 0 && planDismissedKey !== planKey && intentMode !== 'plan';
+  const showInlinePlanButton = false;
   const [manualPlanOpen, setManualPlanOpen] = useState(false);
 
   // ── EPIC 5: Plan modal handlers ──────────────────────────────────────────
@@ -1005,6 +1172,19 @@ export function ChatInterface({
 
   const handleSuggestionSelect = (prompt: string) => {
     emitInteraction('button_click', 'suggestion.select', { prompt });
+
+    // "Verify in preview" should be a direct UI action, not another agent turn.
+    // Sending it back to the model can re-trigger discovery/planning loops.
+    const normalized = prompt.trim().toLowerCase();
+    const isVerifyPreviewPrompt =
+      normalized === 'check the preview to verify the changes render correctly.' ||
+      normalized.startsWith('check the preview to verify');
+
+    if (isVerifyPreviewPrompt && onNavigatePreview) {
+      onNavigatePreview('/');
+      return;
+    }
+
     onSend(prompt);
   };
 
@@ -1046,15 +1226,6 @@ export function ChatInterface({
         aria-label="Conversation"
         aria-busy={isLoading || false}
       >
-        {/* Progress rail -- hidden when Cursor-style blocks are active */}
-        {!messages[messages.length - 1]?.blocks?.length && (
-          <ProgressRail
-            steps={activeRailSteps}
-            isStreaming={!!isLoading}
-            onStop={onStop}
-          />
-        )}
-
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
           <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/30 rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
@@ -1098,8 +1269,35 @@ export function ChatInterface({
           </div>
         )}
 
+        {/* Skeleton state while loading history */}
+        {isLoadingHistory && messages.length === 0 && (
+          <div className="flex flex-col gap-4 p-4 animate-pulse">
+            <div className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-muted shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+              </div>
+            </div>
+            <div className="flex items-start gap-3 justify-end">
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-muted rounded w-2/3 ml-auto" />
+                <div className="h-3 bg-muted rounded w-1/3 ml-auto" />
+              </div>
+              <div className="h-6 w-6 rounded-full bg-muted shrink-0" />
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-muted shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-muted rounded w-5/6" />
+                <div className="h-3 bg-muted rounded w-2/5" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Empty state with mode explanations + suggestions */}
-        {messages.length === 0 && !isLoading && (
+        {messages.length === 0 && !isLoading && !isLoadingHistory && (
           <div className="py-8 flex flex-col items-center">
             <div className="flex flex-col items-center gap-3">
               <SynapseIconAnim size={56} />
@@ -1108,10 +1306,10 @@ export function ChatInterface({
             </div>
             <div className="grid grid-cols-2 gap-2 w-full max-w-[320px] mt-5">
               {[
-                { key: 'code', icon: '⌨', label: 'Code', desc: 'Change theme files' },
-                { key: 'ask', icon: '?', label: 'Ask', desc: 'Questions about your project' },
-                { key: 'plan', icon: '📋', label: 'Plan', desc: 'Step-by-step plans' },
-                { key: 'debug', icon: '🔍', label: 'Debug', desc: 'Find and fix issues' },
+                { key: 'code', icon: Code2, label: 'Code', desc: 'Change theme files' },
+                { key: 'ask', icon: CircleHelp, label: 'Ask', desc: 'Questions about your project' },
+                { key: 'plan', icon: ClipboardList, label: 'Plan', desc: 'Step-by-step plans' },
+                { key: 'debug', icon: Search, label: 'Debug', desc: 'Find and fix issues' },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -1127,7 +1325,10 @@ export function ChatInterface({
                   }`}
                   aria-label={`Switch to ${item.label} mode: ${item.desc}`}
                 >
-                  <span className="font-medium">{item.icon} {item.label}</span>
+                  <span className="font-medium inline-flex items-center gap-1">
+                    <item.icon className="h-3.5 w-3.5" aria-hidden />
+                    {item.label}
+                  </span>
                   <span className="block ide-text-muted text-xs mt-0.5">{item.desc}</span>
                 </button>
               ))}
@@ -1287,35 +1488,89 @@ export function ChatInterface({
                   {/* ── NEW: Cursor-style block rendering ── */}
                   {m.blocks && m.blocks.length > 0 ? (
                     <>
-                      {m.blocks.map((block) => {
-                        switch (block.type) {
-                          case 'thinking':
-                            return (
-                              <ThinkingBlockV2
-                                key={block.id}
-                                reasoningText={block.reasoningText}
-                                isComplete={block.done}
-                                startedAt={block.startedAt}
-                                elapsedMs={block.elapsedMs}
-                              />
-                            );
-                          case 'text':
-                            return (
-                              <MarkdownRenderer
-                                key={block.id}
-                                content={block.text}
-                                isStreaming={isLoading && idx === messages.length - 1}
-                                onOpenFile={onOpenFile}
-                                onApplyCode={onApplyCode}
-                                onSaveCode={onSaveCode}
-                                resolveFileId={resolveFileIdProp}
-                              />
-                            );
-                          case 'tool_action':
+                      {(() => {
+                        // Group consecutive tool_action blocks with identical labels
+                        // into a single collapsible row. Blocks with cards or errors
+                        // are never grouped so their expandable content stays reachable.
+                        type BlockGroup =
+                          | { kind: 'single'; block: ContentBlock }
+                          | { kind: 'group'; label: string; blocks: Extract<ContentBlock, { type: 'tool_action' }>[] };
+
+                        const groups: BlockGroup[] = [];
+                        for (const block of m.blocks) {
+                          const isCollapsible =
+                            block.type === 'tool_action' &&
+                            !block.cardType &&
+                            block.status !== 'error';
+
+                          if (isCollapsible) {
+                            const last = groups[groups.length - 1];
+                            if (last?.kind === 'group' && last.label === block.label) {
+                              last.blocks.push(block as Extract<ContentBlock, { type: 'tool_action' }>);
+                            } else {
+                              groups.push({
+                                kind: 'group',
+                                label: block.label,
+                                blocks: [block as Extract<ContentBlock, { type: 'tool_action' }>],
+                              });
+                            }
+                          } else {
+                            groups.push({ kind: 'single', block });
+                          }
+                        }
+
+                        return groups.map((g, gi) => {
+                          if (g.kind === 'single') {
+                            const block = g.block;
+                            switch (block.type) {
+                              case 'thinking':
+                                return (
+                                  <ThinkingBlockV2
+                                    key={block.id}
+                                    reasoningText={block.reasoningText}
+                                    isComplete={block.done}
+                                    startedAt={block.startedAt}
+                                    elapsedMs={block.elapsedMs}
+                                  />
+                                );
+                              case 'text':
+                                return (
+                                  <MarkdownRenderer
+                                    key={block.id}
+                                    content={block.text}
+                                    isStreaming={isLoading && idx === messages.length - 1}
+                                    onOpenFile={onOpenFile}
+                                    onApplyCode={onApplyCode}
+                                    onSaveCode={onSaveCode}
+                                    resolveFileId={resolveFileIdProp}
+                                  />
+                                );
+                              case 'tool_action':
+                                return (
+                                  <ToolActionItem
+                                    key={block.id}
+                                    block={block}
+                                    onApplyCode={onApplyCode}
+                                    onOpenFile={onOpenFile}
+                                    resolveFileId={resolveFileIdProp}
+                                    onOpenPlanFile={onOpenPlanFile}
+                                    onBuildPlan={onBuildPlan}
+                                    onSend={onSend}
+                                    onConfirmFileCreate={onConfirmFileCreate}
+                                  />
+                                );
+                              default:
+                                return null;
+                            }
+                          }
+
+                          // Grouped repeated tool_action rows
+                          const { label, blocks: groupBlocks } = g;
+                          if (groupBlocks.length === 1) {
                             return (
                               <ToolActionItem
-                                key={block.id}
-                                block={block}
+                                key={groupBlocks[0].id}
+                                block={groupBlocks[0]}
                                 onApplyCode={onApplyCode}
                                 onOpenFile={onOpenFile}
                                 resolveFileId={resolveFileIdProp}
@@ -1325,10 +1580,26 @@ export function ChatInterface({
                                 onConfirmFileCreate={onConfirmFileCreate}
                               />
                             );
-                          default:
-                            return null;
-                        }
-                      })}
+                          }
+                          const lastBlock = groupBlocks[groupBlocks.length - 1];
+                          return (
+                            <CollapsedToolGroup
+                              key={`group-${gi}-${groupBlocks[0].id}`}
+                              label={label}
+                              count={groupBlocks.length}
+                              status={lastBlock.status}
+                              blocks={groupBlocks}
+                              onApplyCode={onApplyCode}
+                              onOpenFile={onOpenFile}
+                              resolveFileId={resolveFileIdProp}
+                              onOpenPlanFile={onOpenPlanFile}
+                              onBuildPlan={onBuildPlan}
+                              onSend={onSend}
+                              onConfirmFileCreate={onConfirmFileCreate}
+                            />
+                          );
+                        });
+                      })()}
                       {/* Citations (Phase 6) */}
                       {m.citations && m.citations.length > 0 && (
                         <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
@@ -1447,6 +1718,9 @@ export function ChatInterface({
                             question={m.clarification.question}
                             options={m.clarification.options}
                             allowMultiple={m.clarification.allowMultiple}
+                            allowFreeform={m.clarification.allowFreeform}
+                            round={m.clarification.round}
+                            maxRounds={m.clarification.maxRounds}
                             onSend={onSend}
                           />
                         )}
@@ -1508,12 +1782,22 @@ export function ChatInterface({
               )}
             </div>
 
-            {/* Model badge + rate-limit indicator on assistant messages */}
-            {m.role === 'assistant' && m.activeModel && (
+            {/* Model/outcome/rate-limit badges on assistant messages */}
+            {m.role === 'assistant' && (m.activeModel || m.executionOutcome || m.rateLimitHit) && (
               <div className="mt-1 flex items-center gap-1.5 px-3">
-                <span className="inline-flex items-center gap-1 text-[10px] ide-text-muted">
-                  {MODEL_LABELS[m.activeModel] || m.activeModel}
-                </span>
+                {m.activeModel && (
+                  <span className="inline-flex items-center gap-1 text-[10px] ide-text-muted">
+                    {MODEL_LABELS[m.activeModel] || m.activeModel}
+                  </span>
+                )}
+                {m.executionOutcome && (
+                  <span
+                    className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${outcomeBadgeConfig(m.executionOutcome).className}`}
+                    title={`Execution outcome: ${outcomeBadgeConfig(m.executionOutcome).label}`}
+                  >
+                    {outcomeBadgeConfig(m.executionOutcome).label}
+                  </span>
+                )}
                 {m.rateLimitHit && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 dark:text-amber-400">
                     <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -1574,10 +1858,9 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Post-response suggestions (after last assistant message) */}
-        {showPostAfterAssistant && (
-          <div className="pt-1">
-            <p className="text-[10px] ide-text-quiet uppercase tracking-wider mb-1.5 px-1">Next steps</p>
+        {/* Post-response suggestions (context-driven next steps after last assistant message) */}
+        {showPostAfterAssistant && responseSuggestions.length > 0 && (
+          <div className="pt-0.5 px-1">
             <SuggestionChips
               suggestions={responseSuggestions}
               onSelect={handleSuggestionSelect}
@@ -1636,10 +1919,15 @@ export function ChatInterface({
                 </button>
               </span>
             )}
-            {/* Inline suggestion chips: prefer response-aware suggestions, fall back to contextual */}
-            {!inputHasText && !isLoading && messages.length > 0 && (responseSuggestions.length > 0 || contextSuggestions.length > 0) && (
+            {/* Inline suggestion chips: only context-driven response suggestions,
+                shown when the main suggestion strip above is not visible. */}
+            {!inputHasText &&
+              !isLoading &&
+              messages.length > 0 &&
+              !showPostAfterAssistant &&
+              responseSuggestions.length > 0 && (
               <SuggestionChips
-                suggestions={(responseSuggestions.length > 0 ? responseSuggestions : contextSuggestions).slice(0, 2)}
+                suggestions={responseSuggestions.slice(0, 3)}
                 onSelect={handleSuggestionSelect}
                 variant="post"
               />
@@ -1649,7 +1937,7 @@ export function ChatInterface({
 
         <form
           onSubmit={handleSubmit}
-          className="px-3 py-2"
+          className="px-2.5 py-1.5"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -1672,8 +1960,12 @@ export function ChatInterface({
                 rows={3}
                 placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
                 disabled={isLoading || isUploadingImage}
-                className="w-full border-0 bg-transparent px-3 pt-3 pb-1.5 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:outline-none focus:ring-0 disabled:opacity-50 resize-none"
-                onChange={(e) => setInputHasText(e.target.value.trim().length > 0)}
+                className="w-full border-0 bg-transparent px-2.5 pt-2.5 pb-1 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:outline-none focus:ring-0 disabled:opacity-50 resize-none"
+                onChange={(e) => {
+                  const draft = e.target.value;
+                  setInputHasText(draft.trim().length > 0);
+                  onDraftChange?.(draft);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1707,14 +1999,57 @@ export function ChatInterface({
               )}
             </div>
 
+            {/* Compact progress rail (docked above input footer) */}
+            {!messages[messages.length - 1]?.blocks?.length && (
+              <ProgressRail
+                steps={activeRailSteps}
+                isStreaming={!!isLoading}
+              />
+            )}
+
+            {/* Compact bento controls above footer (right-aligned) */}
+            <div className="flex justify-end px-2 pt-1">
+              <div className="inline-flex items-center gap-1 rounded-lg border ide-border-subtle ide-surface-inset px-1.5 py-1">
+                {onOpenMemory && (
+                  <button
+                    type="button"
+                    onClick={onOpenMemory}
+                    className={`inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md border transition-colors ${
+                      isMemoryOpen
+                        ? 'text-purple-500 dark:text-purple-300 bg-purple-500/10 border-purple-500/30'
+                        : 'ide-text-3 ide-surface-input ide-border hover:border-stone-300 dark:hover:border-white/20'
+                    }`}
+                    title="Open Developer Memory"
+                    aria-label="Open Developer Memory"
+                  >
+                    <Brain className="h-[11px] w-[11px]" />
+                  </button>
+                )}
+                {onReviewTranscript && (
+                  <button
+                    type="button"
+                    onClick={onReviewTranscript}
+                    disabled={isLoading || isReviewingTranscript}
+                    className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md ide-text-3 ide-surface-input border ide-border hover:border-stone-300 dark:hover:border-white/20 disabled:opacity-50 transition-colors"
+                    title={isReviewingTranscript ? 'Reviewing transcript…' : 'Review this chat transcript'}
+                    aria-label={isReviewingTranscript ? 'Reviewing transcript' : 'Review this chat transcript'}
+                  >
+                    <BookOpen className={`h-[11px] w-[11px] ${isReviewingTranscript ? 'animate-pulse' : ''}`} />
+                  </button>
+                )}
+                <div className="h-4 w-px ide-border-subtle" />
+                <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
+              </div>
+            </div>
+
             {/* Footer row: controls + context % + send — all items h-9, single/team leftmost */}
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2 h-9">
-              <div className="flex items-center gap-2 min-w-0 h-9">
+            <div className="flex items-center justify-between gap-1.5 px-2 py-1 mb-1.5 h-8">
+              <div className="flex items-center gap-1.5 min-w-0 h-8">
               {/* Solo/Team toggle removed — replaced by maxAgents cycle + specialist switch */}
 
               {/* Intent mode dropdown — Ask / Plan / Code / Debug (always visible) */}
               {onIntentModeChange && (
-                <div className="relative h-9 flex items-center shrink-0 min-w-[5rem]" ref={intentDropdownAnchorRef}>
+                <div className="relative h-8 flex items-center shrink-0 min-w-[4.25rem]" ref={intentDropdownAnchorRef}>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1722,7 +2057,7 @@ export function ChatInterface({
                       intentDropdownOpenTimeRef.current = Date.now();
                       setShowIntentDropdown((p) => !p);
                     }}
-                    className="inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ide-surface-input ide-border-subtle hover:ide-hover ide-text-2 whitespace-nowrap"
+                    className="inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ide-surface-input ide-border-subtle hover:ide-hover ide-text-2 whitespace-nowrap"
                     aria-expanded={showIntentDropdown}
                     aria-haspopup="listbox"
                     aria-label="Intent mode"
@@ -1778,14 +2113,14 @@ export function ChatInterface({
 
               {/* Model picker — ghost (no fill/border), portaled */}
               {onModelChange && (
-                <div className="relative h-9 flex items-center">
+                <div className="relative h-8 flex items-center">
                   <button
                     ref={modelPickerAnchorRef}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowModelPicker(p => !p); }}
-                    className="inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs ide-text-muted hover:ide-text-2 bg-transparent border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    className="inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] ide-text-muted hover:ide-text-2 bg-transparent border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                   >
-                    <span className="truncate max-w-[100px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
+                    <span className="truncate max-w-[82px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
                     <ChevronDown className="h-3 w-3" />
                   </button>
                   {showModelPicker && typeof document !== 'undefined' && modelPickerRect &&
@@ -1824,7 +2159,7 @@ export function ChatInterface({
                     const next = (maxAgents % 4) + 1;
                     onMaxAgentsChange(next as MaxAgents);
                   }}
-                  className={`inline-flex items-center gap-1 h-9 rounded-lg px-2.5 text-xs border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                  className={`inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
                     maxAgents > 1
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 border-sky-500/30'
                       : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
@@ -1832,7 +2167,7 @@ export function ChatInterface({
                   title={`Subagents: ${maxAgents}x (click to cycle 1x-4x)`}
                   aria-label={`Subagent count: ${maxAgents}x`}
                 >
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="h-[11px] w-[11px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" />
                   </svg>
                   <span className="tabular-nums font-medium">{maxAgents}x</span>
@@ -1847,7 +2182,7 @@ export function ChatInterface({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingImage}
-                  className={`inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border transition-colors ${
+                  className={`inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg border transition-colors ${
                     attachedImage
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30'
                       : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
@@ -1856,39 +2191,36 @@ export function ChatInterface({
                   aria-label={attachedImage ? 'Image attached' : 'Attach image'}
                 >
                   {isUploadingImage ? (
-                    <Upload className="h-3 w-3 animate-pulse" />
+                    <Upload className="h-[11px] w-[11px] animate-pulse" />
                   ) : (
-                    <ImageIcon className="h-3 w-3" />
+                    <ImageIcon className="h-[11px] w-[11px]" />
                   )}
                 </button>
               )}
 
               </div>
 
-              {/* Context % + Send / Stop (right side, same h-9 as left controls) */}
-              <div className="flex items-center gap-2 shrink-0 h-9 items-center">
-                <div className="h-9 flex items-center justify-center">
-                  <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
-                </div>
+              {/* Send / Stop (right side, same h-9 as left controls) */}
+              <div className="flex items-center gap-1.5 shrink-0 h-8 items-center">
                 {isLoading && onStop ? (
                   <button
                     type="button"
                     onClick={onStop}
-                    className="inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg text-red-400 bg-red-500/15 hover:bg-red-500/25 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:outline-none"
+                    className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg text-red-400 bg-red-500/15 hover:bg-red-500/25 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:outline-none"
                     title="Stop"
                     aria-label="Stop generation"
                   >
-                    <Square className="h-4 w-4 fill-current" aria-hidden />
+                    <Square className="h-3.5 w-3.5 fill-current" aria-hidden />
                   </button>
                 ) : (
                   <button
                     type="submit"
                     disabled={isUploadingImage}
-                    className="inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                     title={isUploadingImage ? 'Uploading…' : 'Send'}
                     aria-label={isUploadingImage ? 'Uploading' : 'Send'}
                   >
-                    <Send className={`h-4 w-4 ${isUploadingImage ? 'animate-pulse' : ''}`} aria-hidden />
+                    <Send className={`h-3.5 w-3.5 ${isUploadingImage ? 'animate-pulse' : ''}`} aria-hidden />
                   </button>
                 )}
               </div>

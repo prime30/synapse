@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
 
@@ -139,7 +140,7 @@ function CodeBlock({ lines }: { lines: string[] }) {
 function Callout({ text }: { text: string }) {
   return (
     <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/5 p-4 flex items-start gap-3">
-      <span className="text-accent text-lg mt-0.5 flex-shrink-0">✦</span>
+      <Sparkles className="text-accent h-4 w-4 mt-0.5 flex-shrink-0" aria-hidden />
       <p className="text-sm text-stone-700 dark:text-white/70 leading-relaxed">
         {text}
       </p>

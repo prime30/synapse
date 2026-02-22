@@ -88,6 +88,7 @@ console.log(
 
 /** Number of runs per (scenario, contender) to average. Must match marketing copy (e.g. "3 runs averaged"). */
 const RUNS_PER_PROMPT = Math.max(1, parseInt(process.env.BENCHMARK_RUNS_PER_PROMPT ?? '3', 10));
+const ENFORCE_PLAN_APPROVE_CODE_FLOW = process.env.BENCHMARK_PLAN_APPROVE_CODE_FLOW !== 'false';
 
 // ── Pricing ────────────────────────────────────────────────────────────────
 
@@ -153,6 +154,14 @@ interface Scenario {
   files: string[];
   recentMessages?: string[];
   validate: (r: SResult) => void;
+}
+
+function shouldUsePlanApproveCodeFlow(sc: Scenario): boolean {
+  return (
+    ENFORCE_PLAN_APPROVE_CODE_FLOW &&
+    sc.intentMode === 'code' &&
+    (sc.expectedTier === 'COMPLEX' || sc.expectedTier === 'ARCHITECTURAL')
+  );
 }
 
 interface SResult {
@@ -347,42 +356,87 @@ async function runV2Scenario(sc: Scenario, _contender: Contender): Promise<SResu
   console.log('  Files: ' + files.map((f) => f.path).join(', '));
   console.log('  Expected tier: ' + sc.expectedTier);
   const t0 = Date.now();
+  let usageInputTokens = 0;
+  let usageOutputTokens = 0;
+  let usageCacheRead = 0;
+  let usageCacheWrite = 0;
 
-  const res = await streamV2(
-    'bench-' + sc.key + '-' + Date.now(),
-    '00000000-0000-0000-0000-000000000099',
-    'bench-user',
-    sc.prompt,
-    files,
-    [],
-    {
-      intentMode: sc.intentMode,
-      recentMessages: sc.recentMessages,
-      // NO forcedModel — let production tier routing work
-      onProgress: (ev: { type: string; label?: string; [key: string]: unknown }) => {
-        if (ev.type === 'thinking') console.log('    [progress] ' + ev.label);
-        if (ev.label && /review/i.test(ev.label)) {
-          if (!reviewStartMs) reviewStartMs = Date.now();
-        }
-        if (reviewStartMs && ev.label && /done|complete|finish/i.test(ev.label)) {
-          reviewTimeMs += Date.now() - reviewStartMs;
-          reviewStartMs = 0;
-        }
+  const runV2Pass = async (
+    pass: { intentMode: 'ask' | 'code' | 'plan' | 'debug'; prompt: string; recentMessages?: string[] },
+    passLabel: string,
+  ) => {
+    console.log('  [v2-pass] ' + passLabel + ' (' + pass.intentMode + ')');
+    const passRes = await streamV2(
+      'bench-' + sc.key + '-' + passLabel + '-' + Date.now(),
+      '00000000-0000-0000-0000-000000000099',
+      'bench-user',
+      pass.prompt,
+      files,
+      [],
+      {
+        intentMode: pass.intentMode,
+        recentMessages: pass.recentMessages,
+        // NO forcedModel — let production tier routing work
+        onProgress: (ev: { type: string; label?: string; [key: string]: unknown }) => {
+          if (ev.type === 'thinking') console.log('    [progress] ' + ev.label);
+          if (ev.label && /review/i.test(ev.label)) {
+            if (!reviewStartMs) reviewStartMs = Date.now();
+          }
+          if (reviewStartMs && ev.label && /done|complete|finish/i.test(ev.label)) {
+            reviewTimeMs += Date.now() - reviewStartMs;
+            reviewStartMs = 0;
+          }
+        },
+        onContentChunk: (ch: string) => {
+          if (!chunks.length) firstAt = Date.now() - t0;
+          chunks.push(ch);
+        },
+        onToolEvent: (ev: { type: string; name: string; id: string }) => {
+          toolEvts.push(ev);
+          if (ev.type === 'tool_start') console.log('    [tool] ' + ev.name);
+        },
+        onReasoningChunk: () => {
+          if (!thinkingStartMs) thinkingStartMs = Date.now();
+          thinkN++;
+        },
       },
-      onContentChunk: (ch: string) => {
-        if (!chunks.length) firstAt = Date.now() - t0;
-        chunks.push(ch);
+    );
+
+    usageInputTokens += passRes.usage?.totalInputTokens ?? 0;
+    usageOutputTokens += passRes.usage?.totalOutputTokens ?? 0;
+    usageCacheRead += passRes.usage?.totalCacheReadTokens ?? 0;
+    usageCacheWrite += passRes.usage?.totalCacheWriteTokens ?? 0;
+    return passRes;
+  };
+  const usePlanFlow = shouldUsePlanApproveCodeFlow(sc);
+  let res;
+  if (usePlanFlow) {
+    const planRes = await runV2Pass(
+      { intentMode: 'plan', prompt: sc.prompt, recentMessages: sc.recentMessages },
+      'plan',
+    );
+    const planText = (chunks.join('') || planRes.analysis || '').slice(-12000);
+    chunks.length = 0;
+    const codeRecentMessages = [
+      ...(sc.recentMessages ?? []),
+      sc.prompt,
+      planText || 'Plan generated.',
+      'Approved plan. Execute these steps now and make the code changes.',
+    ];
+    res = await runV2Pass(
+      {
+        intentMode: 'code',
+        prompt: 'Implement the approved plan with concrete code changes now.',
+        recentMessages: codeRecentMessages,
       },
-      onToolEvent: (ev: { type: string; name: string; id: string }) => {
-        toolEvts.push(ev);
-        if (ev.type === 'tool_start') console.log('    [tool] ' + ev.name);
-      },
-      onReasoningChunk: () => {
-        if (!thinkingStartMs) thinkingStartMs = Date.now();
-        thinkN++;
-      },
-    },
-  );
+      'code',
+    );
+  } else {
+    res = await runV2Pass(
+      { intentMode: sc.intentMode, prompt: sc.prompt, recentMessages: sc.recentMessages },
+      'single',
+    );
+  }
 
   if (thinkingStartMs) thinkingTimeMs = Date.now() - thinkingStartMs;
   if (reviewStartMs) reviewTimeMs += Date.now() - reviewStartMs;
@@ -390,14 +444,17 @@ async function runV2Scenario(sc: Scenario, _contender: Contender): Promise<SResu
   const elapsed = Date.now() - t0;
   const text = chunks.join('');
   const calls = toolEvts.filter((e) => e.type === 'tool_call');
-  const u = res.usage;
-  const inp = u?.totalInputTokens ?? 0;
-  const out = u?.totalOutputTokens ?? 0;
-  const cr = u?.totalCacheReadTokens ?? 0;
-  const cw = u?.totalCacheWriteTokens ?? 0;
-  const model = u?.model ?? _contender.model;
+  const model = res.usage?.model ?? _contender.model;
 
-  console.log('  Actual model: ' + model + ' (tier: ' + (u?.tier ?? '?') + ')');
+  console.log(
+    '  Actual model: ' +
+      model +
+      ' (tier: ' +
+      (res.usage?.tier ?? '?') +
+      ', planFlow=' +
+      (usePlanFlow ? 'on' : 'off') +
+      ')',
+  );
 
   return {
     success: res.success,
@@ -405,12 +462,12 @@ async function runV2Scenario(sc: Scenario, _contender: Contender): Promise<SResu
     totalTimeMs: elapsed,
     firstChunkMs: firstAt,
     model,
-    tier: u?.tier ?? sc.expectedTier,
-    inputTokens: inp,
-    outputTokens: out,
-    cacheRead: cr,
-    cacheWrite: cw,
-    costUSD: calcCost(model, inp, out, cr, cw),
+    tier: res.usage?.tier ?? sc.expectedTier,
+    inputTokens: usageInputTokens,
+    outputTokens: usageOutputTokens,
+    cacheRead: usageCacheRead,
+    cacheWrite: usageCacheWrite,
+    costUSD: calcCost(model, usageInputTokens, usageOutputTokens, usageCacheRead, usageCacheWrite),
     toolCalls: calls.length,
     toolsUsed: [...new Set(calls.map((e) => e.name))],
     changes: res.changes?.length ?? 0,

@@ -2,26 +2,32 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { Link2, Palette, Rocket, type LucideIcon } from 'lucide-react';
 import { GlassCard } from '@/components/marketing/glass';
 
-const STEPS = [
+const STEPS: Array<{
+  number: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
   {
     number: '01',
     title: 'Connect Shopify',
     description: 'Link your Shopify store to sync themes and assets automatically.',
-    icon: '🔗',
+    icon: Link2,
   },
   {
     number: '02',
     title: 'Choose a Theme',
     description: 'Start from scratch or import an existing theme to enhance with AI.',
-    icon: '🎨',
+    icon: Palette,
   },
   {
     number: '03',
     title: 'Start Building',
     description: 'Let the AI agents help you write, validate, and deploy your theme.',
-    icon: '🚀',
+    icon: Rocket,
   },
 ];
 
@@ -62,7 +68,9 @@ export default function WelcomePage() {
 
         {/* Steps */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full mb-16">
-          {STEPS.map((step, i) => (
+          {STEPS.map((step, i) => {
+            const Icon = step.icon;
+            return (
             <motion.div
               key={step.number}
               initial={{ opacity: 0, y: 30 }}
@@ -74,7 +82,7 @@ export default function WelcomePage() {
               }}
             >
               <GlassCard padding="lg" hoverScale className="h-full text-center">
-                <div className="text-3xl mb-4">{step.icon}</div>
+                <Icon className="h-8 w-8 mx-auto mb-4 text-white/80" aria-hidden />
                 <span className="inline-block rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium tracking-widest uppercase text-white/50 mb-2">
                   STEP {step.number}
                 </span>
@@ -82,7 +90,8 @@ export default function WelcomePage() {
                 <p className="text-white/70 text-sm leading-relaxed">{step.description}</p>
               </GlassCard>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
 
         {/* CTA */}

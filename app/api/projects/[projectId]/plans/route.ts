@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     await requireAuth(request);
     const { projectId } = await params;
 
-    const plans = listPlans(projectId);
+    const plans = await listPlans(projectId);
 
     return successResponse({
       plans: plans.map((p) => {
@@ -49,11 +49,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
     const { projectId } = await params;
     const body = await validateBody(createSchema)(request);
 
-    const plan = createPlan(projectId, body.name, body.content, body.todos);
+    const plan = await createPlan(
+      projectId,
+      userId,
+      body.name,
+      body.content,
+      body.todos?.map((t) => ({ content: t.content, status: t.status })),
+    );
 
     return successResponse({ plan }, 201);
   } catch (error) {

@@ -480,53 +480,31 @@ export class ContextEngine {
    * When yieldOpts is provided, yields to the event loop every N files so
    * timers (e.g. heartbeat) can run during long runs.
    */
-  indexFiles(
+  async indexFiles(
     files: FileContext[],
     yieldOpts?: { every: number; yieldFn: () => Promise<void> },
-  ): void | Promise<void> {
+  ): Promise<void> {
     this.index.clear();
     this.fileContents.clear();
     this.depCache.clear();
 
-    const run = async () => {
-      for (let i = 0; i < files.length; i++) {
-        if (yieldOpts && i > 0 && i % yieldOpts.every === 0) {
-          await yieldOpts.yieldFn();
-        }
-        const file = files[i];
-        const path = file.path ?? file.fileName;
-        const tokens = estimateTokens(file.content);
+    const yieldEvery = yieldOpts?.every ?? 50;
+    const yieldFn = yieldOpts?.yieldFn ?? (() => new Promise<void>(r => setTimeout(r, 0)));
+    const useSyncFallback = process.env.SYNC_INDEX_FILES === 'true';
 
-        // Skip reference detection for stub content (e.g. "[5000 chars]")
-        const isStub = file.content.startsWith('[') && /^\[\d+\s+chars/.test(file.content);
-        const references = isStub
-          ? []
-          : detectReferences(file.fileType, file.content, file.fileName);
-
-        const meta: FileMetadata = {
-          fileId: file.fileId,
-          fileName: file.fileName,
-          fileType: file.fileType,
-          path,
-          sizeBytes: isStub ? 0 : new TextEncoder().encode(file.content).byteLength,
-          tokenEstimate: tokens,
-          updatedAt: new Date(),
-          references,
-        };
-
-        this.index.set(file.fileId, meta);
-        this.fileContents.set(file.fileId, file.content);
+    for (let i = 0; i < files.length; i++) {
+      if (!useSyncFallback && i > 0 && i % yieldEvery === 0) {
+        await yieldFn();
       }
-    };
-
-    if (yieldOpts) return run();
-    for (const file of files) {
+      const file = files[i];
       const path = file.path ?? file.fileName;
       const tokens = estimateTokens(file.content);
+
       const isStub = file.content.startsWith('[') && /^\[\d+\s+chars/.test(file.content);
       const references = isStub
         ? []
         : detectReferences(file.fileType, file.content, file.fileName);
+
       const meta: FileMetadata = {
         fileId: file.fileId,
         fileName: file.fileName,
@@ -537,6 +515,7 @@ export class ContextEngine {
         updatedAt: new Date(),
         references,
       };
+
       this.index.set(file.fileId, meta);
       this.fileContents.set(file.fileId, file.content);
     }
@@ -986,6 +965,48 @@ export class ContextEngine {
     }
     return undefined;
   }
+}
+
+// ── LRU Cache of ContextEngine per project ────────────────────────────
+
+const MAX_CACHED_ENGINES = 8;
+
+interface CachedEntry {
+  engine: ContextEngine;
+  lastUsed: number;
+}
+
+const engineCache = new Map<string, CachedEntry>();
+
+/**
+ * Returns a ContextEngine for the given project, reusing from cache when
+ * available. Evicts the least-recently-used entry when the cache is full.
+ */
+export function getProjectContextEngine(
+  projectId: string,
+  maxTokens = 16_000,
+): ContextEngine {
+  const existing = engineCache.get(projectId);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    return existing.engine;
+  }
+
+  if (engineCache.size >= MAX_CACHED_ENGINES) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, entry] of engineCache) {
+      if (entry.lastUsed < oldestTime) {
+        oldestTime = entry.lastUsed;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) engineCache.delete(oldestKey);
+  }
+
+  const engine = new ContextEngine(maxTokens);
+  engineCache.set(projectId, { engine, lastUsed: Date.now() });
+  return engine;
 }
 
 export default ContextEngine;

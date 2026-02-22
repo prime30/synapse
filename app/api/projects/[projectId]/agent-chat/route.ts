@@ -21,18 +21,45 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     const supabase = await createClient();
 
-    // Find the most recent agent session for this user + project
-    const { data: session, error: sessionError } = await supabase
+    // Find recent sessions for this user + project, then pick the newest non-empty one.
+    const { data: sessionCandidates, error: sessionError } = await supabase
       .from('ai_sessions')
       .select('id, title, created_at, updated_at')
       .eq('project_id', projectId)
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(100);
 
     if (sessionError) throw sessionError;
 
+    const candidates = sessionCandidates ?? [];
+    if (candidates.length === 0) {
+      return successResponse({ session: null, messages: [] });
+    }
+
+    const sessionIds = candidates.map((s) => s.id);
+    let messageCounts: Record<string, number> = {};
+
+    const { data: countRows, error: countError } = await supabase
+      .rpc('count_messages_by_session', { session_ids: sessionIds });
+
+    if (!countError && countRows) {
+      for (const row of countRows as Array<{ session_id: string; count: number }>) {
+        messageCounts[row.session_id] = row.count;
+      }
+    } else {
+      const { data: rawCounts, error: rawError } = await supabase
+        .from('ai_messages')
+        .select('session_id')
+        .in('session_id', sessionIds);
+      if (rawError) throw rawError;
+      messageCounts = (rawCounts ?? []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.session_id] = (acc[row.session_id] ?? 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    const session = candidates.find((s) => (messageCounts[s.id] ?? 0) > 0) ?? null;
     if (!session) {
       return successResponse({ session: null, messages: [] });
     }

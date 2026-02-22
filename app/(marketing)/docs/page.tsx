@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { Rocket, Zap, BookOpen, Plug, Brain, ArrowRight, type LucideIcon } from 'lucide-react';
 import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 
 interface DocCategory {
-  icon: string;
+  icon: LucideIcon;
   title: string;
   description: string;
   href: string;
@@ -16,25 +17,25 @@ interface DocCategory {
 
 const PUBLIC_CATEGORIES: DocCategory[] = [
   {
-    icon: '🚀',
+    icon: Rocket,
     title: 'Getting Started',
     description: 'Set up your workspace in minutes',
     href: '/docs/getting-started',
   },
   {
-    icon: '⚡',
+    icon: Zap,
     title: 'API Reference',
     description: 'MCP tools, endpoints, and schemas',
     href: '/docs/api-reference',
   },
   {
-    icon: '📖',
+    icon: BookOpen,
     title: 'Guides',
     description: 'Step-by-step tutorials for common workflows',
     href: '#',
   },
   {
-    icon: '🔌',
+    icon: Plug,
     title: 'Integrations',
     description: 'Connect Shopify, IDE plugins, and more',
     href: '#',
@@ -43,7 +44,7 @@ const PUBLIC_CATEGORIES: DocCategory[] = [
 
 const ADMIN_CATEGORIES: DocCategory[] = [
   {
-    icon: '🧠',
+    icon: Brain,
     title: 'Architecture',
     description: 'Deep dive into the multi-agent AI system',
     href: '/architecture',
@@ -86,7 +87,9 @@ export default function DocsPage() {
         {/* Category Cards */}
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {CATEGORIES.map((cat, i) => (
+            {CATEGORIES.map((cat, i) => {
+              const Icon = cat.icon;
+              return (
               <motion.div
                 key={cat.title}
                 initial={{ opacity: 0, y: 20 }}
@@ -99,9 +102,7 @@ export default function DocsPage() {
                   className="group flex items-start justify-between rounded-2xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-8 hover:border-stone-300 dark:hover:border-white/20 hover:shadow-lg hover:shadow-stone-200/50 dark:hover:shadow-none transition-all"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-3xl mb-4 block" aria-hidden="true">
-                      {cat.icon}
-                    </span>
+                    <Icon className="w-8 h-8 mb-4 text-stone-700 dark:text-white/80" aria-hidden />
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="text-xl font-medium text-stone-900 dark:text-white">
                         {cat.title}
@@ -118,22 +119,11 @@ export default function DocsPage() {
                   </div>
 
                   {/* Arrow indicator */}
-                  <svg
-                    className="w-5 h-5 text-stone-300 dark:text-white/20 group-hover:text-accent group-hover:translate-x-1 transition-all flex-shrink-0 mt-1 ml-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                    />
-                  </svg>
+                  <ArrowRight className="w-5 h-5 text-stone-300 dark:text-white/20 group-hover:text-accent group-hover:translate-x-1 transition-all flex-shrink-0 mt-1 ml-4" />
                 </Link>
               </motion.div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </main>

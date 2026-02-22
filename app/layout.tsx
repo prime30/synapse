@@ -26,6 +26,13 @@ export const metadata: Metadata = {
   ),
   title: "Synapse - Shopify Theme Dev",
   description: "AI-powered Shopify theme development platform",
+  openGraph: {
+    images: ["/og-lambda-animated.svg"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-lambda-animated.svg"],
+  },
 };
 
 export default function RootLayout({
@@ -34,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

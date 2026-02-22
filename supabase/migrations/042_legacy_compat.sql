@@ -1,0 +1,3 @@
+-- Legacy compatibility shim.
+-- Keeps local migration history aligned with remote environments that recorded version 042.
+-- Intentionally no-op.

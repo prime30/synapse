@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { FileText } from 'lucide-react';
 import { useShopifyPages } from '@/hooks/useShopifyPages';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -289,7 +290,7 @@ export function PagesPanel({ connectionId }: PagesPanelProps) {
       {/* Empty state */}
       {pages.length === 0 && !showNewForm && (
         <div className="flex flex-col items-center py-8 px-4 text-center">
-          <span className="text-2xl mb-2">📄</span>
+          <FileText className="h-7 w-7 mb-2 ide-text-muted" aria-hidden />
           <p className="text-sm ide-text-muted font-medium">No pages</p>
           <p className="text-[11px] ide-text-quiet mt-1 max-w-[240px]">
             Create a page to add content like About Us, Contact, or FAQ.

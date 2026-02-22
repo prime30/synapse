@@ -3,6 +3,7 @@ import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { invalidateMemory } from '@/lib/cache/agent-context-cache';
 import type {
   MemoryType,
   MemoryFeedback,
@@ -173,6 +174,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw APIError.internal(error.message);
     }
 
+    invalidateMemory(userId, projectId).catch(() => {});
+
     return successResponse(rowToMemoryEntry(data as MemoryRow), 201);
   } catch (error) {
     return handleAPIError(error);
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { projectId } = await params;
-    await requireProjectAccess(request, projectId);
+    const userId = await requireProjectAccess(request, projectId);
 
     const body = await request.json().catch(() => ({}));
 
@@ -249,6 +252,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
       throw APIError.internal(error.message);
     }
+
+    invalidateMemory(userId, projectId).catch(() => {});
 
     return successResponse(rowToMemoryEntry(data as MemoryRow));
   } catch (error) {

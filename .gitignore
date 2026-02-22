@@ -58,3 +58,8 @@ components/marketing/dev/
 
 # Local file cache (theme files cached on disk for zero-latency agent reads)
 .cache/
+
+# Fine-tuning artifacts (large data, model weights, generated configs)
+.finetune-data/
+.finetune-output/
+.finetune-configs/

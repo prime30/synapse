@@ -8,6 +8,7 @@ interface FileOperationsProps {
   fileId: string;
   fileName: string;
   fileContent: string;
+  projectId?: string;
   onRenameComplete?: () => void;
   onDeleteComplete?: () => void;
   onDuplicateComplete?: (newFileId: string) => void;
@@ -21,6 +22,7 @@ export function FileOperations({
   fileId,
   fileName,
   fileContent,
+  projectId,
   onRenameComplete,
   onDeleteComplete,
   onDuplicateComplete,
@@ -32,6 +34,7 @@ export function FileOperations({
   const [renameValue, setRenameValue] = useState<string | null>(null);
 
   const ops = useFileOperations({
+    projectId,
     onError,
     onSuccess: () => {},
   });

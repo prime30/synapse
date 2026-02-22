@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     await requireAuth(request);
     const { planId } = await params;
 
-    const plan = getPlan(planId);
+    const plan = await getPlan(planId);
     if (!plan) throw APIError.notFound('Plan not found');
 
     return successResponse({ plan });
@@ -24,28 +24,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-const todoSchema = z.object({
-  id: z.string().min(1),
-  content: z.string().min(1),
-  status: z.enum(['pending', 'in_progress', 'completed']),
-});
-
-const updateSchema = z.object({
+const putSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   content: z.string().optional(),
-  todos: z.array(todoSchema).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  expectedVersion: z.number().int().min(0).optional(),
 });
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
     const { planId } = await params;
-    const body = await validateBody(updateSchema)(request);
+    const body = await validateBody(putSchema)(request);
 
-    const plan = updatePlan(planId, body);
-    if (!plan) throw APIError.notFound('Plan not found');
+    const result = await updatePlan(
+      planId,
+      userId,
+      { name: body.name, content: body.content, status: body.status },
+      body.expectedVersion ?? 0,
+    );
+    if (!result) throw APIError.notFound('Plan not found');
+    if ('conflict' in result) {
+      return successResponse({ conflict: true, currentVersion: result.currentVersion }, 409);
+    }
 
-    return successResponse({ plan });
+    return successResponse({ plan: result });
   } catch (error) {
     return handleAPIError(error);
   }
@@ -56,7 +59,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     await requireAuth(request);
     const { planId } = await params;
 
-    const deleted = deletePlan(planId);
+    const deleted = await deletePlan(planId);
     if (!deleted) throw APIError.notFound('Plan not found');
 
     return successResponse({ deleted: true });

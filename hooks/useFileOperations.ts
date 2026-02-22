@@ -1,18 +1,31 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { FileData } from '@/lib/types/files';
+import type { ProjectFile } from './useProjectFiles';
 
 interface UseFileOperationsOptions {
+  projectId?: string;
   onError?: (message: string) => void;
   onSuccess?: (message: string) => void;
 }
 
 export function useFileOperations(options: UseFileOperationsOptions = {}) {
-  const { onError, onSuccess } = options;
+  const { projectId, onError, onSuccess } = options;
+  const qc = useQueryClient();
+
+  const queryKey = projectId ? ['project-files', projectId] : null;
 
   const renameFile = useCallback(
     async (fileId: string, newName: string): Promise<void> => {
+      let previous: ProjectFile[] | undefined;
+      if (queryKey) {
+        previous = qc.getQueryData<ProjectFile[]>(queryKey);
+        qc.setQueryData<ProjectFile[]>(queryKey, (old) =>
+          old?.map((f) => (f.id === fileId ? { ...f, name: newName } : f)),
+        );
+      }
       try {
         const res = await fetch(`/api/files/${fileId}`, {
           method: 'PATCH',
@@ -23,15 +36,23 @@ export function useFileOperations(options: UseFileOperationsOptions = {}) {
         if (!res.ok) throw new Error(json.error ?? 'Rename failed');
         onSuccess?.('File renamed');
       } catch (e) {
+        if (queryKey && previous) qc.setQueryData(queryKey, previous);
         onError?.(e instanceof Error ? e.message : 'Rename failed');
         throw e;
       }
     },
-    [onError, onSuccess]
+    [onError, onSuccess, qc, queryKey],
   );
 
   const deleteFile = useCallback(
     async (fileId: string): Promise<void> => {
+      let previous: ProjectFile[] | undefined;
+      if (queryKey) {
+        previous = qc.getQueryData<ProjectFile[]>(queryKey);
+        qc.setQueryData<ProjectFile[]>(queryKey, (old) =>
+          old?.filter((f) => f.id !== fileId),
+        );
+      }
       try {
         const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' });
         if (!res.ok) {
@@ -40,11 +61,12 @@ export function useFileOperations(options: UseFileOperationsOptions = {}) {
         }
         onSuccess?.('File deleted');
       } catch (e) {
+        if (queryKey && previous) qc.setQueryData(queryKey, previous);
         onError?.(e instanceof Error ? e.message : 'Delete failed');
         throw e;
       }
     },
-    [onError, onSuccess]
+    [onError, onSuccess, qc, queryKey],
   );
 
   const duplicateFile = useCallback(
@@ -56,13 +78,14 @@ export function useFileOperations(options: UseFileOperationsOptions = {}) {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? 'Duplicate failed');
         onSuccess?.('File duplicated');
+        if (queryKey) qc.invalidateQueries({ queryKey });
         return json.data;
       } catch (e) {
         onError?.(e instanceof Error ? e.message : 'Duplicate failed');
         return null;
       }
     },
-    [onError, onSuccess]
+    [onError, onSuccess, qc, queryKey],
   );
 
   const downloadFile = useCallback(

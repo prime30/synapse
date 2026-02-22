@@ -5,6 +5,7 @@ import { ContextEngine } from '@/lib/ai/context-engine';
 import { checkLiquid, checkCSS, checkJavaScript } from '@/lib/agents/validation/syntax-checker';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
 import { executeGrep, executeGlob, executeSemanticSearch } from './search-tools';
+import { extractTargetRegion } from './region-extractor';
 import { runDiagnostics, formatDiagnostics } from './diagnostics-tool';
 import { WorkerPool } from '../worker-pool';
 import type { WorkerTask, WorkerProgressEvent } from '../worker-pool';
@@ -13,6 +14,7 @@ import { webSearch } from '@/lib/ai/web-search';
 import { callPreviewAPI, formatPreviewResult } from './preview-tools';
 import { getShopifyAPI, formatThemeList } from './shopify-tools';
 import { runThemeCheck, formatThemeCheckResult, generatePlaceholderSVG } from './theme-check';
+import { recordHistogram } from '@/lib/observability/metrics';
 
 export interface ToolExecutorContext {
   files: FileContext[];
@@ -33,6 +35,168 @@ export interface ToolExecutorContext {
   shopifyConnectionId?: string;
   /** Shopify theme ID — needed by Shopify operation tools. */
   themeId?: string;
+}
+
+type DbFileRow = {
+  id: string;
+  name: string;
+  path: string | null;
+  file_type: string;
+  content: string | null;
+};
+
+// ── Symbol extraction for get_dependency_graph enrichment ─────────────────
+
+/**
+ * Extract exported/declared symbols from a file based on its type.
+ * Returns a formatted multi-line section, or '' if nothing notable found.
+ */
+function extractFileSymbols(fileName: string, content: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const lines: string[] = [];
+
+  if (ext === 'liquid') {
+    // Extract schema block → title, settings, blocks
+    const schemaMatch = content.match(/\{%-?\s*schema\s*-?%\}([\s\S]*?)\{%-?\s*endschema\s*-?%\}/i);
+    if (schemaMatch) {
+      try {
+        const schema = JSON.parse(schemaMatch[1]) as {
+          name?: string;
+          settings?: Array<{ id?: string; type?: string; label?: string }>;
+          blocks?: Array<{ type?: string; name?: string }>;
+        };
+        if (schema.name) lines.push(`Schema: "${schema.name}"`);
+        if (Array.isArray(schema.settings) && schema.settings.length > 0) {
+          const settingSummaries = schema.settings
+            .filter(s => s.id)
+            .map(s => `${s.id} (${s.type ?? '?'})`)
+            .slice(0, 12);
+          lines.push(`Settings: ${settingSummaries.join(', ')}`);
+        }
+        if (Array.isArray(schema.blocks) && schema.blocks.length > 0) {
+          const blockTypes = schema.blocks.map(b => b.type ?? b.name ?? '?').slice(0, 8);
+          lines.push(`Block types: ${blockTypes.join(', ')}`);
+        }
+      } catch {
+        // malformed schema JSON — skip
+      }
+    }
+    // Extract {% block %} names
+    const blockNames: string[] = [];
+    const blockRe = /\{%-?\s*block\s+['"]?([\w-]+)['"]?/gi;
+    let bm: RegExpExecArray | null;
+    while ((bm = blockRe.exec(content)) !== null) blockNames.push(bm[1]);
+    if (blockNames.length > 0) lines.push(`Liquid blocks: ${[...new Set(blockNames)].join(', ')}`);
+
+    // Extract {% render %} calls (immediate children)
+    const renderNames: string[] = [];
+    const renderRe = /\{%-?\s*render\s+['"]?([\w/-]+)['"]?/gi;
+    let rm: RegExpExecArray | null;
+    while ((rm = renderRe.exec(content)) !== null) renderNames.push(rm[1]);
+    if (renderNames.length > 0) lines.push(`Renders: ${[...new Set(renderNames)].slice(0, 8).join(', ')}`);
+
+  } else if (ext === 'js' || ext === 'ts' || ext === 'jsx' || ext === 'tsx') {
+    // Extract exported names
+    const exportedSymbols: string[] = [];
+    const exportRe =
+      /^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([\w$]+)/gm;
+    let em: RegExpExecArray | null;
+    while ((em = exportRe.exec(content)) !== null) exportedSymbols.push(em[1]);
+    // named re-exports: export { foo, bar }
+    const reExportRe = /^export\s*\{([^}]+)\}/gm;
+    let rem: RegExpExecArray | null;
+    while ((rem = reExportRe.exec(content)) !== null) {
+      rem[1].split(',').forEach(s => {
+        const name = s.trim().split(/\s+as\s+/).pop()?.trim();
+        if (name) exportedSymbols.push(name);
+      });
+    }
+    if (exportedSymbols.length > 0) {
+      lines.push(`Exports: ${[...new Set(exportedSymbols)].slice(0, 16).join(', ')}`);
+    }
+    // Top-level function/class declarations (non-exported)
+    const declRe = /^(?:async\s+)?function\s+([\w$]+)|^class\s+([\w$]+)/gm;
+    const decls: string[] = [];
+    let dm: RegExpExecArray | null;
+    while ((dm = declRe.exec(content)) !== null) decls.push(dm[1] ?? dm[2]);
+    const nonExported = decls.filter(d => !exportedSymbols.includes(d));
+    if (nonExported.length > 0) lines.push(`Declarations: ${nonExported.slice(0, 8).join(', ')}`);
+
+  } else if (ext === 'css' || ext === 'scss' || ext === 'less') {
+    // Extract top-level selectors and CSS custom properties
+    const selectors: string[] = [];
+    const selectorRe = /^([.#][\w-]+(?:[\s,>+~[\]:\w-]*)?)\s*\{/gm;
+    let sm: RegExpExecArray | null;
+    while ((sm = selectorRe.exec(content)) !== null) {
+      selectors.push(sm[1].trim());
+    }
+    if (selectors.length > 0) {
+      lines.push(`Selectors: ${[...new Set(selectors)].slice(0, 12).join(', ')}`);
+    }
+    // CSS custom properties defined in :root
+    const varRe = /--[\w-]+(?=\s*:)/g;
+    const cssVars = [...new Set(content.match(varRe) ?? [])].slice(0, 12);
+    if (cssVars.length > 0) lines.push(`CSS vars: ${cssVars.join(', ')}`);
+
+  } else if (ext === 'json' && fileName.includes('templates/')) {
+    // Template JSON: list section types used
+    try {
+      const data = JSON.parse(content) as { sections?: Record<string, { type?: string }> };
+      const sectionTypes = Object.values(data.sections ?? {})
+        .map(s => s?.type)
+        .filter(Boolean) as string[];
+      if (sectionTypes.length > 0) lines.push(`Template sections: ${sectionTypes.join(', ')}`);
+    } catch {
+      // skip
+    }
+  }
+
+  return lines.length > 0 ? `Symbols:\n  ${lines.join('\n  ')}` : '';
+}
+
+function toFileContext(data: DbFileRow): FileContext {
+  return {
+    fileId: data.id,
+    fileName: data.path ?? data.name,
+    path: data.path ?? data.name,
+    fileType: (data.file_type as FileContext['fileType']) ?? 'other',
+    content: data.content!,
+  };
+}
+
+async function resolveFileFromDatabase(
+  fileId: string,
+  ctx: ToolExecutorContext,
+): Promise<FileContext | null> {
+  if (!ctx.supabaseClient || !ctx.projectId || !fileId) return null;
+
+  const t0 = Date.now();
+
+  // If fileId contains PostgREST filter metacharacters (not a UUID), use path-only lookup
+  if (/[,().]/.test(fileId) && !/^[0-9a-f-]{36}$/i.test(fileId)) {
+    const { data } = await ctx.supabaseClient
+      .from('files')
+      .select('id,name,path,file_type,content')
+      .eq('project_id', ctx.projectId)
+      .eq('path', fileId)
+      .maybeSingle<DbFileRow>();
+    recordHistogram('agent.resolve_file_db_ms', Date.now() - t0).catch(() => {});
+    if (data && typeof data.content === 'string') return toFileContext(data);
+    return null;
+  }
+
+  const baseName = fileId.split('/').pop() ?? fileId;
+  const { data } = await ctx.supabaseClient
+    .from('files')
+    .select('id,name,path,file_type,content')
+    .eq('project_id', ctx.projectId)
+    .or(`id.eq.${fileId},path.eq.${fileId},name.eq.${baseName}`)
+    .limit(1)
+    .maybeSingle<DbFileRow>();
+
+  recordHistogram('agent.resolve_file_db_ms', Date.now() - t0).catch(() => {});
+  if (!data || typeof data.content !== 'string') return null;
+  return toFileContext(data);
 }
 
 /**
@@ -60,7 +224,13 @@ export async function executeToolCall(
           (f.path && f.path.endsWith(`/${fileId}`))
         );
         if (!file) {
-          return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
+          const dbResolved = await resolveFileFromDatabase(fileId, ctx);
+          if (dbResolved) {
+            files.push(dbResolved);
+            file = dbResolved;
+          } else {
+            return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
+          }
         }
         // Hydrate if content is a stub
         if (file.content.startsWith('[') && ctx.loadContent) {
@@ -126,9 +296,81 @@ export async function executeToolCall(
           .map(m => m.fileName);
         const incomingStr = incoming.length > 0 ? incoming.join(', ') : 'none';
 
+        // Enrich with symbol/section data from file content
+        let symbolSection = '';
+        const depFileCtx = files.find(f => f.fileId === depFile.fileId);
+        let depContent = depFileCtx?.content ?? '';
+        if (depContent.startsWith('[') && ctx.loadContent) {
+          const hydrated = await ctx.loadContent([depFile.fileId]);
+          depContent = hydrated[0]?.content ?? depContent;
+        }
+        if (depContent && !depContent.startsWith('[')) {
+          symbolSection = extractFileSymbols(depFile.fileName, depContent);
+        }
+
+        const lines = [
+          `File: ${depFile.fileName}`,
+          `Type: ${depFile.fileType}`,
+          `References (outgoing): ${outgoing}`,
+          `Referenced by (incoming): ${incomingStr}`,
+        ];
+        if (symbolSection) lines.push(symbolSection);
+
+        return { tool_use_id: toolCall.id, content: lines.join('\n') };
+      }
+
+      case 'extract_region': {
+        const regionFileId = String(toolCall.input.fileId ?? '');
+        const hint = String(toolCall.input.hint ?? '').trim();
+        const contextLines = toolCall.input.contextLines ? Number(toolCall.input.contextLines) : 4;
+
+        if (!hint) {
+          return { tool_use_id: toolCall.id, content: 'hint is required.', is_error: true };
+        }
+
+        // Resolve file
+        let regionFile = files.find(f =>
+          f.fileId === regionFileId ||
+          f.fileName === regionFileId ||
+          f.fileName.endsWith(`/${regionFileId}`) ||
+          (f.path && f.path.endsWith(`/${regionFileId}`))
+        );
+        if (!regionFile) {
+          const dbResolved = await resolveFileFromDatabase(regionFileId, ctx);
+          if (dbResolved) { files.push(dbResolved); regionFile = dbResolved; }
+        }
+        if (!regionFile) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${regionFileId}`, is_error: true };
+        }
+
+        // Hydrate if needed
+        let regionContent = regionFile.content;
+        if (regionContent.startsWith('[') && ctx.loadContent) {
+          const hydrated = await ctx.loadContent([regionFile.fileId]);
+          regionContent = hydrated[0]?.content ?? regionContent;
+        }
+        if (regionContent.startsWith('[')) {
+          return { tool_use_id: toolCall.id, content: 'File content not available for extraction.', is_error: true };
+        }
+
+        const match = extractTargetRegion(regionContent, hint, contextLines);
+
+        if (match.matchType === 'none') {
+          return {
+            tool_use_id: toolCall.id,
+            content: `No region matching "${hint}" found in ${regionFile.fileName}. Try grep_content with a broader pattern.`,
+          };
+        }
+
         return {
           tool_use_id: toolCall.id,
-          content: `File: ${depFile.fileName}\nReferences (outgoing): ${outgoing}\nReferenced by (incoming): ${incomingStr}`,
+          content: [
+            `File: ${regionFile.fileName}`,
+            `Match type: ${match.matchType}`,
+            `Lines: ${match.startLine}–${match.endLine}`,
+            ``,
+            match.snippet,
+          ].join('\n'),
         };
       }
 

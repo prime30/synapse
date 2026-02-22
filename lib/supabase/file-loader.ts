@@ -17,8 +17,8 @@ import type { FileContext } from '@/lib/types/agent';
 //   Invalidated only for the specific file that changed.
 //   Loaded on-demand via async loadContent().
 
-const METADATA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const CONTENT_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;  // 5 minutes
+const CONTENT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes (extended for cross-turn reuse)
 
 interface FileContentEntry {
   content: string;

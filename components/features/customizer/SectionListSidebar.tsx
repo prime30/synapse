@@ -1,6 +1,26 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import {
+  Menu,
+  Minus,
+  Square,
+  Play,
+  LayoutGrid,
+  Diamond,
+  Pilcrow,
+  ImageIcon,
+  PanelsTopLeft,
+  Video,
+  Mail,
+  List,
+  Grid3X3,
+  ListOrdered,
+  ChevronDown,
+  FileText,
+  Star,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -21,27 +41,27 @@ interface SectionListSidebarProps {
 
 // ── Section type → icon mapping ──────────────────────────────────────
 
-const SECTION_ICONS: Record<string, string> = {
-  header: '☰',
-  footer: '▬',
-  hero: '⬛',
-  slideshow: '▶',
-  'featured-collection': '◈',
-  'featured-product': '◇',
-  'rich-text': '¶',
-  image: '◻',
-  'image-with-text': '◨',
-  video: '▷',
-  newsletter: '✉',
-  'collection-list': '▤',
-  'product-grid': '▦',
-  multicolumn: '▥',
-  collapsible: '▼',
-  custom: '✦',
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  header: Menu,
+  footer: Minus,
+  hero: Square,
+  slideshow: Play,
+  'featured-collection': LayoutGrid,
+  'featured-product': Diamond,
+  'rich-text': Pilcrow,
+  image: ImageIcon,
+  'image-with-text': PanelsTopLeft,
+  video: Video,
+  newsletter: Mail,
+  'collection-list': List,
+  'product-grid': Grid3X3,
+  multicolumn: ListOrdered,
+  collapsible: ChevronDown,
+  custom: Star,
 };
 
-function getSectionIcon(type: string): string {
-  return SECTION_ICONS[type] ?? '§';
+function getSectionIcon(type: string): LucideIcon {
+  return SECTION_ICONS[type] ?? FileText;
 }
 
 function formatSectionType(type: string): string {
@@ -146,6 +166,7 @@ export function SectionListSidebar({
           const isHovered = section.id === hoveredId;
           const isDragging = dragIndex === index;
           const isDragOver = dragOverIndex === index;
+          const SectionIcon = getSectionIcon(section.type);
 
           return (
             <li
@@ -180,9 +201,7 @@ export function SectionListSidebar({
               </span>
 
               {/* Section icon */}
-              <span className="flex-shrink-0 w-5 text-center text-xs ide-text-muted">
-                {getSectionIcon(section.type)}
-              </span>
+              <SectionIcon className="flex-shrink-0 w-4 h-4 ide-text-muted" aria-hidden />
 
               {/* Section name */}
               <span className="flex-1 text-sm ide-text truncate">

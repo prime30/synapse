@@ -19,6 +19,7 @@ import type {
   ToolStreamEvent,
   ToolStreamResult,
 } from '@/lib/ai/types';
+import type { AgentMessage, ExecutionStatus } from '@/lib/types/agent';
 
 // â”€â”€ Mock setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -96,6 +97,31 @@ function buildTextOnlyStream(text: string): ToolStreamResult {
   };
 }
 
+function buildPTCLookupLoopStream(): ToolStreamResult {
+  const events: ToolStreamEvent[] = [
+    { type: 'text_delta', text: 'Let me read the file first.\n' },
+    {
+      type: 'server_tool_use',
+      id: 'ptc-read-1',
+      name: 'read_file',
+      input: { fileId: 'snippets/test.liquid' },
+    },
+  ];
+  const rawBlocks = [{ type: 'text', text: 'Let me read the file first.\n' }];
+  const stream = new ReadableStream<ToolStreamEvent>({
+    start(c) {
+      for (const e of events) c.enqueue(e);
+      c.close();
+    },
+  });
+  return {
+    stream,
+    getUsage: async () => ({ inputTokens: 250, outputTokens: 60 }),
+    getStopReason: async () => 'tool_use' as const,
+    getRawContentBlocks: async () => rawBlocks,
+  };
+}
+
 vi.mock('@/lib/ai/get-provider', () => ({
   getAIProvider: () => {
     const p = mockProvider.provider;
@@ -116,6 +142,8 @@ vi.mock('@/lib/ai/get-provider', () => ({
 
 let mockTier = 'SIMPLE';
 let mockStreamOverride: (() => ToolStreamResult) | null = null;
+const statusUpdates: Array<{ executionId: string; status: ExecutionStatus }> = [];
+const loggedMessages: AgentMessage[] = [];
 vi.mock('@/lib/agents/classifier', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/agents/classifier')>();
   return {
@@ -125,6 +153,21 @@ vi.mock('@/lib/agents/classifier', async (importOriginal) => {
       confidence: 0.9,
       source: 'heuristic',
     }),
+  };
+});
+
+vi.mock('@/lib/agents/execution-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/agents/execution-store')>();
+  return {
+    ...actual,
+    updateExecutionStatus: (executionId: string, status: ExecutionStatus) => {
+      statusUpdates.push({ executionId, status });
+      return actual.updateExecutionStatus(executionId, status);
+    },
+    addMessage: (executionId: string, message: AgentMessage) => {
+      loggedMessages.push(message);
+      return actual.addMessage(executionId, message);
+    },
   };
 });
 
@@ -179,6 +222,9 @@ describe('V2 Coordinator: streamV2', () => {
     mockProvider.succeedWith('{}');
     mockTier = 'SIMPLE';
     mockVerifyPassed = true;
+    mockStreamOverride = null;
+    statusUpdates.length = 0;
+    loggedMessages.length = 0;
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -279,6 +325,7 @@ describe('V2 Coordinator: streamV2', () => {
       [],
       {
         intentMode: 'code',
+        recentMessages: ['Approved plan. Execute these steps now and make the code changes.'],
         onProgress: (ev) => {
           if (ev.label) progressLabels.push(ev.label as string);
         },
@@ -379,6 +426,142 @@ describe('V2 Coordinator: streamV2', () => {
     // The important assertion is that text was streamed successfully
     expect(result.success).toBe(true);
     expect(chunks.join('')).toContain('product');
+
+    mockStreamOverride = null;
+  });
+
+  it('breaks pre-edit PTC lookup loops with clarification', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
+    mockStreamOverride = () => buildPTCLookupLoopStream();
+
+    const result = await streamV2(
+      'v2-ptc-loop-' + Date.now(),
+      PID,
+      UID,
+      'Implement the code changes you just suggested.',
+      testFiles(),
+      [],
+      {
+        intentMode: 'code',
+        onProgress: () => {},
+        onContentChunk: () => {},
+        onToolEvent: () => {},
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.changes?.length ?? 0).toBe(0);
+    expect(result.needsClarification).toBe(true);
+    expect(result.analysis ?? '').toContain('Stopped after repeated execution/read iterations');
+
+    mockStreamOverride = null;
+  });
+
+  it('marks explicit code no-op runs failed and logs terminal reason', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
+    mockStreamOverride = () => buildTextOnlyStream('I reviewed the files and have recommendations.');
+    const executionId = 'v2-noop-failed-' + Date.now();
+
+    const result = await streamV2(
+      executionId,
+      PID,
+      UID,
+      'Implement the code changes now.',
+      testFiles(),
+      [],
+      {
+        intentMode: 'code',
+        onProgress: () => {},
+        onContentChunk: () => {},
+        onToolEvent: () => {},
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.changes?.length ?? 0).toBe(0);
+    expect(
+      statusUpdates.some(
+        (entry) => entry.executionId.startsWith(executionId) && entry.status === 'failed',
+      ),
+    ).toBe(true);
+    expect(
+      loggedMessages.some(
+        (message) =>
+          message.executionId.startsWith(executionId) &&
+          message.messageType === 'result' &&
+          String(message.payload?.instruction ?? '').toLowerCase().includes('without mutating changes'),
+      ),
+    ).toBe(true);
+
+    mockStreamOverride = null;
+  });
+
+  it('applies referential artifacts deterministically when model does not mutate', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
+    mockStreamOverride = () => buildTextOnlyStream('I will proceed with the requested implementation.');
+
+    const result = await streamV2(
+      'v2-referential-replay-' + Date.now(),
+      PID,
+      UID,
+      'make those changes now',
+      testFiles(),
+      [],
+      {
+        intentMode: 'code',
+        isReferentialCodePrompt: true,
+        referentialArtifacts: [
+          {
+            filePath: 'snippets/test.liquid',
+            newContent,
+            reasoning: 'Replay prior approved edit',
+          },
+        ],
+        onProgress: () => {},
+        onContentChunk: () => {},
+        onToolEvent: () => {},
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.needsClarification).not.toBe(true);
+    expect(result.changes?.length ?? 0).toBeGreaterThanOrEqual(1);
+
+    mockStreamOverride = null;
+  });
+
+  it('emits actionable clarification options for referential no-op outcomes', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
+    mockStreamOverride = () => buildTextOnlyStream('I checked context and have recommendations.');
+    const progressEvents: Array<Record<string, unknown>> = [];
+
+    const result = await streamV2(
+      'v2-referential-clarify-' + Date.now(),
+      PID,
+      UID,
+      'implement the code changes now',
+      testFiles(),
+      [],
+      {
+        intentMode: 'code',
+        isReferentialCodePrompt: true,
+        onProgress: (ev) => progressEvents.push(ev),
+        onContentChunk: () => {},
+        onToolEvent: () => {},
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.needsClarification).toBe(true);
+
+    const clarificationWithOptions = progressEvents.find(
+      (e) =>
+        e.phase === 'clarification' &&
+        Boolean((e.metadata as Record<string, unknown> | undefined)?.options),
+    ) as (Record<string, unknown> & { metadata?: { options?: unknown[] } }) | undefined;
+    expect(clarificationWithOptions).toBeDefined();
+    expect(Array.isArray(clarificationWithOptions?.metadata?.options)).toBe(true);
+    expect((clarificationWithOptions?.metadata?.options ?? []).length).toBeGreaterThanOrEqual(2);
 
     mockStreamOverride = null;
   });

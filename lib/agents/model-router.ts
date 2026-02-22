@@ -2,11 +2,15 @@
  * Action-based multi-model routing.
  *
  * Priority chain for model resolution:
+ *   0. Forced model (benchmark/test bypass)
+ *   0.5 Tuned model canary (hybrid router, for routed actions)
  *   1. Action-level override (e.g. summary always uses Haiku)
  *   2. User preference (from useAgentSettings / localStorage)
  *   3. Agent default (PM uses Opus, specialists use Sonnet)
  *   4. System default (Sonnet 4)
  */
+
+import { shouldUseTunedModel } from '../finetune/hybrid-router';
 
 // ── AI Action types ─────────────────────────────────────────────────────────
 
@@ -131,6 +135,7 @@ export function getProviderForModel(model: string): ProviderName {
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'openai';
   if (model.startsWith('gemini-')) return 'google';
+  if (model.startsWith('synapse-')) return 'openai-compat';
 
   // EPIC E: Check custom model prefixes
   for (const [prefix, provider] of customModelPrefixes) {
@@ -177,6 +182,14 @@ export function resolveModel(options: ResolveModelOptions = {}): string {
   // 0. Forced model — bypasses all routing (benchmark/test use only)
   if (forcedModel && forcedModel.trim()) {
     return forcedModel;
+  }
+
+  // 0.5 Hybrid router: tuned model canary for routed actions (ask, plan, chat, etc.)
+  if (action) {
+    const canary = shouldUseTunedModel(action);
+    if (canary.useTunedModel) {
+      return canary.modelId;
+    }
   }
 
   // 0. TRIVIAL / SIMPLE tier: use Haiku for fast, cheap execution (asks and simple edits).

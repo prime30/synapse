@@ -1,6 +1,22 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
+import {
+  Type,
+  FileText,
+  Hash,
+  SlidersHorizontal,
+  ChevronDown,
+  Check,
+  Palette,
+  ImageIcon,
+  Link2,
+  AlignLeft,
+  Folder,
+  ShoppingBag,
+  CircleHelp,
+  type LucideIcon,
+} from 'lucide-react';
 import type { SchemaSetting } from '@/hooks/useSchemaParser';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -30,20 +46,20 @@ const SETTING_TYPES = [
   'product',
 ] as const;
 
-const TYPE_ICONS: Record<string, string> = {
-  text: 'T',
-  textarea: '¶',
-  number: '#',
-  range: '↔',
-  select: '▾',
-  checkbox: '☑',
-  color: '◆',
-  image_picker: '◻',
-  url: '🔗',
-  richtext: '≡',
-  font_picker: 'Aa',
-  collection: '◈',
-  product: '◇',
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  text: Type,
+  textarea: FileText,
+  number: Hash,
+  range: SlidersHorizontal,
+  select: ChevronDown,
+  checkbox: Check,
+  color: Palette,
+  image_picker: ImageIcon,
+  url: Link2,
+  richtext: AlignLeft,
+  font_picker: Type,
+  collection: Folder,
+  product: ShoppingBag,
 };
 
 type ConditionOperator = 'equals' | 'not_equals';
@@ -183,6 +199,7 @@ export function SchemaBuilderInline({
             const missingLabel = !setting.label?.trim();
             const isDragging = dragIndex === index;
             const isDragOver = dragOverIndex === index;
+            const TypeIcon = TYPE_ICONS[setting.type] ?? CircleHelp;
 
             return (
               <li
@@ -211,9 +228,7 @@ export function SchemaBuilderInline({
                 </span>
 
                 {/* Type icon */}
-                <span className="flex-shrink-0 w-5 text-center text-xs ide-text-muted font-mono">
-                  {TYPE_ICONS[setting.type] ?? '?'}
-                </span>
+                <TypeIcon className="flex-shrink-0 w-4 h-4 ide-text-muted" aria-hidden />
 
                 {/* Setting info */}
                 <div className="flex-1 min-w-0">

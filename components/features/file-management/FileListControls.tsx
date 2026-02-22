@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 import type { FileType } from '@/lib/types/files';
 
 type SortOption = 'name' | 'type' | 'size' | 'date';
@@ -46,9 +47,7 @@ export function FileListControls({
   return (
     <div className="space-y-2 p-2 border-b ide-border">
       <div className="relative">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 ide-text-muted text-sm">
-          🔍
-        </span>
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 ide-text-muted h-4 w-4" aria-hidden />
         <input
           type="text"
           value={localSearch}

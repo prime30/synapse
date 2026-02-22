@@ -95,6 +95,6 @@ export const config = {
      * - api/ routes (handle their own auth)
      * - web-pixels (Shopify preview scripts)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt|manifest.webmanifest|api/|web-pixels|.well-known/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ai.txt|manifest.webmanifest|api/|.well-known/).*)',
   ],
 };

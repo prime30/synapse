@@ -6,6 +6,7 @@ import type {
   CodeChange,
   FileContext,
   UserPreference,
+  OrchestrationActivitySignal,
 } from '@/lib/types/agent';
 import { CodexContextPackager } from '@/lib/context/packager';
 import type { ProjectContext } from '@/lib/context/types';
@@ -18,6 +19,9 @@ import type { AgentExecuteOptions } from '../base';
 import { Agent } from '../base';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { MODELS } from '../model-router';
+import type { SpecialistLifecycleEvent } from '../specialist-lifecycle';
+import { createPlan, updatePlan, readPlanForAgent } from '@/lib/services/plans';
+import type { Plan } from '@/lib/services/plans';
 
 // -- Types -------------------------------------------------------------------
 
@@ -65,6 +69,10 @@ export interface V2ToolExecutorContext {
     metadata?: Record<string, unknown>;
     [key: string]: unknown;
   }) => void;
+  /** Structured specialist lifecycle events for coordinator state machine. */
+  onSpecialistLifecycleEvent?: (event: SpecialistLifecycleEvent) => void;
+  /** Structured orchestration activity signals for PM decisioning/telemetry. */
+  onActivitySignal?: (signal: OrchestrationActivitySignal) => void;
   /** Specialist call counter for rate limiting (shared mutable ref). */
   specialistCallCount?: { value: number };
   /** Routing tier for review model selection (Codex vs Opus by tier). */
@@ -168,6 +176,7 @@ export async function executeV2Tool(
     // -- run_specialist ------------------------------------------------------
     case 'run_specialist': {
       const agentName = String(toolCall.input.agent ?? '');
+      const specialistAgent = agentName as SpecialistName;
       const task = String(toolCall.input.task ?? '');
       const affectedFiles = Array.isArray(toolCall.input.affectedFiles)
         ? (toolCall.input.affectedFiles as string[]).map(String)
@@ -198,6 +207,32 @@ export async function executeV2Tool(
         console.log(
           `[V2ToolExecutor] Running specialist "${agentName}" -- task: ${task.slice(0, 120)}`,
         );
+        const dispatchTs = Date.now();
+        ctx.onSpecialistLifecycleEvent?.({
+          type: 'dispatched',
+          agent: specialistAgent,
+          timestampMs: dispatchTs,
+          details: { affectedFiles },
+        });
+        ctx.onActivitySignal?.({
+          type: 'specialist_dispatched',
+          agent: specialistAgent,
+          timestampMs: dispatchTs,
+          details: { affectedFiles },
+        });
+        const startTs = Date.now();
+        ctx.onSpecialistLifecycleEvent?.({
+          type: 'started',
+          agent: specialistAgent,
+          timestampMs: startTs,
+          details: { task: task.slice(0, 300) },
+        });
+        ctx.onActivitySignal?.({
+          type: 'specialist_started',
+          agent: specialistAgent,
+          timestampMs: startTs,
+          details: { task: task.slice(0, 300) },
+        });
 
         // EPIC 4a: Emit worker_progress start event
         ctx.onProgress?.({
@@ -207,8 +242,7 @@ export async function executeV2Tool(
           status: 'running',
           metadata: { agentType: agentName, affectedFiles },
         });
-
-        const specialist = createSpecialist(agentName as SpecialistName);
+        const specialist = createSpecialist(specialistAgent);
         const scopedFiles = scopeFiles(ctx.files, affectedFiles);
 
         const agentContext: AgentContext = {
@@ -253,6 +287,19 @@ export async function executeV2Tool(
         const summary = truncate(
           `Specialist ${agentName} completed: ${changesCount} file(s) changed.${analysisBrief}`,
         );
+        const completeTs = Date.now();
+        ctx.onSpecialistLifecycleEvent?.({
+          type: 'completed',
+          agent: specialistAgent,
+          timestampMs: completeTs,
+          details: { changesCount, success: result.success },
+        });
+        ctx.onActivitySignal?.({
+          type: 'specialist_completed',
+          agent: specialistAgent,
+          timestampMs: completeTs,
+          details: { changesCount, success: result.success },
+        });
 
         // EPIC 4a: Emit worker_progress complete event
         ctx.onProgress?.({
@@ -271,6 +318,19 @@ export async function executeV2Tool(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[V2ToolExecutor] Specialist "${agentName}" failed:`, message);
+        const failTs = Date.now();
+        ctx.onSpecialistLifecycleEvent?.({
+          type: 'failed',
+          agent: specialistAgent,
+          timestampMs: failTs,
+          details: { error: message },
+        });
+        ctx.onActivitySignal?.({
+          type: 'specialist_failed',
+          agent: specialistAgent,
+          timestampMs: failTs,
+          details: { error: message },
+        });
         return {
           tool_use_id: toolCall.id,
           content: truncate(`Specialist failed: ${message}`),
@@ -291,6 +351,12 @@ export async function executeV2Tool(
       }
 
       try {
+        ctx.onActivitySignal?.({
+          type: 'review_started',
+          agent: 'review',
+          timestampMs: Date.now(),
+          details: { scope },
+        });
         const changesToReview =
           scope === 'all'
             ? ctx.accumulatedChanges
@@ -386,6 +452,15 @@ export async function executeV2Tool(
         console.log(
           `[V2ToolExecutor] Review done -- approved=${result.reviewResult?.approved ?? 'N/A'}`,
         );
+        ctx.onActivitySignal?.({
+          type: 'review_completed',
+          agent: 'review',
+          timestampMs: Date.now(),
+          details: {
+            approved: result.reviewResult?.approved ?? null,
+            issues: result.reviewResult?.issues.length ?? null,
+          },
+        });
 
         return { tool_use_id: toolCall.id, content: truncate(summary) };
       } catch (err) {
@@ -428,6 +503,116 @@ export async function executeV2Tool(
         return {
           tool_use_id: toolCall.id,
           content: truncate(`Second opinion failed: ${message}`),
+          is_error: true,
+        };
+      }
+    }
+
+    // -- create_plan ---------------------------------------------------------
+    case 'create_plan': {
+      const name = String(toolCall.input.name ?? '');
+      const content = String(toolCall.input.content ?? '');
+      const rawTodos = Array.isArray(toolCall.input.todos) ? toolCall.input.todos : [];
+      const todos = rawTodos.map((t: Record<string, unknown>) => ({
+        content: String(t.content ?? ''),
+        status: (t.status as 'pending' | 'in_progress' | 'completed') ?? undefined,
+      }));
+
+      if (!name || !content) {
+        return {
+          tool_use_id: toolCall.id,
+          content: 'Missing required fields: name and content.',
+          is_error: true,
+        };
+      }
+
+      try {
+        const plan = await createPlan(ctx.projectId, ctx.userId, name, content, todos);
+        return {
+          tool_use_id: toolCall.id,
+          content: JSON.stringify({ planId: plan.id, version: plan.version }),
+          planData: plan,
+        } as ToolResult;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          tool_use_id: toolCall.id,
+          content: truncate(`Failed to create plan: ${message}`),
+          is_error: true,
+        };
+      }
+    }
+
+    // -- update_plan ---------------------------------------------------------
+    case 'update_plan': {
+      const planId = String(toolCall.input.planId ?? '');
+      const expectedVersion = Number(toolCall.input.expectedVersion ?? -1);
+
+      if (!planId || expectedVersion < 0) {
+        return {
+          tool_use_id: toolCall.id,
+          content: 'Missing required fields: planId and expectedVersion.',
+          is_error: true,
+        };
+      }
+
+      const updates: { name?: string; content?: string; status?: Plan['status'] } = {};
+      if (toolCall.input.name !== undefined) updates.name = String(toolCall.input.name);
+      if (toolCall.input.content !== undefined) updates.content = String(toolCall.input.content);
+      if (toolCall.input.status !== undefined) updates.status = String(toolCall.input.status) as Plan['status'];
+
+      try {
+        const result = await updatePlan(planId, ctx.userId, updates, expectedVersion);
+
+        if ('conflict' in result) {
+          return {
+            tool_use_id: toolCall.id,
+            content: `Version conflict: expected ${expectedVersion}, current is ${result.currentVersion}. Re-read the plan and retry.`,
+            is_error: true,
+          };
+        }
+
+        return {
+          tool_use_id: toolCall.id,
+          content: JSON.stringify({ planId: result.id, version: result.version }),
+          planData: result,
+        } as ToolResult;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          tool_use_id: toolCall.id,
+          content: truncate(`Failed to update plan: ${message}`),
+          is_error: true,
+        };
+      }
+    }
+
+    // -- read_plan -----------------------------------------------------------
+    case 'read_plan': {
+      const planId = String(toolCall.input.planId ?? '');
+      if (!planId) {
+        return {
+          tool_use_id: toolCall.id,
+          content: 'Missing required field: planId.',
+          is_error: true,
+        };
+      }
+
+      try {
+        const text = await readPlanForAgent(planId);
+        if (!text) {
+          return {
+            tool_use_id: toolCall.id,
+            content: `Plan not found: ${planId}`,
+            is_error: true,
+          };
+        }
+        return { tool_use_id: toolCall.id, content: truncate(text) };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          tool_use_id: toolCall.id,
+          content: truncate(`Failed to read plan: ${message}`),
           is_error: true,
         };
       }

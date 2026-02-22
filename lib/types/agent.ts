@@ -13,6 +13,25 @@ export type IssueSeverity = 'error' | 'warning' | 'info';
 /** Execution status for agent runs */
 export type ExecutionStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'awaiting_approval';
 
+/** Structured orchestration signal types emitted during PM/specialist execution. */
+export type OrchestrationSignalType =
+  | 'specialist_dispatched'
+  | 'specialist_started'
+  | 'specialist_completed'
+  | 'specialist_failed'
+  | 'specialist_reaction'
+  | 'specialist_escalated'
+  | 'review_started'
+  | 'review_completed';
+
+/** Typed activity signal used for PM decisions and UI telemetry. */
+export interface OrchestrationActivitySignal {
+  type: OrchestrationSignalType;
+  agent: AgentType | 'review';
+  timestampMs: number;
+  details?: Record<string, unknown>;
+}
+
 /** A message exchanged between agents through the coordinator */
 export interface AgentMessage {
   id: string;
@@ -173,6 +192,15 @@ export interface AgentResult {
     model: string;
     provider: string;
     tier: string;
+    phaseDiagnostics?: {
+      finalPhase: string;
+      referentialMode?: boolean;
+      applyAttempted?: boolean;
+      replayArtifactsResolved?: number;
+      replayAppliedCount?: number;
+      replaySource?: string;
+      sessionId?: string;
+    };
   };
 }
 
@@ -248,6 +276,7 @@ export interface AgentExecution {
   id: string;
   project_id: string;
   user_id: string;
+  session_id: string | null;
   user_request: string;
   status: 'completed' | 'failed';
   execution_log: AgentMessage[];

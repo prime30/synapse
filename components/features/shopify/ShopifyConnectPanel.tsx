@@ -244,6 +244,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
         setScanResult(data.scanResult);
       }
 
+      emitPreviewSyncComplete(projectId);
       setPushNote('');
       await queryClient.invalidateQueries({
         queryKey: ['shopify-push-history', projectId],

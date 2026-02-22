@@ -192,8 +192,52 @@ interface SemanticInput {
 }
 
 /**
+ * Find the best matching region in file content for the given query tokens.
+ * Returns a line-numbered snippet centred on the highest-scoring line.
+ */
+function findBestMatchingRegion(
+  content: string,
+  query: string,
+  contextLines = 3,
+): { startLine: number; endLine: number; snippet: string } | null {
+  const lines = content.split('\n');
+  const queryTokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(t => t.length > 2);
+
+  if (queryTokens.length === 0 || lines.length === 0) return null;
+
+  let bestLine = -1;
+  let bestScore = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineLower = lines[i].toLowerCase();
+    let score = 0;
+    for (const token of queryTokens) {
+      if (lineLower.includes(token)) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestLine = i;
+    }
+  }
+
+  if (bestLine === -1 || bestScore === 0) return null;
+
+  const start = Math.max(0, bestLine - contextLines);
+  const end = Math.min(lines.length - 1, bestLine + contextLines);
+  const snippet = lines
+    .slice(start, end + 1)
+    .map((l, idx) => `${String(start + idx + 1).padStart(4)}: ${l}`)
+    .join('\n');
+
+  return { startLine: start + 1, endLine: end + 1, snippet };
+}
+
+/**
  * Search files by semantic relevance using fuzzy matching + optional embeddings.
- * Auto-hydrates top results with content excerpts.
+ * Returns ranked results with line-numbered excerpts pinned to the best matching region.
  */
 export async function executeSemanticSearch(
   input: SemanticInput,
@@ -205,46 +249,59 @@ export async function executeSemanticSearch(
     return { tool_use_id: '', content: 'Query is required.', is_error: true };
   }
 
-  // Primary: fuzzy match via ContextEngine
+  // Primary: fuzzy match via ContextEngine (always fast, always available)
   const fuzzyResults = ctx.contextEngine.fuzzyMatch(query, limit);
 
-  // Enhanced: try semantic search if projectId is available
-  let semanticResults: Array<{ fileId: string; fileName: string; similarity: number }> = [];
+  // Enhanced: chunk-level vector search via pgvector (gives back chunkText + location)
+  type VectorChunk = { fileId: string; fileName: string; chunkText: string; chunkIndex: number; similarity: number };
+  let vectorChunks: VectorChunk[] = [];
+
   if (ctx.projectId) {
     try {
-      // Dynamic import to avoid hard dependency on embeddings infrastructure
-      const { semanticFileSearch } = await import('@/lib/ai/embeddings');
-      semanticResults = await semanticFileSearch(ctx.projectId, query, limit);
+      const { generateEmbedding } = await import('@/lib/ai/embeddings');
+      const { similaritySearch } = await import('@/lib/ai/vector-store');
+      const queryVec = await generateEmbedding(query);
+      const raw = await similaritySearch(queryVec, limit * 2, ctx.projectId);
+      vectorChunks = raw.map(c => ({
+        fileId: c.fileId,
+        fileName: c.fileName,
+        chunkText: c.chunkText,
+        chunkIndex: c.chunkIndex,
+        similarity: c.similarity,
+      }));
     } catch {
-      // Embeddings not available — fall through to fuzzy-only
+      // Embeddings not configured — fall through to fuzzy-only
     }
   }
 
-  // Merge results: union of fuzzy + semantic, deduplicated by fileId
+  // Best chunk per file (highest similarity)
+  const bestChunkByFile = new Map<string, VectorChunk>();
+  for (const chunk of vectorChunks) {
+    const existing = bestChunkByFile.get(chunk.fileId);
+    if (!existing || chunk.similarity > existing.similarity) {
+      bestChunkByFile.set(chunk.fileId, chunk);
+    }
+  }
+
+  // Merge: fuzzy + vector, deduplicated by fileId
   const seen = new Set<string>();
   const merged: Array<{ fileId: string; fileName: string; score: number; source: string }> = [];
 
-  // Add fuzzy results first (they're fast and always available)
   for (const m of fuzzyResults) {
     if (!seen.has(m.fileId)) {
       seen.add(m.fileId);
-      merged.push({ fileId: m.fileId, fileName: m.fileName, score: 1.0, source: 'fuzzy' });
+      const vectorBoost = bestChunkByFile.get(m.fileId)?.similarity ?? 0;
+      merged.push({ fileId: m.fileId, fileName: m.fileName, score: 1.0 + vectorBoost, source: vectorBoost > 0 ? 'hybrid' : 'fuzzy' });
     }
   }
 
-  // Add semantic results (may overlap)
-  for (const s of semanticResults) {
-    if (!seen.has(s.fileId)) {
-      seen.add(s.fileId);
-      merged.push({ fileId: s.fileId, fileName: s.fileName, score: s.similarity, source: 'semantic' });
-    } else {
-      // Boost score if found by both methods
-      const existing = merged.find(m => m.fileId === s.fileId);
-      if (existing) existing.score += s.similarity;
+  for (const [fileId, chunk] of bestChunkByFile) {
+    if (!seen.has(fileId)) {
+      seen.add(fileId);
+      merged.push({ fileId, fileName: chunk.fileName, score: chunk.similarity, source: 'vector' });
     }
   }
 
-  // Sort by combined score (highest first)
   merged.sort((a, b) => b.score - a.score);
   const topResults = merged.slice(0, limit);
 
@@ -252,17 +309,30 @@ export async function executeSemanticSearch(
     return { tool_use_id: '', content: 'No matching files found.' };
   }
 
-  // Auto-hydrate top 5 results with content excerpts
+  // Hydrate top 5 files to locate the best matching region
   const topFileIds = topResults.slice(0, 5).map(r => r.fileId);
   const hydratedFiles = ctx.loadContent ? await ctx.loadContent(topFileIds) : [];
   const hydratedMap = new Map(hydratedFiles.map(f => [f.fileId, f]));
 
   const formatted = topResults.map((r, idx) => {
-    const file = hydratedMap.get(r.fileId);
-    const excerpt = file && !file.content.startsWith('[')
-      ? `\n   ${file.content.slice(0, 150).replace(/\n/g, ' ')}...`
-      : '';
-    return `${idx + 1}. ${r.fileName} [${r.source}]${excerpt}`;
+    const vectorChunk = bestChunkByFile.get(r.fileId);
+    let excerptBlock = '';
+
+    if (vectorChunk?.chunkText) {
+      // Use the actual chunk text from the vector index (already the relevant region)
+      const approxLine = vectorChunk.chunkIndex * 30 + 1;
+      excerptBlock = `\n  [~line ${approxLine}]\n${vectorChunk.chunkText.split('\n').slice(0, 8).map(l => `  ${l}`).join('\n')}`;
+    } else {
+      const file = hydratedMap.get(r.fileId);
+      if (file && !file.content.startsWith('[')) {
+        const region = findBestMatchingRegion(file.content, query);
+        if (region) {
+          excerptBlock = `\n  [lines ${region.startLine}–${region.endLine}]\n${region.snippet.split('\n').map(l => `  ${l}`).join('\n')}`;
+        }
+      }
+    }
+
+    return `${idx + 1}. ${r.fileName} [${r.source}]${excerptBlock}`;
   }).join('\n\n');
 
   return { tool_use_id: '', content: formatted };

@@ -10,19 +10,23 @@ export async function GET(request: NextRequest) {
     const supabase = await createReadClient();
 
     const projectId = request.nextUrl.searchParams.get('projectId');
+    const sessionId = request.nextUrl.searchParams.get('sessionId');
     const limit = parseInt(request.nextUrl.searchParams.get('limit') ?? '20', 10);
     const page = parseInt(request.nextUrl.searchParams.get('page') ?? '1', 10);
     const offset = (page - 1) * limit;
 
     let query = supabase
       .from('agent_executions')
-      .select('id, project_id, user_request, status, started_at, completed_at')
+      .select('id, project_id, session_id, user_request, status, started_at, completed_at')
       .eq('user_id', userId)
       .order('started_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (projectId) {
       query = query.eq('project_id', projectId);
+    }
+    if (sessionId) {
+      query = query.eq('session_id', sessionId);
     }
 
     const { data, error } = await query;

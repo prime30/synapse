@@ -26,7 +26,7 @@ export function spendingAlertEmail(opts: SpendingAlertOptions): { subject: strin
           <!-- Header -->
           <tr>
             <td style="background-color: #f59e0b; padding: 24px 32px;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;">⚠️ Spending Alert</h1>
+              <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;">Spending Alert</h1>
             </td>
           </tr>
           <!-- Body -->

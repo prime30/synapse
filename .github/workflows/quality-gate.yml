@@ -8,7 +8,7 @@ on:
 
 jobs:
   quality:
-    name: Test, Lint, Type-check
+    name: Test, Lint, Type-check, CX Harness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,40 @@ jobs:
 
       - name: Type check
         run: npm run type-check
+
+      - name: Synapse prompt-first CX harness
+        run: npm run synapse:harness:cx:ci
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder' }}
+
+      - name: Upload CX harness summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-cx-summary
+          path: .verification/synapse-cx-summary.json
+          if-no-files-found: warn
+
+      - name: Finetune evaluation gate
+        run: npm run finetune:eval:ci
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder' }}
+
+      - name: Upload finetune eval summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finetune-eval-summary
+          path: .verification/finetune-eval-summary.json
+          if-no-files-found: warn
 
       - name: Format check
         run: npm run format:check

@@ -93,7 +93,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'semantic_search',
-    description: 'Search for files by meaning and relevance. Returns ranked results with excerpts. Use when you need to find files related to a concept rather than an exact text match.',
+    description: 'Search for files by meaning and relevance. Returns ranked results with line-numbered code excerpts pinned to the most relevant region. Use when you need to find files related to a concept rather than an exact text match.',
     input_schema: {
       type: 'object',
       properties: {
@@ -101,6 +101,35 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         limit: { type: 'number', description: 'Max results (default 10)' },
       },
       required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'extract_region',
+    description:
+      'Extract a specific named region from a file — function, CSS selector, Liquid block, schema setting, or any named symbol. ' +
+      'Returns the exact line range and a line-numbered snippet. ' +
+      'Always call this BEFORE search_replace on files you have not fully read, to get the precise surrounding context needed for a successful patch.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'File ID or file name to search within',
+        },
+        hint: {
+          type: 'string',
+          description:
+            'What to find: function name (e.g. "addToCart"), CSS selector (e.g. ".hero__title"), ' +
+            'Liquid block/tag (e.g. "{% schema %}"), schema setting key (e.g. "heading_size"), ' +
+            'or any identifier',
+        },
+        contextLines: {
+          type: 'number',
+          description: 'Extra lines of context around a fuzzy match (default 4)',
+        },
+      },
+      required: ['fileId', 'hint'],
       additionalProperties: false,
     },
   },
@@ -581,6 +610,64 @@ export const CREATE_FILE_TOOL: ToolDefinition = {
       reasoning: { type: 'string', description: 'Why this file is needed' },
     },
     required: ['fileName', 'content'],
+    additionalProperties: false,
+  },
+};
+
+// ── Plan management tools (agent-facing, persistent plans) ──────────────────
+
+export const CREATE_PLAN_TOOL: ToolDefinition = {
+  name: 'create_plan',
+  description: 'Create a persistent plan with todos. The plan is saved to the database and shown as a card in chat.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Plan name/title' },
+      content: { type: 'string', description: 'Plan content in markdown' },
+      todos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Todo description' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+          },
+          required: ['content'],
+        },
+        description: 'List of actionable todos',
+      },
+    },
+    required: ['name', 'content', 'todos'],
+    additionalProperties: false,
+  },
+};
+
+export const UPDATE_PLAN_TOOL: ToolDefinition = {
+  name: 'update_plan',
+  description: 'Update an existing plan. Can change content, status, or todos. Requires the plan ID and expected version for conflict safety.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', description: 'Plan ID to update' },
+      expectedVersion: { type: 'number', description: 'Current version of the plan (for conflict detection)' },
+      name: { type: 'string' },
+      content: { type: 'string' },
+      status: { type: 'string', enum: ['draft', 'active', 'archived'] },
+    },
+    required: ['planId', 'expectedVersion'],
+    additionalProperties: false,
+  },
+};
+
+export const READ_PLAN_TOOL: ToolDefinition = {
+  name: 'read_plan',
+  description: 'Read a plan by ID to get its full content and todos. Use this before building or refining a plan.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', description: 'Plan ID to read' },
+    },
+    required: ['planId'],
     additionalProperties: false,
   },
 };

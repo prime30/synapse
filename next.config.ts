@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: false,
   reactCompiler: true,
+  turbopack: {},
   outputFileTracingRoot: __dirname,
   serverExternalPackages: ['@sparticuz/chromium-min', 'puppeteer-core', 'node-cron'],
   webpack: (config: any, { isServer, dev }: { isServer: boolean; dev: boolean }) => {

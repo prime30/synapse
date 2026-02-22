@@ -114,6 +114,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 const postSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  /** Reuse the newest empty active session instead of always creating a new one. */
+  reuseEmpty: z.boolean().optional(),
 });
 
 /**
@@ -130,6 +132,56 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = await request.json().catch(() => ({}));
     const parsed = postSchema.safeParse(body);
     const title = parsed.success ? parsed.data.title : undefined;
+    const reuseEmpty = parsed.success ? Boolean(parsed.data.reuseEmpty) : false;
+
+    if (reuseEmpty) {
+      // Reuse the newest active session with zero messages to avoid piling up empty drafts.
+      const { data: candidates, error: candidateError } = await supabase
+        .from('ai_sessions')
+        .select('id, title, created_at, updated_at')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .is('archived_at', null)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+
+      if (candidateError) throw candidateError;
+
+      const sessionIds = (candidates ?? []).map((s) => s.id);
+      if (sessionIds.length > 0) {
+        let countsBySession: Record<string, number> = {};
+        const { data: countRows, error: countError } = await supabase
+          .rpc('count_messages_by_session', { session_ids: sessionIds });
+
+        if (!countError && countRows) {
+          for (const row of countRows as Array<{ session_id: string; count: number }>) {
+            countsBySession[row.session_id] = row.count;
+          }
+        } else {
+          const { data: rawCounts, error: rawError } = await supabase
+            .from('ai_messages')
+            .select('session_id')
+            .in('session_id', sessionIds);
+          if (rawError) throw rawError;
+          countsBySession = (rawCounts ?? []).reduce<Record<string, number>>((acc, row) => {
+            acc[row.session_id] = (acc[row.session_id] ?? 0) + 1;
+            return acc;
+          }, {});
+        }
+
+        const reusable = (candidates ?? []).find((s) => (countsBySession[s.id] ?? 0) === 0);
+        if (reusable) {
+          return successResponse({
+            id: reusable.id,
+            title: reusable.title,
+            createdAt: reusable.created_at,
+            updatedAt: reusable.updated_at,
+            messageCount: 0,
+            reused: true,
+          });
+        }
+      }
+    }
 
     const { data: session, error } = await supabase
       .from('ai_sessions')
@@ -157,6 +209,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       createdAt: session.created_at,
       updatedAt: session.updated_at,
       messageCount: 0,
+      reused: false,
     });
   } catch (error) {
     return handleAPIError(error);

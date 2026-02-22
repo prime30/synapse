@@ -148,7 +148,10 @@ export function ThemeConsole({
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Close console' : 'Open console'}
       >
-        <span>{isOpen ? '▼' : '▲'} Console</span>
+        <span className="inline-flex items-center gap-1">
+          {isOpen ? ChevronDownIcon : ChevronRightIcon}
+          Console
+        </span>
         <span className="flex items-center gap-1.5">
           {(['diagnostics', 'push-log', 'theme-check', 'tasks'] as const).map((tab) => {
             const n = counts[tab] ?? 0;

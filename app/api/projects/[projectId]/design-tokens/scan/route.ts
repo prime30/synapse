@@ -175,40 +175,37 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           total: files.length,
         });
 
-        // ── Phase: reading (5–35) ────────────────────────────────────
+        // ── Phase: reading (5–35) — parallelized in chunks ───────────
         const ingestionFiles: { id: string; path: string; content: string }[] = [];
+        const CHUNK_SIZE = 20;
 
-        for (let i = 0; i < files.length; i++) {
+        for (let start = 0; start < files.length; start += CHUNK_SIZE) {
           if (abortSignal.aborted) { controller.close(); return; }
 
-          const f = files[i];
-          const fileName = (f.path ?? f.name) as string;
+          const chunk = files.slice(start, start + CHUNK_SIZE);
+          const results = await Promise.all(
+            chunk.map(async (f) => {
+              try {
+                const fullFile = await getFile(f.id as string);
+                const content = fullFile?.content;
+                if (typeof content === 'string' && content.length > 0) {
+                  return { id: f.id as string, path: (f.path ?? f.name) as string, content };
+                }
+              } catch { /* skip unreadable */ }
+              return null;
+            }),
+          );
+          for (const r of results) { if (r) ingestionFiles.push(r); }
 
-          // Only send progress every few files to avoid flooding
-          if (i % 3 === 0 || i === files.length - 1) {
-            send({
-              type: 'progress',
-              phase: 'reading',
-              message: `Reading ${fileName}`,
-              percent: 5 + Math.round(((i + 1) / files.length) * 30),
-              current: i + 1,
-              total: files.length,
-            });
-          }
-
-          try {
-            const fullFile = await getFile(f.id as string);
-            const content = fullFile?.content;
-            if (typeof content === 'string' && content.length > 0) {
-              ingestionFiles.push({
-                id: f.id as string,
-                path: fileName,
-                content,
-              });
-            }
-          } catch {
-            // Skip unreadable files
-          }
+          const progress = Math.min(start + CHUNK_SIZE, files.length);
+          send({
+            type: 'progress',
+            phase: 'reading',
+            message: `Reading files (${progress}/${files.length})`,
+            percent: 5 + Math.round((progress / files.length) * 30),
+            current: progress,
+            total: files.length,
+          });
         }
 
         if (abortSignal.aborted) { controller.close(); return; }

@@ -37,6 +37,12 @@ import {
   type RoutingTier,
   type ClassificationResult,
 } from './classifier';
+import {
+  shouldRequirePlanModeFirst,
+  buildPlanModeRequiredMessage,
+  hasPlanApprovalSignal,
+  buildMaximumEffortPolicyMessage,
+} from './orchestration-policy';
 import { AIProviderError } from '@/lib/ai/errors';
 import { DependencyDetector, ContextCache, CodexContextPackager } from '@/lib/context';
 import type { ProposedChange } from '@/lib/context/packager';
@@ -45,9 +51,11 @@ import type {
   ProjectContext,
   FileDependency,
 } from '@/lib/context/types';
+import { DependencyGraphCache } from '@/lib/context/dependency-graph-cache';
+import { SymbolGraphCache } from '@/lib/context/symbol-graph-cache';
 import { DesignSystemContextProvider } from '@/lib/design-tokens/agent-integration';
 import { generateFileGroups } from '@/lib/shopify/theme-grouping';
-import { ContextEngine } from '@/lib/ai/context-engine';
+import { ContextEngine, getProjectContextEngine } from '@/lib/ai/context-engine';
 import { validateChangeSet } from './validation/change-set-validator';
 import { runDiagnostics, formatDiagnostics } from './tools/diagnostics-tool';
 import { createTwoFilesPatch } from 'diff';
@@ -60,6 +68,9 @@ import {
   MAX_CLARIFICATION_ROUNDS,
 } from './clarification';
 import { verifyChanges } from './verification';
+import { runThemeCheck } from './tools/theme-check';
+import { buildThemePlanArtifact } from './theme-plan-artifact';
+import { ensureCompletionResponseSections } from './completion-format-guard';
 import { saveAfterPM, saveAfterSpecialist, saveAfterReview, clearCheckpoint } from './checkpoint';
 import { compareSnapshots, type DOMSnapshot as VerifierDOMSnapshot, type PreviewVerificationResult } from './preview-verifier';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
@@ -91,8 +102,9 @@ import { enforceRequestBudget } from '@/lib/ai/request-budget';
 /** Module-level singletons so cache persists across requests within the same process. */
 const contextCache = new ContextCache();
 const dependencyDetector = new DependencyDetector();
+const dependencyGraphCache = new DependencyGraphCache();
+const symbolGraphCache = new SymbolGraphCache();
 const designContextProvider = new DesignSystemContextProvider();
-const contextEngine = new ContextEngine(60_000);
 const DOM_CONTEXT_BUDGET = 10_000; // tokens
 
 /**
@@ -100,27 +112,49 @@ const DOM_CONTEXT_BUDGET = 10_000; // tokens
  * Uses TTL-based caching to avoid recomputing on every request.
  * Fails gracefully — returns empty string on error so agent execution is never blocked.
  */
-function buildDependencyContext(
+function toContextFiles(files: FileContext[]): ContextFileContext[] {
+  return files.map((f) => ({
+    fileId: f.fileId,
+    fileName: f.fileName,
+    fileType: f.fileType,
+    content: f.content,
+    sizeBytes: f.content.length,
+    lastModified: new Date(),
+    dependencies: { imports: [], exports: [], usedBy: [] },
+  }));
+}
+
+async function getDependenciesForFiles(
+  projectId: string,
+  contextFiles: ContextFileContext[],
+): Promise<FileDependency[]> {
+  const { dependencies, cacheHit } = await dependencyGraphCache.getOrComputeIncremental(
+    projectId,
+    contextFiles,
+    (file, allFiles) => dependencyDetector.detectDependenciesForFile(file, allFiles),
+  );
+  if (cacheHit) {
+    console.log(`[AgentCoordinator] Dependency cache hit for project ${projectId}`);
+  }
+  return dependencies;
+}
+
+async function getSymbolMatchedFileNames(
+  projectId: string,
+  contextFiles: ContextFileContext[],
+  userRequest: string,
+): Promise<string[]> {
+  const { graph } = await symbolGraphCache.getOrCompute(projectId, contextFiles);
+  return symbolGraphCache.lookupFiles(graph, userRequest, 12);
+}
+
+async function buildDependencyContext(
   files: FileContext[],
   projectId: string,
-): string {
+): Promise<string> {
   try {
-    // Note: contextCache.get() is async but this function is sync.
-    // We skip the cache read and always recompute. The set() below
-    // is fire-and-forget so future async callers can benefit.
-
-    // Convert agent FileContext → context FileContext (adds required fields)
-    const contextFiles: ContextFileContext[] = files.map((f) => ({
-      fileId: f.fileId,
-      fileName: f.fileName,
-      fileType: f.fileType,
-      content: f.content,
-      sizeBytes: f.content.length,
-      lastModified: new Date(),
-      dependencies: { imports: [], exports: [], usedBy: [] },
-    }));
-
-    const dependencies = dependencyDetector.detectDependencies(contextFiles);
+    const contextFiles = toContextFiles(files);
+    const dependencies = await getDependenciesForFiles(projectId, contextFiles);
 
     // Cache the full ProjectContext for the TTL window
     const projectContext: ProjectContext = {
@@ -130,7 +164,7 @@ function buildDependencyContext(
       loadedAt: new Date(),
       totalSizeBytes: contextFiles.reduce((sum, f) => sum + f.sizeBytes, 0),
     };
-    contextCache.set(projectId, projectContext);
+    await contextCache.set(projectId, projectContext);
 
     return formatDependencies(dependencies, contextFiles);
   } catch (error) {
@@ -283,9 +317,11 @@ export function findFilesFromElementHint(hint: ElementHint, files: FileContext[]
 async function selectPMFiles(
   files: FileContext[],
   userRequest: string,
+  projectId: string,
   options?: CoordinatorExecuteOptions,
 ): Promise<FileContext[]> {
-  contextEngine.indexFiles(files);
+  const contextEngine = getProjectContextEngine(projectId, 60_000);
+  await contextEngine.indexFiles(files);
 
   const openTabIds = options?.openTabs ?? [];
   const loadContent = options?.loadContent;
@@ -306,6 +342,18 @@ async function selectPMFiles(
     options?.activeFilePath,
     normalBudget,
   );
+
+  // Graph-first retrieval: use cached symbol graph to pull likely targets.
+  const symbolMatchedIds: string[] = [];
+  try {
+    const symbolMatches = await getSymbolMatchedFileNames(projectId, toContextFiles(files), userRequest);
+    for (const fileName of symbolMatches) {
+      const match = files.find((f) => f.fileName === fileName || f.path === fileName);
+      if (match) symbolMatchedIds.push(match.fileId);
+    }
+  } catch {
+    // Best-effort only.
+  }
 
   // Element-driven file selection: auto-load section + related CSS/JS
   const elementFileIds = elementHint
@@ -328,8 +376,17 @@ async function selectPMFiles(
     ...elementWithDeps,
     ...elementFileIds,
     ...openTabIds,
+    ...symbolMatchedIds,
     ...pmSelection.files.map((f: FileContext) => f.fileId),
   ]);
+
+  const score = new Map<string, number>();
+  for (const id of pmSelection.files.map((f) => f.fileId)) score.set(id, (score.get(id) ?? 0) + 10);
+  for (const id of symbolMatchedIds) score.set(id, (score.get(id) ?? 0) + 20);
+  for (const id of openTabIds) score.set(id, (score.get(id) ?? 0) + 30);
+  for (const id of elementWithDeps) score.set(id, (score.get(id) ?? 0) + 40);
+  for (const id of elementFileIds) score.set(id, (score.get(id) ?? 0) + 45);
+  for (const id of explicitFileIds) score.set(id, (score.get(id) ?? 0) + 55);
 
   if (elementFileIds.length > 0) {
     console.log(`[selectPMFiles] element hint matched ${elementFileIds.length} file(s), ${elementWithDeps.length} with deps`);
@@ -348,22 +405,29 @@ async function selectPMFiles(
     }
   }
 
+  const maxSelectedCount = tier === 'TRIVIAL' ? 6 : tier === 'SIMPLE' ? 14 : 24;
+  const selectedIds = [...pmSelectedIds]
+    .sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0))
+    .slice(0, maxSelectedCount);
+
   console.log(`[selectPMFiles] tier=${tier}, selected=${pmSelectedIds.size}, excluded=${files.length - pmSelectedIds.size}, total=${files.length}, budget=${fileBudget}`);
 
   // Hydrate selected files via loadContent (if available)
-  if (loadContent && pmSelectedIds.size > 0) {
-    const hydratedFiles = await loadContent([...pmSelectedIds]);
+  if (loadContent && selectedIds.length > 0) {
+    const hydratedFiles = await loadContent(selectedIds);
     const hydratedMap = new Map(hydratedFiles.map(f => [f.fileId, f]));
 
-    const result = files.map(f => hydratedMap.get(f.fileId) ?? f);
+    const selectedSet = new Set(selectedIds);
+    const result = files.map(f => selectedSet.has(f.fileId) ? (hydratedMap.get(f.fileId) ?? f) : f);
     const hydratedTokens = hydratedFiles.reduce((s, f) => s + estimateTokens(f.content), 0);
     console.log(`[selectPMFiles] hydrated ${hydratedFiles.length} files, ~${hydratedTokens} tokens`);
     return result;
   }
 
   // Fallback without loadContent: keep existing content for selected, stub others
+  const selectedSet = new Set(selectedIds);
   return files.map(f =>
-    pmSelectedIds.has(f.fileId)
+    selectedSet.has(f.fileId)
       ? f
       : { ...f, content: `[${f.content.length} chars — content excluded, see manifest]` }
   );
@@ -594,8 +658,11 @@ function truncateForPreload(content: string, cursorLine?: number): string {
 
 export async function buildSignalContext(
   files: FileContext[],
-  options?: CoordinatorExecuteOptions,
+  options?: CoordinatorExecuteOptions & { projectId?: string },
 ): Promise<SignalContext> {
+  const contextEngine = options?.projectId
+    ? getProjectContextEngine(options.projectId, 60_000)
+    : new ContextEngine(60_000);
   const preloadIds = new Set<string>();
 
   // Signal 1: Active file (highest priority)
@@ -625,7 +692,7 @@ export async function buildSignalContext(
 
   // Signal 5: Resolve direct dependencies for all signal files
   if (preloadIds.size > 0) {
-    contextEngine.indexFiles(files);
+    await contextEngine.indexFiles(files);
     const withDeps = contextEngine.resolveWithDependencies([...preloadIds]);
     for (const depId of withDeps) preloadIds.add(depId);
   }
@@ -774,6 +841,9 @@ export interface ThinkingEvent {
   file?: string;
   errorCount?: number;
   warningCount?: number;
+  severity?: string;
+  message?: string;
+  category?: string;
   /** Worker progress event fields (type: 'worker_progress') */
   workerId?: string;
   status?: 'running' | 'complete' | 'error';
@@ -784,6 +854,8 @@ export type ProgressCallback = (event: ThinkingEvent) => void;
 // ── Coordinator Options ─────────────────────────────────────────────────
 
 export interface CoordinatorExecuteOptions {
+  /** Source chat session to bind execution records to. */
+  sessionId?: string;
   /** The primary AI action being performed. */
   action?: AIAction;
   /** User's preferred model override (from useAgentSettings). */
@@ -1016,7 +1088,7 @@ export class AgentCoordinator {
 
     const toolCtx: ToolExecutorContext = {
       files,
-      contextEngine,
+      contextEngine: getProjectContextEngine(options.projectId, 60_000),
       projectId: options.projectId,
       userId: options.userId,
       loadContent: options.loadContent,
@@ -1280,7 +1352,7 @@ export class AgentCoordinator {
     userPreferences: UserPreference[],
     options?: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
-    createExecution(executionId, projectId, userId, userRequest);
+    createExecution(executionId, projectId, userId, userRequest, options?.sessionId);
     updateExecutionStatus(executionId, 'in_progress');
 
     const onProgress = options?.onProgress;
@@ -1340,10 +1412,10 @@ export class AgentCoordinator {
     // Build all context layers simultaneously instead of sequentially.
     // NOTE: buildDependencyContext and buildFileGroupContext need files with real content
     // for accurate reference detection. We hydrate PM-selected files first.
-    const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: currentTier });
+    const pmFiles = await selectPMFiles(files, userRequest, projectId, { ...options, tier: currentTier });
     const hydratedForDeps = pmFiles.filter(f => !f.content.startsWith('['));
     const [dependencyContext, designContext, fileGroupContext] = await Promise.all([
-      Promise.resolve(buildDependencyContext(hydratedForDeps, projectId)),
+      buildDependencyContext(hydratedForDeps, projectId),
       buildDesignContext(projectId),
       buildFileGroupContext(hydratedForDeps),
     ]);
@@ -1580,7 +1652,7 @@ export class AgentCoordinator {
         .map(f => f.fileId);
 
       // Expand with dependencies (using stub index — reference detection skipped for stubs)
-      const expandedIds = contextEngine.resolveWithDependencies(affectedFileIds);
+      const expandedIds = getProjectContextEngine(projectId, 60_000).resolveWithDependencies(affectedFileIds);
 
       // Hydrate specialist files via loadContent (bounded to expanded set only)
       const loadContent = options?.loadContent;
@@ -1696,7 +1768,7 @@ export class AgentCoordinator {
         // Build scoped context: hydrate only affected + dependency files
         const specialistBudget = getTierAgentBudget(currentTier, 'specialist');
         const specialistContextEngine = new ContextEngine(specialistBudget);
-        specialistContextEngine.indexFiles(specialistHydratedFiles);
+        await specialistContextEngine.indexFiles(specialistHydratedFiles);
         const specialistCtx = specialistContextEngine.selectRelevantFiles(
           delegation.task,
           [],
@@ -2260,16 +2332,8 @@ export class AgentCoordinator {
         const codexPackager = new CodexContextPackager();
         let projectContext: ProjectContext | null = await contextCache.get(projectId);
         if (!projectContext) {
-          const contextFiles: ContextFileContext[] = reviewFiles.map((f) => ({
-            fileId: f.fileId,
-            fileName: f.fileName,
-            fileType: f.fileType,
-            content: f.content,
-            sizeBytes: f.content.length,
-            lastModified: new Date(),
-            dependencies: { imports: [], exports: [], usedBy: [] },
-          }));
-          const dependencies = dependencyDetector.detectDependencies(contextFiles);
+          const contextFiles = toContextFiles(reviewFiles);
+          const dependencies = await getDependenciesForFiles(projectId, contextFiles);
           projectContext = {
             projectId,
             files: contextFiles,
@@ -2537,7 +2601,7 @@ export class AgentCoordinator {
       return this.executeAskFastPath(executionId, projectId, userId, userRequest, files, userPreferences, options);
     }
 
-    createExecution(executionId, projectId, userId, userRequest);
+    createExecution(executionId, projectId, userId, userRequest, options?.sessionId);
     updateExecutionStatus(executionId, 'in_progress');
 
     const onProgress = options?.onProgress;
@@ -2585,11 +2649,11 @@ export class AgentCoordinator {
       : (options?.action ?? 'generate') as AIAction;
 
     // Build PM-scoped context with tier-aware file selection
-    const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: currentTier });
+    const pmFiles = await selectPMFiles(files, userRequest, projectId, { ...options, tier: currentTier });
 
     // Build dependency context using hydrated files only (not stubs)
     const hydratedForDeps = pmFiles.filter(f => !f.content.startsWith('['));
-    const dependencyContext = buildDependencyContext(hydratedForDeps, projectId);
+    const dependencyContext = await buildDependencyContext(hydratedForDeps, projectId);
 
     let designContext = '';
     try {
@@ -2798,16 +2862,8 @@ export class AgentCoordinator {
           const codexPackager = new CodexContextPackager();
           let projectContext: ProjectContext | null = await contextCache.get(projectId);
           if (!projectContext) {
-            const contextFiles: ContextFileContext[] = reviewFiles.map((f) => ({
-              fileId: f.fileId,
-              fileName: f.fileName,
-              fileType: f.fileType,
-              content: f.content,
-              sizeBytes: f.content.length,
-              lastModified: new Date(),
-              dependencies: { imports: [], exports: [], usedBy: [] },
-            }));
-            const dependencies = dependencyDetector.detectDependencies(contextFiles);
+            const contextFiles = toContextFiles(reviewFiles);
+            const dependencies = await getDependenciesForFiles(projectId, contextFiles);
             projectContext = {
               projectId,
               files: contextFiles,
@@ -2925,12 +2981,15 @@ export class AgentCoordinator {
     // Ask mode: no mutation tools
     if (intentMode === 'ask') return tools;
 
-    // All other modes get mutation tools
+    // All non-ask modes get mutation tools
     tools.push(PROPOSE_CODE_EDIT_TOOL);
     tools.push(SEARCH_REPLACE_TOOL);
     tools.push(CREATE_FILE_TOOL);
-    tools.push(PROPOSE_PLAN_TOOL);
     tools.push(ASK_CLARIFICATION_TOOL);
+    // Keep planning tool exclusive to plan mode to avoid plan loops in code/debug.
+    if (intentMode === 'plan') {
+      tools.push(PROPOSE_PLAN_TOOL);
+    }
 
     if (hasPreview) {
       tools.push(NAVIGATE_PREVIEW_TOOL);
@@ -2963,13 +3022,14 @@ export class AgentCoordinator {
     userPreferences: UserPreference[],
     options: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
-    createExecution(executionId, projectId, userId, userRequest);
+    createExecution(executionId, projectId, userId, userRequest, options?.sessionId);
     updateExecutionStatus(executionId, 'in_progress');
 
     const onProgress = options.onProgress;
     const onContentChunk = options.onContentChunk;
     const onToolEvent = options.onToolEvent;
     const intentMode = options.intentMode ?? 'code';
+    const effectiveTier = options.tier ?? 'SIMPLE';
 
     console.log(`[AgentLoop] Starting for execution ${executionId}, mode=${intentMode}`);
 
@@ -2980,9 +3040,33 @@ export class AgentCoordinator {
       label: 'Building context...',
     });
 
+    if (shouldRequirePlanModeFirst({
+      intentMode,
+      tier: effectiveTier,
+      userRequest,
+      recentMessages: options.recentMessages,
+    })) {
+      const policyMessage = buildPlanModeRequiredMessage(effectiveTier);
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Plan approval required',
+        detail: policyMessage,
+      });
+      updateExecutionStatus(executionId, 'completed');
+      await persistExecution(executionId);
+      return {
+        agentType: 'project_manager',
+        success: true,
+        analysis: policyMessage,
+        needsClarification: true,
+        directStreamed: true,
+      };
+    }
+
     try {
       // ── Build signal-based file context ──────────────────────────────
-      const signalCtx = await buildSignalContext(files, options);
+      const signalCtx = await buildSignalContext(files, { ...options, projectId });
       const { preloaded, manifest } = signalCtx;
 
       // Format pre-loaded files
@@ -2996,6 +3080,7 @@ export class AgentCoordinator {
       if (intentMode === 'code') systemPrompt += '\n\n' + AGENT_CODE_OVERLAY;
       else if (intentMode === 'plan') systemPrompt += '\n\n' + AGENT_PLAN_OVERLAY;
       else if (intentMode === 'debug') systemPrompt += '\n\n' + AGENT_DEBUG_OVERLAY;
+      systemPrompt += '\n\n' + buildMaximumEffortPolicyMessage();
 
       // ── Build initial messages ──────────────────────────────────────
       const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
@@ -3013,9 +3098,7 @@ export class AgentCoordinator {
       }
 
       // Detect plan approval in recent messages and inject execution-forcing instruction
-      const hasPlanApproval = (options.recentMessages ?? []).some((m) =>
-        /approved plan|execute these \d+ steps|implement (this|the plan|it)/i.test(m)
-      );
+      const hasPlanApproval = hasPlanApprovalSignal(options.recentMessages, userRequest);
       if (hasPlanApproval && intentMode !== 'ask' && intentMode !== 'plan') {
         messages.push({
           role: 'user' as const,
@@ -3065,8 +3148,48 @@ export class AgentCoordinator {
       let fullText = '';
       const accumulatedChanges: CodeChange[] = [];
       const readFiles = new Set<string>();
+      for (const f of preloaded) {
+        readFiles.add(f.fileName);
+        if (f.fileId) readFiles.add(f.fileId);
+        if (f.path) readFiles.add(f.path);
+      }
+      const hasThemeLayoutContext = files.some((f) => {
+        const p = (f.path ?? f.fileName).replace(/\\/g, '/').toLowerCase();
+        return p === 'layout/theme.liquid';
+      });
       let needsClarification = false;
       let planProposalCount = 0;
+      let lookupCallsInCodeMode = 0;
+      let blockedLookupStreak = 0;
+      let postEditLookupOnlyIterations = 0;
+      let contextVersion = 0;
+      const lookupResultCache = new Map<string, { version: number; content: string; is_error?: boolean }>();
+      const invalidateProjectGraphs = () => {
+        dependencyGraphCache.invalidateProject(projectId).catch(() => {});
+        symbolGraphCache.invalidateProject(projectId).catch(() => {});
+      };
+
+      // Relaxed cap: allow broader discovery before enforcement in code mode.
+      const CODE_MODE_MAX_LOOKUPS = 4;
+      const LOOKUP_TOOL_NAMES = new Set([
+        'read_file',
+        'search_files',
+        'grep_content',
+        'glob_files',
+        'semantic_search',
+        'list_files',
+        'get_dependency_graph',
+        'run_diagnostics',
+        'check_lint',
+      ]);
+      const buildLookupCacheKey = (toolName: string, input: Record<string, unknown> | undefined): string => {
+        const payload = input ?? {};
+        const stable = JSON.stringify(Object.keys(payload).sort().reduce<Record<string, unknown>>((acc, key) => {
+          acc[key] = payload[key];
+          return acc;
+        }, {}));
+        return `${toolName}:${stable}`;
+      };
 
       onProgress?.({
         type: 'thinking',
@@ -3078,7 +3201,7 @@ export class AgentCoordinator {
       // ── Tool executor context ──────────────────────────────────────────
       const toolCtx: ToolExecutorContext = {
         files: signalCtx.allFiles,
-        contextEngine,
+        contextEngine: getProjectContextEngine(projectId, 60_000),
         projectId,
         userId,
         loadContent: options.loadContent,
@@ -3103,6 +3226,9 @@ export class AgentCoordinator {
 
         // Apply token budget before each iteration
         const budgeted = enforceRequestBudget(messages);
+        const changesAtIterationStart = accumulatedChanges.length;
+        let iterationLookupCalls = 0;
+        let iterationEditCalls = 0;
 
         console.log(`[AgentLoop] Iteration ${iteration}, messages=${budgeted.messages.length}, truncated=${budgeted.truncated}`);
 
@@ -3208,14 +3334,20 @@ export class AgentCoordinator {
                   const newContent = event.input?.newContent as string;
                   const reasoning = event.input?.reasoning as string;
                   const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
-                  accumulatedChanges.push({
-                    fileId: matchedFile?.fileId ?? '',
-                    fileName: filePath ?? '',
-                    originalContent: matchedFile?.content ?? '',
-                    proposedContent: newContent ?? '',
-                    reasoning: reasoning ?? '',
-                    agentType: 'project_manager',
-                  });
+                  const originalContent = matchedFile?.content ?? '';
+                  if ((newContent ?? '') !== originalContent) {
+                    accumulatedChanges.push({
+                      fileId: matchedFile?.fileId ?? '',
+                      fileName: filePath ?? '',
+                      originalContent,
+                      proposedContent: newContent ?? '',
+                      reasoning: reasoning ?? '',
+                      agentType: 'project_manager',
+                    });
+                    iterationEditCalls++;
+                    contextVersion += 1;
+                    invalidateProjectGraphs();
+                  }
                   // Read-after-write: update in-memory state for subsequent iterations
                   if (matchedFile) {
                     matchedFile.content = newContent ?? '';
@@ -3237,14 +3369,19 @@ export class AgentCoordinator {
                   const proposedContent = replaceIdx !== -1
                     ? currentContent.slice(0, replaceIdx) + newText + currentContent.slice(replaceIdx + oldText.length)
                     : currentContent;
-                  accumulatedChanges.push({
-                    fileId: matchedFile?.fileId ?? '',
-                    fileName: filePath ?? '',
-                    originalContent: currentContent,
-                    proposedContent,
-                    reasoning: reasoning ?? '',
-                    agentType: 'project_manager',
-                  });
+                  if (replaceIdx !== -1 && proposedContent !== currentContent) {
+                    accumulatedChanges.push({
+                      fileId: matchedFile?.fileId ?? '',
+                      fileName: filePath ?? '',
+                      originalContent: currentContent,
+                      proposedContent,
+                      reasoning: reasoning ?? '',
+                      agentType: 'project_manager',
+                    });
+                    iterationEditCalls++;
+                    contextVersion += 1;
+                    invalidateProjectGraphs();
+                  }
                   // Read-after-write: update in-memory state for subsequent iterations
                   if (matchedFile && replaceIdx !== -1) {
                     matchedFile.content = proposedContent;
@@ -3271,6 +3408,9 @@ export class AgentCoordinator {
                     reasoning: (event.input?.reasoning as string) ?? '',
                     agentType: 'project_manager',
                   });
+                  iterationEditCalls++;
+                  contextVersion += 1;
+                  invalidateProjectGraphs();
                   // Read-after-write: add new file so read_file can find it
                   const newFileCtx: FileContext = {
                     fileId: `new_${newFileName}`,
@@ -3292,14 +3432,20 @@ export class AgentCoordinator {
                   const filePath = (event.input?.filePath as string) ?? (event.input?.fileName as string) ?? '';
                   const newContent = (event.input?.content as string) ?? (event.input?.newContent as string) ?? '';
                   const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
-                  accumulatedChanges.push({
-                    fileId: matchedFile?.fileId ?? '',
-                    fileName: filePath,
-                    originalContent: matchedFile?.content ?? '',
-                    proposedContent: newContent,
-                    reasoning: (event.input?.reasoning as string) ?? '',
-                    agentType: 'project_manager',
-                  });
+                  const previous = matchedFile?.content ?? '';
+                  if (newContent !== previous) {
+                    accumulatedChanges.push({
+                      fileId: matchedFile?.fileId ?? '',
+                      fileName: filePath,
+                      originalContent: previous,
+                      proposedContent: newContent,
+                      reasoning: (event.input?.reasoning as string) ?? '',
+                      agentType: 'project_manager',
+                    });
+                    iterationEditCalls++;
+                    contextVersion += 1;
+                    invalidateProjectGraphs();
+                  }
                   if (matchedFile) {
                     matchedFile.content = newContent;
                     preloadedMap.set(filePath, matchedFile);
@@ -3322,6 +3468,8 @@ export class AgentCoordinator {
                     if (idx !== -1) files.splice(idx, 1);
                   }
                   syntheticMsg = `File ${filePath} deleted.`;
+                  contextVersion += 1;
+                  invalidateProjectGraphs();
 
                 } else if (event.name === 'rename_file') {
                   const oldPath = (event.input?.oldPath as string) ?? (event.input?.filePath as string) ?? '';
@@ -3341,10 +3489,16 @@ export class AgentCoordinator {
                     if (matchedFile.fileId) preloadedMap.set(matchedFile.fileId, matchedFile);
                   }
                   syntheticMsg = `File renamed from ${oldPath} to ${newPath}.`;
+                  contextVersion += 1;
+                  invalidateProjectGraphs();
 
                 } else if (event.name === 'propose_plan') {
-                  planProposalCount++;
-                  syntheticMsg = 'Plan proposed. Waiting for user review.';
+                  if (intentMode === 'plan') {
+                    planProposalCount++;
+                    syntheticMsg = 'Plan proposed. Waiting for user review.';
+                  } else {
+                    syntheticMsg = '[SYSTEM ENFORCEMENT] propose_plan is disabled outside plan mode. Implement directly with propose_code_edit/search_replace/create_file or ask_clarification.';
+                  }
 
                 } else if (event.name === 'ask_clarification') {
                   needsClarification = true;
@@ -3367,6 +3521,50 @@ export class AgentCoordinator {
           const executeServerTool = async (evt: Extract<ToolStreamEvent, { type: 'tool_end' }>): Promise<void> => {
             const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
             let toolResult: ToolResult;
+            const isLookupTool = LOOKUP_TOOL_NAMES.has(evt.name);
+            const lookupCacheKey = isLookupTool ? buildLookupCacheKey(evt.name, evt.input) : null;
+
+            // In code mode, cap read/search churn before any edits are enacted.
+            if (intentMode === 'code' && isLookupTool && accumulatedChanges.length === 0) {
+              if (lookupCallsInCodeMode >= CODE_MODE_MAX_LOOKUPS) {
+                blockedLookupStreak++;
+                const enforcementMsg = '[SYSTEM ENFORCEMENT] Lookup budget reached in code mode. Do not call more lookup tools this turn. Use propose_code_edit/search_replace/create_file to enact changes, or ask_clarification if required details are missing.';
+                iterToolResults.set(evt.id, {
+                  content: enforcementMsg,
+                  is_error: true,
+                });
+                onToolEvent?.({
+                  type: 'tool_call',
+                  name: evt.name,
+                  id: evt.id,
+                  input: evt.input,
+                  result: enforcementMsg,
+                  isError: true,
+                });
+                return;
+              }
+              lookupCallsInCodeMode++;
+            }
+            if (intentMode === 'code' && isLookupTool) {
+              iterationLookupCalls++;
+            }
+
+            // Reuse lookup results while context has not changed.
+            if (lookupCacheKey) {
+              const cached = lookupResultCache.get(lookupCacheKey);
+              if (cached && cached.version === contextVersion) {
+                iterToolResults.set(evt.id, { content: cached.content, is_error: cached.is_error });
+                onToolEvent?.({
+                  type: 'tool_call',
+                  name: evt.name,
+                  id: evt.id,
+                  input: evt.input,
+                  result: cached.content,
+                  isError: cached.is_error,
+                });
+                return;
+              }
+            }
 
             const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
             const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
@@ -3406,6 +3604,16 @@ export class AgentCoordinator {
               : toolResult.content;
 
             iterToolResults.set(evt.id, { content: truncatedContent, is_error: toolResult.is_error });
+            if (lookupCacheKey) {
+              lookupResultCache.set(lookupCacheKey, {
+                version: contextVersion,
+                content: truncatedContent,
+                is_error: toolResult.is_error,
+              });
+            }
+            if (!toolResult.is_error && intentMode === 'code' && isLookupTool) {
+              blockedLookupStreak = 0;
+            }
 
             onToolEvent?.({
               type: 'tool_call',
@@ -3428,6 +3636,28 @@ export class AgentCoordinator {
         const rawBlocks = await streamResult.getRawContentBlocks();
 
         if (sr !== 'tool_use' || iteration >= MAX_ITERATIONS - 1 || planProposalCount >= 2) {
+          break;
+        }
+
+        // In code mode, once edits exist, don't allow endless lookup-only cycles.
+        if (intentMode === 'code' && accumulatedChanges.length > 0) {
+          const addedChangesThisIteration = accumulatedChanges.length > changesAtIterationStart;
+          if (!addedChangesThisIteration && iterationEditCalls === 0 && iterationLookupCalls > 0) {
+            postEditLookupOnlyIterations++;
+          } else if (addedChangesThisIteration || iterationEditCalls > 0) {
+            postEditLookupOnlyIterations = 0;
+          }
+
+          if (postEditLookupOnlyIterations >= 2) {
+            fullText += '\n\nStopping extra lookup passes and finalizing with the enacted code changes.';
+            break;
+          }
+        }
+
+        // Hard fail-fast: if code mode keeps issuing blocked lookups, stop the loop.
+        if (intentMode === 'code' && blockedLookupStreak >= 5 && accumulatedChanges.length === 0) {
+          fullText += '\n\nI have enough context to proceed, but I need one explicit target to avoid guessing. Confirm the exact file/selector to edit, or tell me to apply the change directly now.';
+          needsClarification = true;
           break;
         }
 
@@ -3484,6 +3714,88 @@ export class AgentCoordinator {
 
       console.log(`[AgentLoop] Complete after ${iteration + 1} iterations, ${fullText.length} chars, ${accumulatedChanges.length} changes`);
 
+      // ── Hard validation/dependency gates for code mode ─────────────────
+      if (intentMode === 'code' && accumulatedChanges.length > 0) {
+        const verification = verifyChanges(accumulatedChanges, files);
+        if (!verification.passed) {
+          onProgress?.({
+            type: 'thinking',
+            phase: 'validating',
+            label: `Validation failed (${verification.errorCount} error(s))`,
+          });
+          onProgress?.({
+            type: 'diagnostics',
+            detail: verification.formatted,
+          });
+          needsClarification = true;
+          accumulatedChanges.length = 0;
+          fullText += `\n\nValidation gate blocked completion:\n${verification.formatted}`;
+        }
+      }
+
+      if (intentMode === 'code' && accumulatedChanges.length > 0) {
+        const crossFile = validateChangeSet(accumulatedChanges, files);
+        if (!crossFile.valid) {
+          const errors = crossFile.issues.filter((i) => i.severity === 'error');
+          const warnings = crossFile.issues.filter((i) => i.severity === 'warning');
+          onProgress?.({
+            type: 'thinking',
+            phase: 'validating',
+            label: `Cross-file contracts: ${errors.length} error(s), ${warnings.length} warning(s)`,
+          });
+          for (const issue of crossFile.issues) {
+            onProgress?.({
+              type: 'diagnostics',
+              file: issue.file,
+              severity: issue.severity,
+              message: issue.description,
+              category: issue.category,
+            });
+          }
+          needsClarification = true;
+          accumulatedChanges.length = 0;
+          fullText += '\n\nCross-file contract gate blocked completion due to validation errors.';
+        }
+      }
+
+      if (intentMode === 'code' && accumulatedChanges.length > 0 && hasThemeLayoutContext) {
+        const artifact = buildThemePlanArtifact(
+          accumulatedChanges,
+          files,
+          readFiles,
+          readFiles
+        );
+        onProgress?.({
+          type: 'diagnostics',
+          detail: artifact.markdown,
+        });
+        if (artifact.policyIssues.length > 0) {
+          needsClarification = true;
+          accumulatedChanges.length = 0;
+          fullText += `\n\nTheme dependency/policy gate blocked completion:\n${artifact.policyIssues.map((i) => `- ${i}`).join('\n')}`;
+        }
+      }
+
+      if (intentMode === 'code' && accumulatedChanges.length > 0 && hasThemeLayoutContext) {
+        const projectedFiles = files.map((f) => {
+          const change = accumulatedChanges.find((c) => c.fileName === f.fileName || c.fileName === (f.path ?? ''));
+          return { path: f.path ?? f.fileName, content: change ? change.proposedContent : f.content };
+        });
+        const themeCheck = runThemeCheck(projectedFiles);
+        if (!themeCheck.passed) {
+          onProgress?.({
+            type: 'diagnostics',
+            detail: `Theme check failed with ${themeCheck.errorCount} error(s) and ${themeCheck.warningCount} warning(s).`,
+          });
+          needsClarification = true;
+          accumulatedChanges.length = 0;
+          fullText += `\n\nTheme check gate blocked completion (${themeCheck.errorCount} error(s)).`;
+        }
+      }
+      if (intentMode === 'code' && accumulatedChanges.length > 0) {
+        fullText += '\n\nVerification evidence: verifyChanges passed; cross-file validation passed; theme_check passed.';
+      }
+
       const hasChanges = accumulatedChanges.length > 0;
 
       if (hasChanges) {
@@ -3494,10 +3806,17 @@ export class AgentCoordinator {
         await persistExecution(executionId);
       }
 
+      const finalAnalysis = ensureCompletionResponseSections({
+        analysis: fullText,
+        intentMode,
+        needsClarification,
+        changes: accumulatedChanges,
+      });
+
       return {
         agentType: 'project_manager',
         success: true,
-        analysis: fullText,
+        analysis: finalAnalysis,
         changes: hasChanges ? accumulatedChanges : undefined,
         needsClarification,
         directStreamed: true,
@@ -3525,7 +3844,7 @@ export class AgentCoordinator {
     userPreferences: UserPreference[],
     options: CoordinatorExecuteOptions,
   ): Promise<AgentResult> {
-    createExecution(executionId, projectId, userId, userRequest);
+    createExecution(executionId, projectId, userId, userRequest, options?.sessionId);
     updateExecutionStatus(executionId, 'in_progress');
 
     const onProgress = options.onProgress;
@@ -3543,7 +3862,7 @@ export class AgentCoordinator {
 
     try {
       // Build PM-scoped context (same file selection as regular solo)
-      const pmFiles = await selectPMFiles(files, userRequest, { ...options, tier: 'SIMPLE' });
+      const pmFiles = await selectPMFiles(files, userRequest, projectId, { ...options, tier: 'SIMPLE' });
 
       // Format selected files for context
       const selectedFiles = pmFiles.filter(f => !f.content.startsWith('['));

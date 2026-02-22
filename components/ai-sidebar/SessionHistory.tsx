@@ -22,6 +22,7 @@ export interface ChatSession {
 interface SessionHistoryProps {
   sessions: ChatSession[];
   activeSessionId: string | null;
+  isLoadingHistory?: boolean;
   onSwitch: (sessionId: string) => void;
   onNew: () => void;
   onDelete?: (sessionId: string) => void;
@@ -52,6 +53,7 @@ function relativeTime(dateStr: string): string {
 export function SessionHistory({
   sessions,
   activeSessionId,
+  isLoadingHistory,
   onSwitch,
   onNew,
   onDelete,
@@ -161,7 +163,11 @@ export function SessionHistory({
                     }
                   }}
                 >
-                  <MessageSquare className="h-3.5 w-3.5 shrink-0 ide-text-quiet" />
+                  {isActive && isLoadingHistory ? (
+                    <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                  ) : (
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0 ide-text-quiet" />
+                  )}
 
                   <div className="flex-1 min-w-0">
                     {isEditing ? (

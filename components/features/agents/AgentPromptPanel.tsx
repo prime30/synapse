@@ -86,6 +86,14 @@ interface SSEToolCallEvent {
   input: Record<string, unknown>;
 }
 
+interface SSEToolErrorEvent {
+  type: 'tool_error';
+  name: string;
+  id: string;
+  error: string;
+  recoverable?: boolean;
+}
+
 interface SSECacheStatsEvent {
   type: 'cache_stats';
   cacheCreationInputTokens: number;
@@ -103,9 +111,10 @@ interface SSECitationEvent {
 
 interface SSEDiagnosticsEvent {
   type: 'diagnostics';
-  file: string;
-  errorCount: number;
-  warningCount: number;
+  file?: string;
+  errorCount?: number;
+  warningCount?: number;
+  detail?: string;
 }
 
 interface SSEWorkerProgressEvent {
@@ -136,6 +145,7 @@ interface SSERateLimitedEvent {
 interface SSEChangePreviewEvent {
   type: 'change_preview';
   executionId: string;
+  sessionId?: string | null;
   projectId: string;
   changes: {
     fileId: string;
@@ -146,7 +156,16 @@ interface SSEChangePreviewEvent {
   }[];
 }
 
-type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent;
+interface SSEExecutionOutcomeEvent {
+  type: 'execution_outcome';
+  executionId?: string;
+  sessionId?: string | null;
+  outcome: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input';
+  changedFiles?: number;
+  needsClarification?: boolean;
+}
+
+type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -180,7 +199,8 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
       parsed.type === 'cache_stats' || parsed.type === 'citation' ||
       parsed.type === 'diagnostics' || parsed.type === 'worker_progress' ||
       parsed.type === 'reasoning' || parsed.type === 'active_model' ||
-      parsed.type === 'rate_limited' || parsed.type === 'change_preview'
+      parsed.type === 'rate_limited' || parsed.type === 'change_preview' ||
+      parsed.type === 'execution_outcome'
     ) {
       return parsed as SSEEvent;
     }
@@ -299,6 +319,59 @@ function formatElementContext(el: SelectedElement): string {
   return parts.join(' | ');
 }
 
+type ReferentialEditArtifact = {
+  filePath: string;
+  newContent: string;
+  reasoning?: string;
+  capturedAt: string;
+};
+
+function editArtifactStorageKey(projectId: string, sessionId: string): string {
+  return `agent:referential-edits:${projectId}:${sessionId}`;
+}
+
+function persistReferentialEditArtifact(
+  projectId: string,
+  sessionId: string,
+  edits: Array<{ filePath: string; newContent: string; reasoning?: string }>,
+): void {
+  if (typeof window === 'undefined' || !sessionId || edits.length === 0) return;
+  const payload: ReferentialEditArtifact[] = edits
+    .filter((e) => e.filePath?.trim() && e.newContent?.trim())
+    .slice(0, 12)
+    .map((e) => ({
+      filePath: e.filePath.trim(),
+      newContent: e.newContent,
+      reasoning: e.reasoning,
+      capturedAt: new Date().toISOString(),
+    }));
+  if (payload.length === 0) return;
+  try {
+    window.localStorage.setItem(
+      editArtifactStorageKey(projectId, sessionId),
+      JSON.stringify(payload),
+    );
+  } catch {
+    // Best-effort client cache only.
+  }
+}
+
+function loadReferentialEditArtifact(
+  projectId: string,
+  sessionId: string | null,
+): ReferentialEditArtifact[] {
+  if (typeof window === 'undefined' || !sessionId) return [];
+  try {
+    const raw = window.localStorage.getItem(editArtifactStorageKey(projectId, sessionId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ReferentialEditArtifact[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e) => e.filePath && e.newContent);
+  } catch {
+    return [];
+  }
+}
+
 interface AgentPromptPanelProps {
   projectId: string;
   context?: AISidebarContextValue;
@@ -381,6 +454,12 @@ interface AgentPromptPanelProps {
     filePath: string | null;
     liveContent: string | null;
   }) => void;
+  /** Open Developer Memory panel (rendered by page shell). */
+  onOpenMemory?: () => void;
+  /** Whether Developer Memory panel is currently open. */
+  isMemoryOpen?: boolean;
+  /** External request to add a file as an attached chat context tag. */
+  pendingAttachedFile?: { id: string; name: string; path: string; nonce: number } | null;
 }
 
 export function AgentPromptPanel({
@@ -416,10 +495,14 @@ export function AgentPromptPanel({
   onOpenFiles,
   onScrollToEdit,
   onAgentActivity,
+  onOpenMemory,
+  isMemoryOpen = false,
+  pendingAttachedFile = null,
 }: AgentPromptPanelProps) {
   const {
     messages,
     isLoadingHistory,
+    historyLoadError,
     appendMessage,
     addLocalMessage,
     updateMessage,
@@ -432,15 +515,19 @@ export function AgentPromptPanel({
     deleteSession,
     renameSession,
     archiveSession,
+    archiveAllSessions,
     unarchiveSession,
     loadMore,
     hasMore,
     isLoadingMore,
+    loadAllHistory,
+    isLoadingAllHistory,
     recordApplyStats,
     clearMessages,
     removeLastTurn,
     truncateAt,
     forkSession,
+    reviewSessionTranscript,
   } = useAgentChat(projectId);
 
   const { specialistMode, model, intentMode, maxAgents, verbose, setSpecialistMode, setModel, setIntentMode, setMaxAgents, setVerbose } = useAgentSettings();
@@ -464,8 +551,34 @@ export function AgentPromptPanel({
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
   const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
   const [trainingPanelOpen, setTrainingPanelOpen] = useState(false);
+  const [isReviewingTranscript, setIsReviewingTranscript] = useState(false);
+  const [pushLog, setPushLog] = useState<Array<{
+    id: string;
+    pushedAt: string;
+    trigger: string;
+    note: string | null;
+    fileCount: number;
+  }>>([]);
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const latestEdits =
+      [...messages]
+        .reverse()
+        .find(
+          (m) =>
+            m.role === 'assistant' &&
+            Array.isArray(m.codeEdits) &&
+            m.codeEdits.length > 0,
+        )?.codeEdits ?? [];
+    if (latestEdits.length > 0) {
+      persistReferentialEditArtifact(projectId, activeSessionId, latestEdits);
+    }
+  }, [messages, activeSessionId, projectId]);
+  // When a timeout happens in multi-agent mode, retry once with 1x.
+  const retrySubagentOverrideRef = useRef<number | null>(null);
 
   // Phase 3b: Attached files from chat drag-and-drop
   const attachedFilesRef = useRef<Array<{ id: string; name: string; path: string }>>([]);
@@ -485,11 +598,60 @@ export function AgentPromptPanel({
   // Content debounce refs
   const contentBufferRef = useRef<string>('');
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmupAbortRef = useRef<AbortController | null>(null);
 
   // Mode-switch auto-submit: when the user clicks "Switch to Code mode" button,
   // the intent mode changes. This ref stores the pending auto-submit message so a
   // useEffect can fire onSend after the mode state has propagated.
   const pendingModeSwitchSend = useRef<string | null>(null);
+
+  const handleDraftWarmup = useCallback((draft: string) => {
+    const trimmed = draft.trim();
+    if (warmupDebounceRef.current) {
+      clearTimeout(warmupDebounceRef.current);
+      warmupDebounceRef.current = null;
+    }
+    if (trimmed.length < 12 || isLoading) {
+      warmupAbortRef.current?.abort();
+      return;
+    }
+
+    warmupDebounceRef.current = setTimeout(async () => {
+      try {
+        warmupAbortRef.current?.abort();
+        const controller = new AbortController();
+        warmupAbortRef.current = controller;
+        const elementHint = extractElementHint(selectedElement);
+        await fetch('/api/agents/warmup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            projectId,
+            draft: trimmed,
+            intentMode,
+            activeFilePath: context.filePath ?? undefined,
+            openTabs: openTabIds ?? undefined,
+            explicitFiles: attachedFilesRef.current.length > 0
+              ? attachedFilesRef.current.map((f) => f.path)
+              : undefined,
+            elementHint: elementHint || undefined,
+            model,
+            maxAgents,
+            specialistMode,
+          }),
+        });
+      } catch {
+        // Warmup is best-effort only.
+      }
+    }, 700);
+  }, [projectId, intentMode, context.filePath, openTabIds, model, maxAgents, specialistMode, selectedElement, isLoading]);
+
+  useEffect(() => () => {
+    if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current);
+    warmupAbortRef.current?.abort();
+  }, []);
 
   // ── Cursor-style content blocks ──────────────────────────────────────
   const blocksRef = useRef<ContentBlock[]>([]);
@@ -626,6 +788,18 @@ export function AgentPromptPanel({
     }
   }
 
+  function buildPlanRoute(
+    title: string,
+    description: string,
+    steps: Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>
+  ): string {
+    const params = new URLSearchParams();
+    params.set('title', title);
+    params.set('description', description);
+    params.set('steps', JSON.stringify(steps));
+    return `/plan?${params.toString()}`;
+  }
+
   type ToolCardType = Extract<ContentBlock, { type: 'tool_action' }>['cardType'];
 
   function getToolCardType(toolName: string): ToolCardType {
@@ -710,6 +884,46 @@ export function AgentPromptPanel({
       stallAlertEmittedRef.current = false;
       contentBufferRef.current = '';
 
+      const trimmedContent = content.trim();
+      const isBlueprintCommand = /^\/blueprint\b/i.test(trimmedContent);
+      if (isBlueprintCommand) {
+        appendMessage('user', content);
+        setIsLoading(true);
+        try {
+          const blueprintPrompt = trimmedContent.replace(/^\/blueprint\b/i, '').trim()
+            || 'Build a complete Shopify theme blueprint with schema-first customizer UX.';
+          const resp = await fetch('/api/themes/blueprint', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId,
+              prompt: blueprintPrompt,
+              mode: 'liquid',
+              audience: 'stakeholder',
+            }),
+          });
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            const err = data?.error ?? 'Blueprint generation failed';
+            setError(err);
+            appendMessage('assistant', `Error: ${err}`);
+            return;
+          }
+          const data = await resp.json();
+          const markdown = (data?.blueprint?.markdown as string | undefined)
+            ?? 'Blueprint generated, but no markdown payload returned.';
+          appendMessage('assistant', markdown);
+          setLastResponseContent(markdown);
+        } catch {
+          const err = 'Blueprint generation failed. Please try again.';
+          setError(err);
+          appendMessage('assistant', `Error: ${err}`);
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
       // EPIC 5: Track user turn in conversation arc
       arcRef.current.addTurn('user');
 
@@ -720,10 +934,17 @@ export function AgentPromptPanel({
       // Phase 4a: Start live preview session
       onLiveSessionStart?.();
 
-      // 4-minute client-side timeout — abort if the stream produces nothing
+      const subagentCountForRequest = retrySubagentOverrideRef.current ?? maxAgents;
+      retrySubagentOverrideRef.current = null;
+
+      // Scale client timeout with subagent count to reduce false timeouts on 3x/4x runs.
+      const timeoutMinutes =
+        subagentCountForRequest >= 4 ? 7 :
+        subagentCountForRequest === 3 ? 6 :
+        subagentCountForRequest === 2 ? 5 : 4;
       const clientTimeout = setTimeout(() => {
         controller.abort();
-      }, 240_000);
+      }, timeoutMinutes * 60_000);
 
       // EPIC 2: Detect [RETRY_WITH_FULL_CONTEXT] prefix
       let actualContent = content;
@@ -801,7 +1022,15 @@ export function AgentPromptPanel({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
-      const { messages: trimmedHistory, summary: historySummary, trimmedCount } = trimHistory(rawHistory);
+      const referentialPrompt = /^(yes|ok|do it|go ahead|apply|implement|implement the code changes you just suggested|make those changes now|make those code changes now)[\s.!]*$/i.test(enrichedContent.trim())
+        || /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(enrichedContent.trim())
+        || /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(enrichedContent.trim());
+      const trimBudget = intentMode === 'code' && referentialPrompt ? 60_000 : 30_000;
+      const keepRecent = intentMode === 'code' && referentialPrompt ? 24 : 10;
+      const { messages: trimmedHistory, summary: historySummary, trimmedCount } = trimHistory(rawHistory, {
+        budget: trimBudget,
+        keepRecent,
+      });
       const history = trimmedHistory;
 
       // Store trim info for ChatInterface UI (D2 summary block + D3 context meter)
@@ -811,6 +1040,8 @@ export function AgentPromptPanel({
       let requestWithContext = historySummary
         ? `[Context from earlier conversation]:\n${historySummary}\n\n${enrichedContent}`
         : enrichedContent;
+      let isReferentialCodePrompt = false;
+      let referentialArtifactsForRequest: ReferentialEditArtifact[] | undefined;
 
       // ── Vague reference hint ─────────────────────────────────────────────
       // When the user says something like "apply that code" or "do it", and
@@ -820,11 +1051,11 @@ export function AgentPromptPanel({
       // history, so this is just a convenience hint, not a recovery mechanism.)
       if (messages.length >= 2) {
         const userMsg = enrichedContent.trim();
-        const isVagueReference = /^(yes|ok|do it|go ahead|apply|implement|implement the code changes you just suggested)[\s.!]*$/i.test(userMsg)
-          || /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(userMsg)
-          || /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(userMsg);
+        const isVagueReference = referentialPrompt;
 
         if (isVagueReference) {
+          isReferentialCodePrompt = true;
+          let referenceFound = false;
           // Find most recent assistant message with code blocks
           for (const msg of [...messages].reverse()) {
             if (msg.role !== 'assistant') continue;
@@ -837,13 +1068,50 @@ export function AgentPromptPanel({
             }
             if (blocks.length > 0) {
               requestWithContext = `[The user is referencing code from earlier in this conversation. Apply it directly.]\n\nCode:\n${blocks.join('\n\n')}\n\nUser: "${userMsg}"`;
+              referenceFound = true;
               break;
             }
             if (msg.codeEdits && msg.codeEdits.length > 0) {
               const edits = msg.codeEdits.map((e) => `[${e.filePath}]\n${e.newContent}`).join('\n\n');
+              referentialArtifactsForRequest = msg.codeEdits
+                .filter((e) => e.filePath?.trim() && e.newContent?.trim())
+                .map((e) => ({
+                  filePath: e.filePath,
+                  newContent: e.newContent,
+                  reasoning: e.reasoning,
+                  capturedAt: new Date().toISOString(),
+                }));
               requestWithContext = `[The user is referencing code edits from earlier. Apply them directly.]\n\nEdits:\n${edits}\n\nUser: "${userMsg}"`;
+              referenceFound = true;
               break;
             }
+          }
+          if (!referenceFound) {
+            const replayEdits = loadReferentialEditArtifact(projectId, activeSessionId);
+            if (replayEdits.length > 0) {
+              referentialArtifactsForRequest = replayEdits;
+              const serializedEdits = replayEdits
+                .slice(0, 8)
+                .map((e) => `[${e.filePath}]\n${e.newContent}`)
+                .join('\n\n');
+              requestWithContext =
+                `[The user is referencing earlier code edits from this same chat session. ` +
+                `Replay these structured edits directly before any extra lookup.]\n\n` +
+                `Edits:\n${serializedEdits}\n\nUser: "${userMsg}"`;
+              referenceFound = true;
+            }
+          }
+          if (!referenceFound) {
+            const recentAssistantContext = [...messages]
+              .reverse()
+              .filter((m) => m.role === 'assistant')
+              .slice(0, 3)
+              .map((m, idx) => `Assistant context ${idx + 1}:\n${m.content.slice(0, 2400)}`)
+              .join('\n\n');
+            requestWithContext =
+              `[Referential follow-up detected. Use prior assistant implementation context from this chat and enact directly in code mode. ` +
+              `Do not re-plan. If edits are unclear, ask one specific clarification question.]\n\n` +
+              `${recentAssistantContext}\n\nUser: "${userMsg}"`;
           }
         }
       }
@@ -887,7 +1155,8 @@ export function AgentPromptPanel({
         const elementHint = extractElementHint(selectedElement);
 
         // V2 agent architecture: single-stream tool-calling loop (no Summary phase)
-        const useV2 = process.env.NEXT_PUBLIC_ENABLE_V2_AGENT === 'true';
+        // Default to v2 unless explicitly disabled.
+        const useV2 = process.env.NEXT_PUBLIC_ENABLE_V2_AGENT !== 'false';
         const streamEndpoint = useV2 ? '/api/agents/stream/v2' : '/api/agents/stream';
 
         const res = await fetch(streamEndpoint, {
@@ -895,13 +1164,27 @@ export function AgentPromptPanel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             projectId,
+            sessionId: activeSessionId ?? undefined,
             request: requestWithContext,
             history,
+            isReferentialCodePrompt:
+              intentMode === 'code' && isReferentialCodePrompt ? true : undefined,
+            referentialArtifacts:
+              intentMode === 'code' &&
+              referentialArtifactsForRequest &&
+              referentialArtifactsForRequest.length > 0
+                ? referentialArtifactsForRequest.map((artifact) => ({
+                    filePath: artifact.filePath,
+                    newContent: artifact.newContent,
+                    reasoning: artifact.reasoning,
+                    capturedAt: artifact.capturedAt,
+                  }))
+                : undefined,
             activeFilePath: context.filePath ?? undefined,
             openTabs: openTabIds ?? undefined,
             domContext: domContext || undefined,
             elementHint: elementHint || undefined,
-            subagentCount: maxAgents, // Cursor-style subagent count (1x-4x)
+            subagentCount: subagentCountForRequest, // Cursor-style subagent count (1x-4x)
             specialistMode,           // Whether to use domain specialists
             model,                    // User model preference
             intentMode,               // Intent mode: ask/plan/code/debug
@@ -943,6 +1226,7 @@ export function AgentPromptPanel({
         // Agent Power Tools accumulators (Phase 7)
         let accumulatedFileOps: Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }> = [];
         let accumulatedShopifyOps: Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }> = [];
+        let hasClarificationCardForRun = false;
 
         // Start stall detection timer (checks every 10s)
         stallTimerRef.current = setInterval(() => {
@@ -1016,6 +1300,7 @@ export function AgentPromptPanel({
                   cardType: 'change_preview',
                   cardData: {
                     executionId: sseEvent.executionId,
+                    sessionId: sseEvent.sessionId ?? activeSessionId ?? null,
                     projectId: sseEvent.projectId,
                     changes: sseEvent.changes,
                   },
@@ -1055,7 +1340,7 @@ export function AgentPromptPanel({
                   flushContentBuffer();
                   blocksRef.current.push({
                     type: 'text', id: crypto.randomUUID(),
-                    text: `\n\n---\n⚠️ **Error:** ${sseEvent.message}`,
+                    text: `\n\n---\n**Error:** ${sseEvent.message}`,
                   });
                 }
                 continue;
@@ -1073,6 +1358,32 @@ export function AgentPromptPanel({
                   rateLimitHit: true,
                   activeModel: sseEvent.fallbackModel,
                 });
+                continue;
+              }
+              if (sseEvent.type === 'execution_outcome') {
+                const normalizedOutcome =
+                  intentMode === 'code' && sseEvent.outcome === 'no-change'
+                    ? 'needs-input'
+                    : sseEvent.outcome;
+                if (normalizedOutcome === 'needs-input' && !hasClarificationCardForRun) {
+                  hasClarificationCardForRun = true;
+                  updateMessage(assistantMsgId, streamedContent, {
+                    executionOutcome: normalizedOutcome,
+                    clarification: {
+                      question: 'I need one detail to enact this directly. Which input can you provide?',
+                      options: [
+                        { id: 'target-file', label: 'I will specify the exact target file path.' },
+                        { id: 'before-after', label: 'I will paste exact before/after code snippet.' },
+                        { id: 'replay-last-edits', label: 'Replay the latest suggested edits as-is.' },
+                      ],
+                      allowFreeform: true,
+                    },
+                  });
+                } else {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    executionOutcome: normalizedOutcome,
+                  });
+                }
                 continue;
               }
               // Handle context_stats SSE event for accurate ContextMeter
@@ -1108,6 +1419,21 @@ export function AgentPromptPanel({
                 });
                 continue;
               }
+              // Handle tool_error: update block status to failed
+              if (sseEvent.type === 'tool_error') {
+                const errorBlock = blocksRef.current.find(
+                  (b) => b.type === 'tool_action' && b.toolId === sseEvent.id,
+                );
+                if (errorBlock && errorBlock.type === 'tool_action') {
+                  errorBlock.status = 'error';
+                  errorBlock.label = `${sseEvent.name} failed${sseEvent.recoverable ? ' (retrying)' : ''}`;
+                }
+                updateMessage(assistantMsgId, streamedContent, {
+                  activeToolCall: undefined,
+                  blocks: [...blocksRef.current],
+                });
+                continue;
+              }
               // Handle tool_call: route completed tool calls to card data
               if (sseEvent.type === 'tool_call') {
                 const input = sseEvent.input;
@@ -1117,12 +1443,18 @@ export function AgentPromptPanel({
                 const clearActive = { activeToolCall: undefined };
 
                 if (toolName === 'propose_plan') {
+                  const title = (input.title as string) ?? 'Plan';
+                  const description = (input.description as string) ?? '';
+                  const steps =
+                    (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ??
+                    [];
                   updateMessage(assistantMsgId, streamedContent, {
                     ...clearActive,
                     planData: {
-                      title: (input.title as string) ?? 'Plan',
-                      description: (input.description as string) ?? '',
-                      steps: (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ?? [],
+                      title,
+                      description,
+                      steps,
+                      filePath: buildPlanRoute(title, description, steps),
                     },
                   });
                 } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
@@ -1278,10 +1610,16 @@ export function AgentPromptPanel({
                   // Build card data from the existing accumulated data
                   let cardData: unknown = undefined;
                   if (toolName === 'propose_plan') {
+                    const title = (input.title as string) ?? 'Plan';
+                    const description = (input.description as string) ?? '';
+                    const steps =
+                      (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ??
+                      [];
                     cardData = {
-                      title: (input.title as string) ?? 'Plan',
-                      description: (input.description as string) ?? '',
-                      steps: (input.steps as unknown[]) ?? [],
+                      title,
+                      description,
+                      steps,
+                      filePath: buildPlanRoute(title, description, steps),
                     };
                   } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
                     const editFilePath_ = (input.filePath as string) ?? '';
@@ -1403,12 +1741,33 @@ export function AgentPromptPanel({
               // Handle diagnostics events — attach to most recent thinking step
               if (sseEvent.type === 'diagnostics') {
                 const steps = thinkingStepsRef.current;
-                if (steps.length > 0) {
-                  const diagEvent = sseEvent as SSEDiagnosticsEvent;
+                const diagEvent = sseEvent as SSEDiagnosticsEvent;
+                const isThemeArtifact =
+                  typeof diagEvent.detail === 'string' &&
+                  diagEvent.detail.includes('## Theme-wide Plan Artifact');
+                if (isThemeArtifact) {
+                  // Surface artifact as an explicit tool card so users can expand/copy it.
+                  blocksRef.current.push({
+                    type: 'tool_action',
+                    id: crypto.randomUUID(),
+                    toolId: `theme-artifact-${Date.now()}`,
+                    toolName: 'theme_artifact',
+                    label: 'Theme-wide Plan Artifact',
+                    subtitle: 'Dependency map, file matrix, batches, and policy checks',
+                    status: 'done',
+                    cardType: 'theme_artifact',
+                    cardData: { markdown: diagEvent.detail },
+                  });
+                  updateMessage(assistantMsgId, streamedContent, {
+                    blocks: [...blocksRef.current],
+                  });
+                  continue;
+                }
+                if (steps.length > 0 && diagEvent.file) {
                   steps[steps.length - 1].diagnostics = {
                     file: diagEvent.file,
-                    errorCount: diagEvent.errorCount,
-                    warningCount: diagEvent.warningCount,
+                    errorCount: diagEvent.errorCount ?? 0,
+                    warningCount: diagEvent.warningCount ?? 0,
                   };
                   updateMessage(assistantMsgId, streamedContent, {
                     thinkingSteps: [...steps],
@@ -1509,22 +1868,36 @@ export function AgentPromptPanel({
                   const metaOptions = sseEvent.metadata?.options as
                     | Array<{ id: string; label: string; recommended?: boolean }>
                     | undefined;
-                  if (metaOptions && metaOptions.length > 0) {
-                    // Extract a short question from the first line or fallback
-                    const firstLine = clarificationText.split('\n').find(
-                      (l: string) => l.trim().length > 0 && !l.trim().match(/^\d+[.)]/),
-                    ) ?? 'Which option would you like?';
-                    updateMessage(assistantMsgId, streamedContent, {
-                      clarification: {
-                        question: firstLine.trim().slice(0, 200),
-                        options: metaOptions.map((o) => ({
-                          id: o.id,
-                          label: o.label,
-                          recommended: o.recommended,
-                        })),
-                      },
-                    });
-                  }
+                  // Extract a short question from the first line or fallback
+                  const firstLine = clarificationText.split('\n').find(
+                    (l: string) => l.trim().length > 0 && !l.trim().match(/^\d+[.)]/),
+                  ) ?? 'Which option would you like?';
+                  hasClarificationCardForRun = true;
+                  updateMessage(assistantMsgId, streamedContent, {
+                    clarification: {
+                      question: firstLine.trim().slice(0, 200),
+                      options:
+                        metaOptions && metaOptions.length > 0
+                          ? metaOptions.map((o) => ({
+                              id: o.id,
+                              label: o.label,
+                              recommended: o.recommended,
+                            }))
+                          : [
+                              { id: 'confirm-target', label: 'I will confirm the exact target file(s).' },
+                              { id: 'provide-snippet', label: 'I will provide exact snippet to replace.' },
+                            ],
+                      allowFreeform: true,
+                      round:
+                        typeof sseEvent.metadata?.clarificationRound === 'number'
+                          ? (sseEvent.metadata.clarificationRound as number)
+                          : undefined,
+                      maxRounds:
+                        typeof sseEvent.metadata?.maxRounds === 'number'
+                          ? (sseEvent.metadata.maxRounds as number)
+                          : undefined,
+                    },
+                  });
                 }
 
                 // Budget warning: track truncation state for ContextMeter
@@ -1740,7 +2113,7 @@ export function AgentPromptPanel({
 
           if (streamedContent) {
             // Partial content was received before the error — append error note
-            streamedContent += `\n\n---\n⚠️ **Error:** ${userMsg}`;
+            streamedContent += `\n\n---\n**Error:** ${userMsg}`;
             updateMessage(assistantMsgId, streamedContent);
             finalizeMessage(assistantMsgId);
           } else {
@@ -1750,7 +2123,7 @@ export function AgentPromptPanel({
             else if (code === 'QUOTA_EXCEEDED') hints.push('Your usage quota has been reached. **Upgrade your plan** to continue.');
             else if (code === 'AUTH_ERROR') hints.push('Check your API key configuration in **Settings**.');
             else hints.push('You can **retry** or **edit your message** and try again.');
-            const inThreadMsg = `⚠️ **Error:** ${userMsg}\n\n${hints.join(' ')}`;
+            const inThreadMsg = `**Error:** ${userMsg}\n\n${hints.join(' ')}`;
             updateMessage(assistantMsgId, inThreadMsg);
             finalizeMessage(assistantMsgId);
           }
@@ -1758,9 +2131,22 @@ export function AgentPromptPanel({
           // Auto-retry for transient errors (max 1 auto-retry)
           if (AUTO_RETRY_CODES.has(code) && autoRetryCountRef.current < 1) {
             autoRetryCountRef.current += 1;
+            const timeoutFallbackToSolo = code === 'TIMEOUT' && maxAgents > 1;
+            if (timeoutFallbackToSolo) {
+              retrySubagentOverrideRef.current = 1;
+              setMaxAgents(1);
+            }
             const delay = code === 'RATE_LIMITED' ? 5000 : 1500;
             setIsRetrying(true);
-            setError(code === 'RATE_LIMITED' ? 'Rate limited — retrying...' : 'Empty response — retrying...');
+            setError(
+              code === 'RATE_LIMITED'
+                ? 'Rate limited — retrying...'
+                : timeoutFallbackToSolo
+                  ? 'Timed out in multi-agent mode — retrying in 1x...'
+                  : code === 'TIMEOUT'
+                    ? 'Timed out — retrying...'
+                    : 'Empty response — retrying...'
+            );
             setTimeout(() => {
               setIsRetrying(false);
               setError(null);
@@ -1916,7 +2302,7 @@ export function AgentPromptPanel({
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -1956,6 +2342,32 @@ export function AgentPromptPanel({
   useEffect(() => {
     lastDecisionScanRef.current = 0;
   }, [activeSessionId]);
+
+  // Load Shopify push log for version history sidebar visibility.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/shopify/push-history`);
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const rows = (json?.data ?? json ?? []) as Array<Record<string, unknown>>;
+        const mapped = rows.map((r) => ({
+          id: String(r.id ?? ''),
+          pushedAt: String(r.pushed_at ?? ''),
+          trigger: String(r.trigger ?? 'manual'),
+          note: (r.note as string | null) ?? null,
+          fileCount: Number(r.file_count ?? 0),
+        })).filter((r) => r.id && r.pushedAt);
+        if (!cancelled) setPushLog(mapped);
+      } catch {
+        // Non-blocking sidebar enhancement.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   // EPIC 14: Extract decisions from completed conversations
   useEffect(() => {
@@ -1997,6 +2409,33 @@ export function AgentPromptPanel({
   const handleReview = useCallback(() => {
     onSend('Review all the changes we have discussed so far. Check for issues, improvements, and verify correctness.');
   }, [onSend]);
+
+  const handleReviewTranscript = useCallback(async () => {
+    if (isReviewingTranscript || !activeSessionId) return;
+    setIsReviewingTranscript(true);
+    try {
+      const review = await reviewSessionTranscript(activeSessionId);
+      if (!review) {
+        appendMessage('assistant', 'Transcript review is unavailable for this session right now. Try again shortly.');
+        return;
+      }
+
+      const findings = review.findings.slice(0, 6).map((f) => `- [${f.severity.toUpperCase()}] ${f.message}`);
+      const response = [
+        '## Transcript Review',
+        '',
+        `Loop risk: ${review.likelyLooping ? 'high' : 'low'}`,
+        '',
+        review.summary,
+        '',
+        '### Findings',
+        findings.length > 0 ? findings.join('\n') : '- No major findings.',
+      ].join('\n');
+      appendMessage('assistant', response);
+    } finally {
+      setIsReviewingTranscript(false);
+    }
+  }, [isReviewingTranscript, activeSessionId, reviewSessionTranscript, appendMessage]);
 
   // Phase 2: Update a code edit's status (applied/rejected) within a message
   const handleEditStatusChange = useCallback((messageId: string, editIndex: number, status: 'applied' | 'rejected') => {
@@ -2119,9 +2558,14 @@ export function AgentPromptPanel({
         onRename={renameSession}
         onArchive={archiveSession}
         onUnarchive={unarchiveSession}
+        onArchiveAll={() => archiveAllSessions()}
+        onArchiveOlderThan={(days) => archiveAllSessions(days)}
         hasMore={hasMore}
         isLoadingMore={isLoadingMore}
         onLoadMore={loadMore}
+        onLoadAllHistory={loadAllHistory}
+        isLoadingAllHistory={isLoadingAllHistory}
+        pushLog={pushLog}
         onOpenTemplates={() => setTemplateLibraryOpen(true)}
         onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
       />
@@ -2144,6 +2588,14 @@ export function AgentPromptPanel({
           onSend(prompt);
         }}
       />
+      {historyLoadError && (
+        <div
+          className="mb-2 mx-2 rounded border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300 flex-shrink-0"
+          role="status"
+        >
+          {historyLoadError}
+        </div>
+      )}
       {error && (
         <div
           className={`mb-2 mx-2 rounded border px-2 py-1.5 text-xs flex-shrink-0 flex items-center justify-between gap-2 ${
@@ -2207,14 +2659,10 @@ export function AgentPromptPanel({
           )}
         </div>
       )}
-      {isLoadingHistory ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm ide-text-muted">Loading conversation...</p>
-        </div>
-      ) : (
-        <ChatInterface
+      <ChatInterface
           messages={messages}
           isLoading={isLoading}
+          isLoadingHistory={isLoadingHistory}
           onSend={onSend}
           placeholder={intentPlaceholder}
           className="flex-1 min-h-0"
@@ -2226,6 +2674,10 @@ export function AgentPromptPanel({
           reviewFileCount={fileCount}
           onStop={handleStop}
           onReview={handleReview}
+          onReviewTranscript={handleReviewTranscript}
+          isReviewingTranscript={isReviewingTranscript}
+          onOpenMemory={onOpenMemory}
+          isMemoryOpen={isMemoryOpen}
           currentModel={model}
           onModelChange={setModel}
           specialistMode={specialistMode}
@@ -2268,13 +2720,14 @@ export function AgentPromptPanel({
           onConfirmFileCreate={onConfirmFileCreate}
           onEditStatusChange={handleEditStatusChange}
           onAttachedFilesChange={handleAttachedFilesChange}
+          pendingAttachedFile={pendingAttachedFile}
           verbose={verbose}
           onToggleVerbose={() => setVerbose(!verbose)}
           onForkAtMessage={(messageIndex) => forkSession(messageIndex)}
           projectId={projectId}
           onPinAsPreference={(rule) => pinnedPrefs.addPin(rule)}
+          onDraftChange={handleDraftWarmup}
         />
-      )}
       </div>
     </div>
   );

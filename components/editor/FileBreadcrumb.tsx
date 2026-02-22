@@ -7,6 +7,8 @@ interface FileBreadcrumbProps {
   content?: string; // file content, for Liquid schema parsing
   /** Navigate to a file path segment (e.g. folder or file name click) */
   onNavigate?: (segmentPath: string) => void;
+  /** Add the current file to chat context tags. */
+  onAddToChatContext?: (filePath: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -55,7 +57,7 @@ function Chevron() {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function FileBreadcrumb({ filePath, content, onNavigate }: FileBreadcrumbProps) {
+export function FileBreadcrumb({ filePath, content, onNavigate, onAddToChatContext }: FileBreadcrumbProps) {
   const segments = useMemo(() => {
     if (!filePath) return [];
 
@@ -87,15 +89,27 @@ export function FileBreadcrumb({ filePath, content, onNavigate }: FileBreadcrumb
           <button
             type="button"
             onClick={() => {
-              if (!onNavigate || !filePath) return;
-              // Path segments (folder/file names) navigate to partial path
+              if (!filePath) return;
               const parts = filePath.split('/').filter(Boolean);
-              const segIndex = parts.indexOf(segment);
-              if (segIndex >= 0) {
-                onNavigate(parts.slice(0, segIndex + 1).join('/'));
+              const isPathSegment = idx < parts.length;
+
+              // Clicking the active file segment adds it as an agent context tag.
+              if (isPathSegment && idx === parts.length - 1 && onAddToChatContext) {
+                onAddToChatContext(filePath);
+                return;
+              }
+
+              // Other path segments keep folder/file navigation behavior.
+              if (isPathSegment && onNavigate) {
+                onNavigate(parts.slice(0, idx + 1).join('/'));
               }
             }}
             className="text-xs ide-text-3 hover:ide-text-2 transition-colors whitespace-nowrap"
+            title={
+              filePath && idx === filePath.split('/').filter(Boolean).length - 1
+                ? 'Add file to agent context'
+                : undefined
+            }
           >
             {segment}
           </button>
