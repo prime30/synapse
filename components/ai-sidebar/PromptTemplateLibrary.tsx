@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { BookOpen, Search, Plus, Trash2, X } from 'lucide-react';
+import { BookOpen, Search, Plus, Trash2, X, LayoutGrid, PanelsTopLeft, Palette, Gauge, Accessibility, FileText, Star, type LucideIcon } from 'lucide-react';
 import { usePromptTemplates } from '@/hooks/usePromptTemplates';
 import { trapFocus } from '@/lib/accessibility';
 import { TEMPLATE_CATEGORIES, type TemplateCategory } from '@/lib/ai/prompt-templates';
@@ -96,10 +96,20 @@ export function PromptTemplateLibrary({
 
   if (!open) return null;
 
-  const categoryList: Array<{ key: TemplateCategory | null; label: string; icon: string }> = [
-    { key: null, label: 'All', icon: '📋' },
+  const CATEGORY_ICONS: Record<TemplateCategory, LucideIcon> = {
+    layout: PanelsTopLeft,
+    styling: Palette,
+    performance: Gauge,
+    accessibility: Accessibility,
+    seo: Search,
+    content: FileText,
+    custom: Star,
+  };
+
+  const categoryList: Array<{ key: TemplateCategory | null; label: string; icon: LucideIcon }> = [
+    { key: null, label: 'All', icon: LayoutGrid },
     ...(Object.entries(TEMPLATE_CATEGORIES) as [TemplateCategory, { label: string; icon: string }][]).map(
-      ([key, { label, icon }]) => ({ key, label, icon })
+      ([key, { label }]) => ({ key, label, icon: CATEGORY_ICONS[key] })
     ),
   ];
 
@@ -140,7 +150,7 @@ export function PromptTemplateLibrary({
 
         {/* Category tabs */}
         <div className={'flex gap-1 p-2 overflow-x-auto border-b ide-border-subtle shrink-0 scrollbar-thin'}>
-          {categoryList.map(({ key, label, icon }) => {
+          {categoryList.map(({ key, label, icon: Icon }) => {
             const isActive = selectedCategory === key;
             return (
               <button
@@ -154,7 +164,7 @@ export function PromptTemplateLibrary({
                     : 'ide-surface-inset ide-text-2 border border-transparent ide-hover')
                 }
               >
-                <span>{icon}</span>
+                <Icon className="h-3 w-3" aria-hidden />
                 <span>{label}</span>
               </button>
             );
@@ -269,6 +279,16 @@ interface TemplateCardProps {
 function TemplateCard({ template, onSelect, onDelete, onDeleteClick }: TemplateCardProps) {
   const badgeClass = CATEGORY_BADGE_CLASSES[template.category];
   const meta = TEMPLATE_CATEGORIES[template.category];
+  const CATEGORY_ICONS: Record<TemplateCategory, LucideIcon> = {
+    layout: PanelsTopLeft,
+    styling: Palette,
+    performance: Gauge,
+    accessibility: Accessibility,
+    seo: Search,
+    content: FileText,
+    custom: Star,
+  };
+  const MetaIcon = CATEGORY_ICONS[template.category];
 
   return (
     <div
@@ -305,7 +325,7 @@ function TemplateCard({ template, onSelect, onDelete, onDeleteClick }: TemplateC
           badgeClass
         }
       >
-        {meta.icon} {meta.label}
+        <MetaIcon className="h-3 w-3" aria-hidden /> {meta.label}
       </span>
     </div>
   );

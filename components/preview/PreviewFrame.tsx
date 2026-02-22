@@ -102,7 +102,11 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
 
     // ── Update iframe src when projectId / path change (not refresh) ──
     useEffect(() => {
-      setIframeSrc(buildPreviewUrl({ projectId, path }));
+      const nextSrc = buildPreviewUrl({ projectId, path });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H3',location:'components/preview/PreviewFrame.tsx:src-effect',message:'iframe src updated',data:{projectId,path:path ?? '/',nextSrc},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setIframeSrc(nextSrc);
     }, [projectId, path]);
 
     // ── Fade-refresh cycle when refreshToken changes ─────────────
@@ -131,18 +135,36 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
 
     // ── Handlers ────────────────────────────────────────────────
     const handleLoad = useCallback(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H2',location:'components/preview/PreviewFrame.tsx:handleLoad',message:'iframe onLoad fired',data:{iframeSrc},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setLoading(false);
       setError(null);
       hasLoadedOnce.current = true;
       // Fade back in after load completes
       setOpacity(1);
-    }, []);
+    }, [iframeSrc]);
 
     const handleError = useCallback(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H2',location:'components/preview/PreviewFrame.tsx:handleError',message:'iframe onError fired',data:{iframeSrc},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setLoading(false);
       setError('Failed to load preview');
       // Still fade back in so the error overlay is visible
       setOpacity(1);
+    }, [iframeSrc]);
+
+    useEffect(() => {
+      const onMessage = (e: MessageEvent) => {
+        if (e.data?.type === 'synapse-preview-syncing') {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'components/preview/PreviewFrame.tsx:message-syncing',message:'received syncing message from iframe',data:{status:e.data?.status ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+      };
+      window.addEventListener('message', onMessage);
+      return () => window.removeEventListener('message', onMessage);
     }, []);
 
     const useFill = isFullscreen || fill;

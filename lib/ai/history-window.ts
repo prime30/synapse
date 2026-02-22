@@ -2,6 +2,11 @@ import { estimateTokens } from './token-counter';
 
 const KEEP_RECENT = 10;
 
+interface TrimHistoryOptions {
+  budget?: number;
+  keepRecent?: number;
+}
+
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -33,8 +38,15 @@ function extractFirstSentence(text: string): string {
  */
 export function trimHistory(
   messages: HistoryMessage[],
-  budget = 30_000
+  budgetOrOptions: number | TrimHistoryOptions = 30_000,
 ): TrimResult {
+  const opts: TrimHistoryOptions =
+    typeof budgetOrOptions === 'number'
+      ? { budget: budgetOrOptions }
+      : budgetOrOptions;
+  const budget = opts.budget ?? 30_000;
+  const baseKeepRecent = Math.max(1, opts.keepRecent ?? KEEP_RECENT);
+
   if (messages.length === 0) {
     return { messages: [], summary: '', trimmedCount: 0 };
   }
@@ -46,11 +58,11 @@ export function trimHistory(
     return { messages: [...messages], summary: '', trimmedCount: 0 };
   }
 
-  if (messages.length <= KEEP_RECENT) {
+  if (messages.length <= baseKeepRecent) {
     return { messages: [...messages], summary: '', trimmedCount: 0 };
   }
 
-  let keepRecent = KEEP_RECENT;
+  let keepRecent = Math.min(baseKeepRecent, messages.length);
   let result: TrimResult;
 
   do {

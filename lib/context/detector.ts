@@ -52,6 +52,28 @@ export class DependencyDetector {
   }
 
   /**
+   * Incremental mode: detect dependencies for a single source file
+   * while still resolving references across the full file set.
+   */
+  detectDependenciesForFile(
+    file: FileContext,
+    allFiles: FileContext[]
+  ): FileDependency[] {
+    switch (file.fileType) {
+      case 'liquid':
+        return this.detectLiquidDependencies(file, allFiles);
+      case 'javascript':
+        return this.detectJavaScriptDependencies(file, allFiles);
+      case 'css':
+        return this.detectCssDependencies(file, allFiles);
+      case 'other':
+        return this.detectTemplateSectionDependencies(file, allFiles);
+      default:
+        return [];
+    }
+  }
+
+  /**
    * Template → section chain: template JSON files reference sections by type.
    */
   private detectTemplateSectionDependencies(

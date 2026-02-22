@@ -13,6 +13,25 @@ export type IssueSeverity = 'error' | 'warning' | 'info';
 /** Execution status for agent runs */
 export type ExecutionStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'awaiting_approval';
 
+/** Structured orchestration signal types emitted during PM/specialist execution. */
+export type OrchestrationSignalType =
+  | 'specialist_dispatched'
+  | 'specialist_started'
+  | 'specialist_completed'
+  | 'specialist_failed'
+  | 'specialist_reaction'
+  | 'specialist_escalated'
+  | 'review_started'
+  | 'review_completed';
+
+/** Typed activity signal used for PM decisions and UI telemetry. */
+export interface OrchestrationActivitySignal {
+  type: OrchestrationSignalType;
+  agent: AgentType | 'review';
+  timestampMs: number;
+  details?: Record<string, unknown>;
+}
+
 /** A message exchanged between agents through the coordinator */
 export interface AgentMessage {
   id: string;
@@ -173,7 +192,28 @@ export interface AgentResult {
     model: string;
     provider: string;
     tier: string;
+    phaseDiagnostics?: {
+      finalPhase: string;
+      referentialMode?: boolean;
+      applyAttempted?: boolean;
+      replayArtifactsResolved?: number;
+      replayAppliedCount?: number;
+      replaySource?: string;
+      sessionId?: string;
+    };
   };
+  /** Verification evidence from post-loop checks. */
+  verificationEvidence?: {
+    syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
+    themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+    checkedFiles: string[];
+    totalCheckTimeMs: number;
+  };
+  /** Structured failure metadata populated by the coordinator when enactment fails. */
+  failureReason?: 'search_replace_failed' | 'file_not_found' | 'policy_blocked' | 'timeout' | 'validation_failed' | null;
+  suggestedAction?: string | null;
+  failedTool?: string | null;
+  failedFilePath?: string | null;
 }
 
 /** In-memory state for an active execution */
@@ -197,6 +237,9 @@ export interface ReviewResult {
   approved: boolean;
   issues: ReviewIssue[];
   summary: string;
+  specCompliant?: boolean;
+  codeQualityApproved?: boolean;
+  failedSection?: 'spec' | 'code_quality' | 'both' | null;
 }
 
 /** A specific issue found by the review agent */
@@ -206,7 +249,7 @@ export interface ReviewIssue {
   line?: number;
   description: string;
   suggestion?: string;
-  category: 'syntax' | 'truncation' | 'breaking_change' | 'consistency' | 'security';
+  category: 'syntax' | 'truncation' | 'breaking_change' | 'consistency' | 'security' | 'spec_compliance';
 }
 
 /** A learned coding pattern from user approvals */
@@ -248,6 +291,7 @@ export interface AgentExecution {
   id: string;
   project_id: string;
   user_id: string;
+  session_id: string | null;
   user_request: string;
   status: 'completed' | 'failed';
   execution_log: AgentMessage[];

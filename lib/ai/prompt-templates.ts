@@ -15,13 +15,13 @@ export interface PromptTemplate {
 }
 
 export const TEMPLATE_CATEGORIES: Record<TemplateCategory, { label: string; icon: string }> = {
-  layout: { label: 'Layout', icon: '\u{1F4D0}' },
-  styling: { label: 'Styling', icon: '\u{1F3A8}' },
-  performance: { label: 'Performance', icon: '\u{26A1}' },
-  accessibility: { label: 'Accessibility', icon: '\u{267F}' },
-  seo: { label: 'SEO', icon: '\u{1F50D}' },
-  content: { label: 'Content', icon: '\u{1F4DD}' },
-  custom: { label: 'Custom', icon: '\u{2B50}' },
+  layout: { label: 'Layout', icon: 'layout' },
+  styling: { label: 'Styling', icon: 'styling' },
+  performance: { label: 'Performance', icon: 'performance' },
+  accessibility: { label: 'Accessibility', icon: 'accessibility' },
+  seo: { label: 'SEO', icon: 'seo' },
+  content: { label: 'Content', icon: 'content' },
+  custom: { label: 'Custom', icon: 'custom' },
 };
 
 export const BUILT_IN_TEMPLATES: PromptTemplate[] = [

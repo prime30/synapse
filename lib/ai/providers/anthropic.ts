@@ -139,6 +139,50 @@ function buildSystemField(systemMessage: AIMessage | undefined): unknown {
   return systemMessage.content;
 }
 
+/**
+ * Normalize continuation content blocks before sending back to Anthropic.
+ * Anthropic accepts `tool_result` only when there is a matching prior `tool_use`.
+ * For PTC loops we may capture `server_tool_use`; convert those to `tool_use`
+ * for the next-turn assistant replay.
+ */
+function normalizeContinuationBlocks(blocks: unknown[]): unknown[] {
+  const normalized: unknown[] = [];
+  for (const raw of blocks) {
+    const block = raw as {
+      type?: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+      text?: string;
+    };
+    if (!block?.type) continue;
+    if (block.type === 'thinking') continue;
+    if (block.type === 'server_tool_use') {
+      if (!block.id || !block.name) continue;
+      normalized.push({
+        type: 'tool_use',
+        id: block.id,
+        name: block.name,
+        input: block.input ?? {},
+      });
+      continue;
+    }
+    if (
+      block.type === 'code_execution_tool_result' ||
+      block.type === 'bash_code_execution_tool_result' ||
+      block.type === 'text_editor_code_execution_tool_result' ||
+      block.type === 'web_fetch_tool_result' ||
+      block.type === 'web_search_tool_result' ||
+      block.type === 'tool_search_tool_result'
+    ) {
+      // Do not replay prior tool result blocks in assistant continuation content.
+      continue;
+    }
+    normalized.push(raw);
+  }
+  return normalized;
+}
+
 /** PTC (Programmatic Tool Calling) is only supported by Sonnet and Opus, not Haiku. */
 function modelSupportsPTC(model: string): boolean {
   return !model.includes('haiku');
@@ -401,7 +445,7 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
           // Assistant message with tool use content blocks
           return {
             role: 'assistant',
-            content: msg.__toolCalls as unknown[],
+            content: normalizeContinuationBlocks(msg.__toolCalls as unknown[]),
           };
         }
         if (msg.__toolResults) {
@@ -561,7 +605,10 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
       const anthropicMessages = chatMessages.map((m) => {
         const msg = m as unknown as Record<string, unknown>;
         if (m.role === 'assistant' && msg.__toolCalls) {
-          return { role: 'assistant', content: msg.__toolCalls as unknown[] };
+          return {
+            role: 'assistant',
+            content: normalizeContinuationBlocks(msg.__toolCalls as unknown[]),
+          };
         }
         if (msg.__toolResults) {
           return { role: 'user', content: msg.__toolResults as unknown[] };

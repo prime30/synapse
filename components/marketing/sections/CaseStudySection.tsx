@@ -183,7 +183,7 @@ export function CaseStudySection() {
                       exit={{ opacity: 0, scale: 0.5 }}
                       transition={{ duration: 0.3, ease: EASE }}
                     >
-                      😮
+                      !
                     </motion.span>
                   )}
                   {hourCount === 1 && phase === 'blown' && (
@@ -195,7 +195,7 @@ export function CaseStudySection() {
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.4, ease: EASE }}
                     >
-                      🤯
+                      !!
                     </motion.span>
                   )}
                 </AnimatePresence>

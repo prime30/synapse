@@ -16,6 +16,9 @@ import {
   PROPOSE_PLAN_TOOL,
   ASK_CLARIFICATION_TOOL,
   NAVIGATE_PREVIEW_TOOL,
+  CREATE_PLAN_TOOL,
+  UPDATE_PLAN_TOOL,
+  READ_PLAN_TOOL,
 } from './definitions';
 
 // -- New V2-only tools --------------------------------------------------
@@ -152,6 +155,7 @@ export function selectV2Tools(
         t.name === 'run_diagnostics',
     ),
     CHECK_LINT_TOOL,
+    READ_PLAN_TOOL,
   ];
 
   if (intentMode === 'ask') {
@@ -161,11 +165,18 @@ export function selectV2Tools(
   tools.push(PROPOSE_CODE_EDIT_TOOL);
   tools.push(SEARCH_REPLACE_TOOL);
   tools.push(CREATE_FILE_TOOL);
-  tools.push(PROPOSE_PLAN_TOOL);
   tools.push(ASK_CLARIFICATION_TOOL);
   tools.push(RUN_SPECIALIST_TOOL);
   tools.push(RUN_REVIEW_TOOL);
   tools.push(GET_SECOND_OPINION_TOOL);
+
+  // Keep planning explicit: only expose propose_plan and plan mutation tools in plan mode.
+  // This prevents code/debug turns from looping back into planning.
+  if (intentMode === 'plan' || intentMode === 'summary') {
+    tools.push(PROPOSE_PLAN_TOOL);
+    tools.push(CREATE_PLAN_TOOL);
+    tools.push(UPDATE_PLAN_TOOL);
+  }
 
   if (hasPreview) {
     tools.push(NAVIGATE_PREVIEW_TOOL);

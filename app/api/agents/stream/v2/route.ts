@@ -23,6 +23,7 @@ import type { ThinkingEvent, AgentToolEvent } from '@/lib/agents/coordinator';
 import { startTrace } from '@/lib/observability/tracer';
 import { incrementCounter, recordHistogram } from '@/lib/observability/metrics';
 import { createModuleLogger } from '@/lib/observability/logger';
+import { resolveReferentialArtifactsFromExecutions } from '@/lib/agents/referential-artifact-ledger';
 
 export const maxDuration = 300;
 
@@ -36,6 +37,7 @@ const SSE_HEADERS = {
 
 const streamSchema = z.object({
   projectId: z.string().uuid(),
+  sessionId: z.string().uuid().optional(),
   request: z.string().min(1, 'Request is required'),
   history: z.array(z.object({
     role: z.enum(['user', 'assistant']),
@@ -47,6 +49,15 @@ const streamSchema = z.object({
   activeFilePath: z.string().optional(),
   explicitFiles: z.array(z.string()).optional(),
   openTabs: z.array(z.string()).optional(),
+  isReferentialCodePrompt: z.boolean().optional(),
+  referentialArtifacts: z.array(
+    z.object({
+      filePath: z.string().min(1),
+      newContent: z.string(),
+      reasoning: z.string().optional(),
+      capturedAt: z.string().optional(),
+    }),
+  ).optional(),
   elementHint: z.object({
     sectionId: z.string().optional(),
     sectionType: z.string().optional(),
@@ -194,13 +205,42 @@ export async function POST(req: NextRequest) {
             detail: `${fileContexts.length} files, ${prefResult.length} prefs`,
           });
 
+          const referentialCodePrompt =
+            (body.intentMode ?? 'code') === 'code' &&
+            (
+              body.isReferentialCodePrompt === true ||
+              /^(yes|ok|do it|go ahead|apply|implement|implement the code changes you just suggested|make those changes now|make those code changes now)[\s.!]*$/i.test(body.request.trim()) ||
+              /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(body.request) ||
+              /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(body.request)
+            );
           const trimmed = trimHistory(
             body.history.map((h) => ({ role: h.role, content: h.content })),
+            {
+              budget: referentialCodePrompt ? 60_000 : 30_000,
+              keepRecent: referentialCodePrompt ? 24 : 10,
+            },
           );
           const recentMessages = trimmed.messages.map((m) => m.content);
+          const incomingArtifacts = body.referentialArtifacts ?? [];
+          let resolvedArtifacts = incomingArtifacts;
+          if (referentialCodePrompt && incomingArtifacts.length === 0) {
+            try {
+              resolvedArtifacts = await resolveReferentialArtifactsFromExecutions({
+                projectId: body.projectId,
+                userId,
+                preferredPaths: body.explicitFiles,
+                maxArtifacts: 8,
+              });
+            } catch {
+              resolvedArtifacts = incomingArtifacts;
+            }
+          }
 
           const coordinatorOptions: V2CoordinatorOptions = {
+            sessionId: body.sessionId,
             intentMode: body.intentMode ?? 'code',
+            isReferentialCodePrompt: referentialCodePrompt,
+            referentialArtifacts: resolvedArtifacts,
             model: fallbackChain[0],
             domContext: body.domContext,
             memoryContext,
@@ -300,6 +340,7 @@ export async function POST(req: NextRequest) {
                 fileContexts,
                 prefResult,
                 {
+                  sessionId: body.sessionId,
                   intentMode: body.intentMode ?? 'code',
                   model: body.model,
                   domContext: body.domContext,
@@ -342,6 +383,42 @@ export async function POST(req: NextRequest) {
               console.error('[V2 Stream] usage recording failed:', err),
             );
           }
+
+          // ── Execution outcome summary for UI badges ─────────────────
+          const changedFiles = result.changes?.length ?? 0;
+          const blockedByPolicy =
+            Boolean(result.needsClarification) &&
+            /plan-first policy requires plan approval/i.test(result.analysis ?? '');
+          const codeModeNoChangeFailure =
+            (body.intentMode ?? 'code') === 'code' &&
+            changedFiles === 0 &&
+            !blockedByPolicy;
+          const needsInput =
+            !result.success ||
+            codeModeNoChangeFailure ||
+            (Boolean(result.needsClarification) && !blockedByPolicy);
+          const outcome: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input' =
+            changedFiles > 0
+              ? 'applied'
+              : blockedByPolicy
+                ? 'blocked-policy'
+                : needsInput
+                  ? 'needs-input'
+                  : 'no-change';
+          emitEvent({
+            type: 'execution_outcome',
+            executionId,
+            sessionId: body.sessionId ?? null,
+            outcome,
+            changedFiles,
+            needsClarification: Boolean(result.needsClarification),
+            failureReason: result.failureReason ?? null,
+            suggestedAction: result.suggestedAction ?? null,
+            failedTool: result.failedTool ?? null,
+            failedFilePath: result.failedFilePath ?? null,
+            reviewFailedSection: result.reviewResult?.failedSection ?? null,
+            verificationEvidence: result.verificationEvidence ?? null,
+          });
 
           emitEvent({
             type: 'context_stats',

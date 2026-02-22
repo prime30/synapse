@@ -24,7 +24,7 @@ export const metadata: Metadata = {
       'Compare Synapse orchestrated agents vs. raw LLM calls across real Shopify development scenarios.',
     images: [
       {
-        url: 'https://synapse.shop/og-image.png',
+        url: 'https://synapse.shop/og-lambda-animated.svg',
         width: 1200,
         height: 630,
         alt: 'Synapse AI Agent Performance Benchmarks',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'AI Agent Benchmarks — Synapse',
     description:
       'Head-to-head: Synapse orchestrated agents vs. raw LLM calls on real Shopify theme tasks.',
-    images: ['https://synapse.shop/og-image.png'],
+    images: ['https://synapse.shop/og-lambda-animated.svg'],
   },
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://synapse.shop/benchmarks' },

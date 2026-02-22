@@ -43,6 +43,7 @@ function yieldToEventLoop(): Promise<void> {
 
 const streamSchema = z.object({
   projectId: z.string().uuid(),
+  sessionId: z.string().uuid().optional(),
   request: z.string().min(1, 'Request is required'),
   history: z
     .array(
@@ -415,6 +416,7 @@ export async function POST(request: NextRequest) {
           const recentMessages = (body.history ?? []).map((m: { content: string }) => m.content);
           // Plan/code/debug: coordinator merges openTabs + explicitFiles into context.
           const coordinatorOptions = {
+            sessionId: body.sessionId,
             action,
             model: body.model,
             mode: body.mode === 'auto' ? undefined : body.mode,
@@ -625,6 +627,7 @@ export async function POST(request: NextRequest) {
               controller.enqueue(`data: ${JSON.stringify({
                 type: 'change_preview',
                 executionId,
+                sessionId: body.sessionId ?? null,
                 projectId: body.projectId,
                 changes: result.changes.map((c) => ({
                   fileId: c.fileId,

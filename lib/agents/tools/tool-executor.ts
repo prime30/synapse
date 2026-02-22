@@ -35,6 +35,47 @@ export interface ToolExecutorContext {
   themeId?: string;
 }
 
+type DbFileRow = {
+  id: string;
+  name: string;
+  path: string | null;
+  file_type: string;
+  content: string | null;
+};
+
+async function resolveFileFromDatabase(
+  fileId: string,
+  ctx: ToolExecutorContext,
+): Promise<FileContext | null> {
+  if (!ctx.supabaseClient || !ctx.projectId || !fileId) return null;
+
+  const candidates: Array<{ column: 'id' | 'path' | 'name'; value: string }> = [
+    { column: 'id', value: fileId },
+    { column: 'path', value: fileId },
+    { column: 'name', value: fileId.split('/').pop() ?? fileId },
+  ];
+
+  for (const candidate of candidates) {
+    const { data, error } = await ctx.supabaseClient
+      .from('files')
+      .select('id,name,path,file_type,content')
+      .eq('project_id', ctx.projectId)
+      .eq(candidate.column, candidate.value)
+      .maybeSingle<DbFileRow>();
+    if (error) continue;
+    if (!data) continue;
+    if (typeof data.content !== 'string') return null;
+    return {
+      fileId: data.id,
+      fileName: data.path ?? data.name,
+      path: data.path ?? data.name,
+      fileType: (data.file_type as FileContext['fileType']) ?? 'other',
+      content: data.content,
+    };
+  }
+  return null;
+}
+
 /**
  * Execute a tool call and return the result.
  * Each tool has access to the project files and context engine.
@@ -60,7 +101,13 @@ export async function executeToolCall(
           (f.path && f.path.endsWith(`/${fileId}`))
         );
         if (!file) {
-          return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
+          const dbResolved = await resolveFileFromDatabase(fileId, ctx);
+          if (dbResolved) {
+            files.push(dbResolved);
+            file = dbResolved;
+          } else {
+            return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
+          }
         }
         // Hydrate if content is a stub
         if (file.content.startsWith('[') && ctx.loadContent) {
@@ -348,7 +395,7 @@ export async function executeToolCall(
         // Find and replace
         const idx = currentContent.indexOf(oldText);
         if (idx === -1) {
-          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure it matches exactly (including whitespace and indentation).`, is_error: true };
+          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure old_text matches the file exactly (including whitespace and indentation). If this fails again, switch to propose_code_edit with the full updated file content.`, is_error: true };
         }
 
         // Check uniqueness — only the first match is replaced

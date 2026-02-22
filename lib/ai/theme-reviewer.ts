@@ -872,7 +872,7 @@ function buildReviewPrompt(files: ThemeFileInput[]): string {
     const forCount = (file.content.match(/\{%-?\s*for\b/g) ?? []).length;
     const ifCount = (file.content.match(/\{%-?\s*if\b/g) ?? []).length;
 
-    let summary = `📄 ${normalised} (${lineCount} lines, ${sizeKB} KB)`;
+    let summary = `File ${normalised} (${lineCount} lines, ${sizeKB} KB)`;
     if (renderCount || forCount || ifCount) {
       const tags = [];
       if (renderCount) tags.push(`render:${renderCount}`);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { Tags } from 'lucide-react';
 import { useShopifyDiscounts } from '@/hooks/useShopifyDiscounts';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -326,7 +327,7 @@ export function DiscountsPanel({ connectionId }: DiscountsPanelProps) {
       {/* Empty state */}
       {priceRules.length === 0 && !showForm && (
         <div className="flex flex-col items-center py-8 px-4 text-center">
-          <span className="text-2xl mb-2">🏷️</span>
+          <Tags className="h-7 w-7 mb-2 ide-text-muted" aria-hidden />
           <p className="text-sm ide-text-muted font-medium">No discounts</p>
           <p className="text-[11px] ide-text-quiet mt-1 max-w-[240px]">
             Create a discount to offer special pricing to your customers.

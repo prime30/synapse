@@ -2,6 +2,7 @@ import { parseLiquidAST } from '@/lib/liquid/liquid-ast';
 import { TypeChecker } from '@/lib/liquid/type-checker';
 import { ScopeTracker } from '@/lib/liquid/scope-tracker';
 import type { CodeChange, FileContext } from '@/lib/types/agent';
+import type { ThemeCheckIssue } from '@/lib/agents/tools/theme-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,4 +256,46 @@ function formatVerificationIssues(issues: VerificationIssue[]): string {
   }
 
   return lines.join('\n');
+}
+
+// ── Theme Check Issue Conversion ─────────────────────────────────────────────
+
+const THEME_CHECK_CATEGORY_MAP: Record<string, VerificationIssue['category']> = {
+  'schema-validation': 'schema',
+  'schema': 'schema',
+  'syntax': 'syntax',
+  'liquid-syntax': 'syntax',
+  'deprecation': 'syntax',
+  'template-json': 'reference',
+  'required-files': 'reference',
+  'accessibility': 'syntax',
+  'performance': 'syntax',
+};
+
+export function convertThemeCheckIssue(issue: ThemeCheckIssue): VerificationIssue | null {
+  if (issue.severity === 'info') return null;
+  return {
+    file: issue.file ?? 'unknown',
+    line: issue.line ?? 0,
+    severity: issue.severity === 'error' ? 'error' : 'warning',
+    message: issue.message,
+    category: THEME_CHECK_CATEGORY_MAP[issue.category] ?? 'syntax',
+  };
+}
+
+export function mergeThemeCheckIssues(
+  existing: VerificationIssue[],
+  themeCheckIssues: ThemeCheckIssue[],
+): VerificationIssue[] {
+  const seen = new Set(existing.map(i => `${i.file}:${i.line}:${i.message}`));
+  const merged = [...existing];
+  for (const tci of themeCheckIssues) {
+    const converted = convertThemeCheckIssue(tci);
+    if (!converted) continue;
+    const key = `${converted.file}:${converted.line}:${converted.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(converted);
+  }
+  return merged;
 }

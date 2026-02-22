@@ -124,6 +124,8 @@ export interface ToolResult {
   tool_use_id: string;
   content: string;
   is_error?: boolean;
+  /** Attached plan data for rendering PlanCard in chat. */
+  planData?: unknown;
 }
 
 /** Extended completion result that may include tool calls. */

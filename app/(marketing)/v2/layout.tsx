@@ -29,7 +29,7 @@ export const metadata: Metadata = {
       'Ship Shopify themes in hours, not weeks. AI code generation, Liquid intelligence, and one-click deploy.',
     images: [
       {
-        url: 'https://synapse.shop/og-image.png',
+        url: 'https://synapse.shop/og-lambda-animated.svg',
         width: 1200,
         height: 630,
         alt: 'Synapse IDE — AI-powered Shopify theme development',
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Synapse — AI-Powered Shopify Theme IDE',
     description: 'Ship Shopify themes in hours, not weeks.',
-    images: ['https://synapse.shop/og-image.png'],
+    images: ['https://synapse.shop/og-lambda-animated.svg'],
   },
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://synapse.shop/v2' },

@@ -15,7 +15,9 @@ export interface ValidationIssue {
     | 'css_class'
     | 'template_section'
     | 'schema_setting'
-    | 'asset_reference';
+    | 'asset_reference'
+    | 'deprecated_liquid'
+    | 'locale_key';
 }
 
 export interface ValidationResult {
@@ -315,6 +317,75 @@ function checkCssClassConsistency(
   return issues;
 }
 
+/** Check for deprecated Liquid constructs that should not be introduced. */
+function checkDeprecatedLiquidConstructs(
+  filePath: string,
+  content: string
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!filePath.endsWith('.liquid')) return issues;
+
+  if (/\{%-?\s*include\s+['"]/g.test(content)) {
+    issues.push({
+      severity: 'warning',
+      file: filePath,
+      description: 'Deprecated Liquid tag `{% include %}` detected; prefer `{% render %}`.',
+      category: 'deprecated_liquid',
+    });
+  }
+  if (/\|\s*img_url\b/g.test(content)) {
+    issues.push({
+      severity: 'warning',
+      file: filePath,
+      description: 'Deprecated Liquid filter `img_url` detected; prefer `image_url`.',
+      category: 'deprecated_liquid',
+    });
+  }
+
+  return issues;
+}
+
+function flattenLocaleKeys(input: unknown, prefix = ''): string[] {
+  if (!input || typeof input !== 'object') return [];
+  const obj = input as Record<string, unknown>;
+  const keys: string[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const current = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object') {
+      keys.push(...flattenLocaleKeys(v, current));
+    } else {
+      keys.push(current);
+    }
+  }
+  return keys;
+}
+
+/** Check translation keys used in Liquid exist in at least one locale JSON file. */
+function checkLocaleKeyReferences(
+  filePath: string,
+  content: string,
+  localeKeys: Set<string>
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!filePath.endsWith('.liquid') || localeKeys.size === 0) return issues;
+
+  const tRegex = /['"]([a-zA-Z0-9_.-]+)['"]\s*\|\s*t\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = tRegex.exec(content)) !== null) {
+    const key = match[1];
+    if (!localeKeys.has(key)) {
+      issues.push({
+        severity: 'warning',
+        file: filePath,
+        description: `Translation key "${key}" not found in locale files.`,
+        category: 'locale_key',
+      });
+    }
+  }
+
+  return issues;
+}
+
 /**
  * Validate a change set for cross-file consistency.
  * Runs before the review agent to catch structural breakage.
@@ -325,6 +396,17 @@ export function validateChangeSet(
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const mergedMap = buildMergedFileMap(changes, projectFiles);
+  const localeKeys = new Set<string>();
+
+  for (const [path, entry] of mergedMap) {
+    if (!path.startsWith('locales/') || !path.endsWith('.json')) continue;
+    try {
+      const parsed = JSON.parse(entry.content) as unknown;
+      for (const k of flattenLocaleKeys(parsed)) localeKeys.add(k);
+    } catch {
+      // JSON parse issues are handled by other validators.
+    }
+  }
 
   const fileSet = new Set<string>(mergedMap.keys());
 
@@ -334,6 +416,8 @@ export function validateChangeSet(
       issues.push(...checkSchemaSettings(filePath, content));
       issues.push(...checkAssetReferences(filePath, content, fileSet));
       issues.push(...checkCssClassConsistency(filePath, content, mergedMap));
+      issues.push(...checkDeprecatedLiquidConstructs(filePath, content));
+      issues.push(...checkLocaleKeyReferences(filePath, content, localeKeys));
     }
 
     if (filePath.includes('templates/') && filePath.endsWith('.json')) {

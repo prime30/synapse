@@ -29,6 +29,7 @@ function computeDiffStats(original: string, proposed: string): { added: number; 
 
 export interface ChangePreviewCardProps {
   executionId: string;
+  sessionId?: string | null;
   projectId: string;
   changes: ChangeEntry[];
   onApproved?: (appliedCount: number) => void;
@@ -37,6 +38,7 @@ export interface ChangePreviewCardProps {
 
 export function ChangePreviewCard({
   executionId,
+  sessionId,
   projectId,
   changes,
   onApproved,
@@ -125,6 +127,14 @@ export function ChangePreviewCard({
           <span className="text-xs font-semibold ide-text-2">
             {changes.length} file{changes.length !== 1 ? 's' : ''} changed
           </span>
+          {sessionId ? (
+            <span
+              className="rounded border ide-border-subtle px-1.5 py-0.5 text-[10px] font-mono ide-text-muted"
+              title={sessionId}
+            >
+              session {sessionId.slice(0, 8)}
+            </span>
+          ) : null}
           <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono">
             <span className="text-emerald-600 dark:text-emerald-400">+{totalStats.added}</span>
             <span className="text-red-500 dark:text-red-400">-{totalStats.removed}</span>

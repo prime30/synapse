@@ -37,7 +37,7 @@ const COSMETIC_KEYWORDS = /\b(color|colour|font|spacing|padding|margin|backgroun
 
 const VALUE_CHANGE_PATTERN = /\b(change|set|update|make|switch)\b.*\b(to|from|into)\b/i;
 
-const COMPLEX_KEYWORDS = /\b(add section|new section|new feature|redesign|refactor|rebuild|rewrite|create.*component|implement|build)\b/i;
+const COMPLEX_KEYWORDS = /\b(add section|new section|new feature|redesign|refactor|rebuild|rewrite|create.*component)\b/i;
 
 const ARCHITECTURAL_KEYWORDS = /\b(entire theme|full refactor|migrate from|restructure|overhaul|rebuild.*theme|refactor.*entire|rewrite.*all)\b/i;
 
@@ -147,8 +147,13 @@ export async function classifyWithLLM(
     ? { lastMessageSummary: options }
     : options ?? {};
 
-  const hasConversation = (opts.recentMessages?.length ?? 0) >= 2;
-  const conversationFloor: RoutingTier | null = hasConversation ? 'COMPLEX' : null;
+  const recentHistory = (opts.recentMessages ?? []).join(' ');
+  const conversationFloor: RoutingTier | null =
+    (opts.recentMessages?.length ?? 0) >= 2 &&
+    CODE_GENERATION_SIGNALS.test(recentHistory) &&
+    FOLLOW_UP_SIGNALS.test(request)
+      ? 'COMPLEX'
+      : null;
 
   try {
     const model = resolveModel({ action: 'classify' });
@@ -248,9 +253,12 @@ export async function classifyRequest(
     });
   }
 
-  // Default fallback -- respect multi-turn conversation floor
+  // Default fallback -- respect multi-turn conversation floor only with code-gen signals
   if (options?.recentMessages && options.recentMessages.length >= 2) {
-    return { tier: 'COMPLEX', confidence: 0.5, source: 'default' };
+    const hist = options.recentMessages.join(' ');
+    if (CODE_GENERATION_SIGNALS.test(hist) && FOLLOW_UP_SIGNALS.test(request)) {
+      return { tier: 'COMPLEX', confidence: 0.5, source: 'default' };
+    }
   }
   return { tier: 'SIMPLE', confidence: 0.5, source: 'default' };
 }

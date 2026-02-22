@@ -157,6 +157,14 @@ const MergeConflictPanel = dynamic(
 
 type ViewMode = 'editor' | 'canvas' | 'customize';
 
+interface PushLogEntry {
+  id: string;
+  pushed_at: string;
+  note: string | null;
+  trigger: string;
+  file_count: number;
+}
+
 /** Map theme file path to storefront preview path via the template classifier. */
 function previewPathFromFile(filePath: string | null | undefined): string {
   if (!filePath) return '/';
@@ -206,6 +214,12 @@ export default function ProjectPage() {
   const [batchDiff, setBatchDiff] = useState<{ title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }> } | null>(null);
   const [themeReview, setThemeReview] = useState<ThemeReviewReportData | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [pendingAttachedFile, setPendingAttachedFile] = useState<{
+    id: string;
+    name: string;
+    path: string;
+    nonce: number;
+  } | null>(null);
   const [devReportOpen, setDevReportOpen] = useState(false);
   const [devReportPrePush, setDevReportPrePush] = useState(false);
 
@@ -242,6 +256,10 @@ export default function ProjectPage() {
   const [storeNav, setStoreNav] = useState('sync');
   const [qualityNav, setQualityNav] = useState('issues');
   const [historyNav, setHistoryNav] = useState('versions');
+  const [pushLog, setPushLog] = useState<PushLogEntry[]>([]);
+  const [isLoadingPushLog, setIsLoadingPushLog] = useState(false);
+  const [pushLogError, setPushLogError] = useState<string | null>(null);
+  const [pushLogReloadKey, setPushLogReloadKey] = useState(0);
 
   const tabs = useFileTabs({ projectId });
   const { rawFiles } = useProjectFiles(projectId);
@@ -377,6 +395,42 @@ export default function ProjectPage() {
     fileLanguage: activeFile?.file_type ?? null,
     selection: sidebar.context.selection ?? null,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeActivity !== 'history' || historyNav !== 'push-log') return;
+
+    setIsLoadingPushLog(true);
+    setPushLogError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/shopify/push-history`);
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          const code = String(errJson?.code ?? errJson?.error?.code ?? 'UNKNOWN');
+          const message = String(errJson?.error ?? errJson?.message ?? `HTTP ${res.status}`);
+          throw new Error(`${message} (${code})`);
+        }
+        const json = await res.json();
+        const rows = (json?.data ?? json ?? []) as PushLogEntry[];
+        if (!cancelled) {
+          setPushLog(Array.isArray(rows) ? rows : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const msg = error instanceof Error ? error.message : 'Could not load push log.';
+          setPushLogError(msg);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingPushLog(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeActivity, historyNav, projectId, pushLogReloadKey]);
 
   // EPIC 14: Developer Memory
   const memory = useMemory(projectId);
@@ -1024,8 +1078,12 @@ export default function ProjectPage() {
 
   /** Open a plan file in the editor by path. Falls back to handleOpenFile. */
   const handleOpenPlanFile = useCallback((filePath: string) => {
+    if (filePath.startsWith('/plan')) {
+      router.push(filePath);
+      return;
+    }
     handleOpenFile(filePath);
-  }, [handleOpenFile]);
+  }, [handleOpenFile, router]);
 
   /** Build selected plan steps by sending them as a message to the agent. */
   const handleBuildPlan = useCallback((checkedSteps: Set<number>) => {
@@ -1666,7 +1724,42 @@ export default function ProjectPage() {
                       </div>
                     )}
                     {historyNav === 'push-log' && (
-                      <div className="p-4 ide-text-3 text-sm">Push log coming soon</div>
+                      <div className="flex-1 overflow-auto p-2">
+                        {isLoadingPushLog ? (
+                          <div className="p-4 ide-text-3 text-sm">Loading push log...</div>
+                        ) : pushLogError ? (
+                          <div className="p-4">
+                            <p className="text-sm text-amber-600 dark:text-amber-300">{pushLogError}</p>
+                            <button
+                              type="button"
+                              onClick={() => setPushLogReloadKey((k) => k + 1)}
+                              className="mt-2 inline-flex items-center rounded border ide-border-subtle px-2 py-1 text-xs ide-text-2 hover:ide-text ide-hover transition-colors"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : pushLog.length === 0 ? (
+                          <div className="p-4 ide-text-3 text-sm">No push history yet</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {pushLog.map((entry) => (
+                              <div key={entry.id} className="rounded border ide-border-subtle ide-surface-panel px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm ide-text truncate">
+                                    {entry.note?.trim() || `${entry.trigger.replace('_', ' ')} push`}
+                                  </p>
+                                  <span className="text-xs ide-text-muted shrink-0">
+                                    {entry.file_count} file{entry.file_count === 1 ? '' : 's'}
+                                  </span>
+                                </div>
+                                <p className="text-xs ide-text-muted mt-0.5">
+                                  {new Date(entry.pushed_at).toLocaleString()}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </>
@@ -1845,6 +1938,17 @@ export default function ProjectPage() {
                       if (match) {
                         tabs.openTab(match.id);
                       }
+                    }}
+                    onAddToChatContext={(filePath) => {
+                      const file = rawFiles.find((f) => f.path === filePath);
+                      if (!file) return;
+                      setPendingAttachedFile({
+                        id: file.id,
+                        name: file.name ?? (file.path?.split('/').pop() ?? filePath),
+                        path: filePath,
+                        nonce: Date.now(),
+                      });
+                      agentChatRef.current?.querySelector('textarea')?.focus();
                     }}
                   />
 
@@ -2167,23 +2271,6 @@ export default function ProjectPage() {
 
           {/* Agent Chat — fills full right sidebar */}
           <div ref={agentChatRef} className="flex-1 flex flex-col min-h-0 p-2">
-            {/* Agent chat header with Memory button */}
-            <div className="flex items-center justify-end mb-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setMemoryOpen(true)}
-                className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium ide-text-3 hover:text-accent ide-hover rounded transition-colors"
-                title="Open Developer Memory"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                  <path d="M12 2a9 9 0 0 1 9 9c0 3.9-3.2 7.2-6.4 9.8a2.1 2.1 0 0 1-2.6 0h0A23.3 23.3 0 0 1 3 11a9 9 0 0 1 9-9Z" />
-                  <path d="M12 2a7 7 0 0 0-4.9 2" />
-                  <path d="M12 2a7 7 0 0 1 4.9 2" />
-                  <circle cx="12" cy="11" r="3" />
-                </svg>
-                Memory
-              </button>
-            </div>
             <AgentPromptPanel
               projectId={projectId}
               context={sidebar.context}
@@ -2216,6 +2303,9 @@ export default function ProjectPage() {
               onOpenFiles={handleOpenFiles}
               onScrollToEdit={handleScrollToEdit}
               onAgentActivity={handleAgentActivity}
+              onOpenMemory={() => setMemoryOpen(true)}
+              isMemoryOpen={memoryOpen}
+              pendingAttachedFile={pendingAttachedFile}
             />
           </div>
         </aside>
@@ -2334,8 +2424,8 @@ export default function ProjectPage() {
       )}
 
       {memoryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 dark:bg-black/50 backdrop-blur-sm" onClick={() => setMemoryOpen(false)}>
-          <div className="relative w-full max-w-xl max-h-[80vh] rounded-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 dark:bg-black/50 backdrop-blur-sm p-3" onClick={() => setMemoryOpen(false)}>
+          <div className="relative w-full max-w-xl max-h-[80vh] rounded-xl border ide-border-subtle overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <MemoryPanel
               memories={memory.memories}
               isLoading={memory.isLoading}
@@ -2343,18 +2433,8 @@ export default function ProjectPage() {
               onForget={memory.forget}
               onEdit={memory.edit}
               activeConventionCount={memory.activeConventionCount}
+              onClose={() => setMemoryOpen(false)}
             />
-            <button
-              type="button"
-              onClick={() => setMemoryOpen(false)}
-              className="absolute top-2 right-2 z-10 rounded p-1 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
-              aria-label="Close memory panel"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
           </div>
         </div>
       )}

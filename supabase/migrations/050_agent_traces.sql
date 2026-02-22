@@ -1,4 +1,4 @@
-﻿-- Migration 042: Agent traces table for EPIC B (observability)
+-- Migration 050: Agent traces table for EPIC B (observability)
 
 CREATE TABLE IF NOT EXISTS agent_traces (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -17,11 +17,35 @@ CREATE INDEX IF NOT EXISTS idx_agent_traces_trace ON agent_traces (trace_id);
 
 ALTER TABLE agent_traces ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read own traces" ON agent_traces
-  FOR SELECT
-  USING (user_id = auth.uid());
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agent_traces'
+      AND policyname = 'Users can read own traces'
+  ) THEN
+    CREATE POLICY "Users can read own traces" ON agent_traces
+      FOR SELECT
+      USING (user_id = auth.uid());
+  END IF;
+END
+$$;
 
-CREATE POLICY "Service role full access" ON agent_traces
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agent_traces'
+      AND policyname = 'Service role full access'
+  ) THEN
+    CREATE POLICY "Service role full access" ON agent_traces
+      FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END
+$$;

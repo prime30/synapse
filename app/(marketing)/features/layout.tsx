@@ -27,7 +27,7 @@ export const metadata: Metadata = {
       'AI code generation, Liquid intelligence, performance scoring, and one-click deploy for Shopify theme developers.',
     images: [
       {
-        url: 'https://synapse.shop/og-image.png',
+        url: 'https://synapse.shop/og-lambda-animated.svg',
         width: 1200,
         height: 630,
         alt: 'Synapse IDE Features — AI-powered Shopify theme development',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     title: 'Features — Synapse Shopify Theme IDE',
     description:
       'AI code generation, Liquid intelligence, performance scoring, and one-click deploy.',
-    images: ['https://synapse.shop/og-image.png'],
+    images: ['https://synapse.shop/og-lambda-animated.svg'],
   },
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://synapse.shop/features' },

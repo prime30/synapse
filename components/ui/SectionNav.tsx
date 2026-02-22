@@ -31,10 +31,10 @@ export function SectionNav({
 }: SectionNavProps) {
   return (
     <div className="shrink-0 select-none">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b ide-border-subtle">
-        <span className="text-[13px] font-semibold ide-text">{title}</span>
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b ide-border-subtle min-w-0">
+        <span className="text-[13px] font-semibold ide-text truncate min-w-0 flex-1" title={title}>{title}</span>
         {headerActions && (
-          <div className="flex items-center gap-1">{headerActions}</div>
+          <div className="flex items-center gap-1 shrink-0">{headerActions}</div>
         )}
       </div>
 

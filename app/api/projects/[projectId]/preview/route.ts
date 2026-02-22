@@ -513,11 +513,17 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const fullPathWithQuery = otherParams.toString()
       ? (pathParam.includes('?') ? `${pathParam}&${otherParams}` : `${pathParam}?${otherParams}`)
       : pathParam;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H1',location:'app/api/projects/[projectId]/preview/route.ts:get-start',message:'preview GET request received',data:{projectId,pathParam,fullPathWithQuery,accept:request.headers.get('accept') ?? '',secFetchDest:request.headers.get('sec-fetch-dest') ?? '',ua:(request.headers.get('user-agent') ?? '').slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     // --- Check in-memory cache before hitting Shopify ---
     const cacheKey = getCacheKey(projectId, fullPathWithQuery);
     const cached = getCachedResponse(cacheKey);
     if (cached) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H5',location:'app/api/projects/[projectId]/preview/route.ts:cache-hit',message:'preview cache hit',data:{projectId,cacheKey,contentType:cached.contentType,status:cached.status},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const ifNoneMatch = request.headers.get('if-none-match');
       if (ifNoneMatch && cached.etag && ifNoneMatch.trim() === cached.etag.trim()) {
         return new NextResponse(null, {
@@ -537,11 +543,33 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       String(themeId),
       fullPathWithQuery
     );
+    const incomingCookie = request.headers.get('cookie') || '';
+    // #region agent log
+    console.log('[preview-debug] request context', {
+      projectId,
+      pathParam,
+      hasCookie: incomingCookie.length > 0,
+      cookieLength: incomingCookie.length,
+      ua: (request.headers.get('user-agent') || '').slice(0, 80),
+    });
+    // #endregion
 
     const shopifyRes = await fetch(shopifyUrl.toString(), {
       headers: buildForwardHeaders(request),
       redirect: 'follow',
     });
+    // #region agent log
+    console.log('[preview-debug] shopify response', {
+      projectId,
+      pathParam,
+      status: shopifyRes.status,
+      ok: shopifyRes.ok,
+      contentType: shopifyRes.headers.get('content-type') || '',
+    });
+    // #endregion
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'app/api/projects/[projectId]/preview/route.ts:shopify-response',message:'shopify response received',data:{projectId,status:shopifyRes.status,ok:shopifyRes.ok,contentType:shopifyRes.headers.get('content-type') ?? '',shopifyUrl:shopifyUrl.pathname},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     // Forward 304 Not Modified from Shopify
     if (shopifyRes.status === 304) {
@@ -557,6 +585,16 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       // 503 = service unavailable — empty dev theme not yet populated
       // Both indicate the background push hasn't finished; show auto-retry page.
       if (shopifyRes.status === 422 || shopifyRes.status === 503) {
+        // #region agent log
+        console.warn('[preview-debug] returning syncing fallback', {
+          projectId,
+          pathParam,
+          status: shopifyRes.status,
+        });
+        // #endregion
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'app/api/projects/[projectId]/preview/route.ts:syncing-fallback',message:'returning syncing fallback html',data:{projectId,status:shopifyRes.status,pathParam},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         return new NextResponse(SYNCING_PREVIEW_HTML, {
           status: 200,
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -584,6 +622,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const headers = stripIframeHeaders(shopifyRes);
     // Forward Shopify cookies to the client (rewritten for our origin)
     rewriteSetCookieHeaders(shopifyRes, headers);
+    // #region agent log
+    console.log('[preview-debug] response cookie headers', {
+      projectId,
+      pathParam,
+      hasSetCookie: !!shopifyRes.headers.get('set-cookie'),
+    });
+    // #endregion
 
     // HTML responses: only inject into full page documents, NOT section
     // rendering fragments (which are also text/html but lack <head>/<html>).
@@ -599,6 +644,17 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       if (isFullPage) {
         const origin = request.nextUrl.origin;
         const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+        // #region agent log
+        console.log('[preview-debug] returning full page html', {
+          projectId,
+          pathParam,
+          includesBridge: rewritten.includes('data-synapse-bridge="1"'),
+          includesInterceptor: rewritten.includes('data-synapse-interceptor="1"'),
+        });
+        // #endregion
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H3',location:'app/api/projects/[projectId]/preview/route.ts:fullpage-html',message:'returning rewritten full-page html',data:{projectId,pathParam,includesBridge:rewritten.includes('data-synapse-bridge="1"'),includesInterceptor:rewritten.includes('data-synapse-interceptor="1"')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         const respBody = new TextEncoder().encode(rewritten);
         headers.set('X-Synapse-Cache', 'MISS');
         // HTML: getCacheTTL returns 0, so we don't cache
@@ -618,6 +674,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       }
 
       // HTML fragment (section rendering, etc.) — cache with shorter TTL
+      // #region agent log
+      console.log('[preview-debug] returning html fragment', {
+        projectId,
+        pathParam,
+      });
+      // #endregion
       const fragBody = new TextEncoder().encode(html);
       headers.set('X-Synapse-Cache', 'MISS');
       const fragTtl = getCacheTTL(contentType);

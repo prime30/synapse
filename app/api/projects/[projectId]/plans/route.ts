@@ -1,47 +1,19 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
-import { validateBody } from '@/lib/middleware/validation';
+import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
-import { createPlan, listPlans } from '@/lib/services/plans';
+import { listPlans, createPlan } from '@/lib/services/plans';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
 }
 
-const todoSchema = z.object({
-  id: z.string().min(1),
-  content: z.string().min(1),
-  status: z.enum(['pending', 'in_progress', 'completed']),
-});
-
-const createSchema = z.object({
-  name: z.string().min(1).max(200),
-  content: z.string(),
-  todos: z.array(todoSchema).optional(),
-});
-
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
     const { projectId } = await params;
-
-    const plans = listPlans(projectId);
-
-    return successResponse({
-      plans: plans.map((p) => {
-        const total = p.todos.length;
-        const completed = p.todos.filter((t) => t.status === 'completed').length;
-        return {
-          id: p.id,
-          name: p.name,
-          todoProgress: { completed, total },
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
-        };
-      }),
-    });
+    await requireProjectAccess(request, projectId);
+    const plans = await listPlans(projectId);
+    return successResponse({ plans });
   } catch (error) {
     return handleAPIError(error);
   }
@@ -49,11 +21,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
     const { projectId } = await params;
-    const body = await validateBody(createSchema)(request);
+    const userId = await requireProjectAccess(request, projectId);
+    const body = await request.json();
+    const { name, content, todos, sessionId } = body;
 
-    const plan = createPlan(projectId, body.name, body.content, body.todos);
+    if (!name || typeof name !== 'string') {
+      return successResponse({ error: 'name is required' }, 400);
+    }
+
+    const plan = await createPlan(
+      projectId,
+      name,
+      content ?? '',
+      todos,
+      userId,
+      sessionId,
+    );
 
     return successResponse({ plan }, 201);
   } catch (error) {

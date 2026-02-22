@@ -66,6 +66,7 @@ interface ExecutionMeta {
   projectId: string;
   userId: string;
   userRequest: string;
+  sessionId?: string;
   status: ExecutionStatus;
   startedAt: string; // ISO
   completedAt?: string; // ISO
@@ -77,7 +78,8 @@ export function createExecution(
   executionId: string,
   projectId: string,
   userId: string,
-  userRequest: string
+  userRequest: string,
+  sessionId?: string,
 ): ExecutionState {
   const now = new Date();
   const meta: ExecutionMeta = {
@@ -85,6 +87,7 @@ export function createExecution(
     projectId,
     userId,
     userRequest,
+    sessionId,
     status: 'pending',
     startedAt: now.toISOString(),
   };
@@ -246,6 +249,8 @@ export async function getScreenshots(executionId: string): Promise<ScreenshotDat
 export async function persistExecution(executionId: string): Promise<void> {
   const state = await getExecution(executionId);
   if (!state) return;
+  const cache = getCache();
+  const meta = await cache.get<ExecutionMeta>(metaKey(executionId));
 
   const allChanges: CodeChange[] = [];
   for (const changes of state.proposedChanges.values()) {
@@ -258,6 +263,7 @@ export async function persistExecution(executionId: string): Promise<void> {
       id: state.executionId,
       project_id: state.projectId,
       user_id: state.userId,
+      session_id: meta?.sessionId ?? null,
       user_request: state.userRequest,
       status: state.status === 'completed' ? 'completed' : 'failed',
       execution_log: state.messages,
@@ -271,7 +277,6 @@ export async function persistExecution(executionId: string): Promise<void> {
   }
 
   // Clean up all Redis keys for this execution
-  const cache = getCache();
   const deletePromises = [
     cache.delete(metaKey(executionId)),
     cache.delete(activeKey(executionId)),

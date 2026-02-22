@@ -500,7 +500,7 @@ export const PROPOSE_PLAN_TOOL: ToolDefinition = {
 
 export const PROPOSE_CODE_EDIT_TOOL: ToolDefinition = {
   name: 'propose_code_edit',
-  description: 'Propose a code edit to an existing project file. Provide the complete new file content. The user will see a diff and can approve or reject.',
+  description: 'Propose a code edit to an existing project file. Provide the complete new file content. Use this when search_replace fails repeatedly, or when making large structural changes. The user will see a diff and can approve or reject.',
   input_schema: {
     type: 'object',
     properties: {
@@ -556,7 +556,7 @@ export const NAVIGATE_PREVIEW_TOOL: ToolDefinition = {
 
 export const SEARCH_REPLACE_TOOL: ToolDefinition = {
   name: 'search_replace',
-  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes.',
+  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes. If search_replace fails twice due to old_text mismatch, switch to propose_code_edit.',
   input_schema: {
     type: 'object',
     properties: {
@@ -585,6 +585,93 @@ export const CREATE_FILE_TOOL: ToolDefinition = {
   },
 };
 
+// ── Plan management tools (agent-facing, persistent plans) ──────────────────
+
+export const CREATE_PLAN_TOOL: ToolDefinition = {
+  name: 'create_plan',
+  description: 'Create a persistent plan with optional todos. The plan is saved to the database and shown as a card in chat.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Short plan name' },
+      content: { type: 'string', description: 'Full plan content in markdown' },
+      status: { type: 'string', enum: ['draft', 'active'], description: 'Plan status (default: draft)' },
+      todos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Todo description' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+          },
+          required: ['content'],
+        },
+        description: 'Optional list of actionable todos',
+      },
+    },
+    required: ['name', 'content'],
+    additionalProperties: false,
+  },
+};
+
+export const UPDATE_PLAN_TOOL: ToolDefinition = {
+  name: 'update_plan',
+  description: 'Update an existing plan. Requires expectedVersion for conflict detection.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', description: 'Plan ID to update' },
+      expectedVersion: { type: 'number', description: 'Current version of the plan (for conflict detection)' },
+      name: { type: 'string' },
+      content: { type: 'string' },
+      status: { type: 'string', enum: ['draft', 'active', 'archived'] },
+      addTodos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Todo description' },
+          },
+          required: ['content'],
+        },
+        description: 'New todos to add to the plan',
+      },
+      removeTodoIds: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'IDs of todos to remove from the plan',
+      },
+      todoStatusChanges: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            todoId: { type: 'string', description: 'Todo ID to update' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'New status' },
+          },
+          required: ['todoId', 'status'],
+        },
+        description: 'Status changes for existing todos',
+      },
+    },
+    required: ['planId', 'expectedVersion'],
+    additionalProperties: false,
+  },
+};
+
+export const READ_PLAN_TOOL: ToolDefinition = {
+  name: 'read_plan',
+  description: "Read a plan's full content and todos to use as context for implementation.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', description: 'Plan ID to read' },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+  },
+};
+
 /** All summary-phase tools. */
 export const SUMMARY_TOOLS: ToolDefinition[] = [
   PROPOSE_PLAN_TOOL,
@@ -593,6 +680,9 @@ export const SUMMARY_TOOLS: ToolDefinition[] = [
   ASK_CLARIFICATION_TOOL,
   NAVIGATE_PREVIEW_TOOL,
   CREATE_FILE_TOOL,
+  CREATE_PLAN_TOOL,
+  UPDATE_PLAN_TOOL,
+  READ_PLAN_TOOL,
 ];
 
 /**

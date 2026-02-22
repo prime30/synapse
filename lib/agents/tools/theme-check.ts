@@ -555,11 +555,13 @@ function checkPerformance(files: ThemeFileInput[]): ThemeCheckIssue[] {
 export function runThemeCheck(
   files: ThemeFileInput[],
   targetFile?: string,
+  options?: { bypassCache?: boolean },
 ): ThemeCheckResult {
-  // Check cache
   const cacheKey = getCacheKey(files, targetFile);
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  if (!options?.bypassCache) {
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+  }
 
   const start = performance.now();
 

@@ -17,6 +17,8 @@ import {
   ArchiveRestore,
   BookOpen,
   Brain,
+  Copy,
+  MoreHorizontal,
 } from 'lucide-react';
 import type { ChatSession } from './SessionHistory';
 
@@ -47,6 +49,11 @@ function hasDiffStats(session: ChatSession): boolean {
   );
 }
 
+function displaySessionId(sessionId: string): string {
+  const compact = sessionId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `CHAT-${compact}`;
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -62,13 +69,25 @@ interface SessionSidebarProps {
   onRename?: (sessionId: string, title: string) => void;
   onArchive?: (sessionId: string) => void;
   onUnarchive?: (sessionId: string) => void;
+  onArchiveAll?: () => void;
+  onArchiveOlderThan?: (days: number) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  onLoadAllHistory?: () => void;
+  isLoadingAllHistory?: boolean;
   /** Open prompt template library (moved from input bar into sidebar). */
   onOpenTemplates?: () => void;
   /** Open training review panel. */
   onOpenTraining?: () => void;
+  /** Recent Shopify push records for version visibility. */
+  pushLog?: Array<{
+    id: string;
+    pushedAt: string;
+    trigger: string;
+    note: string | null;
+    fileCount: number;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,11 +110,16 @@ export function SessionSidebar({
   onRename,
   onArchive,
   onUnarchive,
+  onArchiveAll,
+  onArchiveOlderThan,
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  onLoadAllHistory,
+  isLoadingAllHistory = false,
   onOpenTemplates,
   onOpenTraining,
+  pushLog = [],
 }: SessionSidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -107,6 +131,9 @@ export function SessionSidebar({
   const [editTitle, setEditTitle] = useState('');
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const bulkMenuRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -141,6 +168,17 @@ export function SessionSidebar({
     }
   }, [editingId]);
 
+  useEffect(() => {
+    if (!bulkMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target as Node)) {
+        setBulkMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bulkMenuOpen]);
+
   const handleStartRename = useCallback((session: ChatSession) => {
     setEditingId(session.id);
     setEditTitle(session.title);
@@ -158,14 +196,32 @@ export function SessionSidebar({
   }, []);
 
   const filteredSessions = debouncedQuery
-    ? sessions.filter((s) => s.title.toLowerCase().includes(debouncedQuery))
+    ? sessions.filter((s) =>
+        s.title.toLowerCase().includes(debouncedQuery) ||
+        s.id.toLowerCase().includes(debouncedQuery) ||
+        displaySessionId(s.id).toLowerCase().includes(debouncedQuery),
+      )
     : sessions;
 
   const filteredArchived = debouncedQuery
     ? archivedSessions.filter((s) =>
-        s.title.toLowerCase().includes(debouncedQuery),
+        s.title.toLowerCase().includes(debouncedQuery) ||
+        s.id.toLowerCase().includes(debouncedQuery) ||
+        displaySessionId(s.id).toLowerCase().includes(debouncedQuery),
       )
     : archivedSessions;
+
+  const visiblePushLog = pushLog.slice(0, 8);
+
+  // If active list is empty but archived has items, auto-open archived so
+  // prior chats are immediately visible.
+  useEffect(() => {
+    if (collapsed) return;
+    if (archivedOpen) return;
+    if (filteredSessions.length === 0 && filteredArchived.length > 0) {
+      setArchivedOpen(true);
+    }
+  }, [collapsed, archivedOpen, filteredSessions.length, filteredArchived.length]);
 
   const renderSessionItem = (session: ChatSession, isArchived = false) => {
     const isActive = session.id === activeSessionId;
@@ -259,6 +315,31 @@ export function SessionSidebar({
               <p className="text-[11px] ide-text truncate leading-tight">
                 {session.title || 'Untitled agent'}
               </p>
+              <div className="mt-0.5 flex items-center gap-1">
+                <span
+                  className="inline-flex items-center rounded border ide-border-subtle px-1 py-0.5 text-[9px] font-mono ide-text-muted"
+                  title={session.id}
+                >
+                  {displaySessionId(session.id)}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard?.writeText(session.id).then(() => {
+                      setCopiedSessionId(session.id);
+                      setTimeout(() => {
+                        setCopiedSessionId((prev) => (prev === session.id ? null : prev));
+                      }, 1500);
+                    }).catch(() => {});
+                  }}
+                  className="inline-flex items-center justify-center rounded p-0.5 ide-text-quiet hover:ide-text-2 ide-hover transition-colors"
+                  title={copiedSessionId === session.id ? 'Copied full session id' : 'Copy full session id'}
+                  aria-label="Copy full session id"
+                >
+                  <Copy className="h-2.5 w-2.5" />
+                </button>
+              </div>
               {hasDiffStats(session) ? (
                 <p className="text-[10px] leading-tight mt-0.5 flex items-center gap-1.5">
                   <span className="text-green-500 dark:text-green-400">
@@ -412,6 +493,25 @@ export function SessionSidebar({
               {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               New Agent
             </button>
+            {hasMore && onLoadAllHistory && (
+              <button
+                type="button"
+                onClick={onLoadAllHistory}
+                disabled={isLoadingAllHistory || isLoadingMore}
+                className="w-full flex items-center justify-center gap-1.5 ide-surface-inset border ide-border-subtle rounded px-2 py-1 text-[10px] font-medium ide-text-muted hover:ide-text transition-colors disabled:opacity-60 disabled:pointer-events-none"
+                title="Load all remaining history"
+                aria-label="Load all history"
+              >
+                {(isLoadingAllHistory || isLoadingMore) ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading history...
+                  </>
+                ) : (
+                  'Load all history'
+                )}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -465,10 +565,57 @@ export function SessionSidebar({
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {!collapsed && (
-          <div className="px-2 pt-2 pb-1">
+          <div className="px-2 pt-2 pb-1 flex items-center justify-between group/header">
             <span className="text-[10px] font-semibold uppercase tracking-wider ide-text-muted">
               Agents
             </span>
+            {(onArchiveAll || onArchiveOlderThan) && sessions.length > 0 && (
+              <div className="relative" ref={bulkMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setBulkMenuOpen((v) => !v)}
+                  className="p-0.5 rounded ide-text-quiet hover:ide-text-2 ide-hover opacity-0 group-hover/header:opacity-100 transition-opacity"
+                  title="Bulk archive options"
+                  aria-label="Bulk archive options"
+                >
+                  <MoreHorizontal className="h-3 w-3" />
+                </button>
+                {bulkMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-44 ide-surface-panel border ide-border-subtle rounded-md shadow-lg z-50 py-0.5 text-[11px]">
+                    {onArchiveOlderThan && (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-1.5 ide-hover ide-text-2 flex items-center gap-2"
+                          onClick={() => { onArchiveOlderThan(1); setBulkMenuOpen(false); }}
+                        >
+                          <Archive className="h-3 w-3 ide-text-muted shrink-0" />
+                          Archive older than 1 day
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-1.5 ide-hover ide-text-2 flex items-center gap-2"
+                          onClick={() => { onArchiveOlderThan(7); setBulkMenuOpen(false); }}
+                        >
+                          <Archive className="h-3 w-3 ide-text-muted shrink-0" />
+                          Archive older than 7 days
+                        </button>
+                      </>
+                    )}
+                    {onArchiveAll && (
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-1.5 ide-hover text-red-400 dark:text-red-400 flex items-center gap-2"
+                        onClick={() => { onArchiveAll(); setBulkMenuOpen(false); }}
+                      >
+                        <Archive className="h-3 w-3 shrink-0" />
+                        Archive all
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -530,6 +677,38 @@ export function SessionSidebar({
               )}
             </>
           )}
+
+        {!collapsed && visiblePushLog.length > 0 && (
+          <>
+            <div className="border-t ide-border-subtle mt-1" />
+            <div className="px-2 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider ide-text-muted">
+                Push log
+              </span>
+            </div>
+            <div className="pb-1">
+              {visiblePushLog.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="px-2 py-1.5 border-l-2 border-transparent"
+                  title={entry.note ?? undefined}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] ide-text truncate">
+                      {entry.note?.trim() || (entry.trigger === 'manual' ? 'Manual push' : `${entry.trigger.replace('_', ' ')} push`)}
+                    </span>
+                    <span className="text-[10px] ide-text-muted shrink-0">
+                      {entry.fileCount} file{entry.fileCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] ide-text-muted">
+                    {relativeTime(entry.pushedAt)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

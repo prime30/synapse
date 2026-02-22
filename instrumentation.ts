@@ -25,6 +25,14 @@ export async function register() {
     }
   }
 
+  // Initialize hybrid router from environment (tuned model canary routing)
+  try {
+    const { initFromEnv } = await import('./lib/finetune/hybrid-router');
+    initFromEnv();
+  } catch {
+    // Fine-tune module not critical; skip silently
+  }
+
   // In-process cron scheduling for non-Vercel deployments (e.g. Fly.io).
   // On Vercel, crons are handled by vercel.json — skip to avoid double-firing.
   const isVercel = !!process.env.VERCEL;

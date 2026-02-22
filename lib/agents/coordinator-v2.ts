@@ -17,11 +17,14 @@ import type {
   AgentResult,
   CodeChange,
   FileContext,
+  ReviewResult,
   UserPreference,
   ElementHint,
+  OrchestrationActivitySignal,
 } from '@/lib/types/agent';
 import type {
   AIMessage,
+  AICompletionOptions,
   AIToolCompletionResult,
   ToolStreamEvent,
   ToolStreamResult,
@@ -32,23 +35,42 @@ import type {
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
 import { AIProviderError } from '@/lib/ai/errors';
 import { ContextEngine } from '@/lib/ai/context-engine';
+import { SymbolGraphCache } from '@/lib/context/symbol-graph-cache';
+import { DependencyGraphCache } from '@/lib/context/dependency-graph-cache';
+import type { FileContext as GraphFileContext } from '@/lib/context/types';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { isToolProvider } from './base';
 import type { AIAction } from './model-router';
 import { getProviderForModel, resolveModel } from './model-router';
 import { classifyRequest, escalateTier, type RoutingTier } from './classifier';
-import { verifyChanges } from './verification';
+import {
+  shouldRequirePlanModeFirst,
+  buildPlanModeRequiredMessage,
+  hasPlanApprovalSignal,
+  buildMaximumEffortPolicyMessage,
+} from './orchestration-policy';
+import { verifyChanges, mergeThemeCheckIssues } from './verification';
 import { validateChangeSet } from './validation/change-set-validator';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
+import { runThemeCheck } from './tools/theme-check';
+import { buildThemePlanArtifact } from './theme-plan-artifact';
+import { ensureCompletionResponseSections } from './completion-format-guard';
 import {
   createExecution,
   updateExecutionStatus,
   persistExecution,
+  setReviewResult,
+  addMessage,
 } from './execution-store';
 import { learnFromExecution, extractQueryTerms } from '@/lib/ai/term-mapping-learner';
 import { selectV2Tools } from './tools/v2-tool-definitions';
 import { executeToolCall, type ToolExecutorContext } from './tools/tool-executor';
 import { executeV2Tool, type V2ToolExecutorContext } from './tools/v2-tool-executor';
+import { SpecialistLifecycleTracker } from './specialist-lifecycle';
+import {
+  defaultSpecialistReactionRules,
+  evaluateSpecialistReactions,
+} from './reaction-rules';
 import {
   V2_PM_SYSTEM_PROMPT,
   V2_CODE_OVERLAY,
@@ -73,6 +95,219 @@ const TOTAL_TIMEOUT_MS = 300_000; // 5 minutes
 
 /** Max characters for a single tool result before truncation. */
 const MAX_TOOL_RESULT_CHARS = 6_000;
+
+const LOOKUP_TOOL_NAMES = new Set([
+  'read_file',
+  'search_files',
+  'grep_content',
+  'glob_files',
+  'semantic_search',
+  'list_files',
+  'get_dependency_graph',
+]);
+const PTC_PRE_EDIT_NON_MUTATING_TOOLS = new Set([
+  ...LOOKUP_TOOL_NAMES,
+  'code_execution',
+]);
+
+const MUTATING_CLIENT_TOOL_NAMES = new Set([
+  'propose_code_edit',
+  'search_replace',
+  'create_file',
+  'write_file',
+  'delete_file',
+  'rename_file',
+]);
+
+const PRE_EDIT_LOOKUP_BUDGET = 2;
+const PRE_EDIT_BLOCK_THRESHOLD = 2;
+const PRE_EDIT_ENFORCEMENT_ABORT_THRESHOLD = 2;
+const REFERENTIAL_PRE_EDIT_LOOKUP_BUDGET = 0;
+const REFERENTIAL_PRE_EDIT_BLOCK_THRESHOLD = 1;
+
+// ── Targeted region extraction for mutation failure recovery ───────────────
+
+export interface TargetRegion {
+  rawSnippet: string;
+  contextSnippet: string;
+  matchType: 'exact' | 'fuzzy' | 'fallback';
+  startLine: number;
+  endLine: number;
+}
+
+export interface MutationFailure {
+  toolName: 'search_replace' | 'propose_code_edit' | 'create_file';
+  filePath: string;
+  reason: 'old_text_not_found' | 'file_not_found' | 'validation_error' | 'unknown';
+  attemptedOldText?: string;
+  attemptCount: number;
+  fileLineCount?: number;
+}
+
+export function extractTargetRegion(
+  fileContent: string,
+  attemptedOldText: string,
+  contextLines = 20,
+): TargetRegion {
+  const lines = fileContent.split('\n');
+
+  // Strategy 1: exact substring match
+  const exactIdx = fileContent.indexOf(attemptedOldText);
+  if (exactIdx !== -1) {
+    const beforeMatch = fileContent.slice(0, exactIdx);
+    const matchStartLine = beforeMatch.split('\n').length - 1;
+    const matchEndLine = matchStartLine + attemptedOldText.split('\n').length - 1;
+    const start = Math.max(0, matchStartLine - contextLines);
+    const end = Math.min(lines.length - 1, matchEndLine + contextLines);
+    const regionLines = lines.slice(start, end + 1);
+    return {
+      rawSnippet: regionLines.join('\n'),
+      contextSnippet: regionLines.map((l, i) => `${String(start + i + 1).padStart(4)}| ${l}`).join('\n'),
+      matchType: 'exact',
+      startLine: start + 1,
+      endLine: end + 1,
+    };
+  }
+
+  // Strategy 2: fuzzy match via normalized whitespace
+  const normalizeWs = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const normalizedTarget = normalizeWs(attemptedOldText);
+  if (normalizedTarget.length > 10) {
+    for (let i = 0; i < lines.length; i++) {
+      let windowText = '';
+      const windowSize = attemptedOldText.split('\n').length + 4;
+      const end = Math.min(i + windowSize, lines.length);
+      for (let j = i; j < end; j++) {
+        windowText += (j > i ? ' ' : '') + lines[j];
+      }
+      if (normalizeWs(windowText).includes(normalizedTarget)) {
+        const start = Math.max(0, i - contextLines);
+        const regionEnd = Math.min(lines.length - 1, end - 1 + contextLines);
+        const regionLines = lines.slice(start, regionEnd + 1);
+        return {
+          rawSnippet: regionLines.join('\n'),
+          contextSnippet: regionLines.map((l, idx) => `${String(start + idx + 1).padStart(4)}| ${l}`).join('\n'),
+          matchType: 'fuzzy',
+          startLine: start + 1,
+          endLine: regionEnd + 1,
+        };
+      }
+    }
+  }
+
+  // Strategy 3: bounded fallback — first 100 lines or full file if under 200
+  const fallbackEnd = lines.length <= 200 ? lines.length : 100;
+  const regionLines = lines.slice(0, fallbackEnd);
+  return {
+    rawSnippet: regionLines.join('\n'),
+    contextSnippet: regionLines.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n'),
+    matchType: 'fallback',
+    startLine: 1,
+    endLine: fallbackEnd,
+  };
+}
+
+export function parseReviewToolContent(content: string): ReviewResult | null {
+  if (!content || !/^Review\s+(APPROVED|NEEDS CHANGES)/m.test(content)) return null;
+
+  const lines = content.split(/\r?\n/);
+  const approved = /^Review\s+APPROVED/i.test(lines[0] ?? '');
+  const issues: ReviewResult['issues'] = [];
+
+  let summary = '';
+  let inIssues = false;
+  let specCompliant = true;
+  let codeQualityApproved = true;
+  for (const rawLine of lines.slice(1)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^Issues\s*\(\d+\):/i.test(line)) {
+      inIssues = true;
+      continue;
+    }
+    const specMatch = line.match(/^Spec compliance:\s*(PASS|FAIL)/i);
+    if (specMatch) {
+      specCompliant = specMatch[1].toUpperCase() === 'PASS';
+      continue;
+    }
+    const qualMatch = line.match(/^Code quality:\s*(PASS|FAIL)/i);
+    if (qualMatch) {
+      codeQualityApproved = qualMatch[1].toUpperCase() === 'PASS';
+      continue;
+    }
+    if (!inIssues && !summary) {
+      summary = line;
+      continue;
+    }
+    if (!inIssues) continue;
+
+    const match = line.match(/^- \[(error|warning|info)\]\s+(.+?):\s+(.+)$/i);
+    if (!match) continue;
+    const sev = match[1].toLowerCase();
+    const severity: 'error' | 'warning' | 'info' =
+      sev === 'error' || sev === 'warning' || sev === 'info' ? sev : 'info';
+    issues.push({
+      severity,
+      file: match[2].trim(),
+      description: match[3].trim(),
+      category: 'consistency',
+    });
+  }
+
+  const failedSection: ReviewResult['failedSection'] =
+    !specCompliant && !codeQualityApproved ? 'both'
+    : !specCompliant ? 'spec'
+    : !codeQualityApproved ? 'code_quality'
+    : null;
+
+  return {
+    approved: !specCompliant ? false : approved,
+    summary: summary || (approved ? 'Review approved.' : 'Review needs changes.'),
+    issues,
+    specCompliant,
+    codeQualityApproved,
+    failedSection,
+  };
+}
+
+function buildLookupSignature(toolName: string, input: Record<string, unknown> | undefined): string | null {
+  const payload = input ?? {};
+  switch (toolName) {
+    case 'read_file': {
+      const fileId = String(payload.fileId ?? '').trim().toLowerCase();
+      return fileId ? `read_file:${fileId}` : null;
+    }
+    case 'search_files': {
+      const query = String(payload.query ?? '').trim().toLowerCase();
+      const max = Number(payload.maxResults ?? 5);
+      return query ? `search_files:${query}:${max}` : null;
+    }
+    case 'grep_content': {
+      const pattern = String(payload.pattern ?? '').trim();
+      const fp = String(payload.filePattern ?? '').trim().toLowerCase();
+      const cs = Boolean(payload.caseSensitive);
+      const max = Number(payload.maxResults ?? 50);
+      return pattern ? `grep_content:${pattern}:${fp}:${cs}:${max}` : null;
+    }
+    case 'glob_files': {
+      const pattern = String(payload.pattern ?? '').trim().toLowerCase();
+      return pattern ? `glob_files:${pattern}` : null;
+    }
+    case 'semantic_search': {
+      const query = String(payload.query ?? '').trim().toLowerCase();
+      const limit = Number(payload.limit ?? 5);
+      return query ? `semantic_search:${query}:${limit}` : null;
+    }
+    case 'list_files':
+      return 'list_files';
+    case 'get_dependency_graph': {
+      const fileId = String(payload.fileId ?? '').trim().toLowerCase();
+      return fileId ? `get_dependency_graph:${fileId}` : null;
+    }
+    default:
+      return null;
+  }
+}
 
 /** No-op — kept for backward compat with benchmark test imports. */
 export function resetV2StreamHealth(): void { /* no-op */ }
@@ -108,6 +343,8 @@ const V2_ONLY_TOOLS = new Set(['run_specialist', 'run_review']);
 // ── Module-level ContextEngine ──────────────────────────────────────────────
 
 const contextEngine = new ContextEngine(16_000);
+const symbolGraphCache = new SymbolGraphCache();
+const dependencyGraphCache = new DependencyGraphCache();
 
 // ── Prompt file extraction ────────────────────────────────────────────────────
 
@@ -241,8 +478,21 @@ function enforceFileContextRule(
 
 // ── Options interface ───────────────────────────────────────────────────────
 
+export interface ReferentialArtifact {
+  filePath: string;
+  newContent: string;
+  reasoning?: string;
+  capturedAt?: string;
+  checksum?: string;
+  confidence?: number;
+  sourceExecutionId?: string;
+}
+
 export interface V2CoordinatorOptions {
+  sessionId?: string;
   intentMode?: 'code' | 'ask' | 'plan' | 'debug';
+  isReferentialCodePrompt?: boolean;
+  referentialArtifacts?: ReferentialArtifact[];
   model?: string;
   /** Bypasses ALL model routing (action, tier, agent defaults). For benchmarks. */
   forcedModel?: string;
@@ -250,6 +500,8 @@ export interface V2CoordinatorOptions {
   _tierOverride?: RoutingTier;
   /** Internal: escalation depth counter to prevent infinite recursion. */
   _escalationDepth?: number;
+  /** Internal: direct-enactment recovery retry depth counter. */
+  _enactmentRetryDepth?: number;
   domContext?: string;
   memoryContext?: string;
   diagnosticContext?: string;
@@ -294,6 +546,7 @@ interface V2Context {
  * file manifest listing all project files with sizes for the agent's awareness.
  */
 async function buildV2Context(
+  projectId: string,
   files: FileContext[],
   userRequest: string,
   options: V2CoordinatorOptions,
@@ -328,6 +581,33 @@ async function buildV2Context(
   );
 
   let preloaded = result.files;
+  const graphMatchedIds: string[] = [];
+
+  // Graph-first retrieval: include symbol-matched files before generic fallback.
+  try {
+    const graphFiles: GraphFileContext[] = files.map((f) => ({
+      fileId: f.fileId,
+      fileName: f.fileName,
+      fileType: f.fileType,
+      content: f.content,
+      sizeBytes: f.content.length,
+      lastModified: new Date(),
+      dependencies: { imports: [], exports: [], usedBy: [] },
+    }));
+    const { graph } = await symbolGraphCache.getOrCompute(projectId, graphFiles);
+    const graphMatched = symbolGraphCache.lookupFiles(graph, userRequest, tier === 'TRIVIAL' ? 4 : 10);
+    const preloadedIdsSet = new Set(preloaded.map((f) => f.fileId));
+    for (const fileName of graphMatched) {
+      const match = files.find((f) => f.fileName === fileName || f.path === fileName);
+      if (match && !preloadedIdsSet.has(match.fileId)) {
+        preloaded.push(match);
+        preloadedIdsSet.add(match.fileId);
+      }
+      if (match) graphMatchedIds.push(match.fileId);
+    }
+  } catch {
+    // Best-effort only.
+  }
 
   // Merge prompt-mentioned files that weren't already selected
   const preloadedIds = new Set(preloaded.map(f => f.fileId));
@@ -337,6 +617,21 @@ async function buildV2Context(
       preloadedIds.add(pmf.fileId);
     }
   }
+
+  // Context packing scorer: prioritize active/open tabs/prompt/symbol files.
+  const score = new Map<string, number>();
+  for (const f of result.files) score.set(f.fileId, (score.get(f.fileId) ?? 0) + 10);
+  for (const id of graphMatchedIds) score.set(id, (score.get(id) ?? 0) + 20);
+  for (const f of promptMentionedFiles) score.set(f.fileId, (score.get(f.fileId) ?? 0) + 35);
+  for (const id of options.openTabs ?? []) score.set(id, (score.get(id) ?? 0) + 30);
+  if (options.activeFilePath) {
+    const active = files.find((f) => f.path === options.activeFilePath || f.fileName === options.activeFilePath);
+    if (active) score.set(active.fileId, (score.get(active.fileId) ?? 0) + 40);
+  }
+  const preloadedCap = tier === 'TRIVIAL' ? 6 : tier === 'SIMPLE' ? 12 : 20;
+  preloaded = [...new Map(preloaded.map((f) => [f.fileId, f])).values()]
+    .sort((a, b) => (score.get(b.fileId) ?? 0) - (score.get(a.fileId) ?? 0))
+    .slice(0, preloadedCap);
 
   // Hydrate selected files with real content if loadContent is available
   if (options.loadContent && preloaded.length > 0) {
@@ -384,7 +679,7 @@ async function buildV2Context(
  * Replaces verbose tool results from earlier iterations with short summaries,
  * keeping only the most recent iteration's results intact.
  */
-function compressOldToolResults(messages: AIMessage[]): void {
+export function compressOldToolResults(messages: AIMessage[]): void {
   // Find all user messages with __toolResults
   const toolResultMsgIndices: number[] = [];
   for (let i = 0; i < messages.length; i++) {
@@ -403,12 +698,107 @@ function compressOldToolResults(messages: AIMessage[]): void {
     if (!msg.__toolResults) continue;
 
     for (const block of msg.__toolResults) {
+      if (block.is_error) continue;
       if (block.content && block.content.length > 200) {
         block.content = block.content.slice(0, 150) + '\n[... compressed ...]';
       }
     }
   }
 }
+
+function appendExecutionTerminalLog(
+  executionId: string,
+  messageType: 'task' | 'result' | 'error' | 'question',
+  instruction: string,
+): void {
+  addMessage(executionId, {
+    id: `${executionId}-${Date.now()}`,
+    executionId,
+    fromAgent: 'project_manager',
+    toAgent: 'coordinator',
+    messageType,
+    payload: { instruction },
+    timestamp: new Date(),
+  });
+}
+
+function buildFallbackClarificationOptions(
+  allFiles: FileContext[],
+  artifacts: ReferentialArtifact[],
+): Array<{ id: string; label: string; recommended?: boolean }> {
+  const fileHints = artifacts
+    .map((a) => a.filePath?.trim())
+    .filter((p): p is string => Boolean(p))
+    .slice(0, 3);
+  const fallbackFiles = allFiles.slice(0, 3).map((f) => f.fileName);
+  const targets = fileHints.length > 0 ? fileHints : fallbackFiles;
+  const options = targets.map((p, idx) => ({
+    id: `target-${idx + 1}`,
+    label: `Use \`${p}\` as the target file for this edit.`,
+    recommended: idx === 0,
+  }));
+  options.push({
+    id: 'provide-snippet',
+    label: 'I will paste the exact before/after snippet to apply.',
+  });
+  options.push({
+    id: 'replay-last-edits',
+    label: 'Replay the latest suggested edits as-is.',
+  });
+  return options;
+}
+
+function applyReferentialArtifactsAsChanges(
+  artifacts: ReferentialArtifact[],
+  allFiles: FileContext[],
+  preloadedMap: Map<string, FileContext>,
+  accumulatedChanges: CodeChange[],
+): { applied: number; skipped: number; missing: string[] } {
+  let applied = 0;
+  let skipped = 0;
+  const missing: string[] = [];
+
+  const norm = (p: string) => p.replace(/\\/g, '/').trim().toLowerCase();
+  for (const artifact of artifacts.slice(0, 8)) {
+    const targetPath = artifact.filePath?.trim();
+    if (!targetPath) {
+      skipped += 1;
+      continue;
+    }
+    const targetNorm = norm(targetPath);
+    const target = allFiles.find(
+      (f) => norm(f.fileName) === targetNorm || norm(f.path ?? '') === targetNorm,
+    );
+    if (!target) {
+      missing.push(targetPath);
+      continue;
+    }
+    if ((target.content ?? '') === artifact.newContent) {
+      skipped += 1;
+      continue;
+    }
+
+    const change: CodeChange = {
+      fileId: target.fileId,
+      fileName: target.fileName,
+      originalContent: target.content,
+      proposedContent: artifact.newContent,
+      reasoning: artifact.reasoning ?? 'Replayed referential artifact from prior assistant suggestion.',
+      agentType: 'project_manager',
+    };
+    accumulatedChanges.push(change);
+    target.content = artifact.newContent;
+    preloadedMap.set(target.fileName, target);
+    if (target.path) {
+      preloadedMap.set(target.path, target);
+    }
+    applied += 1;
+  }
+
+  return { applied, skipped, missing };
+}
+
+type ExecutionPhase = 'resolveIntent' | 'buildPatch' | 'applyPatch' | 'verify' | 'complete';
 
 // ── Main entry point ────────────────────────────────────────────────────────
 
@@ -428,7 +818,7 @@ export async function streamV2(
   userPreferences: UserPreference[],
   options: V2CoordinatorOptions,
 ): Promise<AgentResult> {
-  createExecution(executionId, projectId, userId, userRequest);
+  createExecution(executionId, projectId, userId, userRequest, options.sessionId);
   updateExecutionStatus(executionId, 'in_progress');
 
   const onProgress = options.onProgress;
@@ -478,7 +868,41 @@ export async function streamV2(
     }
 
     // ── Build file context ──────────────────────────────────────────────
-    const { preloaded, allFiles, manifest } = await buildV2Context(files, userRequest, options, tier);
+    if (!options.isReferentialCodePrompt && shouldRequirePlanModeFirst({
+      intentMode,
+      tier,
+      userRequest,
+      recentMessages: options.recentMessages,
+    })) {
+      const policyMessage = buildPlanModeRequiredMessage(tier);
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Plan approval required',
+        detail: policyMessage,
+        metadata: { routingTier: tier },
+      });
+      const blockedCodeMutation = intentMode === 'code';
+      if (blockedCodeMutation) {
+        appendExecutionTerminalLog(
+          executionId,
+          'result',
+          'Code-mode request ended without mutating changes because plan approval is required.',
+        );
+      }
+      updateExecutionStatus(executionId, blockedCodeMutation ? 'failed' : 'completed');
+      await persistExecution(executionId);
+      return {
+        agentType: 'project_manager',
+        success: true,
+        analysis: policyMessage,
+        needsClarification: true,
+        directStreamed: true,
+      };
+    }
+
+    // ── Build file context ──────────────────────────────────────────────
+    const { preloaded, allFiles, manifest } = await buildV2Context(projectId, files, userRequest, options, tier);
 
     // Format pre-loaded files for the user message
     const fileContents = preloaded
@@ -492,6 +916,7 @@ export async function streamV2(
     else if (intentMode === 'plan') systemPrompt += '\n\n' + V2_PLAN_OVERLAY;
     else if (intentMode === 'debug') systemPrompt += '\n\n' + V2_DEBUG_OVERLAY;
     else if (intentMode === 'ask') systemPrompt += '\n\n' + V2_ASK_OVERLAY;
+    systemPrompt += '\n\n' + buildMaximumEffortPolicyMessage();
 
     // ── Build initial messages ────────────────────────────────────────
     const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
@@ -554,13 +979,7 @@ export async function streamV2(
     const providerName = getProviderForModel(model);
     const provider = getAIProvider(providerName as Parameters<typeof getAIProvider>[0]);
 
-    if (!isToolProvider(provider)) {
-      throw new AIProviderError(
-        'UNKNOWN',
-        'Provider does not support tool streaming',
-        'coordinator-v2',
-      );
-    }
+    const toolStreamingSupported = isToolProvider(provider);
 
     // ── Iteration state ───────────────────────────────────────────────
     let MAX_ITERATIONS = ITERATION_LIMITS[intentMode] ?? 10;
@@ -582,15 +1001,69 @@ export async function streamV2(
     const startTime = Date.now();
     let iteration = 0;
     let fullText = '';
+    let latestReviewResult: ReviewResult | undefined;
     const accumulatedChanges: CodeChange[] = [];
     const readFiles = new Set<string>();
+    for (const f of preloaded) {
+      readFiles.add(f.fileName);
+      if (f.fileId) readFiles.add(f.fileId);
+      if (f.path) readFiles.add(f.path);
+    }
     const searchedFiles = new Set<string>();
+    const hasApprovedPlanSignal = hasPlanApprovalSignal(options.recentMessages, userRequest);
+    const hasThemeLayoutContext = allFiles.some((f) => {
+      const p = (f.path ?? f.fileName).replace(/\\/g, '/').toLowerCase();
+      return p === 'layout/theme.liquid';
+    });
+    const directMutationRequested =
+      intentMode === 'code' &&
+      /\b(change|replace|update|edit|fix|apply|implement)\b/i.test(userRequest);
+    const directValidationRequested =
+      intentMode === 'code' &&
+      /\b(validate|verification?|verify|preview|check)\b/i.test(userRequest);
+    const referentialCodePrompt =
+      intentMode === 'code' && options.isReferentialCodePrompt === true;
+    const referentialArtifacts = options.referentialArtifacts ?? [];
+    let executionPhase: ExecutionPhase = 'resolveIntent';
+    let replayAppliedCount = 0;
+    let replaySource: string | undefined;
+    const preEditLookupBudget = referentialCodePrompt
+      ? REFERENTIAL_PRE_EDIT_LOOKUP_BUDGET
+      : PRE_EDIT_LOOKUP_BUDGET;
+    const preEditBlockThreshold = referentialCodePrompt
+      ? REFERENTIAL_PRE_EDIT_BLOCK_THRESHOLD
+      : PRE_EDIT_BLOCK_THRESHOLD;
     let needsClarification = false;
+    let hasStructuredClarification = false;
+    let lastMutationFailure: MutationFailure | null = null;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCacheReadTokens = 0;
     let totalCacheWriteTokens = 0;
     let ptcContainerId: string | undefined; // PTC: reuse sandbox container across iterations
+    const specialistLifecycle = new SpecialistLifecycleTracker();
+    const specialistReactionRules = defaultSpecialistReactionRules();
+    const orchestrationSignals: OrchestrationActivitySignal[] = [];
+    const queuedReactionInstructions: string[] = [];
+    let reactionEscalationMessage: string | null = null;
+    // Avoid repeated exploration calls in the same context version.
+    let contextVersion = 0;
+    const lookupCallVersion = new Map<string, number>();
+    const lookupResultCache = new Map<string, { version: number; content: string; is_error?: boolean }>();
+    // Stricter enact bias in code mode: before first edit, allow only one lookup pass.
+    let hasAttemptedEdit = false;
+    let preEditLookupCount = 0;
+    let preEditLookupBlockedCount = 0;
+    let forceNoLookupUntilEdit = false;
+    let enactEnforcementCount = 0;
+    let preEditExecutionOnlyIterations = 0;
+    let postEditNoChangeIterations = 0;
+    let failedMutationCount = 0;
+    let debugFixAttemptCount = 0;
+    const invalidateProjectGraphs = () => {
+      dependencyGraphCache.invalidateProject(projectId).catch(() => {});
+      symbolGraphCache.invalidateProject(projectId).catch(() => {});
+    };
 
     onProgress?.({
       type: 'thinking',
@@ -599,6 +1072,105 @@ export async function streamV2(
       label: `${tier} tier — using ${model.split('/').pop() ?? model}`,
       metadata: { routingTier: tier },
     });
+    executionPhase = 'buildPatch';
+
+    // Graceful fallback: for providers without tool streaming, run a single non-tool
+    // completion turn instead of failing the execution.
+    if (!toolStreamingSupported) {
+      onProgress?.({
+        type: 'thinking',
+        phase: 'analyzing',
+        label: 'Tool streaming unavailable — using fallback response mode',
+        detail: 'Continuing without tool calls for this provider.',
+      });
+
+      let fallbackText = '';
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+
+      const fallbackOptions: Partial<AICompletionOptions> = {
+        model,
+        maxTokens: intentMode === 'ask' ? 2048 : 4096,
+        ...(AI_FEATURES.adaptiveThinking ? {
+          thinking: { type: 'adaptive' },
+          effort: tier === 'ARCHITECTURAL' ? 'high' : tier === 'COMPLEX' ? 'medium' : 'low',
+        } : {}),
+      };
+
+      try {
+        const streamResult = await provider.stream(messages, fallbackOptions);
+        const reader = streamResult.stream.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          fallbackText += value;
+          onContentChunk?.(value);
+        }
+        try {
+          const usage = await streamResult.getUsage();
+          totalInputTokens += usage.inputTokens;
+          totalOutputTokens += usage.outputTokens;
+        } catch {
+          // Best-effort usage collection.
+        }
+      } catch {
+        // If streaming fallback fails, degrade to single-shot completion.
+        const completion = await provider.complete(messages, fallbackOptions);
+        fallbackText = completion.content ?? '';
+        totalInputTokens += completion.inputTokens ?? 0;
+        totalOutputTokens += completion.outputTokens ?? 0;
+        if (fallbackText) {
+          onContentChunk?.(fallbackText);
+        }
+      }
+
+      let needsClarification = false;
+      if (intentMode === 'code') {
+        needsClarification = true;
+        const codeFallbackMsg =
+          'I cannot run edit tools with the current provider, so I returned guidance only. ' +
+          'Switch to a tool-enabled model/provider to apply changes directly.';
+        fallbackText = fallbackText.trim() ? `${fallbackText}\n\n${codeFallbackMsg}` : codeFallbackMsg;
+      }
+
+      const fallbackStatus =
+        intentMode === 'code' ? 'failed' : 'completed';
+      if (intentMode === 'code') {
+        appendExecutionTerminalLog(
+          executionId,
+          'result',
+          'Code-mode request ended without mutating changes because the provider could not execute tools.',
+        );
+      }
+      updateExecutionStatus(executionId, fallbackStatus);
+      await persistExecution(executionId);
+
+      const finalAnalysis = ensureCompletionResponseSections({
+        analysis: fallbackText || 'Completed in fallback response mode.',
+        intentMode,
+        needsClarification,
+        changes: [],
+        reviewResult: undefined,
+      });
+
+      return {
+        agentType: 'project_manager',
+        success: true,
+        analysis: finalAnalysis,
+        needsClarification,
+        directStreamed: true,
+        usage: {
+          totalInputTokens,
+          totalOutputTokens,
+          totalCacheReadTokens: 0,
+          totalCacheWriteTokens: 0,
+          model,
+          provider: providerName,
+          tier,
+        },
+      };
+    }
 
     // ── Tool executor contexts ────────────────────────────────────────
 
@@ -634,6 +1206,56 @@ export async function streamV2(
         });
       },
       onReasoningChunk: options.onReasoningChunk,
+      onSpecialistLifecycleEvent: (event) => {
+        const record = specialistLifecycle.onEvent(event);
+        onProgress?.({
+          type: 'specialist_lifecycle',
+          phase: 'orchestration',
+          label: `${record.agent}: ${record.state}`,
+          metadata: {
+            agent: record.agent,
+            state: record.state,
+            retries: record.retries,
+            details: record.details ?? null,
+          },
+        });
+
+        const decisions = evaluateSpecialistReactions({
+          record,
+          rules: specialistReactionRules,
+        });
+        for (const decision of decisions) {
+          onProgress?.({
+            type: 'orchestration_reaction',
+            phase: 'orchestration',
+            label: decision.ruleId,
+            detail: decision.message,
+            metadata: {
+              ruleId: decision.ruleId,
+              action: decision.action,
+              escalate: decision.escalate,
+            },
+          });
+          orchestrationSignals.push({
+            type: decision.escalate ? 'specialist_escalated' : 'specialist_reaction',
+            agent: record.agent as OrchestrationActivitySignal['agent'],
+            timestampMs: Date.now(),
+            details: {
+              ruleId: decision.ruleId,
+              action: decision.action,
+              message: decision.message,
+            },
+          });
+          if (decision.escalate) {
+            reactionEscalationMessage = decision.message;
+          } else {
+            queuedReactionInstructions.push(decision.message);
+          }
+        }
+      },
+      onActivitySignal: (signal) => {
+        orchestrationSignals.push(signal);
+      },
       model: options.model,
       dependencyContext: undefined,
       designContext: undefined,
@@ -651,8 +1273,28 @@ export async function streamV2(
       if (f.path) preloadedMap.set(f.path, f);
     }
 
+    // ── Pre-loop referential short-circuit ──────────────────────────
+    let skippedLoop = false;
+    if (referentialCodePrompt && referentialArtifacts.length > 0 && accumulatedChanges.length === 0) {
+      const preReplay = applyReferentialArtifactsAsChanges(
+        referentialArtifacts, allFiles, preloadedMap, accumulatedChanges,
+      );
+      if (preReplay.applied > 0) {
+        hasAttemptedEdit = true;
+        replayAppliedCount = preReplay.applied;
+        replaySource = referentialArtifacts[0]?.sourceExecutionId;
+        executionPhase = 'applyPatch';
+        fullText = `Applied ${preReplay.applied} change(s) from prior execution.`;
+        skippedLoop = true;
+        onProgress?.({ type: 'thinking', phase: 'executing',
+          label: `Replayed ${preReplay.applied} artifact(s) directly — skipped exploration` });
+      }
+    }
+
     // ── Agent loop ────────────────────────────────────────────────────
-    while (iteration < MAX_ITERATIONS) {
+    while (!skippedLoop && iteration < MAX_ITERATIONS) {
+      const changesAtIterationStart = accumulatedChanges.length;
+      let mutatingAttemptedThisIteration = false;
       if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
         console.warn(`[V2] Timeout after ${iteration} iterations`);
         break;
@@ -774,7 +1416,13 @@ export async function streamV2(
               });
 
               // Track clarification requests
-              if (event.name === 'ask_clarification') needsClarification = true;
+              if (event.name === 'ask_clarification') {
+                needsClarification = true;
+                const inputOptions = (event.input?.options as Array<{ id?: string; label?: string }> | undefined) ?? [];
+                if (Array.isArray(inputOptions) && inputOptions.length > 0) {
+                  hasStructuredClarification = true;
+                }
+              }
 
               // Accumulate code changes + update in-memory state
               const syntheticMsg = handleClientTool(
@@ -783,6 +1431,14 @@ export async function streamV2(
                 preloadedMap,
                 accumulatedChanges,
               );
+              if (MUTATING_CLIENT_TOOL_NAMES.has(event.name)) {
+                hasAttemptedEdit = true;
+                mutatingAttemptedThisIteration = true;
+                executionPhase = 'applyPatch';
+                contextVersion += 1;
+                invalidateProjectGraphs();
+                debugFixAttemptCount = 0;
+              }
               iterToolResults.set(event.id, { content: syntheticMsg });
             }
           }
@@ -819,17 +1475,97 @@ export async function streamV2(
           console.log(`[V2] Executing ${pendingServerTools.length} server tools in parallel`);
         }
 
-        await Promise.all(
-          pendingServerTools.map(async (evt) => {
+        for (const evt of pendingServerTools) {
             const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
             let toolResult: ToolResult;
+            const lookupSig = LOOKUP_TOOL_NAMES.has(evt.name)
+              ? buildLookupSignature(evt.name, evt.input)
+              : null;
+
+            const shouldGatePreEditLookup =
+              intentMode === 'code' &&
+              !hasAttemptedEdit &&
+              !!lookupSig;
+
+            if (shouldGatePreEditLookup && (forceNoLookupUntilEdit || preEditLookupCount >= preEditLookupBudget)) {
+              toolResult = {
+                tool_use_id: evt.id,
+                content:
+                  `Skipped extra pre-edit lookup (${evt.name}). ` +
+                  `Context is already sufficient to start editing. ` +
+                  `Proceed with search_replace/propose_code_edit, or call ask_clarification if truly blocked.`,
+              };
+              iterToolResults.set(evt.id, { content: toolResult.content, is_error: false });
+              onProgress?.({
+                type: 'thinking',
+                phase: 'analyzing',
+                label: `Enact bias — blocked extra ${evt.name} before first edit`,
+              });
+              onToolEvent?.({
+                type: 'tool_call',
+                name: evt.name,
+                id: evt.id,
+                input: evt.input,
+                result: toolResult.content,
+                isError: false,
+              });
+              preEditLookupBlockedCount += 1;
+              continue;
+            }
+
+            if (lookupSig && lookupCallVersion.get(lookupSig) === contextVersion) {
+              const cachedLookup = lookupResultCache.get(lookupSig);
+              if (cachedLookup && cachedLookup.version === contextVersion) {
+                toolResult = {
+                  tool_use_id: evt.id,
+                  content: cachedLookup.content,
+                  is_error: cachedLookup.is_error,
+                };
+                iterToolResults.set(evt.id, { content: toolResult.content, is_error: toolResult.is_error });
+                onProgress?.({
+                  type: 'thinking',
+                  phase: 'analyzing',
+                  label: `Reused cached ${evt.name} result`,
+                });
+                onToolEvent?.({
+                  type: 'tool_call',
+                  name: evt.name,
+                  id: evt.id,
+                  input: evt.input,
+                  result: toolResult.content,
+                  isError: toolResult.is_error,
+                });
+                continue;
+              }
+              toolResult = {
+                tool_use_id: evt.id,
+                content: `Skipped redundant ${evt.name} call (context already sufficient for this turn). Proceed to edit or ask clarification only if needed.`,
+              };
+              iterToolResults.set(evt.id, { content: toolResult.content, is_error: false });
+              onProgress?.({
+                type: 'thinking',
+                phase: 'analyzing',
+                label: `Reusing context — skipped duplicate ${evt.name}`,
+              });
+              onToolEvent?.({
+                type: 'tool_call',
+                name: evt.name,
+                id: evt.id,
+                input: evt.input,
+                result: toolResult.content,
+                isError: false,
+              });
+              continue;
+            }
 
             // Short-circuit read_file for pre-loaded files
             const readFileId =
               evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
             const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
+            let wasPreloadedReadHit = false;
 
             if (preloadedFile) {
+              wasPreloadedReadHit = true;
               toolResult = {
                 tool_use_id: evt.id,
                 content: preloadedFile.content,
@@ -841,6 +1577,20 @@ export async function streamV2(
               // V2-specific tools: run_specialist, run_review
               try {
                 toolResult = await executeV2Tool(toolCall, v2ToolCtx);
+                if (evt.name === 'run_review' && !toolResult.is_error) {
+                  const parsed = parseReviewToolContent(toolResult.content ?? '');
+                  if (parsed) {
+                    latestReviewResult = parsed;
+                    setReviewResult(executionId, parsed);
+                  }
+                }
+                if (evt.name === 'run_specialist' && !toolResult.is_error) {
+                  hasAttemptedEdit = true;
+                  executionPhase = 'applyPatch';
+                  forceNoLookupUntilEdit = false;
+                  contextVersion += 1;
+                  invalidateProjectGraphs();
+                }
               } catch (err) {
                 toolResult = {
                   tool_use_id: evt.id,
@@ -885,6 +1635,41 @@ export async function streamV2(
               }
             }
 
+            // Track failed mutation attempts so the loop can detect and break stalls.
+            // A search_replace / write_file / propose_code_edit call that returns an error
+            // still counts as an "attempted edit" for the purpose of escaping the pre-edit
+            // lookup loop — but we separately track failures to trigger corrective injection.
+            if (
+              (evt.name === 'search_replace' || evt.name === 'write_file' || evt.name === 'propose_code_edit') &&
+              toolResult.is_error
+            ) {
+              failedMutationCount += 1;
+              debugFixAttemptCount += 1;
+              hasAttemptedEdit = true;
+              mutatingAttemptedThisIteration = true;
+              executionPhase = 'applyPatch';
+              forceNoLookupUntilEdit = false;
+
+              const failedFilePath = evt.input?.filePath as string | undefined;
+              const failedReason: MutationFailure['reason'] =
+                toolResult.content.includes('not found in') ? 'old_text_not_found'
+                : toolResult.content.includes('File not found') ? 'file_not_found'
+                : toolResult.content.includes('valid') ? 'validation_error'
+                : 'unknown';
+              const isSameFile = lastMutationFailure?.filePath === failedFilePath;
+              const fileContent = failedFilePath
+                ? preloaded.find(f => f.fileName === failedFilePath || f.path === failedFilePath)?.content
+                : undefined;
+              lastMutationFailure = {
+                toolName: evt.name as MutationFailure['toolName'],
+                filePath: failedFilePath ?? 'unknown',
+                reason: failedReason,
+                attemptedOldText: (evt.input?.old_text as string) ?? undefined,
+                attemptCount: isSameFile ? (lastMutationFailure?.attemptCount ?? 0) + 1 : 1,
+                fileLineCount: fileContent ? fileContent.split('\n').length : undefined,
+              };
+            }
+
             // Truncate large results
             const truncatedContent =
               toolResult.content.length > MAX_TOOL_RESULT_CHARS
@@ -896,6 +1681,19 @@ export async function streamV2(
               content: truncatedContent,
               is_error: toolResult.is_error,
             });
+            if (lookupSig && !toolResult.is_error) {
+              lookupCallVersion.set(lookupSig, contextVersion);
+              lookupResultCache.set(lookupSig, {
+                version: contextVersion,
+                content: truncatedContent,
+                is_error: toolResult.is_error,
+              });
+              if (shouldGatePreEditLookup && !wasPreloadedReadHit) {
+                preEditLookupCount += 1;
+              }
+            } else if (!lookupSig) {
+              preEditLookupBlockedCount = 0;
+            }
 
             onToolEvent?.({
               type: 'tool_call',
@@ -905,24 +1703,185 @@ export async function streamV2(
               result: truncatedContent,
               isError: toolResult.is_error,
             });
-          }),
+        }
+      }
+
+      if (reactionEscalationMessage) {
+        needsClarification = true;
+        fullText = fullText.trim()
+          ? `${fullText}\n\n${reactionEscalationMessage}`
+          : reactionEscalationMessage;
+        onProgress?.({
+          type: 'thinking',
+          phase: 'clarification',
+          label: 'Specialist escalation requires clarification',
+          detail: reactionEscalationMessage,
+        });
+        break;
+      }
+
+      // If code-mode keeps attempting lookups before any edit, inject a hard
+      // enact instruction into the loop context for the next iteration.
+      if (intentMode === 'code' && !hasAttemptedEdit && preEditLookupBlockedCount >= preEditBlockThreshold) {
+        forceNoLookupUntilEdit = true;
+        enactEnforcementCount += 1;
+        messages.push({
+          role: 'user',
+          content:
+            'SYSTEM ENFORCEMENT: Lookup budget exhausted before first edit. ' +
+            'Next step MUST be one of: (1) search_replace/propose_code_edit/create_file to enact changes, ' +
+            'or (2) ask_clarification if required details are missing. ' +
+            'Do NOT call read/search/grep/glob/semantic/list/dependency tools again.',
+        });
+        onProgress?.({
+          type: 'thinking',
+          phase: 'analyzing',
+          label: 'Enact enforcement applied — editing required',
+        });
+
+        // Fail fast if enforcement has already been applied and the model still
+        // keeps requesting lookup-only actions instead of editing.
+        if (enactEnforcementCount >= PRE_EDIT_ENFORCEMENT_ABORT_THRESHOLD) {
+          const loopAbortMsg =
+            'Stopping this run to prevent a lookup loop. ' +
+            'I already have sufficient context. ' +
+            'Next attempt must begin with an edit tool (search_replace/propose_code_edit/create_file) ' +
+            'or ask_clarification if details are missing.';
+          needsClarification = true;
+          if (fullText.trim().length > 0) {
+            fullText += `\n\n${loopAbortMsg}`;
+          } else {
+            fullText = loopAbortMsg;
+          }
+          onContentChunk?.(`\n\n${loopAbortMsg}`);
+          break;
+        }
+
+        preEditLookupBlockedCount = 0;
+      }
+
+      // If search_replace / propose_code_edit keeps failing, inject a targeted
+      // correction with copy-safe file region so the model can fix its old_text.
+      if (intentMode === 'code' && failedMutationCount >= 3 && lastMutationFailure) {
+        const targetFile = preloaded.find(
+          f => f.fileName === lastMutationFailure!.filePath || f.path === lastMutationFailure!.filePath,
         );
+        const fileContent = targetFile?.content ?? '';
+        const region = lastMutationFailure.attemptedOldText
+          ? extractTargetRegion(fileContent, lastMutationFailure.attemptedOldText)
+          : null;
+        const lineCount = lastMutationFailure.fileLineCount ?? fileContent.split('\n').length;
+        const fileSizeNote = lineCount > 500
+          ? `\nNOTE: This file is ${lineCount} lines. If using propose_code_edit, include ALL content.`
+          : '';
+
+        let failedMutMsg =
+          `SYSTEM CORRECTION: search_replace failed ${lastMutationFailure.attemptCount} times on ${lastMutationFailure.filePath}.\n\n` +
+          'The text you provided as old_text does not match the file.';
+
+        if (region) {
+          failedMutMsg +=
+            ' Below is the relevant region.\n\n' +
+            'COPY-SAFE SNIPPET (use this as old_text):\n---\n' + region.rawSnippet + '\n---\n\n' +
+            'CONTEXT (line numbers for reference only -- do NOT copy these):\n---\n' + region.contextSnippet + '\n---\n\n' +
+            'OPTION 1: Copy the exact text from the COPY-SAFE SNIPPET above as old_text.\n' +
+            'OPTION 2: Use propose_code_edit with the full updated file content instead.' +
+            fileSizeNote;
+        } else {
+          failedMutMsg +=
+            '\n\nSwitch to propose_code_edit with the full updated file content.' + fileSizeNote;
+        }
+
+        // Architectural questioning after repeated failures
+        if (debugFixAttemptCount >= 3) {
+          failedMutMsg +=
+            '\n\nQUESTION YOUR APPROACH:\n' +
+            '- Are you editing the right file? Could the change belong in a different file?\n' +
+            '- Is the file structure different from what you assumed? Re-read it.\n' +
+            '- Would a completely different strategy (e.g., create_file instead of search_replace) work better?\n' +
+            '- Could the issue be in a different layer (CSS vs Liquid vs JS)?';
+        }
+
+        messages.push({ role: 'user', content: failedMutMsg });
+        onProgress?.({
+          type: 'thinking',
+          phase: 'analyzing',
+          label: debugFixAttemptCount >= 3
+            ? `Reconsidering approach (${debugFixAttemptCount} failed fixes)`
+            : `Failed mutation recovery (${failedMutationCount} failures)`,
+        });
+        failedMutationCount = 0;
+
+        // Hard break: after 5 cumulative debug fix attempts, stop the loop
+        if (debugFixAttemptCount >= 5) {
+          needsClarification = true;
+          const escalateMsg =
+            'Stopping after 5 failed fix attempts. The current approach is not working. ' +
+            'Please review the file content manually or try a different strategy.';
+          fullText = fullText.trim() ? `${fullText}\n\n${escalateMsg}` : escalateMsg;
+          onContentChunk?.(`\n\n${escalateMsg}`);
+          onProgress?.({
+            type: 'thinking',
+            phase: 'analyzing',
+            label: 'Debug escalation: stopping after repeated failures',
+          });
+          break;
+        }
+
+        if (enactEnforcementCount >= PRE_EDIT_ENFORCEMENT_ABORT_THRESHOLD) {
+          needsClarification = true;
+          const abortMsg =
+            'Stopping: repeated edit failures with no net change applied. ' +
+            'Please share the exact file content or accept a full file rewrite.';
+          fullText = fullText.trim() ? `${fullText}\n\n${abortMsg}` : abortMsg;
+          onContentChunk?.(`\n\n${abortMsg}`);
+          break;
+        }
+        enactEnforcementCount += 1;
       }
 
       // ── Execute PTC (server_tool_use) tool calls in parallel ────
       if (pendingPTCTools.length > 0) {
         console.log(`[V2-PTC] Executing ${pendingPTCTools.length} programmatic tool call(s)`);
+
+        // Pre-claim budget slots synchronously before parallel execution to avoid
+        // a race condition where all concurrent PTC calls see the same pre-increment
+        // count and all pass the gate simultaneously.
+        const ptcBudgetDecisions = pendingPTCTools.map((evt) => {
+          const shouldGate =
+            intentMode === 'code' &&
+            !hasAttemptedEdit &&
+            PTC_PRE_EDIT_NON_MUTATING_TOOLS.has(evt.name);
+          if (!shouldGate) return { evt, blocked: false };
+          if (forceNoLookupUntilEdit || preEditLookupCount >= preEditLookupBudget) {
+            preEditLookupBlockedCount += 1;
+            return { evt, blocked: true };
+          }
+          preEditLookupCount += 1; // pre-claim slot synchronously
+          return { evt, blocked: false };
+        });
+
         await Promise.all(
-          pendingPTCTools.map(async (evt) => {
+          ptcBudgetDecisions.map(async ({ evt, blocked }) => {
             const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
             let toolResult: ToolResult;
             try {
-              const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
-              const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
-              if (preloadedFile) {
-                toolResult = { tool_use_id: evt.id, content: preloadedFile.content };
+              if (blocked) {
+                toolResult = {
+                  tool_use_id: evt.id,
+                  content:
+                    `Skipped extra pre-edit PTC tool (${evt.name}). ` +
+                    `Context is already sufficient to start editing. ` +
+                    `Proceed with search_replace/propose_code_edit/create_file, or ask_clarification if blocked.`,
+                };
               } else {
-                toolResult = await executeToolCall(toolCall, toolCtx);
+                const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
+                const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
+                if (preloadedFile) {
+                  toolResult = { tool_use_id: evt.id, content: preloadedFile.content };
+                } else {
+                  toolResult = await executeToolCall(toolCall, toolCtx);
+                }
               }
             } catch (err) {
               toolResult = {
@@ -934,6 +1893,15 @@ export async function streamV2(
             if (evt.name === 'read_file' && !toolResult.is_error) {
               const fileId = evt.input?.fileId as string;
               if (fileId) readFiles.add(fileId);
+            }
+            if (MUTATING_CLIENT_TOOL_NAMES.has(evt.name) && !toolResult.is_error) {
+              hasAttemptedEdit = true;
+              mutatingAttemptedThisIteration = true;
+              executionPhase = 'applyPatch';
+              forceNoLookupUntilEdit = false;
+              contextVersion += 1;
+              invalidateProjectGraphs();
+              debugFixAttemptCount = 0;
             }
             const truncatedContent =
               toolResult.content.length > MAX_TOOL_RESULT_CHARS
@@ -975,6 +1943,84 @@ export async function streamV2(
           }
         }
       } catch { /* getContextEdits may not be available */ }
+
+      const addedChangesThisIteration = accumulatedChanges.length > changesAtIterationStart;
+
+      // Pre-edit breaker: stop repeated execution/read loops before any mutation.
+      if (intentMode === 'code' && !hasAttemptedEdit) {
+        const hadExecutionNoMutation =
+          (pendingPTCTools.length > 0 || pendingServerTools.length > 0) &&
+          !mutatingAttemptedThisIteration &&
+          !addedChangesThisIteration;
+        if (hadExecutionNoMutation) {
+          preEditExecutionOnlyIterations += 1;
+          if (preEditExecutionOnlyIterations >= 2) {
+            needsClarification = true;
+            const preEditLoopMsg =
+              'Stopped after repeated execution/read iterations before any edit was applied. ' +
+              'Next step must be a mutating edit tool (search_replace/propose_code_edit/create_file) ' +
+              'or ask_clarification with exact missing details.';
+            fullText = fullText.trim() ? `${fullText}\n\n${preEditLoopMsg}` : preEditLoopMsg;
+            onProgress?.({
+              type: 'thinking',
+              phase: 'clarification',
+              label: 'Pre-edit loop detected — edit required',
+              detail: preEditLoopMsg,
+            });
+            break;
+          }
+        } else {
+          preEditExecutionOnlyIterations = 0;
+        }
+      }
+
+      // If we keep executing tools after edits without producing net new changes,
+      // stop early and ask for clarification instead of looping.
+      if (intentMode === 'code' && hasAttemptedEdit) {
+        if (hasApprovedPlanSignal && mutatingAttemptedThisIteration && !addedChangesThisIteration) {
+          needsClarification = true;
+          const approvedPlanBreakerMsg =
+            'Approved-plan execution attempted an edit but produced no net file change. ' +
+            'Please confirm the exact file/path and expected delta so I can enact directly without re-looping.';
+          fullText = fullText.trim()
+            ? `${fullText}\n\n${approvedPlanBreakerMsg}`
+            : approvedPlanBreakerMsg;
+          onProgress?.({
+            type: 'thinking',
+            phase: 'clarification',
+            label: 'Approved plan blocked — no net change applied',
+            detail: approvedPlanBreakerMsg,
+          });
+          break;
+        }
+        if (addedChangesThisIteration) {
+          postEditNoChangeIterations = 0;
+        } else {
+          // Treat mutating client-tool attempts as execution too; otherwise we can loop on
+          // repeated no-op write/edit attempts without tripping the stagnation breaker.
+          const hadExecution =
+            pendingPTCTools.length > 0 ||
+            pendingServerTools.length > 0 ||
+            mutatingAttemptedThisIteration;
+          if (hadExecution) {
+            postEditNoChangeIterations += 1;
+            if (postEditNoChangeIterations >= 2) {
+              needsClarification = true;
+              const breakerMsg =
+                'Stopped after repeated execution-only iterations with no net code changes. ' +
+                'Confirm the exact target file/path or intended delta so I can apply changes directly.';
+              fullText = fullText.trim() ? `${fullText}\n\n${breakerMsg}` : breakerMsg;
+              onProgress?.({
+                type: 'thinking',
+                phase: 'clarification',
+                label: 'Execution stalled — clarification required',
+                detail: breakerMsg,
+              });
+              break;
+            }
+          }
+        }
+      }
 
       // ── Track token usage for this iteration ────────────────────
       try {
@@ -1023,12 +2069,12 @@ export async function streamV2(
             });
           }
         }
-        // PTC: server_tool_use blocks need server_tool_result responses
+        // PTC: Anthropic expects `tool_result` (not `server_tool_result`) in follow-up user turns.
         if (b.type === 'server_tool_use' && b.id) {
           const cached = iterToolResults.get(b.id);
           if (cached) {
             toolResultBlocks.push({
-              type: 'server_tool_result',
+              type: 'tool_result',
               tool_use_id: b.id,
               content: cached.content,
               ...(cached.is_error ? { is_error: true } : {}),
@@ -1046,6 +2092,20 @@ export async function streamV2(
         messages.push(toolResultMsg);
       }
 
+      if (queuedReactionInstructions.length > 0) {
+        const reactionInstruction = queuedReactionInstructions
+          .map((m) => `- ${m}`)
+          .join('\n');
+        messages.push({
+          role: 'user',
+          content:
+            'ORCHESTRATION REACTION POLICY:\n' +
+            `${reactionInstruction}\n` +
+            'Apply this guidance in your next step and avoid repeating failed specialist patterns.',
+        });
+        queuedReactionInstructions.length = 0;
+      }
+
       // Compress old tool results to save tokens in later iterations
       // Skip when context editing is active (API handles it server-side)
       if (!AI_FEATURES.contextEditing) {
@@ -1055,6 +2115,106 @@ export async function streamV2(
       iteration++;
     }
 
+    if (
+      !skippedLoop &&
+      referentialCodePrompt &&
+      accumulatedChanges.length === 0 &&
+      !needsClarification &&
+      referentialArtifacts.length > 0
+    ) {
+      const replayResult = applyReferentialArtifactsAsChanges(
+        referentialArtifacts,
+        allFiles,
+        preloadedMap,
+        accumulatedChanges,
+      );
+      if (replayResult.applied > 0) {
+        hasAttemptedEdit = true;
+        executionPhase = 'applyPatch';
+        replayAppliedCount = replayResult.applied;
+        replaySource = referentialArtifacts[0]?.sourceExecutionId;
+        onProgress?.({
+          type: 'thinking',
+          phase: 'executing',
+          label: `Applied ${replayResult.applied} replayed edit(s) from prior context`,
+        });
+      } else {
+        needsClarification = true;
+        const replayBlockedMsg =
+          replayResult.missing.length > 0
+            ? `Replay artifacts could not be applied because target file(s) were not found: ${replayResult.missing.slice(0, 3).join(', ')}.`
+            : 'Replay artifacts were available but did not produce a net code change.';
+        fullText = fullText.trim() ? `${fullText}\n\n${replayBlockedMsg}` : replayBlockedMsg;
+        onProgress?.({
+          type: 'thinking',
+          phase: 'clarification',
+          label: 'Replay requires clarification',
+          detail: replayBlockedMsg,
+        });
+      }
+    }
+
+    if (intentMode === 'code' && directMutationRequested && accumulatedChanges.length === 0 && !needsClarification) {
+      const enactmentRetryDepth = options._enactmentRetryDepth ?? 0;
+      if (enactmentRetryDepth < 1) {
+        const recoveryInstruction =
+          'ENACTMENT RECOVERY MODE: You must produce at least one concrete mutating edit tool call ' +
+          '(search_replace, propose_code_edit, or create_file) in this pass. ' +
+          'Do not perform additional lookup/exploration unless absolutely necessary.';
+        onProgress?.({
+          type: 'thinking',
+          phase: 'validating',
+          label: 'Recovering — forcing direct enactment',
+          detail: 'Retrying once with strict enactment instructions.',
+        });
+        return streamV2(
+          `${executionId}-enact`,
+          projectId,
+          userId,
+          `${userRequest}\n\n${recoveryInstruction}`,
+          files,
+          userPreferences,
+          {
+            ...options,
+            _enactmentRetryDepth: enactmentRetryDepth + 1,
+          },
+        );
+      } else {
+        needsClarification = true;
+        const noChangeMsg =
+          'No code changes were applied for this direct-edit request. ' +
+          'Confirm the exact file/path and the literal before/after text so I can execute the edit deterministically.';
+        fullText = fullText.trim() ? `${fullText}\n\n${noChangeMsg}` : noChangeMsg;
+        onProgress?.({
+          type: 'thinking',
+          phase: 'clarification',
+          label: 'No changes applied — clarification required',
+          detail: noChangeMsg,
+        });
+      }
+    }
+    if (
+      intentMode === 'code' &&
+      directMutationRequested &&
+      directValidationRequested &&
+      accumulatedChanges.length === 0
+    ) {
+      const mutationBeforeValidationMsg =
+        'Validation was requested, but no edits were successfully applied. ' +
+        'I need a deterministic target edit (exact file and before/after text) before running preview/verification.';
+      fullText = fullText.trim()
+        ? `${fullText}\n\n${mutationBeforeValidationMsg}`
+        : mutationBeforeValidationMsg;
+      needsClarification = true;
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Mutation required before validation',
+        detail: mutationBeforeValidationMsg,
+      });
+    }
+
+    executionPhase = 'verify';
     // ── EPIC 2a: Auto-review gate ──────────────────────────────────────────
     const needsAutoReview = (
       (tier === 'COMPLEX' || tier === 'ARCHITECTURAL') ||
@@ -1079,8 +2239,15 @@ export async function streamV2(
           name: 'run_review' as const,
           input: { scope: 'all' },
         };
-        const reviewResult = await executeV2Tool(reviewToolCall, v2ToolCtx);
-        const reviewContent = reviewResult.content ?? '';
+        const autoReviewToolResult = await executeV2Tool(reviewToolCall, v2ToolCtx);
+        const reviewContent = autoReviewToolResult.content ?? '';
+        if (!autoReviewToolResult.is_error) {
+          const parsed = parseReviewToolContent(reviewContent);
+          if (parsed) {
+            latestReviewResult = parsed;
+            setReviewResult(executionId, parsed);
+          }
+        }
         const reviewFailed = reviewContent.includes('NEEDS CHANGES');
         if (reviewFailed) {
           onProgress?.({
@@ -1104,16 +2271,79 @@ export async function streamV2(
       }
     }
 
-    // ── EPIC 2b: Self-verification loop ───────────────────────────────────
+    // ── Unified verification pipeline ──────────────────────────────────────
+    // Run verifyChanges and runThemeCheck together, merge issues, build evidence.
+    let verificationEvidence: {
+      syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
+      themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+      checkedFiles: string[];
+      totalCheckTimeMs: number;
+    } | undefined;
+
     if (accumulatedChanges.length > 0) {
+      const verifyStart = Date.now();
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'validating',
+        label: 'Running verification checks...',
+      });
+
       const verification = verifyChanges(accumulatedChanges, allFiles);
+
+      let themeCheckResult: ReturnType<typeof runThemeCheck> | null = null;
+      if (intentMode === 'code' && hasThemeLayoutContext) {
+        onProgress?.({
+          type: 'thinking',
+          phase: 'validating',
+          label: 'Running theme check...',
+        });
+        const projectedFiles = allFiles.map((f) => {
+          const change = accumulatedChanges.find((c) => c.fileName === f.fileName || c.fileName === (f.path ?? ''));
+          return { path: f.path ?? f.fileName, content: change ? change.proposedContent : f.content };
+        });
+        try {
+          themeCheckResult = runThemeCheck(projectedFiles, undefined, { bypassCache: true });
+        } catch (err) {
+          console.warn('[V2] Theme check error during verification:', err);
+        }
+      }
+
+      const mergedIssues = themeCheckResult
+        ? mergeThemeCheckIssues(verification.issues, themeCheckResult.issues)
+        : verification.issues;
+
+      const totalCheckTimeMs = Date.now() - verifyStart;
+
+      verificationEvidence = {
+        syntaxCheck: {
+          passed: verification.passed,
+          errorCount: verification.errorCount,
+          warningCount: verification.warningCount,
+        },
+        themeCheck: themeCheckResult ? {
+          passed: themeCheckResult.passed,
+          errorCount: themeCheckResult.errorCount,
+          warningCount: themeCheckResult.warningCount,
+          infoCount: themeCheckResult.issues.filter(i => i.severity === 'info').length,
+        } : undefined,
+        checkedFiles: accumulatedChanges.map(c => c.fileName),
+        totalCheckTimeMs,
+      };
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'validating',
+        label: `Verification complete (${totalCheckTimeMs}ms)`,
+      });
+
       if (!verification.passed) {
         onProgress?.({
           type: 'thinking',
           phase: 'validating',
           label: `Found ${verification.errorCount} error(s) — self-correcting...`,
         });
-        for (const issue of verification.issues.filter(i => i.severity === 'error')) {
+        for (const issue of mergedIssues.filter(i => i.severity === 'error')) {
           onProgress?.({
             type: 'diagnostics',
             file: issue.file,
@@ -1123,6 +2353,17 @@ export async function streamV2(
             category: issue.category,
           });
         }
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += `\n\nValidation gate blocked completion:\n${verification.formatted}`;
+      } else if (themeCheckResult && !themeCheckResult.passed) {
+        onProgress?.({
+          type: 'diagnostics',
+          detail: `Theme check failed with ${themeCheckResult.errorCount} error(s) and ${themeCheckResult.warningCount} warning(s).`,
+        });
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += `\n\nTheme check gate blocked completion (${themeCheckResult.errorCount} error(s)).`;
       } else if (verification.warningCount > 0) {
         onProgress?.({
           type: 'thinking',
@@ -1132,7 +2373,7 @@ export async function streamV2(
       }
     }
 
-    // ── EPIC 2c: Change-set validation ────────────────────────────────────
+    // ── Change-set validation ───────────────────────────────────────────────
     if (accumulatedChanges.length > 0) {
       const validation = validateChangeSet(accumulatedChanges, allFiles);
       if (!validation.valid) {
@@ -1152,7 +2393,35 @@ export async function streamV2(
             category: issue.category,
           });
         }
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += '\n\nCross-file contract gate blocked completion due to validation errors.';
       }
+    }
+
+    // ── Theme-wide artifact + policy checks ────────────────────────────────
+    if (intentMode === 'code' && accumulatedChanges.length > 0 && hasThemeLayoutContext) {
+      const artifact = buildThemePlanArtifact(
+        accumulatedChanges,
+        allFiles,
+        readFiles,
+        searchedFiles
+      );
+      onProgress?.({
+        type: 'diagnostics',
+        detail: artifact.markdown,
+      });
+      if (artifact.policyIssues.length > 0) {
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += `\n\nTheme policy gate blocked completion:\n${artifact.policyIssues.map((i) => `- ${i}`).join('\n')}`;
+      }
+    }
+
+    if (intentMode === 'code' && accumulatedChanges.length > 0) {
+      const syntaxStatus = verificationEvidence?.syntaxCheck.passed ? 'passed' : 'skipped';
+      const themeStatus = verificationEvidence?.themeCheck?.passed ? 'passed' : (verificationEvidence?.themeCheck ? 'failed' : 'skipped');
+      fullText += `\n\nVerification evidence: verifyChanges ${syntaxStatus}; theme_check ${themeStatus}.`;
     }
 
     // ── EPIC 2d: File context rule enforcement ─────────────────────────────
@@ -1210,12 +2479,54 @@ export async function streamV2(
       }
     }
 
+    if (referentialCodePrompt && intentMode === 'code' && !hasAttemptedEdit) {
+      needsClarification = true;
+      const referentialGateMsg =
+        'This referential code request did not attempt a mutating edit. ' +
+        'Please choose a target file or provide exact before/after snippet so I can apply deterministically.';
+      fullText = fullText.trim() ? `${fullText}\n\n${referentialGateMsg}` : referentialGateMsg;
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Referential enactment requires concrete target',
+        detail: referentialGateMsg,
+      });
+    }
+
+    if (intentMode === 'code' && needsClarification && !hasStructuredClarification) {
+      const fallbackOptions = buildFallbackClarificationOptions(allFiles, referentialArtifacts);
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Additional input needed to enact changes',
+        detail:
+          fullText.trim().length > 0
+            ? fullText.trim()
+            : 'I need one specific detail to apply the requested code changes safely.',
+        metadata: {
+          options: fallbackOptions,
+          clarificationRound: 1,
+          maxRounds: 2,
+        },
+      });
+      hasStructuredClarification = true;
+    }
+
     // ── Finalize ──────────────────────────────────────────────────────
+    executionPhase = 'complete';
     console.log(
       `[V2] Complete after ${iteration + 1} iterations, ${fullText.length} chars, ${accumulatedChanges.length} changes`,
     );
 
-    updateExecutionStatus(executionId, 'completed');
+    const noChangeCodeRun = intentMode === 'code' && accumulatedChanges.length === 0;
+    if (noChangeCodeRun) {
+      appendExecutionTerminalLog(
+        executionId,
+        'result',
+        'Code-mode request completed without mutating changes; status forced to failed.',
+      );
+    }
+    updateExecutionStatus(executionId, noChangeCodeRun ? 'failed' : 'completed');
     await persistExecution(executionId);
 
     // Fire-and-forget: learn term-to-file mappings from this execution
@@ -1230,11 +2541,20 @@ export async function streamV2(
       }
     }
 
+    const finalAnalysis = ensureCompletionResponseSections({
+      analysis: fullText,
+      intentMode,
+      needsClarification,
+      changes: accumulatedChanges,
+      reviewResult: latestReviewResult,
+    });
+
     return {
       agentType: 'project_manager',
       success: true,
-      analysis: fullText,
+      analysis: finalAnalysis,
       changes: accumulatedChanges.length > 0 ? accumulatedChanges : undefined,
+      reviewResult: latestReviewResult,
       needsClarification,
       directStreamed: true,
       usage: {
@@ -1245,7 +2565,29 @@ export async function streamV2(
         model,
         provider: providerName,
         tier,
+        phaseDiagnostics: {
+          finalPhase: executionPhase,
+          referentialMode: referentialCodePrompt,
+          applyAttempted: hasAttemptedEdit,
+          replayArtifactsResolved: referentialArtifacts.length,
+          replayAppliedCount,
+          replaySource,
+          sessionId: options.sessionId,
+        },
       },
+      failureReason: lastMutationFailure?.reason === 'old_text_not_found'
+        ? 'search_replace_failed'
+        : lastMutationFailure?.reason === 'file_not_found'
+          ? 'file_not_found'
+          : lastMutationFailure?.reason === 'validation_error'
+            ? 'validation_failed'
+            : null,
+      suggestedAction: lastMutationFailure
+        ? 'Try rephrasing the edit or paste the exact before/after code.'
+        : null,
+      failedTool: lastMutationFailure?.toolName ?? null,
+      failedFilePath: lastMutationFailure?.filePath ?? null,
+      verificationEvidence,
     };
   } catch (error) {
     console.error('[V2] Fatal error:', error);
@@ -1279,6 +2621,13 @@ export async function streamV2(
       }
     }
 
+    appendExecutionTerminalLog(
+      executionId,
+      'error',
+      error instanceof Error
+        ? `Fatal coordinator error: ${error.message}`
+        : `Fatal coordinator error: ${String(error)}`,
+    );
     updateExecutionStatus(executionId, 'failed');
     await persistExecution(executionId).catch(() => {});
 
@@ -1320,14 +2669,17 @@ function handleClientTool(
     const reasoning = event.input?.reasoning as string;
     const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
 
-    accumulatedChanges.push({
-      fileId: matchedFile?.fileId ?? '',
-      fileName: filePath ?? '',
-      originalContent: matchedFile?.content ?? '',
-      proposedContent: newContent ?? '',
-      reasoning: reasoning ?? '',
-      agentType: 'project_manager',
-    });
+    const originalContent = matchedFile?.content ?? '';
+    if ((newContent ?? '') !== originalContent) {
+      accumulatedChanges.push({
+        fileId: matchedFile?.fileId ?? '',
+        fileName: filePath ?? '',
+        originalContent,
+        proposedContent: newContent ?? '',
+        reasoning: reasoning ?? '',
+        agentType: 'project_manager',
+      });
+    }
 
     // Read-after-write: update in-memory state
     if (matchedFile) {
@@ -1358,14 +2710,16 @@ function handleClientTool(
           currentContent.slice(replaceIdx + oldText.length)
         : currentContent;
 
-    accumulatedChanges.push({
-      fileId: matchedFile?.fileId ?? '',
-      fileName: filePath ?? '',
-      originalContent: currentContent,
-      proposedContent,
-      reasoning: reasoning ?? '',
-      agentType: 'project_manager',
-    });
+    if (replaceIdx !== -1 && proposedContent !== currentContent) {
+      accumulatedChanges.push({
+        fileId: matchedFile?.fileId ?? '',
+        fileName: filePath ?? '',
+        originalContent: currentContent,
+        proposedContent,
+        reasoning: reasoning ?? '',
+        agentType: 'project_manager',
+      });
+    }
 
     // Read-after-write: update in-memory state
     if (matchedFile && replaceIdx !== -1) {
@@ -1427,14 +2781,17 @@ function handleClientTool(
       (event.input?.content as string) ?? (event.input?.newContent as string) ?? '';
     const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
 
-    accumulatedChanges.push({
-      fileId: matchedFile?.fileId ?? '',
-      fileName: filePath,
-      originalContent: matchedFile?.content ?? '',
-      proposedContent: newContent,
-      reasoning: (event.input?.reasoning as string) ?? '',
-      agentType: 'project_manager',
-    });
+    const previousContent = matchedFile?.content ?? '';
+    if (newContent !== previousContent) {
+      accumulatedChanges.push({
+        fileId: matchedFile?.fileId ?? '',
+        fileName: filePath,
+        originalContent: previousContent,
+        proposedContent: newContent,
+        reasoning: (event.input?.reasoning as string) ?? '',
+        agentType: 'project_manager',
+      });
+    }
 
     if (matchedFile) {
       matchedFile.content = newContent;

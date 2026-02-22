@@ -16,6 +16,7 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CodeEditCard } from './CodeEditCard';
 import { ChangePreviewCard } from './ChangePreviewCard';
+import { ThemeArtifactCard } from './ThemeArtifactCard';
 
 type ToolActionBlock = Extract<ContentBlock, { type: 'tool_action' }>;
 
@@ -296,16 +297,26 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
       return <ScreenshotCard comparison={comp} />;
     }
     case 'change_preview': {
-      const preview = data as { executionId: string; projectId: string; changes: Array<{ fileId: string; fileName: string; originalContent: string; proposedContent: string; reasoning: string }> };
+      const preview = data as {
+        executionId: string;
+        sessionId?: string | null;
+        projectId: string;
+        changes: Array<{ fileId: string; fileName: string; originalContent: string; proposedContent: string; reasoning: string }>;
+      };
       return (
         <ChangePreviewCard
           executionId={preview.executionId}
+          sessionId={preview.sessionId ?? null}
           projectId={preview.projectId}
           changes={preview.changes}
           onApproved={handlers.onChangeApproved}
           onRejected={handlers.onChangeRejected}
         />
       );
+    }
+    case 'theme_artifact': {
+      const artifact = data as { markdown: string };
+      return <ThemeArtifactCard markdown={artifact.markdown} />;
     }
     case 'preview_nav':
     default:

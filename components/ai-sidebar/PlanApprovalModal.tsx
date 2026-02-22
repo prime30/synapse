@@ -57,20 +57,21 @@ const COMPLEXITY_KEYWORDS: Record<string, PlanStep['complexity']> = {
  * Detects complexity hints from keywords in the step text.
  */
 export function parsePlanSteps(text: string): PlanStep[] {
-  const steps: PlanStep[] = [];
+  const lines = text.split('\n');
+  const rawSteps: PlanStep[] = [];
+  const chatterPattern =
+    /\b(let me|now let|great|i(?:'| wi)ll|i've hit|lookup budget|pre-loaded files are truncated|check the correct path|ran\s+[a-z_]+)\b/i;
 
-  // Match "1. text", "1) text", or "Step 1: text"
-  const stepRegex = /(?:^|\n)\s*(?:(?:(\d+)[.)]\s+)|(?:[Ss]tep\s+(\d+)[:\s]+))(.+)/g;
-  let match: RegExpExecArray | null;
+  for (const line of lines) {
+    const m = line.match(/^\s*(?:(\d+)[.)]\s+|[Ss]tep\s+(\d+)\s*:\s+)(.+)$/);
+    if (!m) continue;
+    const number = parseInt(m[1] || m[2], 10);
+    const description = (m[3] ?? '').trim();
+    if (!description || description.length < 8 || description.length > 220) continue;
+    if (chatterPattern.test(description)) continue;
 
-  while ((match = stepRegex.exec(text)) !== null) {
-    const number = parseInt(match[1] || match[2], 10);
-    const description = match[3].trim();
-
-    // Detect complexity from keywords
     const lowerDesc = description.toLowerCase();
     let complexity: PlanStep['complexity'] | undefined;
-
     for (const [keyword, level] of Object.entries(COMPLEXITY_KEYWORDS)) {
       if (lowerDesc.includes(keyword)) {
         complexity = level;
@@ -78,10 +79,18 @@ export function parsePlanSteps(text: string): PlanStep[] {
       }
     }
 
-    steps.push({ number, description, complexity });
+    rawSteps.push({ number, description, complexity });
   }
 
-  return steps;
+  if (rawSteps.length < 2) return [];
+  const seen = new Set<number>();
+  const deduped = rawSteps.filter((s) => {
+    if (seen.has(s.number)) return false;
+    seen.add(s.number);
+    return true;
+  });
+  deduped.sort((a, b) => a.number - b.number);
+  return deduped;
 }
 
 // ── Complexity badge ─────────────────────────────────────────────────────────

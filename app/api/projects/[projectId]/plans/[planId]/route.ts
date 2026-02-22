@@ -1,9 +1,7 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
-import { validateBody } from '@/lib/middleware/validation';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
-import { handleAPIError, APIError } from '@/lib/errors/handler';
+import { handleAPIError } from '@/lib/errors/handler';
 import { getPlan, updatePlan, deletePlan } from '@/lib/services/plans';
 
 interface RouteParams {
@@ -12,40 +10,44 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
-    const { planId } = await params;
-
-    const plan = getPlan(planId);
-    if (!plan) throw APIError.notFound('Plan not found');
-
+    const { projectId, planId } = await params;
+    await requireProjectAccess(request, projectId);
+    const plan = await getPlan(planId);
+    if (!plan) {
+      return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    }
     return successResponse({ plan });
   } catch (error) {
     return handleAPIError(error);
   }
 }
 
-const todoSchema = z.object({
-  id: z.string().min(1),
-  content: z.string().min(1),
-  status: z.enum(['pending', 'in_progress', 'completed']),
-});
-
-const updateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  content: z.string().optional(),
-  todos: z.array(todoSchema).optional(),
-});
-
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
-    const { planId } = await params;
-    const body = await validateBody(updateSchema)(request);
+    const { projectId, planId } = await params;
+    const userId = await requireProjectAccess(request, projectId);
+    const body = await request.json();
+    const { name, content, status, expectedVersion } = body;
 
-    const plan = updatePlan(planId, body);
-    if (!plan) throw APIError.notFound('Plan not found');
+    const result = await updatePlan(
+      planId,
+      { name, content, status },
+      userId,
+      expectedVersion,
+    );
 
-    return successResponse({ plan });
+    if (!result) {
+      return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    }
+
+    if ('conflict' in result) {
+      return NextResponse.json(
+        { error: 'Version conflict', currentVersion: result.currentVersion },
+        { status: 409 },
+      );
+    }
+
+    return successResponse({ plan: result });
   } catch (error) {
     return handleAPIError(error);
   }
@@ -53,12 +55,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
-    const { planId } = await params;
-
-    const deleted = deletePlan(planId);
-    if (!deleted) throw APIError.notFound('Plan not found');
-
+    const { projectId, planId } = await params;
+    await requireProjectAccess(request, projectId);
+    const deleted = await deletePlan(planId);
+    if (!deleted) {
+      return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    }
     return successResponse({ deleted: true });
   } catch (error) {
     return handleAPIError(error);

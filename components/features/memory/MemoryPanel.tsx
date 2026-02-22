@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
+import { Ruler, Compass, Target, Link2, type LucideIcon } from 'lucide-react';
 import type {
   MemoryEntry,
   MemoryType,
@@ -22,6 +23,8 @@ interface MemoryPanelProps {
   onEdit: (id: string, content: MemoryEntry['content']) => void;
   /** Convention count for the status bar indicator */
   activeConventionCount?: number;
+  /** Optional close handler for modal usage. */
+  onClose?: () => void;
 }
 
 type TabId = 'conventions' | 'decisions' | 'preferences' | 'term-mappings';
@@ -344,34 +347,35 @@ function TermMappingItem({
 // ── Empty state ───────────────────────────────────────────────────────
 
 function EmptyState({ tab }: { tab: TabId }) {
-  const messages: Record<TabId, { icon: string; title: string; description: string }> = {
+  const messages: Record<TabId, { icon: LucideIcon; title: string; description: string }> = {
     conventions: {
-      icon: '📐',
+      icon: Ruler,
       title: 'No conventions detected',
       description: 'As you work on your theme, Synapse will detect naming patterns, schema conventions, and coding styles.',
     },
     decisions: {
-      icon: '🧭',
+      icon: Compass,
       title: 'No decisions recorded',
       description: 'Explicit choices made during AI conversations (like "Let\'s use BEM" or "I chose flexbox because...") will appear here.',
     },
     preferences: {
-      icon: '🎯',
+      icon: Target,
       title: 'No preferences learned',
       description: 'As you accept, reject, and edit AI suggestions, Synapse will learn your preferred coding patterns.',
     },
     'term-mappings': {
-      icon: '🔗',
+      icon: Link2,
       title: 'No term mappings yet',
       description: 'Import a theme or run some prompts to start learning. Synapse maps informal terms like "hero" to the actual files they refer to.',
     },
   };
 
   const msg = messages[tab];
+  const Icon = msg.icon;
 
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-      <span className="text-2xl mb-2">{msg.icon}</span>
+      <Icon className="h-7 w-7 mb-2 ide-text-muted" aria-hidden />
       <div className="text-sm ide-text-muted font-medium mb-1">{msg.title}</div>
       <div className="text-[11px] ide-text-quiet max-w-[240px]">{msg.description}</div>
     </div>
@@ -415,6 +419,7 @@ export function MemoryPanel({
   onFeedback,
   onForget,
   onEdit: _onEdit,
+  onClose,
 }: MemoryPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('conventions');
 
@@ -477,6 +482,20 @@ export function MemoryPanel({
         <span className="text-[10px] ide-text-quiet ml-auto">
           {memories.length + termMappings.length} {memories.length + termMappings.length === 1 ? 'entry' : 'entries'}
         </span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded ide-text-muted hover:ide-text transition-colors"
+            aria-label="Close memory panel"
+            title="Close"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Tabs */}

@@ -1,0 +1,42 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050506"/>
+      <stop offset="1" stop-color="#0B0F0D"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="418" y1="155" x2="782" y2="475" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#28CD56"/>
+    </linearGradient>
+    <radialGradient id="dotGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(760 210) rotate(90) scale(80 80)">
+      <stop stop-color="#28CD56"/>
+      <stop offset="1" stop-color="#28CD56" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g opacity="0.14">
+    <path d="M0 520H1200M0 470H1200M0 420H1200M0 370H1200M0 320H1200M0 270H1200M0 220H1200M0 170H1200M0 120H1200" stroke="#9CA3AF"/>
+    <path d="M120 0V630M220 0V630M320 0V630M420 0V630M520 0V630M620 0V630M720 0V630M820 0V630M920 0V630M1020 0V630M1120 0V630" stroke="#9CA3AF"/>
+  </g>
+
+  <g>
+    <path d="M600 165L458 470H532L600 324L668 470H742L600 165Z" fill="url(#glow)"/>
+    <path d="M600 165L458 470H532L600 324L668 470H742L600 165Z" fill="none" stroke="#E5E7EB" stroke-opacity="0.5" stroke-width="2"/>
+
+    <circle cx="760" cy="210" r="10" fill="#28CD56">
+      <animate attributeName="r" values="8;12;8" dur="1.3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="1.3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="760" cy="210" r="22" fill="url(#dotGlow)" filter="url(#soft)">
+      <animate attributeName="opacity" values="0.35;0.9;0.35" dur="1.3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <text x="600" y="548" text-anchor="middle" fill="#E7E5E4" font-size="52" font-family="Inter, Arial, sans-serif" font-weight="600">
+    Synapse
+  </text>
+</svg>

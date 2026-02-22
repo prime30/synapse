@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS public.agent_executions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES public.ai_sessions(id) ON DELETE SET NULL,
   user_request TEXT NOT NULL,
   status public.agent_execution_status NOT NULL,
   execution_log JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -37,4 +38,5 @@ CREATE POLICY "Users can update own executions"
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_agent_executions_project ON public.agent_executions(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_executions_user ON public.agent_executions(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_executions_session_id ON public.agent_executions(session_id);
 CREATE INDEX IF NOT EXISTS idx_agent_executions_started ON public.agent_executions(started_at DESC);
