@@ -55,8 +55,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Allow public paths through without hitting Supabase auth
-  if (isPublicPath(pathname)) {
+  // Allow public paths through without hitting Supabase auth —
+  // except /auth/signin which needs the auth check to redirect logged-in users.
+  if (isPublicPath(pathname) && pathname !== '/auth/signin') {
     return response;
   }
 
@@ -72,6 +73,11 @@ export async function middleware(request: NextRequest) {
     const callbackUrl =
       request.nextUrl.searchParams.get('callbackUrl') ?? '/onboarding';
     return NextResponse.redirect(new URL(callbackUrl, request.url));
+  }
+
+  // Unauthenticated users on the sign-in page stay there
+  if (!isAuthenticated && pathname === '/auth/signin') {
+    return response;
   }
 
   // Redirect unauthenticated users to sign-in
