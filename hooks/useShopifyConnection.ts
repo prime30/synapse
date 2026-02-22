@@ -81,10 +81,13 @@ export function useShopifyConnection(projectId: string) {
       const json = await res.json();
       return json.data as ConnectionStatus;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['shopify-connection', projectId],
       });
+      if (variables.action === 'push') {
+        emitPreviewSyncComplete(projectId);
+      }
     },
   });
 

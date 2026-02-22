@@ -47,7 +47,12 @@ export type SubPhase =
   | 'checking_consistency'
   // Complete
   | 'persisting'
-  | 'finalizing';
+  | 'finalizing'
+  // Debug framework
+  | 'gathering_evidence'
+  | 'forming_hypothesis'
+  | 'testing_fix'
+  | 'escalating';
 
 export type ExecutionMode = 'orchestrated' | 'solo' | 'plan' | 'general';
 
@@ -61,6 +66,7 @@ export interface RailStep {
   startedAt?: number;
   completedAt?: number;
   error?: { message: string; recoverable: boolean };
+  escalationHint?: string;
 }
 
 // -- Human-readable labels --

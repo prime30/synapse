@@ -575,7 +575,7 @@ async function buildV2Context(
  * Replaces verbose tool results from earlier iterations with short summaries,
  * keeping only the most recent iteration's results intact.
  */
-function compressOldToolResults(messages: AIMessage[]): void {
+export function compressOldToolResults(messages: AIMessage[]): void {
   // Find all user messages with __toolResults
   const toolResultMsgIndices: number[] = [];
   for (let i = 0; i < messages.length; i++) {
@@ -594,6 +594,7 @@ function compressOldToolResults(messages: AIMessage[]): void {
     if (!msg.__toolResults) continue;
 
     for (const block of msg.__toolResults) {
+      if (block.is_error) continue;
       if (block.content && block.content.length > 200) {
         block.content = block.content.slice(0, 150) + '\n[... compressed ...]';
       }
@@ -2119,16 +2120,79 @@ export async function streamV2(
       }
     }
 
-    // ── EPIC 2b: Self-verification loop ───────────────────────────────────
+    // ── Unified verification pipeline ──────────────────────────────────────
+    // Run verifyChanges and runThemeCheck together, merge issues, build evidence.
+    let verificationEvidence: {
+      syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
+      themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+      checkedFiles: string[];
+      totalCheckTimeMs: number;
+    } | undefined;
+
     if (accumulatedChanges.length > 0) {
+      const verifyStart = Date.now();
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'validating',
+        label: 'Running verification checks...',
+      });
+
       const verification = verifyChanges(accumulatedChanges, allFiles);
+
+      let themeCheckResult: ReturnType<typeof runThemeCheck> | null = null;
+      if (intentMode === 'code' && hasThemeLayoutContext) {
+        onProgress?.({
+          type: 'thinking',
+          phase: 'validating',
+          label: 'Running theme check...',
+        });
+        const projectedFiles = allFiles.map((f) => {
+          const change = accumulatedChanges.find((c) => c.fileName === f.fileName || c.fileName === (f.path ?? ''));
+          return { path: f.path ?? f.fileName, content: change ? change.proposedContent : f.content };
+        });
+        try {
+          themeCheckResult = runThemeCheck(projectedFiles, undefined, { bypassCache: true });
+        } catch (err) {
+          console.warn('[V2] Theme check error during verification:', err);
+        }
+      }
+
+      const mergedIssues = themeCheckResult
+        ? mergeThemeCheckIssues(verification.issues, themeCheckResult.issues)
+        : verification.issues;
+
+      const totalCheckTimeMs = Date.now() - verifyStart;
+
+      verificationEvidence = {
+        syntaxCheck: {
+          passed: verification.passed,
+          errorCount: verification.errorCount,
+          warningCount: verification.warningCount,
+        },
+        themeCheck: themeCheckResult ? {
+          passed: themeCheckResult.passed,
+          errorCount: themeCheckResult.errorCount,
+          warningCount: themeCheckResult.warningCount,
+          infoCount: themeCheckResult.issues.filter(i => i.severity === 'info').length,
+        } : undefined,
+        checkedFiles: accumulatedChanges.map(c => c.fileName),
+        totalCheckTimeMs,
+      };
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'validating',
+        label: `Verification complete (${totalCheckTimeMs}ms)`,
+      });
+
       if (!verification.passed) {
         onProgress?.({
           type: 'thinking',
           phase: 'validating',
           label: `Found ${verification.errorCount} error(s) — self-correcting...`,
         });
-        for (const issue of verification.issues.filter(i => i.severity === 'error')) {
+        for (const issue of mergedIssues.filter(i => i.severity === 'error')) {
           onProgress?.({
             type: 'diagnostics',
             file: issue.file,
@@ -2138,6 +2202,17 @@ export async function streamV2(
             category: issue.category,
           });
         }
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += `\n\nValidation gate blocked completion:\n${verification.formatted}`;
+      } else if (themeCheckResult && !themeCheckResult.passed) {
+        onProgress?.({
+          type: 'diagnostics',
+          detail: `Theme check failed with ${themeCheckResult.errorCount} error(s) and ${themeCheckResult.warningCount} warning(s).`,
+        });
+        needsClarification = true;
+        accumulatedChanges.length = 0;
+        fullText += `\n\nTheme check gate blocked completion (${themeCheckResult.errorCount} error(s)).`;
       } else if (verification.warningCount > 0) {
         onProgress?.({
           type: 'thinking',
@@ -2153,7 +2228,7 @@ export async function streamV2(
       }
     }
 
-    // ── EPIC 2c: Change-set validation ────────────────────────────────────
+    // ── Change-set validation ───────────────────────────────────────────────
     if (accumulatedChanges.length > 0) {
       const validation = validateChangeSet(accumulatedChanges, allFiles);
       if (!validation.valid) {
@@ -2371,6 +2446,19 @@ export async function streamV2(
           sessionId: options.sessionId,
         },
       },
+      failureReason: lastMutationFailure?.reason === 'old_text_not_found'
+        ? 'search_replace_failed'
+        : lastMutationFailure?.reason === 'file_not_found'
+          ? 'file_not_found'
+          : lastMutationFailure?.reason === 'validation_error'
+            ? 'validation_failed'
+            : null,
+      suggestedAction: lastMutationFailure
+        ? 'Try rephrasing the edit or paste the exact before/after code.'
+        : null,
+      failedTool: lastMutationFailure?.toolName ?? null,
+      failedFilePath: lastMutationFailure?.filePath ?? null,
+      verificationEvidence,
     };
   } catch (error) {
     console.error('[V2] Fatal error:', error);

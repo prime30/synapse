@@ -352,7 +352,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── updateMessage (local only) ──────────────────────────────────────────
 
-  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit'>>) => {
+  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'verificationEvidence'>>) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content, ...meta } : m)),
     );

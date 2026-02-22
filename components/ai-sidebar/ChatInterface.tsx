@@ -37,6 +37,7 @@ import { useContextMeter } from '@/hooks/useContextMeter';
 import { ContextMeter } from './ContextMeter';
 import type { ChatSession } from './SessionHistory';
 import { logInteractionEvent } from '@/lib/ai/interaction-client';
+import { PlanMentionPopover, type PlanMention } from './PlanMentionPopover';
 
 /** Sanitize user message content for the sticky prompt banner. */
 function sanitizeForStickyPrompt(content: string): string {
@@ -821,6 +822,16 @@ export function ChatInterface({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // @plan typeahead state
+  const [mentionState, setMentionState] = useState<{
+    visible: boolean;
+    query: string;
+    selectedIndex: number;
+    anchorRect: { top: number; left: number } | null;
+    triggerIndex: number;
+  } | null>(null);
+  const [projectPlans, setProjectPlans] = useState<PlanMention[]>([]);
+
   // Phase 3b: Attached files (dragged from file tree)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; path: string }>>([]);
 
@@ -846,6 +857,21 @@ export function ChatInterface({
     },
     [projectId, activeSessionId],
   );
+
+  // Fetch project plans for @plan typeahead
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/plans`)
+      .then(r => r.json())
+      .then(data => {
+        setProjectPlans((data.data?.plans ?? []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          todoProgress: p.todoProgress ?? { completed: 0, total: 0 },
+        })));
+      })
+      .catch(() => {});
+  }, [projectId]);
 
   useLayoutEffect(() => {
     if (!showIntentDropdown || !intentDropdownAnchorRef.current) {
@@ -1135,6 +1161,27 @@ export function ChatInterface({
     if (e.target) e.target.value = '';
   }, [handleImageAttach]);
 
+  const handlePlanSelect = useCallback((plan: PlanMention) => {
+    const textarea = inputRef.current;
+    if (!textarea || !mentionState) return;
+    const val = textarea.value;
+    const before = val.slice(0, mentionState.triggerIndex);
+    const after = val.slice(textarea.selectionStart ?? val.length);
+    const mention = `@plan:${plan.name} `;
+    textarea.value = before + mention + after;
+    setInputHasText(true);
+    onDraftChange?.(textarea.value);
+    setMentionState(null);
+    textarea.focus();
+    const newPos = before.length + mention.length;
+    textarea.setSelectionRange(newPos, newPos);
+  }, [mentionState, onDraftChange]);
+
+  const filteredPlans = useMemo(() => {
+    if (!mentionState) return [];
+    return projectPlans.filter(p => p.name.toLowerCase().includes(mentionState.query.toLowerCase()));
+  }, [projectPlans, mentionState]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const raw = inputRef.current?.value?.trim();
@@ -1156,6 +1203,29 @@ export function ChatInterface({
       }
     }
 
+    // Resolve @plan: references to inline context
+    const planRefs = messageText.match(/@plan:([^\s]+(?:\s[^\s@]+)*)/g);
+    if (planRefs && projectId) {
+      let contextPrefix = '';
+      for (const ref of planRefs) {
+        const planName = ref.replace('@plan:', '').trim();
+        const plan = projectPlans.find(p => p.name === planName);
+        if (plan) {
+          try {
+            const res = await fetch(`/api/projects/${projectId}/plans/${plan.id}`);
+            const data = await res.json();
+            if (data.data) {
+              const todos = data.data.todos?.map((t: any) => `${t.status === 'completed' ? '☑' : '☐'} ${t.content}`).join(', ') ?? '';
+              contextPrefix += `[Referenced Plan: "${data.data.name}"]\n${data.data.content}\nTodos: ${todos}\n[End Plan]\n\n`;
+            }
+          } catch { /* skip unresolvable plans */ }
+        }
+      }
+      if (contextPrefix) {
+        messageText = contextPrefix + messageText;
+      }
+    }
+
     // If we're editing a previous message, use edit-and-resend instead of appending
     if (editPendingRef.current !== null && onEditMessage) {
       const editIdx = editPendingRef.current;
@@ -1166,6 +1236,7 @@ export function ChatInterface({
     }
     if (inputRef.current) inputRef.current.value = '';
     setInputHasText(false);
+    setMentionState(null);
     setAttachedFiles([]);
     onDismissElement?.();
   };
@@ -1807,6 +1878,85 @@ export function ChatInterface({
               </div>
             )}
 
+            {/* Review section failure badges */}
+            {m.role === 'assistant' && m.reviewFailedSection && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-1 px-3">
+                {(m.reviewFailedSection === 'spec' || m.reviewFailedSection === 'both') && (
+                  <span className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10">
+                    spec compliance failed
+                  </span>
+                )}
+                {(m.reviewFailedSection === 'code_quality' || m.reviewFailedSection === 'both') && (
+                  <span className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10">
+                    code quality issues
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Failure metadata: reason + suggested action */}
+            {m.role === 'assistant' && m.failureReason && (
+              <div className="mt-0.5 flex flex-col gap-0.5 px-3">
+                <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                  {m.failureReason === 'search_replace_failed' ? 'Edit failed: text mismatch in ' + (m.failedFilePath ?? 'file')
+                    : m.failureReason === 'file_not_found' ? 'File not found: ' + (m.failedFilePath ?? 'unknown')
+                    : m.failureReason === 'validation_failed' ? 'Validation error' + (m.failedFilePath ? ' in ' + m.failedFilePath : '')
+                    : m.failureReason}
+                </span>
+                {m.suggestedAction && (
+                  <button
+                    type="button"
+                    className="text-left text-[10px] text-sky-600 dark:text-sky-400 cursor-pointer hover:underline"
+                    onClick={() => {
+                      const el = inputRef.current;
+                      if (el) {
+                        el.value = el.value ? el.value + ' ' + m.suggestedAction : m.suggestedAction!;
+                        el.focus();
+                        setInputHasText(true);
+                      }
+                      emitInteraction('button_click', 'suggested_action_clicked', {
+                        failureReason: m.failureReason,
+                        failedTool: m.failedTool,
+                      });
+                    }}
+                  >
+                    {m.suggestedAction}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Verification evidence card */}
+            {m.role === 'assistant' && m.verificationEvidence && (
+              <div className="mt-1 mx-3 rounded-md border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-2">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-[10px] font-medium text-stone-600 dark:text-gray-400">Verification</span>
+                  <span className="text-[9px] text-stone-400 dark:text-stone-500">({m.verificationEvidence.totalCheckTimeMs}ms)</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center gap-1">
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${m.verificationEvidence.syntaxCheck.passed ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="text-[10px] text-stone-700 dark:text-stone-300">
+                      Syntax {m.verificationEvidence.syntaxCheck.errorCount > 0 ? `${m.verificationEvidence.syntaxCheck.errorCount}E` : ''}{m.verificationEvidence.syntaxCheck.warningCount > 0 ? ` ${m.verificationEvidence.syntaxCheck.warningCount}W` : ''}{m.verificationEvidence.syntaxCheck.passed && m.verificationEvidence.syntaxCheck.warningCount === 0 ? 'pass' : ''}
+                    </span>
+                  </div>
+                  {m.verificationEvidence.themeCheck && (
+                    <div className="flex items-center gap-1">
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${m.verificationEvidence.themeCheck.passed ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-[10px] text-stone-700 dark:text-stone-300">
+                        Theme {m.verificationEvidence.themeCheck.errorCount > 0 ? `${m.verificationEvidence.themeCheck.errorCount}E` : ''}{m.verificationEvidence.themeCheck.warningCount > 0 ? ` ${m.verificationEvidence.themeCheck.warningCount}W` : ''}{m.verificationEvidence.themeCheck.passed && m.verificationEvidence.themeCheck.warningCount === 0 ? 'pass' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {m.verificationEvidence.checkedFiles.length > 0 && (
+                  <div className="mt-1 text-[9px] text-stone-400 dark:text-stone-500 truncate">
+                    {m.verificationEvidence.checkedFiles.length} file{m.verificationEvidence.checkedFiles.length !== 1 ? 's' : ''} checked
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Clarification hint — shows when assistant is asking for more info */}
             {m.role === 'assistant' && !isLoading && idx === messages.length - 1 &&
               /\?\s*$/.test(m.content.trim()) &&
@@ -1967,6 +2117,31 @@ export function ChatInterface({
                   onDraftChange?.(draft);
                 }}
                 onKeyDown={(e) => {
+                  if (mentionState?.visible) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setMentionState(prev => prev ? { ...prev, selectedIndex: Math.min(prev.selectedIndex + 1, filteredPlans.length - 1) } : null);
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setMentionState(prev => prev ? { ...prev, selectedIndex: Math.max(prev.selectedIndex - 1, 0) } : null);
+                      return;
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredPlans[mentionState.selectedIndex]) {
+                        handlePlanSelect(filteredPlans[mentionState.selectedIndex]);
+                      }
+                      return;
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setMentionState(null);
+                      return;
+                    }
+                  }
+
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSubmit(e);
@@ -1987,6 +2162,17 @@ export function ChatInterface({
                 }}
                 onPaste={handlePaste}
               />
+
+              {mentionState?.visible && (
+                <PlanMentionPopover
+                  plans={projectPlans}
+                  query={mentionState.query}
+                  selectedIndex={mentionState.selectedIndex}
+                  onSelect={handlePlanSelect}
+                  anchorRect={mentionState.anchorRect ?? undefined}
+                  onDismiss={() => setMentionState(null)}
+                />
+              )}
 
               {/* Drag-drop overlay */}
               {isDraggingOver && (

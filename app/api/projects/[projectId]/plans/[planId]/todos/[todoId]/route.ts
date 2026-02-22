@@ -1,18 +1,12 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
-import { validateBody } from '@/lib/middleware/validation';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
-import { handleAPIError, APIError } from '@/lib/errors/handler';
+import { handleAPIError } from '@/lib/errors/handler';
 import { updatePlanTodo } from '@/lib/services/plans';
 
 interface RouteParams {
   params: Promise<{ projectId: string; planId: string; todoId: string }>;
 }
-
-const patchSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'completed']),
-});
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {

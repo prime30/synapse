@@ -1,9 +1,7 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
-import { validateBody } from '@/lib/middleware/validation';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
-import { handleAPIError, APIError } from '@/lib/errors/handler';
+import { handleAPIError } from '@/lib/errors/handler';
 import { getPlan, updatePlan, deletePlan } from '@/lib/services/plans';
 
 interface RouteParams {

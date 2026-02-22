@@ -529,7 +529,7 @@ export const PROPOSE_PLAN_TOOL: ToolDefinition = {
 
 export const PROPOSE_CODE_EDIT_TOOL: ToolDefinition = {
   name: 'propose_code_edit',
-  description: 'Propose a code edit to an existing project file. Provide the complete new file content. The user will see a diff and can approve or reject.',
+  description: 'Propose a code edit to an existing project file. Provide the complete new file content. Use this when search_replace fails repeatedly, or when making large structural changes. The user will see a diff and can approve or reject.',
   input_schema: {
     type: 'object',
     properties: {
@@ -585,7 +585,7 @@ export const NAVIGATE_PREVIEW_TOOL: ToolDefinition = {
 
 export const SEARCH_REPLACE_TOOL: ToolDefinition = {
   name: 'search_replace',
-  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes.',
+  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes. If search_replace fails twice due to old_text mismatch, switch to propose_code_edit.',
   input_schema: {
     type: 'object',
     properties: {
@@ -680,6 +680,9 @@ export const SUMMARY_TOOLS: ToolDefinition[] = [
   ASK_CLARIFICATION_TOOL,
   NAVIGATE_PREVIEW_TOOL,
   CREATE_FILE_TOOL,
+  CREATE_PLAN_TOOL,
+  UPDATE_PLAN_TOOL,
+  READ_PLAN_TOOL,
 ];
 
 /**

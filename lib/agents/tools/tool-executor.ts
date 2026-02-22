@@ -590,7 +590,7 @@ export async function executeToolCall(
         // Find and replace
         const idx = currentContent.indexOf(oldText);
         if (idx === -1) {
-          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure it matches exactly (including whitespace and indentation).`, is_error: true };
+          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure old_text matches the file exactly (including whitespace and indentation). If this fails again, switch to propose_code_edit with the full updated file content.`, is_error: true };
         }
 
         // Check uniqueness — only the first match is replaced

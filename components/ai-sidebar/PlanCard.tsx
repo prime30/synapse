@@ -1,16 +1,46 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { PlanStep } from './ChatInterface';
+import { ExternalLink, Sparkles } from 'lucide-react';
+
+type PlanStatus = 'draft' | 'active' | 'archived';
+
+const STATUS_STYLES: Record<PlanStatus, string> = {
+  draft: 'bg-stone-500/10 text-stone-600 dark:text-stone-400',
+  active: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  archived: 'bg-stone-400/10 text-stone-400 dark:text-stone-500',
+};
+
+const STATUS_LABELS: Record<PlanStatus, string> = {
+  draft: 'Draft',
+  active: 'Active',
+  archived: 'Archived',
+};
 
 interface PlanCardProps {
   planData: { title: string; description: string; steps: PlanStep[]; filePath?: string };
+  planId?: string;
+  version?: number;
+  status?: PlanStatus;
+  projectId?: string;
   onOpenPlanFile?: (filePath: string) => void;
   onBuildPlan?: (checkedSteps: Set<number>) => void;
+  onRefine?: (planId: string) => void;
   isBuilding?: boolean;
 }
 
-export function PlanCard({ planData, onOpenPlanFile, onBuildPlan, isBuilding }: PlanCardProps) {
+export function PlanCard({
+  planData,
+  planId,
+  version,
+  status,
+  projectId,
+  onOpenPlanFile,
+  onBuildPlan,
+  onRefine,
+  isBuilding,
+}: PlanCardProps) {
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(
     () => new Set(planData.steps.map(s => s.number))
   );
@@ -24,17 +54,50 @@ export function PlanCard({ planData, onOpenPlanFile, onBuildPlan, isBuilding }: 
     });
   };
 
+  const progress = useMemo(() => {
+    const total = planData.steps.length;
+    const completed = checkedSteps.size;
+    return { completed, total, pct: total > 0 ? (completed / total) * 100 : 0 };
+  }, [planData.steps.length, checkedSteps.size]);
+
   return (
     <div
       className="my-2 rounded-lg border ide-border ide-surface-inset overflow-hidden"
       role="region"
       aria-label="Plan proposal"
     >
+      {/* Header: title + status badge */}
       <div className="px-3 py-2 border-b ide-border-subtle">
-        <h4 className="text-xs font-semibold ide-text-1">{planData.title}</h4>
+        <div className="flex items-center gap-1.5">
+          <h4 className="text-xs font-semibold ide-text-1 truncate">{planData.title}</h4>
+          {status && (
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${STATUS_STYLES[status]}`}
+            >
+              {STATUS_LABELS[status]}
+            </span>
+          )}
+          {version != null && (
+            <span className="shrink-0 text-[10px] ide-text-muted">v{version}</span>
+          )}
+        </div>
         <p className="text-[11px] ide-text-2 mt-0.5">{planData.description}</p>
+
+        {/* Progress bar */}
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#28CD56] transition-all duration-300"
+              style={{ width: `${progress.pct}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-[10px] font-medium ide-text-muted">
+            {progress.completed}/{progress.total}
+          </span>
+        </div>
       </div>
 
+      {/* Step checkboxes */}
       <div className="px-3 py-2 space-y-1.5">
         {planData.steps.map(step => (
           <label
@@ -65,7 +128,27 @@ export function PlanCard({ planData, onOpenPlanFile, onBuildPlan, isBuilding }: 
         ))}
       </div>
 
+      {/* Footer: actions */}
       <div className="px-3 py-2 border-t ide-border-subtle flex items-center justify-end gap-2">
+        {planId && projectId && (
+          <a
+            href={`/projects/${projectId}/plans/${planId}`}
+            className="inline-flex items-center gap-1 ide-text-muted hover:ide-text-2 ide-hover rounded text-xs px-2.5 py-1 focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open in tab
+          </a>
+        )}
+        {planId && onRefine && (
+          <button
+            type="button"
+            onClick={() => onRefine(planId)}
+            className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 rounded text-xs px-2.5 py-1 focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:outline-none"
+          >
+            <Sparkles className="h-3 w-3" />
+            Refine
+          </button>
+        )}
         {planData.filePath && onOpenPlanFile && (
           <button
             type="button"

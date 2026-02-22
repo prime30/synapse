@@ -219,14 +219,35 @@ You are in plan mode. Help the user think through changes before implementing th
 - Identify risks and edge cases in your plan (e.g., breaking existing customizations, mobile responsiveness, performance).
 - Don't make code changes unless the user explicitly asks you to proceed with implementation.`;
 
-export const V2_DEBUG_OVERLAY = `## Debug Mode
+export const V2_DEBUG_OVERLAY = `## Debug Mode - Systematic Investigation
 
-You are in debug mode. Systematically diagnose and fix issues.
+When debugging, follow this framework:
 
-- Check the PRE-LOADED FILES first — the affected file may already be in your context. Only use \`read_file\` for files not already pre-loaded.
-- Use \`grep_content\` to find related patterns, variable usage, and include/render references.
-- Use \`run_diagnostics\` for automated checks across the theme.
-- Use \`get_dependency_graph\` to trace how files relate when the issue might be in a parent or child template.
+### 1. Gather Evidence First
+- Read error messages and stack traces fully before forming theories
+- Use PRE-LOADED FILES before reading new ones — the affected file may already be in your context
+- Run \`run_diagnostics\` for automated checks across the theme
+- Use \`grep_content\` to find related patterns, variable usage, and include/render references
+- Check the dependency graph with \`get_dependency_graph\` to trace how files relate
+
+### 2. Form Hypotheses
+- Based on evidence, list 1-3 possible causes (most likely first)
+- For each hypothesis, identify which file and which lines to check
+- Consider: Is it Liquid logic? CSS visibility? JS interference? Asset loading?
+
+### 3. Test Incrementally
+- Test ONE hypothesis at a time with a minimal change
+- Run \`check_lint\` and \`theme_check\` after each change to verify
+- If the fix doesn't work, revert and try the next hypothesis
+- Propose targeted, minimal fixes — avoid rewriting unrelated code
+
+### 4. Escalate When Stuck
+- After 3 failed fixes, STOP and reconsider:
+  - Am I editing the right file?
+  - Could the issue be in a different layer (CSS vs Liquid vs JS)?
+  - Is there a third-party script interfering?
+  - Should I look at layout/theme.liquid for global interference?
+- Ask for more context if needed rather than guessing
 
 **Common Shopify issues to check:**
 - Liquid syntax errors (unclosed tags, missing endtags)
@@ -234,9 +255,8 @@ You are in debug mode. Systematically diagnose and fix issues.
 - Missing section schema settings referenced in Liquid
 - Broken asset references (wrong filename, missing file)
 - JSON syntax errors in templates or settings
-- Incorrect \`{% render %}\` / \`{% include %}\` paths
+- Incorrect \\\`{% render %}\\\` / \\\`{% include %}\\\` paths
 
-- Propose targeted, minimal fixes — avoid rewriting unrelated code.
 - Explain the root cause clearly so the user understands the issue.`;
 
 export const V2_ASK_OVERLAY = `## Ask Mode

@@ -14,6 +14,8 @@ export const REVIEW_OUTPUT_SCHEMA = {
   type: 'object',
   properties: {
     approved: { type: 'boolean' },
+    specCompliant: { type: 'boolean' },
+    codeQualityApproved: { type: 'boolean' },
     issues: {
       type: 'array',
       items: {
@@ -32,7 +34,7 @@ export const REVIEW_OUTPUT_SCHEMA = {
     },
     summary: { type: 'string' },
   },
-  required: ['approved', 'issues', 'summary'],
+  required: ['approved', 'specCompliant', 'codeQualityApproved', 'issues', 'summary'],
   additionalProperties: false,
 } as const;
 
@@ -304,6 +306,8 @@ export class ReviewAgent extends Agent {
 
       const parsed = JSON.parse(jsonString) as {
         approved?: boolean;
+        specCompliant?: boolean;
+        codeQualityApproved?: boolean;
         issues?: Array<{
           severity?: string;
           file?: string;
@@ -325,11 +329,23 @@ export class ReviewAgent extends Agent {
       }));
 
       const hasErrors = issues.some((i) => i.severity === 'error');
+      const specCompliant = parsed.specCompliant ?? true;
+      const codeQualityApproved = parsed.codeQualityApproved ?? !hasErrors;
+      const approved = !specCompliant ? false : (parsed.approved ?? !hasErrors);
+
+      const failedSection: ReviewResult['failedSection'] =
+        !specCompliant && !codeQualityApproved ? 'both'
+        : !specCompliant ? 'spec'
+        : !codeQualityApproved ? 'code_quality'
+        : null;
 
       const reviewResult: ReviewResult = {
-        approved: parsed.approved ?? !hasErrors,
+        approved,
         issues,
         summary: parsed.summary ?? 'Review completed.',
+        specCompliant,
+        codeQualityApproved,
+        failedSection,
       };
 
       return {

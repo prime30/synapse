@@ -202,6 +202,18 @@ export interface AgentResult {
       sessionId?: string;
     };
   };
+  /** Verification evidence from post-loop checks. */
+  verificationEvidence?: {
+    syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
+    themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+    checkedFiles: string[];
+    totalCheckTimeMs: number;
+  };
+  /** Structured failure metadata populated by the coordinator when enactment fails. */
+  failureReason?: 'search_replace_failed' | 'file_not_found' | 'policy_blocked' | 'timeout' | 'validation_failed' | null;
+  suggestedAction?: string | null;
+  failedTool?: string | null;
+  failedFilePath?: string | null;
 }
 
 /** In-memory state for an active execution */
@@ -225,6 +237,9 @@ export interface ReviewResult {
   approved: boolean;
   issues: ReviewIssue[];
   summary: string;
+  specCompliant?: boolean;
+  codeQualityApproved?: boolean;
+  failedSection?: 'spec' | 'code_quality' | 'both' | null;
 }
 
 /** A specific issue found by the review agent */
@@ -234,7 +249,7 @@ export interface ReviewIssue {
   line?: number;
   description: string;
   suggestion?: string;
-  category: 'syntax' | 'truncation' | 'breaking_change' | 'consistency' | 'security';
+  category: 'syntax' | 'truncation' | 'breaking_change' | 'consistency' | 'security' | 'spec_compliance';
 }
 
 /** A learned coding pattern from user approvals */
