@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "after_edit": [
+      { "command": "npx shopify theme check --path ." }
+    ],
+    "before_push": [
+      { "command": "npm run lint" },
+      { "command": "npm run build" }
+    ]
+  }
+}

@@ -19,7 +19,7 @@ const iconStyle: CSSProperties = { flexShrink: 0 };
 
 function LiquidIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="oklch(0.777 0.152 199)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
       <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
     </svg>
   );
@@ -27,7 +27,7 @@ function LiquidIcon() {
 
 function JavaScriptIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="oklch(0.795 0.184 86)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <path d="M9 15l2-2m4-4l2-2" />
       <path d="M8 12h.01M16 12h.01" />
@@ -37,7 +37,7 @@ function JavaScriptIcon() {
 
 function CssIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="oklch(0.702 0.183 293)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <path d="M8 8h8M8 12h5M8 16h8" />
     </svg>
@@ -46,7 +46,7 @@ function CssIcon() {
 
 function OtherIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="oklch(0.704 0.015 264)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
     </svg>

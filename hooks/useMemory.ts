@@ -37,6 +37,11 @@ interface UseMemoryReturn {
   refresh: () => Promise<void>;
 }
 
+interface MemoryUnavailableResponse {
+  unavailable?: boolean;
+  message?: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
@@ -108,11 +113,14 @@ export function useMemory(projectId: string): UseMemoryReturn {
         prev.map((m) => (m.id === id ? { ...m, feedback } : m)),
       );
       try {
-        await fetchJSON(baseUrl, {
+        const res = await fetchJSON<MemoryEntry | MemoryUnavailableResponse>(baseUrl, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, feedback }),
         });
+        if ('unavailable' in res && res.unavailable) {
+          await refresh();
+        }
       } catch {
         // Revert on error
         await refresh();
@@ -128,11 +136,14 @@ export function useMemory(projectId: string): UseMemoryReturn {
       // Optimistic remove
       setMemories((prev) => prev.filter((m) => m.id !== id));
       try {
-        await fetchJSON(baseUrl, {
+        const res = await fetchJSON<{ deleted?: boolean } & MemoryUnavailableResponse>(baseUrl, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id }),
         });
+        if (res.unavailable) {
+          await refresh();
+        }
       } catch {
         await refresh();
       }
@@ -148,11 +159,14 @@ export function useMemory(projectId: string): UseMemoryReturn {
         prev.map((m) => (m.id === id ? { ...m, content } : m)),
       );
       try {
-        await fetchJSON(baseUrl, {
+        const res = await fetchJSON<MemoryEntry | MemoryUnavailableResponse>(baseUrl, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, content }),
         });
+        if ('unavailable' in res && res.unavailable) {
+          await refresh();
+        }
       } catch {
         await refresh();
       }
@@ -165,12 +179,12 @@ export function useMemory(projectId: string): UseMemoryReturn {
   const create = useCallback(
     async (type: MemoryEntry['type'], content: MemoryContent, confidence: number) => {
       try {
-        const data = await fetchJSON<MemoryEntry>(baseUrl, {
+        const data = await fetchJSON<MemoryEntry | MemoryUnavailableResponse>(baseUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type, content, confidence }),
         });
-        if (mountedRef.current) {
+        if (mountedRef.current && 'id' in data && typeof data.id === 'string') {
           setMemories((prev) => [data, ...prev]);
         }
       } catch {

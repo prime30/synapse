@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Sparkles } from 'lucide-react';
 import type { FileType } from '@/lib/types/files';
 import { formatFileSize, formatRelativeTime } from '@/hooks/useProjectFiles';
 import type { ProjectFile } from '@/hooks/useProjectFiles';
@@ -17,6 +17,7 @@ interface FileListItemProps {
   onDuplicate?: (fileId: string) => void;
   onDelete?: (fileId: string) => void;
   snippetUsageCount?: number;
+  hasAgentEdits?: boolean;
 }
 
 function getFileTypeColor(type: FileType): string {
@@ -40,6 +41,7 @@ export function FileListItem({
   onDuplicate,
   onDelete,
   snippetUsageCount,
+  hasAgentEdits,
 }: FileListItemProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -90,6 +92,9 @@ export function FileListItem({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm ide-text flex items-center">
             {displayName}
+            {hasAgentEdits && (
+              <Sparkles className="ml-1.5 w-3 h-3 text-sky-500 dark:text-sky-400" aria-label="Agent edited" />
+            )}
             {snippetUsageCount != null && snippetUsageCount > 0 && (
               <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-medium ide-active text-sky-500 dark:text-sky-400 rounded-full leading-none">
                 x{snippetUsageCount}

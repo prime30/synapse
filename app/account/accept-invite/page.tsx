@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 type InviteState = 'loading' | 'success' | 'error';
 
-export default function AcceptInvitePage() {
+function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get('token');
@@ -124,5 +124,13 @@ export default function AcceptInvitePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Processing invitation...</div>}>
+      <AcceptInviteContent />
+    </Suspense>
   );
 }

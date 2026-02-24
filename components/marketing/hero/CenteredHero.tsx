@@ -5,12 +5,12 @@ import Link from 'next/link';
 
 export function CenteredHero() {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 pb-24 bg-[#0a0a0a] overflow-hidden">
+    <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 pb-24 bg-[oklch(0.145_0_0)] overflow-hidden">
       {/* Subtle radial gradient — no harsh edges */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(14, 165, 233, 0.06) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse 80% 60% at 50% 40%, oklch(0.685 0.169 237 / 0.06) 0%, transparent 60%)',
         }}
       />
 
@@ -46,7 +46,7 @@ export function CenteredHero() {
           />
           <Link
             href="/signup"
-            className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow shrink-0"
+            className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_oklch(0.685_0.169_237_/_0.4)] transition-shadow shrink-0"
           >
             Start Free
           </Link>

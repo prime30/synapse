@@ -152,6 +152,37 @@ export const SHOPIFY_WORKFLOWS: ShopifyWorkflow[] = [
       'Liquid defines the product template structure; JS handles variant switching, gallery, and add-to-cart. Schema settings may be embedded in Liquid section.',
   },
   {
+    id: 'edit-section',
+    name: 'Edit a section',
+    description:
+      'Edit an existing section in a theme. Needs Liquid (section markup + schema), CSS (styles), and optionally JS (interactivity).',
+    triggers: [
+      /edit\s+(?:a\s+)?section/i,
+      /update\s+(?:a\s+)?section/i,
+      /modify\s+(?:a\s+)?section/i,
+      /change\s+(?:a\s+)?section/i,
+    ],
+    steps: [
+      {
+        agent: 'liquid',
+        focus: 'Modify section markup and schema settings',
+        priority: 'required',
+      },
+      {
+        agent: 'css',
+        focus: 'Update section styles',
+        priority: 'required',
+      },
+      {
+        agent: 'javascript',
+        focus: 'Update interactive behavior if needed',
+        priority: 'optional',
+      },
+    ],
+    pmGuidance:
+      'Liquid first to modify section structure and schema. CSS for styling changes. JS only if interactive behavior needs updating. If user references another section, load it first as context.',
+  },
+  {
     id: 'fix-mobile-layout',
     name: 'Fix mobile layout',
     description:
@@ -179,6 +210,21 @@ export const SHOPIFY_WORKFLOWS: ShopifyWorkflow[] = [
       'CSS is primary for responsive fixes. Liquid optional only if mobile needs different markup (e.g., hide/show elements). Start with CSS media queries.',
   },
 ];
+
+const REFERENCE_SECTION_RE =
+  /(?:like|similar to|based on|matching|same as)\s+['"]?([\w-]+)['"]?/i;
+
+/**
+ * Detects whether the user request references an existing section by name
+ * (e.g. "make it like featured-collection" or "based on 'hero-banner'").
+ * Returns the normalized section file path or null.
+ */
+export function detectReferenceSection(userRequest: string): string | null {
+  const match = userRequest.match(REFERENCE_SECTION_RE);
+  if (!match) return null;
+  const name = match[1];
+  return name.endsWith('.liquid') ? `sections/${name}` : `sections/${name}.liquid`;
+}
 
 /**
  * Tests the user request against all workflow triggers and returns the first match.

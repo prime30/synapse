@@ -6,6 +6,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { safeTransition } from '@/lib/accessibility';
 import type { ContentBlock } from './ChatInterface';
 import type { PlanStep } from './PlanApprovalModal';
+import { ToolProgressBar } from './ToolProgressBar';
+import { ToolContentPreview } from './ToolContentPreview';
+import type { ToolProgressState } from '@/hooks/useToolProgress';
 
 // Lazy-loaded card components to avoid circular deps
 import { PlanCard } from './PlanCard';
@@ -95,7 +98,7 @@ function StatusIcon({ status, toolName }: { status: string; toolName: string }) 
   if (status === 'done') {
     return (
       <div className="shrink-0 h-4 w-4 flex items-center justify-center">
-        <Check className="h-4 w-4 text-[#28CD56]" aria-hidden />
+        <Check className="h-4 w-4 text-[oklch(0.745_0.189_148)]" aria-hidden />
       </div>
     );
   }
@@ -180,6 +183,26 @@ export function ToolActionItem({
         )}
       </button>
 
+      {/* Tool progress during loading */}
+      {block.status === 'loading' && block.progress && (
+        <>
+          <ToolProgressBar
+            percentage={block.progress.percentage}
+            indeterminate={block.progress.percentage == null}
+          />
+          <ToolContentPreview
+            toolName={block.toolName}
+            progress={{
+              toolCallId: block.toolId,
+              name: block.toolName,
+              phase: block.progress.phase,
+              detail: block.progress.detail,
+              percentage: block.progress.percentage,
+            } as ToolProgressState}
+          />
+        </>
+      )}
+
       {/* Expanded card content */}
       {(hasExpandableContent || block.status === 'error') && (
         <AnimatePresence initial={false}>
@@ -204,6 +227,18 @@ export function ToolActionItem({
                   onChangeRejected,
                   isBuilding,
                 })}
+                {block.validationSuggestions && block.validationSuggestions.length > 0 && (
+                  <div role="status" className="px-2.5 py-2 space-y-1 border-t ide-border-subtle">
+                    {block.validationSuggestions.map((suggestion, i) => (
+                      <div
+                        key={i}
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 inline-block mr-1"
+                      >
+                        {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -232,10 +267,11 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
 
   switch (block.cardType) {
     case 'plan': {
-      const planData = data as { title: string; description: string; steps: PlanStep[]; filePath?: string };
+      const planData = data as { title: string; description: string; steps: PlanStep[]; filePath?: string; confidence?: number };
       return (
         <PlanCard
           planData={planData}
+          confidence={planData.confidence}
           onOpenPlanFile={handlers.onOpenPlanFile}
           onBuildPlan={handlers.onBuildPlan}
           isBuilding={handlers.isBuilding}
@@ -243,7 +279,7 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
       );
     }
     case 'code_edit': {
-      const edit = data as { filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' };
+      const edit = data as { filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected'; confidence?: number };
       return (
         <CodeEditCard
           filePath={edit.filePath}
@@ -251,6 +287,7 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
           newContent={edit.newContent}
           originalContent={edit.originalContent}
           status={edit.status}
+          confidence={edit.confidence}
           onApplyCode={handlers.onApplyCode}
           resolveFileId={handlers.resolveFileId}
           onOpenFile={handlers.onOpenFile}
@@ -269,13 +306,14 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
       );
     }
     case 'file_create': {
-      const fc = data as { fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' };
+      const fc = data as { fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled'; confidence?: number };
       return (
         <FileCreateCard
           fileName={fc.fileName}
           content={fc.content}
           reasoning={fc.reasoning}
           status={fc.status}
+          confidence={fc.confidence}
           onConfirm={handlers.onConfirmFileCreate}
         />
       );

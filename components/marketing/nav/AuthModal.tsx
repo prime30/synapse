@@ -235,7 +235,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
           {/* Modal container */}
           <div className="fixed inset-0 z-[61] flex items-center justify-center p-4" onClick={onClose}>
             <motion.div
-              className="relative w-full max-w-sm rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden border-stone-200 bg-white/95 shadow-stone-200/20 dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/20"
+              className="relative w-full max-w-sm rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden border-stone-200 bg-white/95 shadow-stone-200/20 dark:border-white/10 dark:bg-[oklch(0.145_0_0)]/90 dark:shadow-black/20"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -301,7 +301,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                         <span className="w-full border-t border-stone-200 dark:border-white/10" />
                       </div>
                       <div className="relative flex justify-center text-xs">
-                        <span className="bg-white px-2 text-stone-500 dark:bg-[#0a0a0a] dark:text-white/50">
+                        <span className="bg-white px-2 text-stone-500 dark:bg-[oklch(0.145_0_0)] dark:text-white/50">
                           or continue with email
                         </span>
                       </div>

@@ -68,17 +68,17 @@ export interface ParticleSystem {
 
 /** Default color scheme matching Tailwind palette. */
 export const DEFAULT_COLORS: FlowColorScheme = {
-  assignment: '#60a5fa', // blue-400
-  output: '#34d399', // emerald-400
-  filter: '#a78bfa', // violet-400
-  control: '#fbbf24', // amber-400
-  scope: '#f87171', // red-400
-  string: '#34d399',
-  number: '#60a5fa',
-  boolean: '#fbbf24',
-  array: '#a78bfa',
-  object: '#f97316',
-  unknown: '#94a3b8', // slate-400
+  assignment: 'oklch(0.718 0.158 248)', // blue-400
+  output: 'oklch(0.765 0.177 163)', // emerald-400
+  filter: 'oklch(0.667 0.174 277)', // violet-400
+  control: 'oklch(0.852 0.167 84)', // amber-400
+  scope: 'oklch(0.704 0.191 22)', // red-400
+  string: 'oklch(0.765 0.177 163)',
+  number: 'oklch(0.718 0.158 248)',
+  boolean: 'oklch(0.852 0.167 84)',
+  array: 'oklch(0.667 0.174 277)',
+  object: 'oklch(0.702 0.183 52)',
+  unknown: 'oklch(0.704 0.022 256)', // slate-400
 };
 
 /** Default particle system configuration. */

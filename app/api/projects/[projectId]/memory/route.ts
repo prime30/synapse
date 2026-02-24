@@ -49,12 +49,20 @@ function isMemoryUnavailableError(error: { code?: string; message?: string }): b
 /*  GET — List memories for a project                                  */
 /* ------------------------------------------------------------------ */
 
+/** Check if memory content matches search text (case-insensitive). */
+function contentMatchesSearch(content: MemoryContent, search: string): boolean {
+  if (!search.trim()) return true;
+  const text = JSON.stringify(content).toLowerCase();
+  return text.includes(search.trim().toLowerCase());
+}
+
 /**
  * GET /api/projects/[projectId]/memory
  *
  * Query params:
  *  - type: filter by memory type (convention | decision | preference)
  *  - feedback: filter by feedback (correct | wrong | null)
+ *  - search: full-text search within content (client-side filter when DB lacks FTS)
  *  - minConfidence: minimum confidence threshold (0-1)
  *  - limit: max results (default 50, max 200)
  *  - offset: pagination offset
@@ -67,11 +75,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const url = request.nextUrl;
     const typeFilter = url.searchParams.get('type') as MemoryType | null;
     const feedbackFilter = url.searchParams.get('feedback');
+    const searchParam = url.searchParams.get('search')?.trim() ?? '';
     const minConfidence = parseFloat(url.searchParams.get('minConfidence') ?? '0');
     const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200);
     const offset = parseInt(url.searchParams.get('offset') ?? '0', 10);
 
     const supabase = adminClient();
+
+    // When searching, fetch more to allow in-handler filtering (DB may not have FTS)
+    const useSearchFilter = !!searchParam;
+    const fetchLimit = useSearchFilter ? Math.min(limit * 4, 200) : limit;
+    const fetchOffset = useSearchFilter ? 0 : offset;
 
     let query = supabase
       .from('developer_memory')
@@ -80,7 +94,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .gte('confidence', isNaN(minConfidence) ? 0 : minConfidence)
       .order('confidence', { ascending: false })
       .order('updated_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .range(fetchOffset, fetchOffset + fetchLimit - 1);
 
     if (typeFilter && VALID_TYPES.has(typeFilter)) {
       query = query.eq('type', typeFilter);
@@ -100,11 +114,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw APIError.internal(error.message);
     }
 
-    const memories = (data as MemoryRow[]).map(rowToMemoryEntry);
+    let memories = (data as MemoryRow[]).map(rowToMemoryEntry);
+
+    if (searchParam) {
+      memories = memories.filter((m) => contentMatchesSearch(m.content, searchParam));
+    }
+
+    const total = searchParam ? memories.length : (count ?? memories.length);
+    const paginated = memories.slice(offset, offset + limit);
 
     return successResponse({
-      memories,
-      total: count ?? memories.length,
+      memories: paginated,
+      total,
       limit,
       offset,
     });
@@ -167,8 +188,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (error) {
       if (isMemoryUnavailableError(error)) {
         return successResponse(
-          { message: 'Developer memory not available' },
-          503
+          { unavailable: true, message: 'Developer memory not available' }
         );
       }
       throw APIError.internal(error.message);
@@ -245,7 +265,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (error) {
       if (isMemoryUnavailableError(error)) {
-        return successResponse({ message: 'Developer memory not available' }, 503);
+        return successResponse({ unavailable: true, message: 'Developer memory not available' });
       }
       if (error.code === 'PGRST116') {
         throw APIError.notFound('Memory entry not found');

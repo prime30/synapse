@@ -1,6 +1,24 @@
 import { estimateTokens } from './token-counter';
+import { estimateMetadataTokens } from './message-compression';
 import type { AIMessage } from './types';
 import type { AgentType, RoutingTier } from '@/lib/types/agent';
+import type { MessageMetadata } from '@/lib/types/database';
+
+/**
+ * Estimate total tokens for a message, including tool metadata overhead
+ * from __toolCalls and __toolResults.
+ */
+function estimateMessageTokens(msg: AIMessage): number {
+  let tokens = estimateTokens(msg.content);
+  const record = msg as unknown as Record<string, unknown>;
+  if (record.__toolCalls) {
+    tokens += estimateMetadataTokens({ toolCalls: record.__toolCalls as MessageMetadata['toolCalls'] });
+  }
+  if (record.__toolResults) {
+    tokens += estimateMetadataTokens({ toolResults: record.__toolResults as MessageMetadata['toolResults'] });
+  }
+  return tokens;
+}
 
 export interface BudgetResult {
   messages: AIMessage[];
@@ -258,9 +276,9 @@ export function enforceRequestBudget(
     ? nonSystemMessages.slice(0, lastUserIndex)
     : [];
 
-  // ── NEW: Truncate the tail (last user message) if it alone exceeds budget ──
+  // Truncate the tail (last user message) if it alone exceeds budget
   const availableForTail = Math.max(0, max - systemTokens);
-  let tailTokens = estimateTokens(tail.map((m) => m.content).join(''));
+  let tailTokens = tail.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
 
   if (tailTokens > availableForTail && tail.length > 0) {
     // Truncate the last user message (which is tail[0]) using middle-preserving strategy
@@ -271,7 +289,7 @@ export function enforceRequestBudget(
     if (lastMsg.cacheControl) truncatedMsg.cacheControl = lastMsg.cacheControl;
     if (lastMsg.citations) truncatedMsg.citations = lastMsg.citations;
     tail = [truncatedMsg, ...tail.slice(1)];
-    tailTokens = estimateTokens(tail.map((m) => m.content).join(''));
+    tailTokens = tail.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
     truncatedCount++;
     budgetTruncated = true;
     console.warn(
@@ -291,7 +309,7 @@ export function enforceRequestBudget(
     let accumulated = 0;
     const keptReversed: AIMessage[] = [];
     for (const m of reversed) {
-      const tokens = estimateTokens(m.content);
+      const tokens = estimateMessageTokens(m);
       if (accumulated + tokens <= budgetForRemovable) {
         keptReversed.unshift(m);
         accumulated += tokens;

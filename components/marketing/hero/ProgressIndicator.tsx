@@ -41,8 +41,8 @@ export function ProgressIndicator({ activeFold, onFoldClick }: ProgressIndicator
               animate={{
                 width: activeFold === index ? 10 : 6,
                 height: activeFold === index ? 10 : 6,
-                backgroundColor: activeFold === index ? '#0ea5e9' : 'rgba(168,162,158,0.3)',
-                boxShadow: activeFold === index ? '0 0 12px rgba(14,165,233,0.5)' : 'none',
+                backgroundColor: activeFold === index ? 'oklch(0.685 0.169 237)' : 'oklch(0.709 0.01 56 / 0.3)',
+                boxShadow: activeFold === index ? '0 0 12px oklch(0.685 0.169 237 / 0.5)' : 'none',
               }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             />

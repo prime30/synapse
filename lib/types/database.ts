@@ -69,12 +69,48 @@ export interface AISession {
 
 export type MessageRole = 'system' | 'user' | 'assistant';
 
+export interface MessageMetadata {
+  toolCalls?: Array<{
+    type: 'tool_use';
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }>;
+  toolResults?: Array<{
+    type: 'tool_result';
+    tool_use_id: string;
+    content: string;
+    is_error: boolean;
+    compressed?: boolean;
+  }>;
+}
+
 export interface AIMessageRecord {
   id: string;
   session_id: string;
   role: MessageRole;
   content: string;
+  metadata: MessageMetadata | null;
   input_tokens: number | null;
   output_tokens: number | null;
   created_at: string;
+}
+
+export type BugSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type BugStatus = 'open' | 'in_progress' | 'fixed' | 'archived';
+
+export interface BugReport {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  screenshot_url: string | null;
+  severity: BugSeverity;
+  status: BugStatus;
+  agent_session_id: string | null;
+  fixed_by: string | null;
+  fixed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

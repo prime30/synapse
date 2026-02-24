@@ -151,7 +151,7 @@ function SuggestionNodeInner({ suggestion, onDismiss }: {
       }}
     >
       <div className="flex items-start gap-2 px-3 py-2 max-w-[240px] rounded-lg ide-surface-pop border ide-border shadow-lg">
-        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="oklch(0.718 0.174 253)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
           <path d="M9 18h6" />
           <path d="M10 22h4" />
           <path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
@@ -509,30 +509,30 @@ export function CanvasView({
               }}
             >
               <Suspense fallback={null}>
-                <BackgroundLazy gap={20} size={1} color="#1e293b" />
+                <BackgroundLazy gap={20} size={1} color="oklch(0.279 0.029 260)" />
                 <MiniMapLazy
                   nodeColor={(node) => {
                     const data = node.data as unknown as CanvasFileData;
                     switch (data?.fileType) {
-                      case 'liquid': return '#22d3ee';
-                      case 'javascript': return '#eab308';
-                      case 'css': return '#a78bfa';
-                      default: return '#6b7280';
+                      case 'liquid': return 'oklch(0.777 0.152 199)';
+                      case 'javascript': return 'oklch(0.795 0.184 86)';
+                      case 'css': return 'oklch(0.702 0.183 293)';
+                      default: return 'oklch(0.551 0.027 264)';
                     }
                   }}
-                  maskColor="rgba(0, 0, 0, 0.7)"
+                  maskColor="oklch(0 0 0 / 0.7)"
                   style={{
-                    backgroundColor: '#0f172a',
+                    backgroundColor: 'oklch(0.208 0.042 265)',
                     borderRadius: '0.5rem',
-                    border: '1px solid #1e293b',
+                    border: '1px solid oklch(0.279 0.029 260)',
                   }}
                 />
                 <ControlsLazy
                   showInteractive={false}
                   style={{
                     borderRadius: '0.5rem',
-                    border: '1px solid #374151',
-                    backgroundColor: '#111827',
+                    border: '1px solid oklch(0.373 0.022 261)',
+                    backgroundColor: 'oklch(0.235 0.031 264)',
                   }}
                 />
               </Suspense>

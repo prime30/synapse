@@ -12,6 +12,7 @@ export { LogoSlider } from './LogoSlider';
 export { HowItWorksSection } from './HowItWorksSection';
 export { CTASection } from './CTASection';
 export { IsometricHeroGrid } from './IsometricHeroGrid';
+export { StyleIntelligenceSection } from './StyleIntelligenceSection';
 
 // Legacy exports (kept for backward compat)
 export { FeatureShowcase } from './FeatureShowcase';
@@ -20,3 +21,4 @@ export { TestimonialSection } from './TestimonialSection';
 export { MarqueeTicker } from './MarqueeTicker';
 export { FeaturesSection } from './FeaturesSection';
 export { SocialProofSection } from './SocialProofSection';
+export { PolicyTemplateLibrary } from './PolicyTemplateLibrary';

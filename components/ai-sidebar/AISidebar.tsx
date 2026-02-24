@@ -62,7 +62,7 @@ export function AISidebar({
           currentWidth={width}
           onResize={onResize}
         />
-        <div className="flex flex-col flex-1 min-h-0 pl-1">
+        <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-x-hidden pl-1">
           {/* Header */}
           <div className="flex items-center justify-between border-b ide-border-subtle px-3 py-2 flex-shrink-0">
             <span className="text-sm font-medium ide-text-2">AI Assistant</span>

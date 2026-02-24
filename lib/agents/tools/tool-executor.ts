@@ -3,6 +3,7 @@ import type { FileContext, AgentContext } from '@/lib/types/agent';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ContextEngine } from '@/lib/ai/context-engine';
 import { checkLiquid, checkCSS, checkJavaScript } from '@/lib/agents/validation/syntax-checker';
+import { isSectionFile, contentMarkupOnly, contentSchemaOnly } from '@/lib/liquid/schema-stripper';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
 import { executeGrep, executeGlob, executeSemanticSearch } from './search-tools';
 import { extractTargetRegion } from './region-extractor';
@@ -35,6 +36,12 @@ export interface ToolExecutorContext {
   shopifyConnectionId?: string;
   /** Shopify theme ID — needed by Shopify operation tools. */
   themeId?: string;
+  /** Session ID — needed by scratchpad tools for per-session memory. */
+  sessionId?: string;
+  /** Project directory for shell commands (defaults to process.cwd()). */
+  projectDir?: string;
+  /** Callback when a file is changed via direct DB write (search_replace, write_file). */
+  onFileChanged?: (change: { fileId: string; fileName: string; originalContent: string; proposedContent: string; reasoning: string }) => void;
 }
 
 type DbFileRow = {
@@ -199,6 +206,26 @@ async function resolveFileFromDatabase(
   return toFileContext(data);
 }
 
+function resolveFileContext(files: FileContext[], ref: string): FileContext | undefined {
+  if (!ref) return undefined;
+  const baseRef = ref.split('/').pop() ?? ref;
+  return files.find((f) => {
+    const name = f.fileName ?? '';
+    const path = f.path ?? '';
+    const baseName = name.split('/').pop() ?? name;
+    const basePath = path.split('/').pop() ?? path;
+    return (
+      f.fileId === ref ||
+      name === ref ||
+      path === ref ||
+      name.endsWith(`/${ref}`) ||
+      path.endsWith(`/${ref}`) ||
+      baseName === baseRef ||
+      basePath === baseRef
+    );
+  });
+}
+
 /**
  * Execute a tool call and return the result.
  * Each tool has access to the project files and context engine.
@@ -217,12 +244,7 @@ export async function executeToolCall(
       case 'read_file': {
         const fileId = String(toolCall.input.fileId ?? '');
         // If loadContent is available, try to hydrate the file first
-        let file = files.find(f =>
-          f.fileId === fileId ||
-          f.fileName === fileId ||
-          f.fileName.endsWith(`/${fileId}`) ||
-          (f.path && f.path.endsWith(`/${fileId}`))
-        );
+        let file = resolveFileContext(files, fileId);
         if (!file) {
           const dbResolved = await resolveFileFromDatabase(fileId, ctx);
           if (dbResolved) {
@@ -237,7 +259,21 @@ export async function executeToolCall(
           const hydrated = await ctx.loadContent([file.fileId]);
           if (hydrated.length > 0) file = hydrated[0];
         }
-        return { tool_use_id: toolCall.id, content: file.content };
+
+        let content = file.content;
+
+        // Schema-aware view for section files
+        const view = String(toolCall.input.view ?? 'full');
+        const filePath = file.fileName || file.path || '';
+        if (view !== 'full' && isSectionFile(filePath)) {
+          if (view === 'markup') {
+            content = contentMarkupOnly(content);
+          } else if (view === 'schema') {
+            content = contentSchemaOnly(content);
+          }
+        }
+
+        return { tool_use_id: toolCall.id, content };
       }
 
       case 'search_files': {
@@ -329,12 +365,7 @@ export async function executeToolCall(
         }
 
         // Resolve file
-        let regionFile = files.find(f =>
-          f.fileId === regionFileId ||
-          f.fileName === regionFileId ||
-          f.fileName.endsWith(`/${regionFileId}`) ||
-          (f.path && f.path.endsWith(`/${regionFileId}`))
-        );
+        let regionFile = resolveFileContext(files, regionFileId);
         if (!regionFile) {
           const dbResolved = await resolveFileFromDatabase(regionFileId, ctx);
           if (dbResolved) { files.push(dbResolved); regionFile = dbResolved; }
@@ -414,12 +445,7 @@ export async function executeToolCall(
         const lintFileName = String(toolCall.input.fileName ?? '');
         const lintContent = toolCall.input.content ? String(toolCall.input.content) : undefined;
 
-        const lintFile = files.find(f =>
-          f.fileId === lintFileName ||
-          f.fileName === lintFileName ||
-          f.fileName.endsWith(`/${lintFileName}`) ||
-          (f.path && f.path.endsWith(`/${lintFileName}`))
-        );
+        const lintFile = resolveFileContext(files, lintFileName);
         if (!lintFile && !lintContent) {
           return { tool_use_id: toolCall.id, content: `File not found: ${lintFileName}`, is_error: true };
         }
@@ -460,12 +486,7 @@ export async function executeToolCall(
         const diagContent = toolCall.input.content ? String(toolCall.input.content) : undefined;
 
         // Find the file for metadata (type detection)
-        const diagFile = files.find(f =>
-          f.fileId === diagFileName ||
-          f.fileName === diagFileName ||
-          f.fileName.endsWith(`/${diagFileName}`) ||
-          (f.path && f.path.endsWith(`/${diagFileName}`))
-        );
+        const diagFile = resolveFileContext(files, diagFileName);
         if (!diagFile && !diagContent) {
           return { tool_use_id: toolCall.id, content: `File not found: ${diagFileName}`, is_error: true };
         }
@@ -568,11 +589,7 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'old_text and new_text are identical — no change needed.', is_error: true };
         }
 
-        const file = files.find(f =>
-          f.fileId === filePath || f.fileName === filePath ||
-          f.fileName.endsWith(`/${filePath}`) ||
-          (f.path && f.path.endsWith(`/${filePath}`))
-        );
+        const file = resolveFileContext(files, filePath);
         if (!file) {
           return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
         }
@@ -587,10 +604,42 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: `Cannot load content for ${filePath}`, is_error: true };
         }
 
-        // Find and replace
-        const idx = currentContent.indexOf(oldText);
+        // Find and replace — try exact match first, then whitespace-flexible
+        let idx = currentContent.indexOf(oldText);
+        let usedFuzzy = false;
         if (idx === -1) {
-          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. Ensure old_text matches the file exactly (including whitespace and indentation). If this fails again, switch to propose_code_edit with the full updated file content.`, is_error: true };
+          // Fuzzy: normalize leading whitespace on each line and retry
+          const normalizeWs = (s: string) => s.split('\n').map(l => l.trimStart()).join('\n');
+          const normalizedContent = normalizeWs(currentContent);
+          const normalizedOld = normalizeWs(oldText);
+          const fuzzyIdx = normalizedContent.indexOf(normalizedOld);
+          if (fuzzyIdx !== -1) {
+            // Find the original position by counting characters up to fuzzyIdx
+            let origPos = 0;
+            let normPos = 0;
+            const contentLines = currentContent.split('\n');
+            const normContentLines = normalizedContent.split('\n');
+            for (let li = 0; li < contentLines.length && normPos < fuzzyIdx; li++) {
+              const normLineLen = normContentLines[li].length + 1;
+              const origLineLen = contentLines[li].length + 1;
+              if (normPos + normLineLen > fuzzyIdx) {
+                origPos += (fuzzyIdx - normPos) + (contentLines[li].length - normContentLines[li].length);
+                break;
+              }
+              normPos += normLineLen;
+              origPos += origLineLen;
+            }
+            // Extract the actual text span from original content
+            const oldLines = oldText.split('\n').length;
+            const origLines = currentContent.split('\n');
+            const startLine = currentContent.slice(0, origPos).split('\n').length - 1;
+            const actualOld = origLines.slice(startLine, startLine + oldLines).join('\n');
+            idx = currentContent.indexOf(actualOld);
+            if (idx !== -1) usedFuzzy = true;
+          }
+        }
+        if (idx === -1) {
+          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. The text doesn't match the file content (check indentation and whitespace). Try reading the exact lines first with read_file, or use propose_code_edit with full file content.`, is_error: true };
         }
 
         // Check uniqueness — only the first match is replaced
@@ -617,8 +666,28 @@ export async function executeToolCall(
           // Update in-memory file content so subsequent reads reflect the change
           file.content = updatedContent;
 
+          // Report the change so the specialist's accumulatedChanges gets populated
+          ctx.onFileChanged?.({
+            fileId: file.fileId,
+            fileName: file.fileName,
+            originalContent: currentContent,
+            proposedContent: updatedContent,
+            reasoning: (toolCall.input.reasoning as string) ?? 'search_replace',
+          });
+
+          // Invalidate cache + trigger Shopify push so changes propagate
+          try {
+            const { invalidateFileContent } = await import('@/lib/supabase/file-loader');
+            invalidateFileContent(file.fileId);
+            if (ctx.projectId) {
+              const { schedulePushForProject } = await import('@/lib/shopify/push-queue');
+              schedulePushForProject(ctx.projectId);
+            }
+          } catch { /* non-blocking */ }
+
           const sizeBytes = new TextEncoder().encode(updatedContent).length;
-          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes, 1 replacement).${uniqueWarning}` };
+          const fuzzyNote = usedFuzzy ? ' (whitespace-flexible match used)' : '';
+          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes, 1 replacement).${fuzzyNote}${uniqueWarning}` };
         } catch (err) {
           return { tool_use_id: toolCall.id, content: `Write failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
         }
@@ -630,6 +699,11 @@ export async function executeToolCall(
         const fileName = String(toolCall.input.fileName ?? '');
         const content = String(toolCall.input.content ?? '');
 
+        // Reject empty content writes — this destroys files
+        if (!content || content.trim().length === 0) {
+          return { tool_use_id: toolCall.id, content: `write_file rejected: content is empty. This would erase the file. Use search_replace for targeted edits instead of write_file.`, is_error: true };
+        }
+
         // Validate path
         if (fileName.includes('..') || fileName.startsWith('/') || fileName.includes(':')) {
           return { tool_use_id: toolCall.id, content: `Invalid file path: ${fileName}`, is_error: true };
@@ -639,17 +713,20 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'File content exceeds 1MB limit.', is_error: true };
         }
 
-        const file = files.find(f =>
-          f.fileId === fileName || f.fileName === fileName ||
-          f.fileName.endsWith(`/${fileName}`) ||
-          (f.path && f.path.endsWith(`/${fileName}`))
-        );
+        const file = resolveFileContext(files, fileName);
         if (!file) {
           return { tool_use_id: toolCall.id, content: `File not found: ${fileName}`, is_error: true };
         }
 
         if (!ctx.supabaseClient) {
           return { tool_use_id: toolCall.id, content: 'Database client not available for file writes.', is_error: true };
+        }
+
+        // Destructive write guard: reject if new content is much smaller than existing
+        const existingLen = (file.content ?? '').length;
+        const newLen = content.length;
+        if (existingLen > 200 && newLen < existingLen * 0.5) {
+          return { tool_use_id: toolCall.id, content: `write_file rejected: new content (${newLen} chars) is ${Math.round((1 - newLen / existingLen) * 100)}% smaller than existing (${existingLen} chars). Use search_replace for targeted edits.`, is_error: true };
         }
 
         // async
@@ -677,11 +754,7 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: `Invalid file path: ${fileName}`, is_error: true };
         }
 
-        const file = files.find(f =>
-          f.fileId === fileName || f.fileName === fileName ||
-          f.fileName.endsWith(`/${fileName}`) ||
-          (f.path && f.path.endsWith(`/${fileName}`))
-        );
+        const file = resolveFileContext(files, fileName);
         if (!file) {
           return { tool_use_id: toolCall.id, content: `File not found: ${fileName}`, is_error: true };
         }
@@ -717,11 +790,7 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'New file name is required.', is_error: true };
         }
 
-        const file = files.find(f =>
-          f.fileId === fileName || f.fileName === fileName ||
-          f.fileName.endsWith(`/${fileName}`) ||
-          (f.path && f.path.endsWith(`/${fileName}`))
-        );
+        const file = resolveFileContext(files, fileName);
         if (!file) {
           return { tool_use_id: toolCall.id, content: `File not found: ${fileName}`, is_error: true };
         }
@@ -751,15 +820,98 @@ export async function executeToolCall(
 
       // ── Web search tool (Agent Power Tools Phase 2) ──────────────────────
 
+      // ── Scratchpad tools (Track C) ───────────────────────────────────────
+
+      case 'update_scratchpad': {
+        const content = String(toolCall.input.content ?? '');
+        const sessionId = ctx.sessionId ?? ctx.projectId ?? 'default';
+        const result = executeScratchpadWrite(sessionId, content);
+        return {
+          tool_use_id: toolCall.id,
+          content: result.success ? 'Scratchpad updated.' : 'Scratchpad update failed.',
+        };
+      }
+
+      case 'read_scratchpad': {
+        const sessionId = ctx.sessionId ?? ctx.projectId ?? 'default';
+        const result = executeScratchpadRead(sessionId);
+        return { tool_use_id: toolCall.id, content: result.content };
+      }
+
+      // ── Shell tool (Track C) ────────────────────────────────────────────
+
+      case 'run_command': {
+        const command = String(toolCall.input.command ?? '');
+        if (!command.trim()) {
+          return { tool_use_id: toolCall.id, content: 'Command is required.', is_error: true };
+        }
+        const projectDir = ctx.projectDir ?? process.cwd();
+        return executeShellCommand(command, projectDir).then((result) => {
+          const out = result.stdout ? `stdout:\n${result.stdout}` : '';
+          const err = result.stderr ? `stderr:\n${result.stderr}` : '';
+          const exit = `exitCode: ${result.exitCode}`;
+          return {
+            tool_use_id: toolCall.id,
+            content: [out, err, exit].filter(Boolean).join('\n'),
+            is_error: result.exitCode !== 0,
+          };
+        });
+      }
+
+      // ── Network inspector (Track C) ──────────────────────────────────────
+
+      case 'read_network_requests': {
+        if (!ctx.projectId) {
+          return { tool_use_id: toolCall.id, content: 'Project ID is required for preview tools.', is_error: true };
+        }
+        const search = String(toolCall.input?.search ?? '');
+        return readNetworkRequests(ctx.projectId, search || undefined).then(({ requests }) => {
+          if (requests.length === 0) {
+            return { tool_use_id: toolCall.id, content: 'No network requests found.' };
+          }
+          const formatted = requests
+            .map(
+              (r) =>
+                `${r.method} ${r.url} → ${r.status} (${r.duration}ms)${r.error ? ` — ${r.error}` : ''}`,
+            )
+            .join('\n');
+          return { tool_use_id: toolCall.id, content: `${requests.length} request(s):\n${formatted}` };
+        });
+      }
+
+      // ── Image generation (Track C) ────────────────────────────────────────
+
+      case 'generate_image': {
+        const prompt = String(toolCall.input.prompt ?? '');
+        const targetPath = String(toolCall.input.targetPath ?? '');
+        if (!prompt || !targetPath) {
+          return { tool_use_id: toolCall.id, content: 'prompt and targetPath are required.', is_error: true };
+        }
+        return executeImageGen({
+          prompt,
+          targetPath,
+          width: toolCall.input.width ? Number(toolCall.input.width) : undefined,
+          height: toolCall.input.height ? Number(toolCall.input.height) : undefined,
+        }).then((result) => ({
+          tool_use_id: toolCall.id,
+          content: result.message,
+          is_error: !result.success,
+        }));
+      }
+
+      // ── Web search tool (Agent Power Tools Phase 2) ──────────────────────
+
       case 'web_search': {
         const query = String(toolCall.input.query ?? '');
         if (!query) {
           return { tool_use_id: toolCall.id, content: 'Search query is required.', is_error: true };
         }
+        const site = toolCall.input.site ? String(toolCall.input.site) : undefined;
+        const searchQuery = site ? `site:${site} ${query}` : query;
         const maxResults = Math.min(Number(toolCall.input.maxResults ?? 5), 5);
 
         // async — returns a Promise<ToolResult>
-        return webSearch(query, maxResults)
+        return webSearch(searchQuery, maxResults)
           .then(result => {
             if (result.results.length === 0) {
               return {
@@ -867,6 +1019,23 @@ export async function executeToolCall(
             content: `CSS injection failed: ${err instanceof Error ? err.message : String(err)}`,
             is_error: true as const,
           }));
+      }
+
+      case 'read_console_logs': {
+        if (!ctx.projectId) {
+          return { tool_use_id: toolCall.id, content: 'Project ID is required for preview tools.', is_error: true };
+        }
+        const search = String(toolCall.input?.search ?? '');
+        const result = await callPreviewAPI(ctx.projectId, 'getConsoleLogs', { search });
+        if (!result.success) {
+          return { tool_use_id: toolCall.id, content: 'Preview not available — console logs cannot be read.' };
+        }
+        const logs = (result.data as { logs?: Array<{ level: string; message: string; ts: number }> })?.logs ?? [];
+        if (logs.length === 0) {
+          return { tool_use_id: toolCall.id, content: 'No console errors or warnings found.' };
+        }
+        const formatted = logs.map((l) => `[${l.level}] ${l.message}`).join('\n');
+        return { tool_use_id: toolCall.id, content: `${logs.length} console log(s):\n${formatted}` };
       }
 
       case 'inject_html': {
@@ -1236,8 +1405,8 @@ export async function executeToolCall(
         const width = Number(toolCall.input.width ?? 800);
         const height = Number(toolCall.input.height ?? 600);
         const text = String(toolCall.input.text ?? 'Placeholder');
-        const bgColor = String(toolCall.input.bgColor ?? '#f5f5f4');
-        const textColor = String(toolCall.input.textColor ?? '#78716c');
+        const bgColor = String(toolCall.input.bgColor ?? 'oklch(0.97 0.001 106)');
+        const textColor = String(toolCall.input.textColor ?? 'oklch(0.553 0.013 58)');
 
         // Validate dimensions
         if (width < 1 || width > 4000 || height < 1 || height > 4000) {
@@ -1250,6 +1419,162 @@ export async function executeToolCall(
         } catch (err) {
           return { tool_use_id: toolCall.id, content: `Placeholder generation failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true };
         }
+      }
+
+      // ── Shopify diagnostic tools (E3) ──────────────────────────────
+
+      case 'trace_rendering_chain': {
+        const symptom = String(toolCall.input.symptom ?? '');
+        if (!symptom) {
+          return { tool_use_id: toolCall.id, content: 'Symptom is required.', is_error: true };
+        }
+        const themeFiles = files
+          .filter(f => !f.content.startsWith('['))
+          .map(f => ({ path: f.path ?? f.fileName, content: f.content }));
+        const chainResult = traceRenderingChain(symptom, themeFiles);
+        return { tool_use_id: toolCall.id, content: formatRenderingChainResult(chainResult) };
+      }
+
+      case 'check_theme_setting': {
+        const settingId = String(toolCall.input.settingId ?? '');
+        if (!settingId) {
+          return { tool_use_id: toolCall.id, content: 'Setting ID is required.', is_error: true };
+        }
+        const themeFiles = files
+          .filter(f => !f.content.startsWith('['))
+          .map(f => ({ path: f.path ?? f.fileName, content: f.content }));
+        const settingResult = checkThemeSetting(settingId, themeFiles);
+        return { tool_use_id: toolCall.id, content: formatSettingCheckResult(settingResult) };
+      }
+
+      case 'diagnose_visibility': {
+        const element = String(toolCall.input.element ?? '');
+        const pageType = String(toolCall.input.pageType ?? '');
+        if (!element || !pageType) {
+          return { tool_use_id: toolCall.id, content: 'Element and pageType are required.', is_error: true };
+        }
+        const themeFiles = files
+          .filter(f => !f.content.startsWith('['))
+          .map(f => ({ path: f.path ?? f.fileName, content: f.content }));
+        const visResult = diagnoseVisibility(element, pageType, themeFiles);
+        return { tool_use_id: toolCall.id, content: formatVisibilityDiagnosis(visResult) };
+      }
+
+      // ── Structural retrieval tools (Search Architecture Upgrade) ────────────
+
+      case 'get_schema_settings': {
+        const sectionFile = String(toolCall.input.sectionFile ?? '');
+        if (!sectionFile) {
+          return { tool_use_id: toolCall.id, content: 'sectionFile is required.', is_error: true };
+        }
+        const file = files.find(f =>
+          f.fileName === sectionFile || f.path === sectionFile ||
+          f.fileName?.endsWith(`/${sectionFile}`) || sectionFile?.endsWith(`/${f.fileName}`)
+        );
+        if (!file) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${sectionFile}`, is_error: true };
+        }
+        let content = file.content;
+        if (content.startsWith('[') && ctx.loadContent) {
+          const hydrated = await ctx.loadContent([file.fileId]);
+          if (hydrated.length > 0) content = hydrated[0].content;
+        }
+        const { extractSchemaEntries, formatSchemaSummary } = await import('@/lib/parsers/schema-indexer');
+        const entries = extractSchemaEntries(content, sectionFile);
+        if (entries.length === 0) {
+          return { tool_use_id: toolCall.id, content: `No schema found in ${sectionFile}` };
+        }
+        return { tool_use_id: toolCall.id, content: formatSchemaSummary(entries) };
+      }
+
+      case 'find_references': {
+        const target = String(toolCall.input.target ?? '');
+        const refType = String(toolCall.input.type ?? 'any');
+        if (!target) {
+          return { tool_use_id: toolCall.id, content: 'target is required.', is_error: true };
+        }
+        const { ThemeDependencyGraph } = await import('@/lib/context/cross-language-graph');
+        const graph = new ThemeDependencyGraph();
+        graph.buildFromFiles(files.map(f => ({ path: f.path ?? f.fileName, content: f.content })));
+
+        let results;
+        if (refType === 'css_class') {
+          results = graph.findClassUsage(target);
+        } else {
+          results = graph.findReferences(target);
+        }
+
+        if (results.length === 0) {
+          return { tool_use_id: toolCall.id, content: `No references found for "${target}".` };
+        }
+        const formatted = results
+          .slice(0, 20)
+          .map(r => `- ${r.file}${r.line ? `:${r.line}` : ''} (${r.type})`)
+          .join('\n');
+        return { tool_use_id: toolCall.id, content: `References for "${target}" (${results.length}):\n${formatted}` };
+      }
+
+      case 'read_chunk': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        const startLine = Number(toolCall.input.startLine ?? 0);
+        const endLine = Number(toolCall.input.endLine ?? 0);
+        if (!filePath || !startLine || !endLine) {
+          return { tool_use_id: toolCall.id, content: 'filePath, startLine, and endLine are required.', is_error: true };
+        }
+        const file = files.find(f =>
+          f.fileName === filePath || f.path === filePath ||
+          f.fileName?.endsWith(`/${filePath}`) || filePath?.endsWith(`/${f.fileName}`)
+        );
+        if (!file) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
+        }
+        let content = file.content;
+        if (content.startsWith('[') && ctx.loadContent) {
+          const hydrated = await ctx.loadContent([file.fileId]);
+          if (hydrated.length > 0) content = hydrated[0].content;
+        }
+        const lines = content.split('\n');
+        const contextPad = 2;
+        const from = Math.max(0, startLine - 1 - contextPad);
+        const to = Math.min(lines.length, endLine + contextPad);
+        const chunk = lines.slice(from, to)
+          .map((l, i) => `${String(from + i + 1).padStart(4)} | ${l}`)
+          .join('\n');
+        return { tool_use_id: toolCall.id, content: `${filePath} lines ${from + 1}-${to}:\n${chunk}` };
+      }
+
+      case 'parallel_batch_read': {
+        const chunks = toolCall.input.chunks as Array<{ filePath: string; startLine: number; endLine: number }> | undefined;
+        if (!chunks || !Array.isArray(chunks) || chunks.length === 0) {
+          return { tool_use_id: toolCall.id, content: 'chunks array is required.', is_error: true };
+        }
+        const contextPad = 2;
+        const sections: string[] = [];
+
+        for (const chunk of chunks.slice(0, 10)) {
+          const file = files.find(f =>
+            f.fileName === chunk.filePath || f.path === chunk.filePath ||
+            f.fileName?.endsWith(`/${chunk.filePath}`) || chunk.filePath?.endsWith(`/${f.fileName}`)
+          );
+          if (!file) {
+            sections.push(`--- ${chunk.filePath} (not found) ---`);
+            continue;
+          }
+          let content = file.content;
+          if (content.startsWith('[') && ctx.loadContent) {
+            const hydrated = await ctx.loadContent([file.fileId]);
+            if (hydrated.length > 0) content = hydrated[0].content;
+          }
+          const lines = content.split('\n');
+          const from = Math.max(0, chunk.startLine - 1 - contextPad);
+          const to = Math.min(lines.length, chunk.endLine + contextPad);
+          const numbered = lines.slice(from, to)
+            .map((l, i) => `${String(from + i + 1).padStart(4)} | ${l}`)
+            .join('\n');
+          sections.push(`--- ${chunk.filePath} lines ${from + 1}-${to} ---\n${numbered}`);
+        }
+
+        return { tool_use_id: toolCall.id, content: sections.join('\n\n') };
       }
 
       default:

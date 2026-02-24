@@ -26,7 +26,7 @@ export interface DOMSnapshot {
  * A detected structural regression between before and after snapshots.
  */
 export interface StructuralRegression {
-  type: 'missing_element' | 'broken_image' | 'visibility_change' | 'section_removed';
+  type: 'missing_element' | 'broken_image' | 'visibility_change' | 'section_removed' | 'console_error';
   description: string;
   severity: 'error' | 'warning';
   /** CSS-like selector or description of the affected element */
@@ -167,7 +167,7 @@ export function compareSnapshots(
 
 // ── Formatting ───────────────────────────────────────────────────────────────
 
-function formatRegressions(regressions: StructuralRegression[]): string {
+export function formatRegressions(regressions: StructuralRegression[]): string {
   if (regressions.length === 0) return '';
 
   const lines: string[] = ['[Preview Regressions]'];

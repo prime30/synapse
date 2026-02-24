@@ -293,9 +293,9 @@ export function FiberField({
     const glow = ctx.createRadialGradient(originX, originY, 0, originX, originY, glowR);
     const glowBoost = canvas.width < 900 ? 2.5 : 1;
     const glowAlpha = (0.04 + scrollIntensity * 0.08) * glowBoost;
-    glow.addColorStop(0, `rgba(40, 205, 86, ${glowAlpha})`);
-    glow.addColorStop(0.4, `rgba(6, 182, 212, ${glowAlpha * 0.5})`);
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    glow.addColorStop(0, `oklch(0.745 0.189 148 / ${glowAlpha})`);
+    glow.addColorStop(0.4, `oklch(0.715 0.143 215 / ${glowAlpha * 0.5})`);
+    glow.addColorStop(1, 'oklch(0 0 0 / 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -435,7 +435,7 @@ export function FiberField({
         grad.addColorStop(0, pulseColor(fb.positionT, pulseAlpha * 0.9));
         grad.addColorStop(0.15, pulseColor(fb.positionT, pulseAlpha * 0.6));
         grad.addColorStop(0.4, pulseColor(fb.positionT, pulseAlpha * 0.2));
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'oklch(0 0 0 / 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(px - glowRadius, py - glowRadius, glowRadius * 2, glowRadius * 2);
       }
@@ -451,7 +451,7 @@ export function FiberField({
         tipGrad.addColorStop(0, pulseColor(fb.positionT, tipAlpha * 0.9));
         tipGrad.addColorStop(0.2, pulseColor(fb.positionT, tipAlpha * 0.5));
         tipGrad.addColorStop(0.5, pulseColor(fb.positionT, tipAlpha * 0.15));
-        tipGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        tipGrad.addColorStop(1, 'oklch(0 0 0 / 0)');
         ctx.fillStyle = tipGrad;
         ctx.fillRect(fp3x - tipGlowR, fp3y - tipGlowR, tipGlowR * 2, tipGlowR * 2);
         ctx.restore();

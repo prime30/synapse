@@ -107,7 +107,7 @@ export function NavbarUserMenu({ onSignOut }: NavbarUserMenuProps) {
           fullName={profile.full_name}
           email={profile.email}
           size="sm"
-          fallbackColor="#78716c"
+          fallbackColor="oklch(0.553 0.013 58)"
         />
       </button>
 
@@ -118,7 +118,7 @@ export function NavbarUserMenu({ onSignOut }: NavbarUserMenuProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-xl shadow-stone-200/50 dark:shadow-black/50 overflow-hidden"
+            className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-[oklch(0.185_0_0)] shadow-xl shadow-stone-200/50 dark:shadow-black/50 overflow-hidden"
             role="menu"
           >
             {/* User info header */}
@@ -129,7 +129,7 @@ export function NavbarUserMenu({ onSignOut }: NavbarUserMenuProps) {
                   fullName={profile.full_name}
                   email={profile.email}
                   size="md"
-                  fallbackColor="#78716c"
+                  fallbackColor="oklch(0.553 0.013 58)"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">

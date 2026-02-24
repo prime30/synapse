@@ -157,7 +157,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={state === 'submitting' || !email.trim()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-6 py-3 text-sm font-medium text-white transition-all duration-150 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] dark:focus:ring-offset-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-6 py-3 text-sm font-medium text-white transition-all duration-150 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[oklch(0.145_0_0)] dark:focus:ring-offset-[oklch(0.145_0_0)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {state === 'submitting' ? (
                   <>

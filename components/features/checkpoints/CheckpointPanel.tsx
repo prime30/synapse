@@ -275,7 +275,7 @@ export function CheckpointPanel({
             setError(null);
           }}
           disabled={showInput}
-          className="px-2.5 py-1 text-xs rounded bg-[#28CD56] text-white hover:bg-[#28CD56]/90 disabled:opacity-50 transition-colors font-medium"
+          className="px-2.5 py-1 text-xs rounded bg-[oklch(0.745_0.189_148)] text-white hover:bg-[oklch(0.745_0.189_148)]/90 disabled:opacity-50 transition-colors font-medium"
         >
           Save checkpoint
         </button>
@@ -292,13 +292,13 @@ export function CheckpointPanel({
             onKeyDown={handleInputKeyDown}
             placeholder="Checkpoint name..."
             disabled={isCreating}
-            className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 ide-text placeholder:ide-text-muted focus:outline-none focus:ring-1 focus:ring-[#28CD56]/50 disabled:opacity-50"
+            className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 ide-text placeholder:ide-text-muted focus:outline-none focus:ring-1 focus:ring-[oklch(0.745_0.189_148)]/50 disabled:opacity-50"
           />
           <button
             type="button"
             onClick={handleCreate}
             disabled={isCreating || !label.trim()}
-            className="px-2.5 py-1.5 text-xs rounded bg-[#28CD56] text-white hover:bg-[#28CD56]/90 disabled:opacity-50 transition-colors font-medium flex items-center gap-1.5 shrink-0"
+            className="px-2.5 py-1.5 text-xs rounded bg-[oklch(0.745_0.189_148)] text-white hover:bg-[oklch(0.745_0.189_148)]/90 disabled:opacity-50 transition-colors font-medium flex items-center gap-1.5 shrink-0"
           >
             {isCreating && <Spinner />}
             Save

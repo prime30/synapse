@@ -176,7 +176,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
             >
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(0.765 0.177 163)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </motion.div>
@@ -228,7 +228,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
                 w-full inline-flex items-center justify-center gap-2.5 px-6 py-2.5 rounded-lg
                 font-medium text-sm transition-all
                 ${oauthUrl
-                  ? 'bg-[#5E8E3E] hover:bg-[#4A7A2E] text-white shadow-[0_0_20px_rgba(94,142,62,0.25)] hover:shadow-[0_0_30px_rgba(94,142,62,0.4)]'
+                  ? 'bg-[oklch(0.587_0.12_135)] hover:bg-[oklch(0.517_0.115_137)] text-white shadow-[0_0_20px_oklch(0.587_0.12_135_/_0.25)] hover:shadow-[0_0_30px_oklch(0.587_0.12_135_/_0.4)]'
                   : 'bg-stone-200 dark:bg-white/10 ide-text-muted cursor-not-allowed'
                 }
               `}
@@ -259,7 +259,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
                 <span className="w-full border-t border-stone-200 dark:border-white/10" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-[#fafaf9] dark:bg-[#0a0a0a] px-2 ide-text-quiet">
+                <span className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] px-2 ide-text-quiet">
                   or
                 </span>
               </div>
@@ -368,7 +368,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
                         type="button"
                         onClick={handleManualConnect}
                         disabled={isConnecting}
-                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-all shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_30px_rgba(14,165,233,0.5)]"
+                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-all shadow-[0_0_20px_oklch(0.685_0.169_237_/_0.3)] hover:shadow-[0_0_30px_oklch(0.685_0.169_237_/_0.5)]"
                       >
                         {isConnecting ? (
                           <>

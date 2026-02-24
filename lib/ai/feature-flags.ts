@@ -31,12 +31,23 @@ export const AI_FEATURES = {
   /** V2 agent architecture: single-stream tool-calling loop (no Summary phase). */
   v2Agent: process.env.ENABLE_V2_AGENT === 'true',
 
-  /** Programmatic Tool Calling: let Claude batch read-only tools in a Python sandbox. */
-  programmaticToolCalling: process.env.ENABLE_PTC !== 'false',
+  /** Programmatic Tool Calling: let Claude batch read-only tools in a Python sandbox.
+   *  DISABLED: PTC causes broken tool calls (empty patterns, wrong async signatures).
+   *  Direct tool calling is more reliable. Re-enable when Anthropic improves PTC stability. */
+  programmaticToolCalling: process.env.ENABLE_PTC === 'true',
 
   /** Server-side context editing: auto-clear old tool results and thinking blocks (beta). */
   contextEditing: process.env.ENABLE_CONTEXT_EDITING === 'true',
 
   /** Prompt cache TTL: '5m' (default free refresh) or '1h' (2x write cost, same read cost). */
   promptCacheTtl: (process.env.PROMPT_CACHE_TTL ?? '1h') as '5m' | '1h',
+
+  /** Lean pipeline: efficiency overhaul single-pass agent loop. */
+  leanPipeline: process.env.AGENT_LEAN_PIPELINE === 'true' || process.env.AGENT_LEAN_PIPELINE === '1',
+
+  /** Knowledge modules: dynamic injection of domain knowledge based on user message keywords. */
+  knowledgeModules: process.env.ENABLE_KNOWLEDGE_MODULES !== 'false',
+
+  /** Semantic skill matching: hybrid keyword + word-vector similarity for module selection. */
+  semanticSkillMatching: process.env.ENABLE_SEMANTIC_SKILL_MATCHING !== 'false',
 } as const;

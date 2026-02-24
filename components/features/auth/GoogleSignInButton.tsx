@@ -27,7 +27,7 @@ export function GoogleSignInButton({
         px-6 py-3 text-sm font-medium ide-text
         transition-all duration-150
         ide-hover
-        focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-950 dark:focus:ring-offset-[#0a0a0a]
+        focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-950 dark:focus:ring-offset-[oklch(0.145_0_0)]
         ${className}
       `}
       aria-label="Sign in with Google"

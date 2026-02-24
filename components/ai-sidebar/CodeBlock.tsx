@@ -211,7 +211,7 @@ export function CodeBlock({
       </div>
 
       {/* ── Syntax-highlighted code ─────────────────────────────────────── */}
-      <div ref={codeScrollRef} onScroll={handleCodeScroll} className={`relative overflow-auto ${streaming ? 'max-h-[200px]' : 'max-h-[400px]'}`}>
+      <div ref={codeScrollRef} onScroll={handleCodeScroll} className={`relative overflow-y-auto overflow-x-hidden ${streaming ? 'max-h-[200px]' : 'max-h-[400px]'}`}>
         <SyntaxHighlighter
           language={highlightLanguage}
           style={isDark ? vscDarkPlus : oneLight}
@@ -219,7 +219,7 @@ export function CodeBlock({
           lineNumberStyle={{
             minWidth: '2.5em',
             paddingRight: '1em',
-            color: '#4b5563',
+            color: 'oklch(0.446 0.03 256)',
             fontSize: '0.75rem',
             userSelect: 'none',
           }}
@@ -229,6 +229,8 @@ export function CodeBlock({
             background: 'transparent',
             fontSize: '0.8125rem',
             lineHeight: '1.5',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
           }}
           codeTagProps={{
             style: {
@@ -272,7 +274,7 @@ export function CodeBlock({
               </div>
 
               {/* Unified diff view — all lines shown as additions */}
-              <div className="rounded border ide-border-subtle ide-surface-panel overflow-auto max-h-[300px] font-mono text-xs leading-[1.6]">
+              <div className="rounded border ide-border-subtle ide-surface-panel overflow-y-auto overflow-x-hidden max-h-[300px] font-mono text-xs leading-[1.6]">
                 {lines.map((line, i) => (
                   <div
                     key={i}
@@ -287,7 +289,7 @@ export function CodeBlock({
                       +
                     </span>
                     {/* Line content */}
-                    <span className="py-px px-2 text-emerald-300/90 whitespace-pre flex-1 bg-emerald-500/[0.04]">
+                    <span className="py-px px-2 text-emerald-300/90 whitespace-pre-wrap break-words flex-1 min-w-0 bg-emerald-500/[0.04]">
                       {line || ' '}
                     </span>
                   </div>

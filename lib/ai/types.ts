@@ -33,6 +33,8 @@ export interface AICompletionOptions {
   contextManagement?: {
     edits: Array<ContextEditStrategy>;
   };
+  /** Force the model to use a tool. 'any' = must use some tool, string = must use that specific tool. */
+  toolChoice?: 'auto' | 'any' | { type: 'tool'; name: string };
 }
 
 // ── Context editing strategy types ──────────────────────────────────

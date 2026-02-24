@@ -85,6 +85,8 @@ interface MonacoEditorProps {
   enableInlineCompletions?: boolean;
   /** File path for completion context (e.g. sections/hero.liquid). */
   filePathForCompletions?: string | null;
+  /** Agent edit ranges to highlight in the editor */
+  agentEdits?: Array<{ startLine: number; endLine: number; reasoning: string; timestamp: number }>;
 }
 
 const MONACO_LANGUAGE_MAP: Record<EditorLanguage, string> = {
@@ -212,6 +214,7 @@ export function MonacoEditor({
   onEditorMount,
   enableInlineCompletions = false,
   filePathForCompletions = null,
+  agentEdits,
 }: MonacoEditorProps) {
   const { settings } = useEditorSettings();
   const { isDark } = useTheme();
@@ -251,6 +254,7 @@ export function MonacoEditor({
   /* Refs for decoration collections & injected <style> (cleaned up on unmount) */
   const tagDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const colorDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+  const agentEditDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const styleElRef = useRef<HTMLStyleElement | null>(null);
   const inlineCompletionDisposableRef = useRef<import('monaco-editor').IDisposable | null>(null);
 
@@ -413,13 +417,20 @@ export function MonacoEditor({
          ═══════════════════════════════════════════════════════════════════ */
       const styleEl = document.createElement('style');
       styleEl.setAttribute('data-synapse', 'monaco-extras');
-      styleEl.textContent =
-        '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}';
+      styleEl.textContent = [
+        '.liquid-tag-highlight{background-color:oklch(0.66 0.108 243 / 0.15);border:1px solid oklch(0.66 0.108 243 / 0.3);border-radius:2px}',
+        '.agent-edit-line{background:rgba(14,165,233,0.06)}',
+        '.dark .agent-edit-line{background:rgba(14,165,233,0.1)}',
+        '.agent-edit-gutter::before{content:"";display:block;width:6px;height:6px;border-radius:50%;background:#0ea5e9;margin:auto}',
+      ].join('\n');
       document.head.appendChild(styleEl);
       styleElRef.current = styleEl;
 
       const tagDecs = editorInstance.createDecorationsCollection([]);
       tagDecorationsRef.current = tagDecs;
+
+      const agentEditDecs = editorInstance.createDecorationsCollection([]);
+      agentEditDecorationsRef.current = agentEditDecs;
 
       editorInstance.onDidChangeCursorPosition((e) => {
         const { lineNumber, column } = e.position;
@@ -531,7 +542,7 @@ export function MonacoEditor({
                 seen.add(h);
                 cssRules.push(
                   `.${cls}::before{content:'';display:inline-block;width:12px;height:12px;` +
-                  `background-color:${color};border:1px solid rgba(255,255,255,.3);` +
+                  `background-color:${color};border:1px solid oklch(1 0 0 / 0.3);` +
                   `border-radius:2px;margin-right:4px;vertical-align:middle}`,
                 );
               }
@@ -545,7 +556,7 @@ export function MonacoEditor({
           /* Merge: keep liquid-tag-highlight base rule + append swatch rules */
           if (styleElRef.current) {
             styleElRef.current.textContent =
-              '.liquid-tag-highlight{background-color:rgba(86,156,214,.15);border:1px solid rgba(86,156,214,.3);border-radius:2px}\n' +
+              '.liquid-tag-highlight{background-color:oklch(0.66 0.108 243 / 0.15);border:1px solid oklch(0.66 0.108 243 / 0.3);border-radius:2px}\n' +
               cssRules.join('\n');
           }
           colorDecs.set(decs);
@@ -983,6 +994,41 @@ export function MonacoEditor({
     }
     setPasteDialog(null);
   }, [pasteDialog, onImagePaste]);
+
+  /* ── Agent edit decorations ───────────────────────────────────────── */
+  useEffect(() => {
+    const decs = agentEditDecorationsRef.current;
+    const mon = monacoRef.current;
+    if (!decs || !mon) return;
+
+    if (!agentEdits || agentEdits.length === 0) {
+      decs.set([]);
+      return;
+    }
+
+    const decorations = agentEdits.map((edit) => {
+      const dateStr = new Date(edit.timestamp).toLocaleString();
+      const shortReason = edit.reasoning.length > 80
+        ? edit.reasoning.slice(0, 80) + '...'
+        : edit.reasoning;
+      return {
+        range: new mon.Range(edit.startLine, 1, edit.endLine, 1),
+        options: {
+          isWholeLine: true,
+          className: 'agent-edit-line',
+          glyphMarginClassName: 'agent-edit-gutter',
+          overviewRuler: {
+            color: '#0ea5e9',
+            position: mon.editor.OverviewRulerLane.Right,
+          },
+          glyphMarginHoverMessage: { value: `**Synapse:** ${shortReason}\n\n_${dateStr}_` },
+          hoverMessage: { value: `**Synapse:** ${shortReason}\n\n_${dateStr}_` },
+        },
+      };
+    });
+
+    decs.set(decorations);
+  }, [agentEdits]);
 
   /* ═════════════════════════════════════════════════════════════════════
      Render

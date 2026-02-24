@@ -9,6 +9,7 @@ import { SessionSidebar } from '@/components/ai-sidebar/SessionSidebar';
 import { TrainingReviewPanel } from '@/components/ai-sidebar/TrainingReviewPanel';
 import { PromptTemplateLibrary } from '@/components/ai-sidebar/PromptTemplateLibrary';
 import type { AISidebarContextValue } from '@/hooks/useAISidebar';
+import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
 import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentSettings, type IntentMode } from '@/hooks/useAgentSettings';
 import { usePinnedPreferences } from '@/hooks/usePinnedPreferences';
@@ -40,6 +41,10 @@ import { getFirstChangedLineRange } from '@/lib/ai/diff-utils';
 import { ConversationArc } from '@/lib/ai/conversation-arc';
 import type { AIErrorCode } from '@/lib/ai/errors';
 import { useFileTabs } from '@/hooks/useFileTabs';
+import { useThemeHealth } from '@/hooks/useThemeHealth';
+import { HealthFindingBar } from '@/components/ai-sidebar/HealthFindingBar';
+import { BugReportModal } from '@/components/ai-sidebar/BugReportModal';
+import { useAgentEdits } from '@/hooks/useAgentEdits';
 
 // ── SSE event types ────────────────────────────────────────────────────────────
 
@@ -94,6 +99,29 @@ interface SSEToolErrorEvent {
   recoverable?: boolean;
 }
 
+interface SSEToolResultEvent {
+  type: 'tool_result';
+  name: string;
+  id: string;
+  netZero?: boolean;
+}
+
+interface SSEToolProgressEvent {
+  type: 'tool_progress';
+  name: string;
+  id: string;
+  toolCallId: string;
+  progress: {
+    phase: string;
+    detail: string;
+    bytesProcessed?: number;
+    totalBytes?: number;
+    matchCount?: number;
+    lineNumber?: number;
+    percentage?: number;
+  };
+}
+
 interface SSECacheStatsEvent {
   type: 'cache_stats';
   cacheCreationInputTokens: number;
@@ -121,7 +149,8 @@ interface SSEWorkerProgressEvent {
   type: 'worker_progress';
   workerId: string;
   label: string;
-  status: 'running' | 'complete';
+  status: 'running' | 'complete' | 'dispatched' | 'started' | 'completed' | 'failed';
+  files?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -165,7 +194,13 @@ interface SSEExecutionOutcomeEvent {
   needsClarification?: boolean;
 }
 
-type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent;
+interface SSEWorktreeStatusEvent {
+  type: 'worktree_status';
+  worktrees: Array<{ id: string; agentId: string; modifiedCount: number; createdCount: number }>;
+  conflicts: Array<{ path: string }>;
+}
+
+type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSEToolResultEvent | SSEToolProgressEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent | SSEWorktreeStatusEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -185,28 +220,38 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 
-/** Parse an SSE event from a chunk of stream text. Returns null if not an SSE event. */
+/**
+ * Parse SSE events from a stream chunk. The backend uses the SSE 'event:' field
+ * to distinguish structured events from raw content:
+ * - "event: synapse\ndata: {json}\n\n" → structured event
+ * - "data: text\n\n" → raw content (no event field)
+ *
+ * This means NO whitelist is needed — any chunk with 'event: synapse' is an event.
+ */
 function parseSSEEvent(chunk: string): SSEEvent | null {
-  // SSE events are formatted as: data: {json}\n\n
-  const match = chunk.match(/data:\s*(\{.*\})/);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[1]);
-    if (
-      parsed.type === 'error' || parsed.type === 'done' ||
-      parsed.type === 'thinking' || parsed.type === 'context_stats' ||
-      parsed.type === 'tool_start' || parsed.type === 'tool_call' ||
-      parsed.type === 'cache_stats' || parsed.type === 'citation' ||
-      parsed.type === 'diagnostics' || parsed.type === 'worker_progress' ||
-      parsed.type === 'reasoning' || parsed.type === 'active_model' ||
-      parsed.type === 'rate_limited' || parsed.type === 'change_preview' ||
-      parsed.type === 'execution_outcome'
-    ) {
-      return parsed as SSEEvent;
+  // Check for the event: synapse prefix (proper SSE protocol)
+  if (chunk.includes('event: synapse')) {
+    const dataMatch = chunk.match(/data:\s*(\{.*\})/);
+    if (dataMatch) {
+      try {
+        return JSON.parse(dataMatch[1]) as SSEEvent;
+      } catch { /* malformed JSON */ }
     }
-  } catch {
-    // Not a valid SSE event — just normal content
+    return null;
   }
+
+  // Legacy fallback: any data: {json} with a type field is an event
+  // (for backward compatibility during transition)
+  const match = chunk.match(/data:\s*(\{.*\})/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (parsed && typeof parsed.type === 'string') {
+        return parsed as SSEEvent;
+      }
+    } catch { /* not JSON */ }
+  }
+
   return null;
 }
 
@@ -233,8 +278,8 @@ const RETRY_PREFIX = '[RETRY_WITH_FULL_CONTEXT]';
 
 function detectPromptAction(prompt: string): string {
   const lower = prompt.toLowerCase();
-  if (/\b(review|audit|check|inspect|scan)\b/.test(lower)) return 'review';
-  if (/\b(fix|debug|repair|resolve|patch)\b/.test(lower)) return 'fix';
+  if (/\b(fix|debug|repair|resolve|patch|check|inspect)\b/.test(lower)) return 'fix';
+  if (/\b(review|audit|scan)\b/.test(lower) && !/\b(fix|debug|repair|check)\b/.test(lower)) return 'review';
   if (/\b(refactor|clean|simplif|reorganiz)\b/.test(lower)) return 'refactor';
   if (/\b(explain|what|how|why|describe)\b/.test(lower)) return 'explain';
   if (/\b(plan|outline|design|architect)\b/.test(lower)) return 'plan';
@@ -546,6 +591,7 @@ export function AgentPromptPanel({
   const [showRetryChip, setShowRetryChip] = useState(false);
   const [outputMode, setOutputMode] = useState<OutputMode>('chat');
   const arcRef = useRef(new ConversationArc());
+  const explicitSelectionRef = useRef(false);
   const [currentAction, setCurrentAction] = useState<string | undefined>();
   const [lastTrimmedCount, setLastTrimmedCount] = useState(0);
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
@@ -559,6 +605,13 @@ export function AgentPromptPanel({
     note: string | null;
     fileCount: number;
   }>>([]);
+  const [healthBarDismissed, setHealthBarDismissed] = useState(false);
+  const [bugReportOpen, setBugReportOpen] = useState(false);
+  const { scanResult, isScanning } = useThemeHealth({ projectId, enabled: true });
+  const agentEdits = useAgentEdits();
+  useEffect(() => {
+    if (scanResult?.findings?.length) setHealthBarDismissed(false);
+  }, [scanResult?.findings?.length]);
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
 
@@ -587,7 +640,25 @@ export function AgentPromptPanel({
   }, []);
   const thinkingStepsRef = useRef<import('@/components/ai-sidebar/ThinkingBlock').ThinkingStep[]>([]);
   const lastDecisionScanRef = useRef(0);
+  const memoryWriteUnavailableRef = useRef(false);
   const workersRef = useRef<Array<{ workerId: string; label: string; status: string }>>([]);
+  const [activeSpecialists, setActiveSpecialists] = useState<
+    Map<
+      string,
+      {
+        id: string;
+        type: string;
+        label: string;
+        status: 'running' | 'complete' | 'failed';
+        files: string[];
+        startedAt: number;
+      }
+    >
+  >(new Map());
+
+  useEffect(() => {
+    memoryWriteUnavailableRef.current = false;
+  }, [projectId]);
 
   // Stall detection refs
   const lastSSEEventTimeRef = useRef<number>(Date.now());
@@ -876,6 +947,7 @@ export function AgentPromptPanel({
       lastPromptRef.current = content;
       thinkingStepsRef.current = [];
       workersRef.current = [];
+      setActiveSpecialists(new Map());
       blocksRef.current = [];
       thinkingStartedAtRef.current = 0;
       // Reset stall detection
@@ -970,8 +1042,10 @@ export function AgentPromptPanel({
         enrichedContent = `${passiveCtx}\n\n${enrichedContent}`;
       }
 
-      // EPIC 1c: Selection injection — auto-include selected editor text (with line range for chat pill)
-      if (context.selection) {
+      // EPIC 1c: Selection injection — only include if user explicitly dragged
+      // a file into the chat or used QuickActions. Do NOT auto-inject editor
+      // selections (Find highlights, cursor moves) into every message.
+      if (context.selection && explicitSelectionRef.current) {
         const start = context.selectionStartLine;
         const end = context.selectionEndLine;
         const lineTag =
@@ -979,6 +1053,7 @@ export function AgentPromptPanel({
             ? ` — lines ${start}-${end}`
             : '';
         enrichedContent = `[Selected code in editor${lineTag}]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${enrichedContent}`;
+        explicitSelectionRef.current = false;
       }
 
       // Phase 3b: Inject explicit file context for dragged files
@@ -1116,19 +1191,7 @@ export function AgentPromptPanel({
         }
       }
 
-      // Display user message with selected-code as a line-number pill (collapsed by default), not raw code
-      const displayContent =
-        context.selection && context.selection.trim().length > 0
-          ? (() => {
-              const start = context.selectionStartLine;
-              const end = context.selectionEndLine;
-              const lineTag =
-                typeof start === 'number' && typeof end === 'number'
-                  ? ` — lines ${start}-${end}`
-                  : '';
-              return `[Selected code in editor${lineTag}]:\n\`\`\`\n${context.selection}\n\`\`\`\n\n${actualContent}`;
-            })()
-          : actualContent;
+      const displayContent = actualContent;
       appendMessage('user', displayContent);
       setIsLoading(true);
 
@@ -1220,8 +1283,8 @@ export function AgentPromptPanel({
         let thinkingComplete = false;
 
         // Local accumulators for tool card data (avoids reading message state mid-stream)
-        let accumulatedCodeEdits: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' }> = [];
-        let accumulatedFileCreates: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' }> = [];
+        let accumulatedCodeEdits: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected'; confidence?: number }> = [];
+        let accumulatedFileCreates: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled'; confidence?: number }> = [];
         let accumulatedCitations: Array<{ citedText: string; documentTitle: string; startIndex?: number; endIndex?: number }> = [];
         // Agent Power Tools accumulators (Phase 7)
         let accumulatedFileOps: Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }> = [];
@@ -1312,6 +1375,7 @@ export function AgentPromptPanel({
               }
               if (sseEvent.type === 'done') {
                 receivedDone = true;
+                setActiveSpecialists(new Map());
                 // Mark thinking complete and enable input immediately so UX updates without waiting for stream close
                 thinkingComplete = true;
                 const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
@@ -1360,15 +1424,33 @@ export function AgentPromptPanel({
                 });
                 continue;
               }
+              if (sseEvent.type === 'shopify_push') {
+                // Auto-push completed — refresh preview
+                setTimeout(() => emitPreviewSyncComplete(projectId), 1500);
+                continue;
+              }
               if (sseEvent.type === 'execution_outcome') {
                 const normalizedOutcome =
                   intentMode === 'code' && sseEvent.outcome === 'no-change'
                     ? 'needs-input'
                     : sseEvent.outcome;
+                const reasonStr = (sseEvent as { failureReason?: string }).failureReason ?? '';
+                const referentialReplayFailed =
+                  /referential|artifact/i.test(reasonStr) || undefined;
+                const failureMeta = {
+                  failureReason: (sseEvent as { failureReason?: string }).failureReason ?? undefined,
+                  suggestedAction: (sseEvent as { suggestedAction?: string }).suggestedAction ?? undefined,
+                  failedTool: (sseEvent as { failedTool?: string }).failedTool ?? undefined,
+                  failedFilePath: (sseEvent as { failedFilePath?: string }).failedFilePath ?? undefined,
+                  reviewFailedSection: (sseEvent as { reviewFailedSection?: string }).reviewFailedSection ?? undefined,
+                  referentialReplayFailed,
+                  verificationEvidence: (sseEvent as { verificationEvidence?: unknown }).verificationEvidence ?? undefined,
+                };
                 if (normalizedOutcome === 'needs-input' && !hasClarificationCardForRun) {
                   hasClarificationCardForRun = true;
                   updateMessage(assistantMsgId, streamedContent, {
                     executionOutcome: normalizedOutcome,
+                    ...failureMeta,
                     clarification: {
                       question: 'I need one detail to enact this directly. Which input can you provide?',
                       options: [
@@ -1382,6 +1464,7 @@ export function AgentPromptPanel({
                 } else {
                   updateMessage(assistantMsgId, streamedContent, {
                     executionOutcome: normalizedOutcome,
+                    ...failureMeta,
                   });
                 }
                 continue;
@@ -1434,6 +1517,33 @@ export function AgentPromptPanel({
                 });
                 continue;
               }
+              // Handle tool_progress: update loading tool block with progress data
+              if (sseEvent.type === 'tool_progress') {
+                const progressToolId = sseEvent.toolCallId || sseEvent.id;
+                const matchIdx = blocksRef.current.findLastIndex(
+                  (b: ContentBlock) =>
+                    b.type === 'tool_action' &&
+                    b.status === 'loading' &&
+                    (b.toolId === progressToolId || b.toolName === sseEvent.name),
+                );
+                if (matchIdx >= 0) {
+                  const b = blocksRef.current[matchIdx];
+                  if (b.type === 'tool_action') {
+                    b.progress = {
+                      phase: sseEvent.progress.phase,
+                      detail: sseEvent.progress.detail,
+                      percentage: sseEvent.progress.percentage,
+                    };
+                    if (sseEvent.progress.detail) {
+                      b.label = sseEvent.progress.detail;
+                    }
+                  }
+                }
+                updateMessage(assistantMsgId, streamedContent, {
+                  blocks: [...blocksRef.current],
+                });
+                continue;
+              }
               // Handle tool_call: route completed tool calls to card data
               if (sseEvent.type === 'tool_call') {
                 const input = sseEvent.input;
@@ -1448,6 +1558,7 @@ export function AgentPromptPanel({
                   const steps =
                     (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ??
                     [];
+                  const confidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                   updateMessage(assistantMsgId, streamedContent, {
                     ...clearActive,
                     planData: {
@@ -1455,6 +1566,7 @@ export function AgentPromptPanel({
                       description,
                       steps,
                       filePath: buildPlanRoute(title, description, steps),
+                      ...(confidence != null && { confidence }),
                     },
                   });
                 } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
@@ -1474,6 +1586,7 @@ export function AgentPromptPanel({
                   } else {
                     editNewContent = (input.newContent as string) ?? '';
                   }
+                  const editConfidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                   accumulatedCodeEdits = [
                     ...accumulatedCodeEdits,
                     {
@@ -1482,16 +1595,29 @@ export function AgentPromptPanel({
                       newContent: editNewContent,
                       originalContent: originalFileContent,
                       status: 'pending' as const,
+                      ...(editConfidence != null && { confidence: editConfidence }),
                     },
                   ];
                   // Phase 4a: Push live change to preview
                   onLiveChange?.({ filePath: editFilePath, newContent: editNewContent });
 
+                  // Auto-open the file being edited so the user sees the change
+                  if (editFilePath) {
+                    onOpenFiles?.([editFilePath]);
+                  }
+
                   // Agent Live Breakout: auto-scroll to first changed line
-                  if (onScrollToEdit && originalFileContent && editFilePath) {
+                  if (originalFileContent && editFilePath) {
                     const range = getFirstChangedLineRange(originalFileContent, editNewContent);
                     if (range) {
-                      onScrollToEdit(editFilePath, range.startLine);
+                      onScrollToEdit?.(editFilePath, range.startLine);
+                      agentEdits.addEdits(editFilePath, [{
+                        startLine: range.startLine,
+                        endLine: range.endLine,
+                        reasoning: (input.reasoning as string) ?? toolName,
+                        agentType: 'project_manager',
+                        timestamp: Date.now(),
+                      }]);
                     }
                   }
 
@@ -1526,15 +1652,19 @@ export function AgentPromptPanel({
                     },
                   });
                 } else if (toolName === 'create_file') {
+                  const createFileName = (input.fileName as string) ?? '';
+                  const fcConfidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                   accumulatedFileCreates = [
                     ...accumulatedFileCreates,
                     {
-                      fileName: (input.fileName as string) ?? '',
+                      fileName: createFileName,
                       content: (input.content as string) ?? '',
                       reasoning: input.reasoning as string | undefined,
                       status: 'pending' as const,
+                      ...(fcConfidence != null && { confidence: fcConfidence }),
                     },
                   ];
+                  if (createFileName) onOpenFiles?.([createFileName]);
                   updateMessage(assistantMsgId, streamedContent, {
                     ...clearActive,
                     fileCreates: [...accumulatedFileCreates],
@@ -1615,11 +1745,13 @@ export function AgentPromptPanel({
                     const steps =
                       (input.steps as Array<{ number: number; text: string; complexity?: 'simple' | 'moderate' | 'complex'; files?: string[] }>) ??
                       [];
+                    const planConfidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                     cardData = {
                       title,
                       description,
                       steps,
                       filePath: buildPlanRoute(title, description, steps),
+                      ...(planConfidence != null && { confidence: planConfidence }),
                     };
                   } else if (toolName === 'propose_code_edit' || toolName === 'search_replace') {
                     const editFilePath_ = (input.filePath as string) ?? '';
@@ -1636,12 +1768,14 @@ export function AgentPromptPanel({
                     } else {
                       newContent_ = (input.newContent as string) ?? '';
                     }
+                    const blockEditConfidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                     cardData = {
                       filePath: editFilePath_,
                       reasoning: input.reasoning as string | undefined,
                       newContent: newContent_,
                       originalContent: origContent_,
                       status: 'pending' as const,
+                      ...(blockEditConfidence != null && { confidence: blockEditConfidence }),
                     };
                   } else if (toolName === 'ask_clarification') {
                     cardData = {
@@ -1650,11 +1784,13 @@ export function AgentPromptPanel({
                       allowMultiple: input.allowMultiple as boolean | undefined,
                     };
                   } else if (toolName === 'create_file') {
+                    const blockFcConfidence = typeof input.confidence === 'number' ? Math.max(0, Math.min(1, input.confidence)) : undefined;
                     cardData = {
                       fileName: (input.fileName as string) ?? '',
                       content: (input.content as string) ?? '',
                       reasoning: input.reasoning as string | undefined,
                       status: 'pending' as const,
+                      ...(blockFcConfidence != null && { confidence: blockFcConfidence }),
                     };
                   } else if (toolName === 'write_file' || toolName === 'delete_file' || toolName === 'rename_file') {
                     const opType = toolName.replace('_file', '') as 'write' | 'delete' | 'rename';
@@ -1717,9 +1853,39 @@ export function AgentPromptPanel({
                 }
                 continue;
               }
+              // Handle tool_result: update status when edit produced no net change
+              if (sseEvent.type === 'tool_result') {
+                const trEvent = sseEvent as SSEToolResultEvent;
+                if (trEvent.netZero) {
+                  const matchIdx = blocksRef.current.findIndex(
+                    (b) => b.type === 'tool_action' && b.toolId === trEvent.name && b.status === 'done'
+                  );
+                  if (matchIdx >= 0) {
+                    const b = blocksRef.current[matchIdx];
+                    if (b.type === 'tool_action') {
+                      b.status = 'error';
+                      b.label = `${b.label ?? trEvent.name} (no change)`;
+                    }
+                    updateMessage(assistantMsgId, streamedContent, {
+                      blocks: [...blocksRef.current],
+                    });
+                  }
+                }
+                continue;
+              }
               // Handle cache_stats event
               if (sseEvent.type === 'cache_stats') {
                 // Cache stats are informational; no UI update needed yet
+                continue;
+              }
+              // F1: Virtual worktree status for parallel agent isolation
+              if (sseEvent.type === 'worktree_status') {
+                updateMessage(assistantMsgId, streamedContent, {
+                  worktreeStatus: {
+                    worktrees: sseEvent.worktrees ?? [],
+                    conflicts: sseEvent.conflicts ?? [],
+                  },
+                });
                 continue;
               }
               // Handle citation events
@@ -1778,24 +1944,50 @@ export function AgentPromptPanel({
               // Handle worker_progress events — track parallel worker status
               if (sseEvent.type === 'worker_progress') {
                 const workerEvent = sseEvent as SSEWorkerProgressEvent;
+                const status = workerEvent.status;
+                const files = workerEvent.files ?? (workerEvent.metadata?.affectedFiles as string[] | undefined) ?? [];
+
+                setActiveSpecialists((prev) => {
+                  const next = new Map(prev);
+                  if (status === 'dispatched' || status === 'started' || status === 'running') {
+                    next.set(workerEvent.workerId, {
+                      id: workerEvent.workerId,
+                      type: workerEvent.label?.split(':')[0] ?? 'specialist',
+                      label: workerEvent.label || 'Working...',
+                      status: 'running',
+                      files,
+                      startedAt: Date.now(),
+                    });
+                  } else if (status === 'completed' || status === 'complete') {
+                    const existing = next.get(workerEvent.workerId);
+                    if (existing) next.set(workerEvent.workerId, { ...existing, status: 'complete' });
+                  } else if (status === 'failed') {
+                    const existing = next.get(workerEvent.workerId);
+                    if (existing) next.set(workerEvent.workerId, { ...existing, status: 'failed' });
+                  }
+                  return next;
+                });
+
                 const workers = (workersRef.current ?? []) as Array<{ workerId: string; label: string; status: 'running' | 'complete' }>;
-                const existingIdx = workers.findIndex(w => w.workerId === workerEvent.workerId);
+                const workerStatus = status === 'completed' || status === 'complete' ? 'complete' : 'running';
+                const existingIdx = workers.findIndex((w) => w.workerId === workerEvent.workerId);
                 if (existingIdx >= 0) {
-                  workers[existingIdx] = { workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status };
+                  workers[existingIdx] = { workerId: workerEvent.workerId, label: workerEvent.label, status: workerStatus };
                 } else {
-                  workers.push({ workerId: workerEvent.workerId, label: workerEvent.label, status: workerEvent.status });
+                  workers.push({ workerId: workerEvent.workerId, label: workerEvent.label, status: workerStatus });
                 }
                 workersRef.current = workers;
 
                 // Agent Live Breakout: auto-open files from worker_progress metadata
                 const wpMeta = workerEvent.metadata;
+                const affectedFiles = files.length > 0 ? files : (wpMeta?.affectedFiles as string[] | undefined);
                 if (
-                  workerEvent.status === 'running' &&
-                  wpMeta?.affectedFiles &&
-                  Array.isArray(wpMeta.affectedFiles) &&
-                  (wpMeta.affectedFiles as string[]).length > 0
+                  (status === 'running' || status === 'started' || status === 'dispatched') &&
+                  affectedFiles &&
+                  Array.isArray(affectedFiles) &&
+                  affectedFiles.length > 0
                 ) {
-                  onOpenFiles?.(wpMeta.affectedFiles as string[]);
+                  onOpenFiles?.(affectedFiles);
                 }
 
                 // Phase 8: Pass workers to ThinkingBlock via message metadata
@@ -2006,9 +2198,9 @@ export function AgentPromptPanel({
               }
             }
 
-            // Normal content chunk — skip if it looks like raw SSE data
-            // (providers may inject formatSSEError mid-stream)
-            if (chunk.trim().startsWith('data: {')) {
+            // Content chunk — check if it's actually a structured SSE event
+            // that wasn't caught by the main parser (e.g., split across chunks)
+            if (chunk.trim().startsWith('data: {') || chunk.includes('event: synapse')) {
               const innerEvent = parseSSEEvent(chunk);
               if (innerEvent) {
                 lastSSEEventTimeRef.current = Date.now();
@@ -2346,7 +2538,7 @@ export function AgentPromptPanel({
   // Load Shopify push log for version history sidebar visibility.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(`/api/projects/${projectId}/shopify/push-history`);
         if (!res.ok || cancelled) return;
@@ -2372,6 +2564,7 @@ export function AgentPromptPanel({
   // EPIC 14: Extract decisions from completed conversations
   useEffect(() => {
     if (isLoading || messages.length < 2) return;
+    if (memoryWriteUnavailableRef.current) return;
     if (messages.length <= lastDecisionScanRef.current) return;
 
     const newMsgs = messages.slice(lastDecisionScanRef.current);
@@ -2385,19 +2578,43 @@ export function AgentPromptPanel({
 
     const decisions = extractDecisionsFromChat(chatMsgs);
 
-    for (const d of decisions) {
-      if (d.confidence >= 0.7) {
-        fetch(`/api/projects/${projectId}/memory`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'decision',
-            content: d.decision,
-            confidence: d.confidence,
-          }),
-        }).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      for (const d of decisions) {
+        if (cancelled || memoryWriteUnavailableRef.current) break;
+        if (d.confidence < 0.7) continue;
+
+        try {
+          const res = await fetch(`/api/projects/${projectId}/memory`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'decision',
+              content: d.decision,
+              confidence: d.confidence,
+            }),
+          });
+
+          // If developer memory is unavailable in this environment, stop retrying.
+          if (res.status === 503) {
+            memoryWriteUnavailableRef.current = true;
+            break;
+          }
+
+          const body = await res.json().catch(() => null) as { unavailable?: boolean } | null;
+          if (body?.unavailable) {
+            memoryWriteUnavailableRef.current = true;
+            break;
+          }
+        } catch {
+          // Best-effort only; don't interrupt chat flow.
+        }
       }
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isLoading, messages, projectId]);
 
   const handleStop = useCallback(() => {
@@ -2568,6 +2785,15 @@ export function AgentPromptPanel({
         pushLog={pushLog}
         onOpenTemplates={() => setTemplateLibraryOpen(true)}
         onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
+        projectId={projectId}
+        onSelectMessage={(_messageId, sessionId) => {
+          handleSwitchSession(sessionId);
+        }}
+        activeSessionMessages={messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.timestamp?.toISOString?.(),
+        }))}
       />
 
       {/* Chat area */}
@@ -2663,6 +2889,7 @@ export function AgentPromptPanel({
           messages={messages}
           isLoading={isLoading}
           isLoadingHistory={isLoadingHistory}
+          activeSpecialists={activeSpecialists}
           onSend={onSend}
           placeholder={intentPlaceholder}
           className="flex-1 min-h-0"
@@ -2708,6 +2935,7 @@ export function AgentPromptPanel({
           onTruncateMessages={truncateAt}
           onRegenerateMessage={handleRegenerate}
           onOpenFile={onOpenFile}
+          onReportBug={() => setBugReportOpen(true)}
           errorCode={errorCode}
           resolveFileId={resolveFileIdProp}
           trimmedMessageCount={lastTrimmedCount}
@@ -2729,6 +2957,12 @@ export function AgentPromptPanel({
           onDraftChange={handleDraftWarmup}
         />
       </div>
+      {bugReportOpen && (
+        <BugReportModal
+          projectId={projectId}
+          onClose={() => setBugReportOpen(false)}
+        />
+      )}
     </div>
   );
 }

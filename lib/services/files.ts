@@ -129,9 +129,23 @@ export async function updateFile(fileId: string, input: UpdateFileInput) {
     // Get current file to check storage strategy
     const { data: currentFile } = await supabase
       .from('files')
-      .select('storage_path, project_id, path')
+      .select('storage_path, project_id, path, content')
       .eq('id', fileId)
       .single();
+
+    // Capture version snapshot before overwriting
+    if (input.userId && currentFile) {
+      const prevContent = currentFile.content
+        ?? (currentFile.storage_path ? await downloadFromStorage(currentFile.storage_path).catch(() => null) : null);
+      if (prevContent) {
+        try {
+          const { captureVersionOnSave } = await import('@/lib/versions/version-capture');
+          await captureVersionOnSave(fileId, prevContent, input.userId);
+        } catch {
+          // Non-fatal: version capture failure should never block file updates
+        }
+      }
+    }
 
     if (currentFile?.storage_path) {
       await deleteFromStorage(currentFile.storage_path);

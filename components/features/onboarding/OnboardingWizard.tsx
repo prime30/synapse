@@ -57,7 +57,7 @@ const stepTransition = { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const };
 
 function GateSkeleton() {
   return (
-    <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex flex-col" role="presentation" aria-hidden="true">
+    <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex flex-col" role="presentation" aria-hidden="true">
       {/* Top bar skeleton */}
       <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
         <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ function ProgressIndicator({
                 className={`
                   w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-300
                   ${isActive
-                    ? 'bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                    ? 'bg-emerald-500 text-white shadow-[0_0_12px_oklch(0.696_0.17_162_/_0.4)]'
                     : isCompleted
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       : 'bg-stone-100 dark:bg-white/5 ide-text-muted border ide-border'
@@ -336,7 +336,7 @@ function WizardInner({
   const currentStep = useMemo(() => STEPS[currentIndex], [currentIndex]);
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex flex-col">
+    <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex flex-col">
       {/* Top bar with progress + skip */}
       <header className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
         {/* Logo + theme toggle */}

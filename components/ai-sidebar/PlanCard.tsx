@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import type { PlanStep } from './ChatInterface';
 import { ExternalLink, Sparkles } from 'lucide-react';
+import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
+import { clampConfidence } from '@/lib/agents/confidence-flow';
 
 type PlanStatus = 'draft' | 'active' | 'archived';
 
@@ -24,6 +26,7 @@ interface PlanCardProps {
   version?: number;
   status?: PlanStatus;
   projectId?: string;
+  confidence?: number;
   onOpenPlanFile?: (filePath: string) => void;
   onBuildPlan?: (checkedSteps: Set<number>) => void;
   onRefine?: (planId: string) => void;
@@ -36,6 +39,7 @@ export function PlanCard({
   version,
   status,
   projectId,
+  confidence,
   onOpenPlanFile,
   onBuildPlan,
   onRefine,
@@ -68,7 +72,7 @@ export function PlanCard({
     >
       {/* Header: title + status badge */}
       <div className="px-3 py-2 border-b ide-border-subtle">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <h4 className="text-xs font-semibold ide-text-1 truncate">{planData.title}</h4>
           {status && (
             <span
@@ -80,6 +84,9 @@ export function PlanCard({
           {version != null && (
             <span className="shrink-0 text-[10px] ide-text-muted">v{version}</span>
           )}
+          {clampConfidence(confidence) != null && (
+            <ConfidenceBadge confidence={confidence} className="shrink-0" />
+          )}
         </div>
         <p className="text-[11px] ide-text-2 mt-0.5">{planData.description}</p>
 
@@ -87,7 +94,7 @@ export function PlanCard({
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 h-1.5 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
             <div
-              className="h-full rounded-full bg-[#28CD56] transition-all duration-300"
+              className="h-full rounded-full bg-[oklch(0.745_0.189_148)] transition-all duration-300"
               style={{ width: `${progress.pct}%` }}
             />
           </div>

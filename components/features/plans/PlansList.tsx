@@ -305,7 +305,7 @@ export function PlansList({ projectId, onOpenPlan }: PlansListProps) {
                         <div className="flex items-center gap-1.5">
                           <div
                             className="w-16 h-1.5 rounded-full overflow-hidden"
-                            style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}
+                            style={{ backgroundColor: 'oklch(0 0 0 / 0.08)' }}
                           >
                             <div
                               className="h-full rounded-full transition-all"

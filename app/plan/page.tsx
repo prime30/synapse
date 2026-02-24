@@ -113,7 +113,7 @@ ${allChecks}
   };
 
   return (
-    <main className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a]">
+    <main className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]">
       <div className="mx-auto w-full max-w-5xl px-6 py-10">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-white">/plan</h1>
         <p className="mt-2 text-sm text-stone-600 dark:text-gray-400">
@@ -163,7 +163,7 @@ ${allChecks}
             <button
               type="button"
               onClick={copyPlan}
-              className="rounded-md bg-[#28CD56] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+              className="rounded-md bg-[oklch(0.745_0.189_148)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
             >
               Copy Markdown
             </button>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useEditorSettings, type Preset } from '@/hooks/useEditorSettings';
 import { useChromaticSettings } from '@/hooks/useChromaticSettings';
 import { loadKeybindings, saveKeybindings, resetKeybindings, getEffectiveKey, type KeyBinding } from '@/lib/editor/keyboard-config';
+import { SkillBrowser } from '@/components/editor/SkillBrowser';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -12,6 +13,7 @@ import { loadKeybindings, saveKeybindings, resetKeybindings, getEffectiveKey, ty
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  projectId?: string;
 }
 
 interface CustomProvider {
@@ -26,7 +28,7 @@ interface CustomProvider {
   created_at: string;
 }
 
-type SettingsTab = 'editor' | 'appearance' | 'keys' | 'providers';
+type SettingsTab = 'editor' | 'appearance' | 'keys' | 'providers' | 'skills';
 
 /* ------------------------------------------------------------------ */
 /*  Preset card data                                                   */
@@ -130,6 +132,18 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    id: 'skills',
+    label: 'Skills',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        <path d="M8 7h8" />
+        <path d="M8 11h8" />
+      </svg>
+    ),
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -144,7 +158,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-[#0a0a0a] ${
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-[oklch(0.145_0_0)] ${
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
       } ${
         checked ? 'bg-sky-500 dark:bg-sky-500' : 'bg-stone-300 dark:bg-white/20'
@@ -218,7 +232,7 @@ function formatKeyCombo(e: KeyboardEvent): string {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps) {
   const { settings, updateSetting, applyPreset, resetToDefaults } = useEditorSettings();
   const chromatic = useChromaticSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
@@ -379,7 +393,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         <div className="flex flex-1 min-h-0">
           {/* Sidebar nav */}
           <nav className="w-44 shrink-0 border-r ide-border-subtle py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
-            {TABS.map((tab) => {
+            {TABS.filter((tab) => (tab.id === 'skills' ? !!projectId : true)).map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
@@ -630,7 +644,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 <button
                                   type="button"
                                   onClick={() => setRecordingId(isRecording ? null : binding.id)}
-                                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-100 dark:focus:ring-offset-[#0a0a0a] min-w-[100px] justify-center ${
+                                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-stone-100 dark:focus:ring-offset-[oklch(0.145_0_0)] min-w-[100px] justify-center ${
                                     isRecording
                                       ? 'border-sky-500 bg-sky-500/20 text-sky-600 dark:text-sky-300 animate-pulse'
                                       : isCustom
@@ -877,6 +891,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ── SKILLS TAB ───────────────────────────────────────────── */}
+            {activeTab === 'skills' && projectId && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-semibold tracking-widest uppercase ide-text-muted mb-1">
+                    Knowledge Modules
+                  </h3>
+                  <p className="text-xs ide-text-quiet mb-3">
+                    Enable or disable skills that the agent loads based on your prompts.
+                  </p>
+                  <SkillBrowser projectId={projectId} />
                 </div>
               </div>
             )}

@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-02-24T19:12:51.760Z",
+  "projectId": "f70d9af0-616a-4723-b231-ada0f2d41d77",
+  "scenarios": [
+    {
+      "id": "debug-cart-css",
+      "passed": false,
+      "reason": "Too many tool calls (22) — agent may be looping",
+      "toolCalls": 22,
+      "elapsedMs": 71778
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "total": 1,
+    "passRate": "0%",
+    "avgToolCalls": 22,
+    "avgTimeSeconds": 72
+  }
+}

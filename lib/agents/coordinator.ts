@@ -9,6 +9,7 @@ import type {
   FileContext,
   UserPreference,
   ElementHint,
+  ToolProgressEvent,
 } from '@/lib/types/agent';
 import {
   createExecution,
@@ -915,18 +916,22 @@ export interface CoordinatorExecuteOptions {
   onContentChunk?: (chunk: string) => void;
   /** Stream tool lifecycle events to the client (tool_start, tool_call with results). */
   onToolEvent?: (event: AgentToolEvent) => void;
+  /** True when the user is referencing proposed changes from a prior turn. Bypasses plan-first policy. */
+  isReferentialCodePrompt?: boolean;
 }
 
 /** Tool event emitted from the streaming agent loop to the client via SSE. */
 export interface AgentToolEvent {
-  type: 'tool_start' | 'tool_call';
+  type: 'tool_start' | 'tool_call' | 'tool_progress';
   name: string;
   id?: string;
+  toolCallId?: string;
   input?: Record<string, unknown>;
   /** Included for server-executed tools (the LLM used the result; client renders a card). */
   result?: unknown;
   /** True if the tool execution failed. */
   isError?: boolean;
+  progress?: ToolProgressEvent['progress'];
 }
 
 // ── Usage tracking types ────────────────────────────────────────────────
@@ -2949,7 +2954,7 @@ export class AgentCoordinator {
     'read_file', 'search_files', 'grep_content', 'glob_files', 'semantic_search',
     'list_files', 'get_dependency_graph', 'validate_syntax', 'run_diagnostics',
     'check_lint', 'theme_check', 'screenshot_preview', 'compare_screenshots',
-    'inspect_element', 'get_page_snapshot', 'query_selector', 'inject_css',
+    'inspect_element', 'get_page_snapshot', 'query_selector', 'read_console_logs', 'inject_css',
     'inject_html', 'fetch_url', 'web_search', 'spawn_workers',
     'push_to_shopify', 'pull_from_shopify', 'list_themes',
     'list_store_resources', 'get_shopify_asset', 'generate_placeholder',
@@ -3045,6 +3050,7 @@ export class AgentCoordinator {
       tier: effectiveTier,
       userRequest,
       recentMessages: options.recentMessages,
+      isReferentialCodePrompt: options.isReferentialCodePrompt,
     })) {
       const policyMessage = buildPlanModeRequiredMessage(effectiveTier);
       onProgress?.({

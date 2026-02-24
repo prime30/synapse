@@ -11,7 +11,7 @@ export function TestimonialSection() {
     <motion.section
       ref={ref}
       data-navbar-theme="dark"
-      className="relative bg-[#0a0a0a] py-32 md:py-40"
+      className="relative bg-[oklch(0.145_0_0)] py-32 md:py-40"
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
       transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}

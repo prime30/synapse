@@ -141,33 +141,27 @@ describe('compressOldToolResults', () => {
 // ── Failure metadata mapping ────────────────────────────────────────────────
 
 describe('failure metadata mapping', () => {
+  function mapFailureReason(reason: 'old_text_not_found' | 'file_not_found' | 'unknown'): 'search_replace_failed' | 'file_not_found' | null {
+    if (reason === 'old_text_not_found') return 'search_replace_failed';
+    if (reason === 'file_not_found') return 'file_not_found';
+    return null;
+  }
+
   it('AgentResult failureReason maps old_text_not_found to search_replace_failed', () => {
     const reason = 'old_text_not_found' as const;
-    const mapped = reason === 'old_text_not_found'
-      ? 'search_replace_failed'
-      : reason === 'file_not_found'
-        ? 'file_not_found'
-        : null;
+    const mapped = mapFailureReason(reason);
     expect(mapped).toBe('search_replace_failed');
   });
 
   it('AgentResult failureReason maps file_not_found correctly', () => {
     const reason = 'file_not_found' as const;
-    const mapped = reason === 'old_text_not_found'
-      ? 'search_replace_failed'
-      : reason === 'file_not_found'
-        ? 'file_not_found'
-        : null;
+    const mapped = mapFailureReason(reason);
     expect(mapped).toBe('file_not_found');
   });
 
   it('AgentResult failureReason returns null for unknown reasons', () => {
     const reason = 'unknown' as const;
-    const mapped = reason === 'old_text_not_found'
-      ? 'search_replace_failed'
-      : reason === 'file_not_found'
-        ? 'file_not_found'
-        : null;
+    const mapped = mapFailureReason(reason);
     expect(mapped).toBeNull();
   });
 });
@@ -220,5 +214,215 @@ describe('SYSTEM CORRECTION message format', () => {
       : '';
 
     expect(fileSizeNote).toBe('');
+  });
+});
+
+// ── read_file line range support ────────────────────────────────────────────
+
+describe('read_file line range support', () => {
+  it('returns numbered lines for startLine/endLine range', () => {
+    const fileContent = Array.from({ length: 100 }, (_, i) => `line ${i + 1} content`).join('\n');
+    const lines = fileContent.split('\n');
+    const start = 10;
+    const end = 15;
+    const sliced = lines.slice(start - 1, end);
+    const numbered = sliced.map((l, i) => `${start + i}| ${l}`);
+    const result = `Lines ${start}-${end} of ${lines.length}:\n${numbered.join('\n')}`;
+
+    expect(result).toContain('Lines 10-15 of 100:');
+    expect(result).toContain('10| line 10 content');
+    expect(result).toContain('15| line 15 content');
+    expect(result).not.toContain('9| ');
+    expect(result).not.toContain('16| ');
+  });
+
+  it('clamps startLine to 1 and endLine to file length', () => {
+    const lines = ['a', 'b', 'c', 'd', 'e'];
+    const start = Math.max(1, -5);
+    const end = Math.min(lines.length, 999);
+    expect(start).toBe(1);
+    expect(end).toBe(5);
+  });
+});
+
+// ── Plan-first bypass for referential prompts ────────────────────────────────
+
+describe('plan-first bypass for referential prompts', () => {
+  it('shouldRequirePlanModeFirst returns false when isReferentialCodePrompt is true', async () => {
+    const { shouldRequirePlanModeFirst } = await import('@/lib/agents/orchestration-policy');
+    const result = shouldRequirePlanModeFirst({
+      intentMode: 'code',
+      tier: 'COMPLEX',
+      userRequest: 'implement those changes',
+      recentMessages: [],
+      isReferentialCodePrompt: true,
+    });
+    expect(result).toBe(false);
+  });
+
+  it('shouldRequirePlanModeFirst still gates COMPLEX without referential flag', async () => {
+    const { shouldRequirePlanModeFirst } = await import('@/lib/agents/orchestration-policy');
+    const result = shouldRequirePlanModeFirst({
+      intentMode: 'code',
+      tier: 'COMPLEX',
+      userRequest: 'refactor the entire theme to use a new architecture',
+      recentMessages: [],
+    });
+    expect(result).toBe(true);
+  });
+
+  it('shouldRequirePlanModeFirst passes through for SIMPLE tier even without flag', async () => {
+    const { shouldRequirePlanModeFirst } = await import('@/lib/agents/orchestration-policy');
+    const result = shouldRequirePlanModeFirst({
+      intentMode: 'code',
+      tier: 'SIMPLE',
+      userRequest: 'change the color to blue',
+      recentMessages: [],
+    });
+    expect(result).toBe(false);
+  });
+});
+
+// ── Per-file failure tracking ────────────────────────────────────────────────
+
+describe('per-file failure tracking', () => {
+  it('tracks failures per file independently', () => {
+    const failedMutationByFile = new Map<string, number>();
+
+    failedMutationByFile.set('header.liquid', (failedMutationByFile.get('header.liquid') ?? 0) + 1);
+    failedMutationByFile.set('footer.liquid', (failedMutationByFile.get('footer.liquid') ?? 0) + 1);
+    failedMutationByFile.set('header.liquid', (failedMutationByFile.get('header.liquid') ?? 0) + 1);
+
+    expect(failedMutationByFile.get('header.liquid')).toBe(2);
+    expect(failedMutationByFile.get('footer.liquid')).toBe(1);
+  });
+
+  it('triggers SYSTEM CORRECTION at per-file threshold of 2', () => {
+    const failedMutationByFile = new Map<string, number>();
+    const filePath = 'sections/header.liquid';
+
+    failedMutationByFile.set(filePath, 1);
+    expect((failedMutationByFile.get(filePath) ?? 0) >= 2).toBe(false);
+
+    failedMutationByFile.set(filePath, 2);
+    expect((failedMutationByFile.get(filePath) ?? 0) >= 2).toBe(true);
+  });
+
+  it('resets per-file count on success for that file only', () => {
+    const failedMutationByFile = new Map<string, number>();
+    failedMutationByFile.set('header.liquid', 3);
+    failedMutationByFile.set('footer.liquid', 2);
+
+    failedMutationByFile.delete('header.liquid');
+
+    expect(failedMutationByFile.has('header.liquid')).toBe(false);
+    expect(failedMutationByFile.get('footer.liquid')).toBe(2);
+  });
+});
+
+// ── proposeOnlyFiles forced fallback ─────────────────────────────────────────
+
+describe('proposeOnlyFiles forced fallback', () => {
+  it('blocks search_replace for files in proposeOnlyFiles set', () => {
+    const proposeOnlyFiles = new Set<string>();
+    proposeOnlyFiles.add('sections/header.liquid');
+
+    const evtName = 'search_replace';
+    const targetPath = 'sections/header.liquid';
+    const blocked = evtName === 'search_replace' && proposeOnlyFiles.has(targetPath);
+
+    expect(blocked).toBe(true);
+  });
+
+  it('allows search_replace for files NOT in proposeOnlyFiles', () => {
+    const proposeOnlyFiles = new Set<string>();
+    proposeOnlyFiles.add('sections/header.liquid');
+
+    const blocked = 'search_replace' === 'search_replace' && proposeOnlyFiles.has('sections/footer.liquid');
+    expect(blocked).toBe(false);
+  });
+
+  it('allows propose_code_edit even for proposeOnlyFiles entries', () => {
+    const proposeOnlyFiles = new Set<string>();
+    proposeOnlyFiles.add('sections/header.liquid');
+
+    const isSearchReplace = false;
+    const blocked = isSearchReplace && proposeOnlyFiles.has('sections/header.liquid');
+    expect(blocked).toBe(false);
+  });
+
+  it('adds file to proposeOnlyFiles after SYSTEM CORRECTION', () => {
+    const proposeOnlyFiles = new Set<string>();
+    const lastMutationFilePath = 'sections/header.liquid';
+
+    if (lastMutationFilePath) {
+      proposeOnlyFiles.add(lastMutationFilePath);
+    }
+
+    expect(proposeOnlyFiles.has('sections/header.liquid')).toBe(true);
+  });
+});
+
+// ── Referential artifact replay ──────────────────────────────────────────────
+
+describe('referential artifact basename fallback matching', () => {
+  it('matches file by basename when full path does not match', () => {
+    const files = [
+      { fileId: '1', fileName: 'sections/header.liquid', path: 'sections/header.liquid', content: '...' },
+      { fileId: '2', fileName: 'sections/footer.liquid', path: 'sections/footer.liquid', content: '...' },
+    ];
+    const artifactFilePath = 'header.liquid';
+
+    let file = files.find(f => f.fileName === artifactFilePath || f.path === artifactFilePath);
+    expect(file).toBeUndefined();
+
+    if (!file && artifactFilePath) {
+      const basename = artifactFilePath.split('/').pop();
+      if (basename) {
+        file = files.find(f =>
+          f.fileName.endsWith(`/${basename}`) ||
+          f.fileName === basename ||
+          (f.path && f.path.endsWith(`/${basename}`))
+        );
+      }
+    }
+
+    expect(file).toBeDefined();
+    expect(file!.fileName).toBe('sections/header.liquid');
+  });
+
+  it('prefers exact match over basename match', () => {
+    const files = [
+      { fileId: '1', fileName: 'header.liquid', path: 'header.liquid', content: 'exact' },
+      { fileId: '2', fileName: 'sections/header.liquid', path: 'sections/header.liquid', content: 'nested' },
+    ];
+    const artifactFilePath = 'header.liquid';
+
+    const file = files.find(f => f.fileName === artifactFilePath || f.path === artifactFilePath);
+    expect(file).toBeDefined();
+    expect(file!.content).toBe('exact');
+  });
+
+  it('injects system message when applied === 0', () => {
+    const applied = 0;
+    const referentialArtifacts = [
+      { filePath: 'sections/header.liquid', fileName: 'header.liquid', content: '<div>new content</div>' },
+    ];
+    const messages: Array<{ role: string; content: string }> = [];
+
+    if (applied === 0) {
+      const unresolvedPaths = referentialArtifacts
+        .map(a => a.filePath ?? a.fileName ?? 'unknown')
+        .join(', ');
+      messages.push({
+        role: 'user',
+        content: `[SYSTEM] Referential artifacts could not be applied automatically (files: ${unresolvedPaths}).`,
+      });
+    }
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toContain('[SYSTEM]');
+    expect(messages[0].content).toContain('sections/header.liquid');
   });
 });

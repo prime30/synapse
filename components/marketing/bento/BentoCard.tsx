@@ -27,7 +27,7 @@ const sizeClasses: Record<CardSize, string> = {
 };
 
 function getVariantClasses(variant: CardVariant, theme: CardTheme): string {
-  if (variant === 'accent') return 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_rgba(40,205,86,0.25)]';
+  if (variant === 'accent') return 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_oklch(0.745_0.189_148_/_0.25)]';
   const glass = theme === 'light' ? 'glass-light' : 'glass-dark';
   return variant === 'code-texture' ? glass : glass;
 }
@@ -71,7 +71,7 @@ export function BentoCard({
         <div
           className="absolute inset-0 pointer-events-none opacity-40 transition-opacity duration-300"
           style={{
-            background: `radial-gradient(300px circle at ${mousePos.x}% ${mousePos.y}%, rgba(14,165,233,0.12), transparent)`,
+            background: `radial-gradient(300px circle at ${mousePos.x}% ${mousePos.y}%, oklch(0.685 0.169 237 / 0.12), transparent)`,
           }}
         />
       )}
@@ -138,7 +138,7 @@ export function BentoCard({
         ${getVariantClasses(variant, theme)}
         cursor-pointer
         transition-all duration-300
-        hover:border-accent/20 hover:shadow-[0_8px_30px_rgba(40,205,86,0.08)]
+        hover:border-accent/20 hover:shadow-[0_8px_30px_oklch(0.745_0.189_148_/_0.08)]
         ${className}
       `}
       variants={itemVariants}

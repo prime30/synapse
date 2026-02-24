@@ -208,8 +208,8 @@ export function FeaturesSection() {
                   key={initial}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium"
                   style={{
-                    backgroundColor: ['#f59e0b', '#3b82f6', '#a855f7'][i],
-                    color: '#0c0c0c',
+                    backgroundColor: ['oklch(0.769 0.188 70)', 'oklch(0.623 0.214 259)', 'oklch(0.586 0.262 293)'][i],
+                    color: 'oklch(0.156 0 0)',
                   }}
                 >
                   {initial}

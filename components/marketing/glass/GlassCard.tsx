@@ -41,7 +41,7 @@ export function GlassCard({
   const glassClass = theme === 'light' ? 'glass-light glass-hover' : 'glass-dark glass-hover';
   const variantClasses = {
     default: glassClass,
-    accent: 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_rgba(40,205,86,0.25)]',
+    accent: 'gradient-accent text-white border border-accent/30 shadow-[0_0_24px_oklch(0.745_0.189_148_/_0.25)]',
     'code-texture': glassClass,
   };
 

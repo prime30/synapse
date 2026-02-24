@@ -41,7 +41,9 @@ export function shouldRequirePlanModeFirst(input: {
   tier: RoutingTier;
   userRequest: string;
   recentMessages?: string[];
+  isReferentialCodePrompt?: boolean;
 }): boolean {
+  if (input.isReferentialCodePrompt) return false;
   if (input.intentMode !== 'code') return false;
   // If the user directly asks to implement/apply code changes, enact immediately.
   // This avoids blocking explicit execution requests behind plan mode.
@@ -62,6 +64,50 @@ export function buildPlanModeRequiredMessage(tier: RoutingTier): string {
 export function buildMaximumEffortPolicyMessage(): string {
   return (
     'Maximum-effort execution policy: do not stop at quick wins or partial subsets. ' +
-    'When recommendations are identified, implement the full recommendation set end-to-end unless the user explicitly narrows scope.'
+    'When recommendations are identified, implement the full recommendation set end-to-end unless the user explicitly narrows scope. ' +
+    'Maximum-effort applies to IMPLEMENTATION, not investigation. Read files once, then implement changes. Do not loop on investigation.'
   );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Referential Enactment Policy                                      */
+/* ------------------------------------------------------------------ */
+
+export interface ReferentialPolicy {
+  /** Pre-edit lookup budget — referential mode is mutating-first. */
+  preEditLookupBudget: 0;
+  /** Whether to attempt replay fallback before terminal no-op. */
+  useReplayFallback: true;
+  /** Only theme files are in scope for Shopify-safe edits. */
+  allowedFileScopes: readonly string[];
+  /** Code-mode runs with zero changes cannot be persisted as "completed". */
+  noChangeCompletedBlocked: true;
+}
+
+const SHOPIFY_THEME_SCOPES = [
+  'sections/',
+  'snippets/',
+  'templates/',
+  'layout/',
+  'assets/',
+  'config/',
+  'locales/',
+] as const;
+
+/**
+ * Returns the policy constraints governing referential enactment.
+ *
+ * Contract:
+ * - Referential mode enforces mutating-first (pre-edit lookup budget = 0).
+ * - Uses replay fallback before terminal no-op.
+ * - Preserves Shopify-safe file scope (only theme directories).
+ * - Code-mode no-change runs cannot be persisted as `completed`.
+ */
+export function getReferentialPolicy(): ReferentialPolicy {
+  return {
+    preEditLookupBudget: 0,
+    useReplayFallback: true,
+    allowedFileScopes: SHOPIFY_THEME_SCOPES,
+    noChangeCompletedBlocked: true,
+  };
 }

@@ -85,7 +85,7 @@ export default function SignupPage() {
       <Navbar />
 
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a] to-[#141414]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[oklch(0.145_0_0)] via-[oklch(0.145_0_0)] to-[oklch(0.185_0_0)]" />
 
       <main className="relative pt-32 pb-24 flex items-center justify-center min-h-screen px-6">
         <motion.div

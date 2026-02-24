@@ -5,8 +5,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Synapse - AI-Powered Shopify Theme IDE',
     short_name: 'Synapse',
     description: 'AI-powered Shopify theme development platform',
-    theme_color: '#28CD56',
-    background_color: '#fafaf9',
+    theme_color: 'oklch(0.745 0.189 148)',
+    background_color: 'oklch(0.985 0.001 106)',
     display: 'standalone',
     start_url: '/',
     icons: [

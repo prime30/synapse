@@ -86,7 +86,7 @@ export function HowItWorksSection() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="bg-[#fafaf9] dark:bg-[#0a0a0a] relative py-20 md:py-28 overflow-hidden"
+      className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] relative py-20 md:py-28 overflow-hidden"
     >
       {/* Content frame lines */}
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden="true">
@@ -116,14 +116,14 @@ export function HowItWorksSection() {
         <motion.div
           role="tablist"
           aria-label="How it works steps"
-          className="relative inline-flex items-center rounded-full overflow-hidden isolate backdrop-blur-xl p-1 mb-8 sm:mb-10 bg-zinc-100/90 border border-zinc-200/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] dark:bg-zinc-800/90 dark:border-white/5 dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
+          className="relative inline-flex items-center rounded-full overflow-hidden isolate backdrop-blur-xl p-1 mb-8 sm:mb-10 bg-zinc-100/90 border border-zinc-200/80 shadow-[inset_0_1px_3px_oklch(0_0_0_/_0.06)] dark:bg-zinc-800/90 dark:border-white/5 dark:shadow-[inset_0_2px_4px_oklch(0_0_0_/_0.4)]"
           initial={{ opacity: 0, y: 16 }}
           animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
           transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         >
           {/* Sliding glass pill — matches button height via offsetTop/offsetHeight */}
           <motion.div
-            className="absolute rounded-full overflow-hidden bg-gradient-to-b from-white/95 to-white/70 border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.15),inset_0_2px_0_rgba(255,255,255,0.5)] dark:bg-gradient-to-b dark:from-white/15 dark:to-white/10 dark:border-white/20 dark:shadow-[0_1px_4px_rgba(0,0,0,0.08),0_4px_20px_rgba(255,255,255,0.12)]"
+            className="absolute rounded-full overflow-hidden bg-gradient-to-b from-white/95 to-white/70 border border-white/60 shadow-[0_4px_20px_oklch(0_0_0_/_0.15),inset_0_2px_0_oklch(1_0_0_/_0.5)] dark:bg-gradient-to-b dark:from-white/15 dark:to-white/10 dark:border-white/20 dark:shadow-[0_1px_4px_oklch(0_0_0_/_0.08),0_4px_20px_oklch(1_0_0_/_0.12)]"
             initial={false}
             animate={{ x: tabRect.left, width: tabRect.width, height: tabRect.height }}
             transition={pillSpring}
@@ -132,7 +132,7 @@ export function HowItWorksSection() {
 
           {/* Accent glow bar */}
           <motion.div
-            className="absolute h-[2px] rounded-full bg-accent shadow-[0_0_8px_rgba(40,205,86,0.6)] bottom-[1px]"
+            className="absolute h-[2px] rounded-full bg-accent shadow-[0_0_8px_oklch(0.745_0.189_148_/_0.6)] bottom-[1px]"
             initial={false}
             animate={{ x: barLeft, width: barWidth }}
             transition={barSpring}
@@ -148,7 +148,7 @@ export function HowItWorksSection() {
             style={{
               left: 0,
               top: tabRect.top,
-              background: 'radial-gradient(ellipse at 50% 80%, rgba(40,205,86,0.15) 0%, transparent 60%)',
+              background: 'radial-gradient(ellipse at 50% 80%, oklch(0.745 0.189 148 / 0.15) 0%, transparent 60%)',
             }}
           />
 
@@ -156,7 +156,7 @@ export function HowItWorksSection() {
           <motion.div
             className="absolute inset-0 rounded-full pointer-events-none dark:block hidden"
             style={{
-              background: `radial-gradient(ellipse at ${activeStep === 0 ? 20 : activeStep === 1 ? 50 : 80}% 20%, rgba(255,255,255,0.06) 0%, transparent 50%)`,
+              background: `radial-gradient(ellipse at ${activeStep === 0 ? 20 : activeStep === 1 ? 50 : 80}% 20%, oklch(1 0 0 / 0.06) 0%, transparent 50%)`,
             }}
             animate={{ opacity: [0.5, 0.7, 0.5] }}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}

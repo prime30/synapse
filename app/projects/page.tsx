@@ -1,13 +1,33 @@
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 
 /**
- * /projects -- Backward-compatibility redirect.
+ * /projects -- Smart redirect.
  *
- * This page used to be a client-side routing hub that checked store/project
- * state and redirected accordingly. That logic now lives in the onboarding
- * wizard's smart entry gate. This server-side redirect ensures bookmarks
- * and external links continue to work.
+ * If the user has projects, go straight to the most recent one.
+ * If not, go to onboarding.
  */
-export default function ProjectsRedirect() {
-  redirect('/onboarding');
+export default async function ProjectsRedirect() {
+  let targetUrl = '/onboarding';
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (projects && projects.length > 0) {
+        targetUrl = `/projects/${projects[0].id}`;
+      }
+    }
+  } catch {
+    // Auth or DB error — fall through to onboarding
+  }
+
+  redirect(targetUrl);
 }

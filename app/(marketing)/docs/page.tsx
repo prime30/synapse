@@ -66,7 +66,7 @@ export default function DocsPage() {
     : PUBLIC_CATEGORIES;
 
   return (
-    <div className="relative film-grain bg-stone-50 dark:bg-[#0a0a0a] min-h-screen">
+    <div className="relative film-grain bg-stone-50 dark:bg-[oklch(0.145_0_0)] min-h-screen">
       <Navbar />
 
       <main className="pt-32 pb-24">

@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-02-24T22:18:02.505Z",
+  "projectId": "f70d9af0-616a-4723-b231-ada0f2d41d77",
+  "scenarios": [
+    {
+      "id": "debug-cart-css",
+      "passed": true,
+      "reason": "Made a code change in 12 tool calls",
+      "toolCalls": 12,
+      "elapsedMs": 107909
+    },
+    {
+      "id": "fix-header-sticky",
+      "passed": true,
+      "reason": "Made edit in 4 tool calls",
+      "toolCalls": 4,
+      "elapsedMs": 62274
+    },
+    {
+      "id": "explain-liquid",
+      "passed": true,
+      "reason": "Answered without editing (0 tool calls)",
+      "toolCalls": 0,
+      "elapsedMs": 24165
+    },
+    {
+      "id": "add-trust-badges",
+      "passed": false,
+      "reason": "terminated",
+      "toolCalls": 0,
+      "elapsedMs": 1058
+    },
+    {
+      "id": "change-color",
+      "passed": false,
+      "reason": "fetch failed",
+      "toolCalls": 0,
+      "elapsedMs": 3
+    },
+    {
+      "id": "restock-badge-lengths",
+      "passed": false,
+      "reason": "fetch failed",
+      "toolCalls": 0,
+      "elapsedMs": 2
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "total": 6,
+    "passRate": "50%",
+    "avgToolCalls": 3,
+    "avgTimeSeconds": 33
+  }
+}

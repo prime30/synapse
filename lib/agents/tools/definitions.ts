@@ -5,11 +5,20 @@ import type { ToolDefinition } from '@/lib/ai/types';
 export const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'read_file',
-    description: 'Read the full content of a file by its file ID or file name.',
+    description: 'Read the full content of a file by its file ID or file name. For section files with large schemas, use view parameter to read only the part you need.',
     input_schema: {
       type: 'object',
       properties: {
-        fileId: { type: 'string', description: 'The file ID or file name to read' },
+        fileId: {
+          type: 'string',
+          description: 'The file ID or file name to read',
+        },
+        view: {
+          type: 'string',
+          enum: ['full', 'markup', 'schema'],
+          description:
+            'For Liquid section files: "markup" returns only the Liquid code (no schema), "schema" returns only the schema JSON, "full" returns everything (default). Use "markup" when editing HTML/Liquid, "schema" when editing settings.',
+        },
       },
       required: ['fileId'],
       additionalProperties: false,
@@ -66,12 +75,12 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   // ── Search tools (Phase 1: Agent Tooling Upgrade) ──────────────────────
   {
     name: 'grep_content',
-    description: 'Search file contents using a regex or substring pattern. Returns matching lines with file names and line numbers. Use for finding specific code patterns, variable usage, or CSS selectors.',
+    description: 'Search file contents using a regex or substring pattern. Returns matching lines with file names and line numbers. ALWAYS provide filePattern to scope the search to relevant files — searching all files is slow and wasteful.',
     input_schema: {
       type: 'object',
       properties: {
         pattern: { type: 'string', description: 'Regex or substring pattern to search for' },
-        filePattern: { type: 'string', description: 'Glob pattern to filter files (e.g. "*.liquid", "assets/*.css")' },
+        filePattern: { type: 'string', description: 'RECOMMENDED: Glob pattern to scope the search (e.g. "snippets/cart-*.liquid" for cart issues, "assets/*.css" for CSS, "sections/main-product*.liquid" for product pages). Omitting this searches ALL files which is slow.' },
         caseSensitive: { type: 'boolean', description: 'Case-sensitive search (default false)' },
         maxResults: { type: 'number', description: 'Max matches to return (default 50)' },
       },
@@ -202,14 +211,92 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   // ── Web search tool (Agent Power Tools Phase 2) ─────────────────────────
   {
     name: 'web_search',
-    description: 'Search the web for documentation, code patterns, Shopify references, or any other information. Returns up to 5 results with titles, URLs, and snippets. Results are cached for 1 hour.',
+    description:
+      'Search the web for documentation, especially Shopify dev docs. Use when checking if a Liquid filter is deprecated or finding API documentation. Returns up to 5 results with titles, URLs, and snippets.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Search query (e.g. "shopify liquid section schema", "css grid responsive layout")' },
+        query: { type: 'string', description: 'Search query' },
+        site: { type: 'string', description: 'Limit to site (default: shopify.dev)' },
         maxResults: { type: 'number', description: 'Maximum results to return (default 5, max 5)' },
       },
       required: ['query'],
+      additionalProperties: false,
+    },
+  },
+
+  // ── Scratchpad tools (Track C: Agent memory) ────────────────────────────
+  {
+    name: 'update_scratchpad',
+    description:
+      'Rewrite your scratchpad with current plan and findings. Use this every 3-4 tool calls to maintain focus. ALWAYS rewrite, never append.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'Your current understanding, plan, and next steps. Overwrites previous content.',
+        },
+      },
+      required: ['content'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_scratchpad',
+    description: 'Read your current scratchpad content.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
+
+  // ── Shell tool (Track C: Sandboxed execution) ───────────────────────────
+  {
+    name: 'run_command',
+    description:
+      'Run a shell command in the project directory. Allowed: npm test/build/lint, npx tsc/eslint, git status/diff/log, shopify theme check. 60s timeout.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Shell command to run' },
+      },
+      required: ['command'],
+      additionalProperties: false,
+    },
+  },
+
+  // ── Network inspector (Track C) ────────────────────────────────────────
+  {
+    name: 'read_network_requests',
+    description:
+      'Read recent network requests from the Shopify preview. Shows AJAX calls, asset loads, and API errors. Use when debugging cart updates, API failures, or 404s.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Optional URL filter' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+
+  // ── Image generation (Track C: Placeholder) ─────────────────────────────
+  {
+    name: 'generate_image',
+    description:
+      'Generate an image for theme assets (hero banners, product placeholders, section backgrounds).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string' },
+        targetPath: { type: 'string' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+      },
+      required: ['prompt', 'targetPath'],
       additionalProperties: false,
     },
   },
@@ -245,6 +332,18 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         selector: { type: 'string', description: 'CSS selector targeting a single element' },
       },
       required: ['selector'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_console_logs',
+    description: 'Read recent console errors and warnings from the live Shopify preview. Use this FIRST when debugging rendering or interaction issues. Returns the last 50 log entries.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Optional search filter for log messages' },
+      },
+      required: [],
       additionalProperties: false,
     },
   },
@@ -413,9 +512,63 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         width: { type: 'number', description: 'Image width in pixels (default 800)' },
         height: { type: 'number', description: 'Image height in pixels (default 600)' },
         text: { type: 'string', description: 'Label text to display (default "Placeholder")' },
-        bgColor: { type: 'string', description: 'Background color hex (default "#f5f5f4")' },
-        textColor: { type: 'string', description: 'Text color hex (default "#78716c")' },
+        bgColor: { type: 'string', description: 'Background color (default "oklch(0.97 0.001 106)")' },
+        textColor: { type: 'string', description: 'Text color (default "oklch(0.553 0.013 58)")' },
       },
+      additionalProperties: false,
+    },
+  },
+
+  // ── Shopify diagnostic tools (E3) ───────────────────────────────────────
+  {
+    name: 'trace_rendering_chain',
+    description:
+      'Trace the Shopify rendering chain for a user symptom. Returns the file chain from layout to assets with suggested checks. Use this FIRST when debugging visibility or rendering issues.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        symptom: {
+          type: 'string',
+          description: 'The user-reported symptom (e.g., "product images not showing")',
+        },
+      },
+      required: ['symptom'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'check_theme_setting',
+    description:
+      'Check a Shopify theme setting existence, value, and usage. Use when an issue might be caused by a disabled or misconfigured setting.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        settingId: {
+          type: 'string',
+          description: 'The setting ID to check (e.g., "show_hero_banner")',
+        },
+      },
+      required: ['settingId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'diagnose_visibility',
+    description:
+      'Diagnose why an element is not visible. Checks CSS hiding rules, Liquid conditionals, and theme settings simultaneously. Use for "X is not showing" bugs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        element: {
+          type: 'string',
+          description: 'CSS selector or element description (e.g., ".product-card", "hero banner")',
+        },
+        pageType: {
+          type: 'string',
+          description: 'Page type (e.g., "product", "collection", "index", "cart")',
+        },
+      },
+      required: ['element', 'pageType'],
       additionalProperties: false,
     },
   },
@@ -462,6 +615,94 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       additionalProperties: false,
     },
   },
+
+  // ── Structural retrieval tools (Search Architecture Upgrade) ───────────────
+  {
+    name: 'get_schema_settings',
+    description:
+      'Get all schema settings for a Liquid section file as a structured summary. Returns setting IDs, types, labels, and defaults — much smaller than reading the full schema. Use this instead of reading entire section files when you need schema info.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        sectionFile: {
+          type: 'string',
+          description: 'Section file path (e.g., "sections/hero-banner.liquid")',
+        },
+      },
+      required: ['sectionFile'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'find_references',
+    description:
+      'Find all files that reference a given target (snippet, section, CSS class, or JS function). Uses the theme dependency graph for instant cross-file lookups.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        target: {
+          type: 'string',
+          description: 'The target to find references for (e.g., "hero-banner", ".t4s-swatch__restock-badge", "setSoldOut")',
+        },
+        type: {
+          type: 'string',
+          enum: ['render', 'css_class', 'function', 'any'],
+          description: 'Type of reference to search for. "any" searches all types.',
+        },
+      },
+      required: ['target'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_chunk',
+    description:
+      'Read a specific line range from a file with 2 lines of context above and below. Use when you know the exact lines you need instead of reading the entire file.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'File path to read from',
+        },
+        startLine: {
+          type: 'number',
+          description: 'Starting line number (1-based)',
+        },
+        endLine: {
+          type: 'number',
+          description: 'Ending line number (1-based)',
+        },
+      },
+      required: ['filePath', 'startLine', 'endLine'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'parallel_batch_read',
+    description:
+      'Read multiple file chunks in a single call. Returns all requested line ranges concatenated. Use this instead of multiple read_chunk calls to reduce round-trips.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        chunks: {
+          type: 'array',
+          description: 'Array of chunks to read',
+          items: {
+            type: 'object',
+            properties: {
+              filePath: { type: 'string', description: 'File path' },
+              startLine: { type: 'number', description: 'Starting line (1-based)' },
+              endLine: { type: 'number', description: 'Ending line (1-based)' },
+            },
+            required: ['filePath', 'startLine', 'endLine'],
+          },
+        },
+      },
+      required: ['chunks'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // ── PM exploration tools (used during the pre-decision exploration phase) ──────
@@ -489,8 +730,12 @@ export const PM_EXPLORATION_TOOLS: ToolDefinition[] = [
   AGENT_TOOLS.find(t => t.name === 'grep_content')!,
   AGENT_TOOLS.find(t => t.name === 'list_files')!,
   AGENT_TOOLS.find(t => t.name === 'get_dependency_graph')!,
+  AGENT_TOOLS.find(t => t.name === 'get_schema_settings')!,
+  AGENT_TOOLS.find(t => t.name === 'find_references')!,
+  AGENT_TOOLS.find(t => t.name === 'read_chunk')!,
+  AGENT_TOOLS.find(t => t.name === 'parallel_batch_read')!,
   CHECK_LINT_TOOL,
-];
+].filter(Boolean);
 
 // ── Summary-phase tools (user-facing, used during the summary/response phase) ──
 

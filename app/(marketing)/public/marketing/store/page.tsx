@@ -13,7 +13,7 @@ export const metadata = {
  */
 export default function PublicMarketingStorePage() {
   return (
-    <main className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] pt-24 pb-16">
+    <main className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] pt-24 pb-16">
       <div className="max-w-4xl mx-auto px-6">
         <Link
           href="/public/marketing"
@@ -30,7 +30,7 @@ export default function PublicMarketingStorePage() {
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
           {STORE_PRODUCT_IMAGES.map((product, i) => (
-            <div key={i} className="rounded-xl border border-stone-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#141414]">
+            <div key={i} className="rounded-xl border border-stone-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[oklch(0.185_0_0)]">
               <div className="aspect-square bg-stone-100 dark:bg-stone-900/50 relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

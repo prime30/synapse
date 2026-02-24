@@ -98,7 +98,7 @@ export function IsometricHeroGrid() {
   return (
     <motion.div
       ref={containerRef}
-      className="max-w-5xl mx-auto mt-12 md:mt-16 px-6 pb-20 overflow-hidden"
+      className="relative max-w-5xl mx-auto mt-12 md:mt-16 px-6 pb-20 overflow-hidden"
       style={{ y }}
     >
       <div className="relative mx-auto" style={{ perspective: 1200, width: 'min(90vw, 640px)' }}>
@@ -121,7 +121,7 @@ export function IsometricHeroGrid() {
               {card.type === 'blank' ? (
                 <span className="text-stone-200 dark:text-white/10 text-[10px]" aria-hidden>-</span>
               ) : (
-                <div className="w-full h-full min-h-[72px] md:min-h-[88px] bg-[#0a0a0a] dark:bg-[#111] rounded-xl">
+                <div className="w-full h-full min-h-[72px] md:min-h-[88px] bg-[oklch(0.145_0_0)] dark:bg-[oklch(0.178_0_0)] rounded-xl">
                   <CardContent type={card.type} />
                 </div>
               )}

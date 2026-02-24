@@ -17,6 +17,7 @@ interface FileListProps {
   onAddFile?: () => void;
   presence?: WorkspacePresence[];
   snippetUsageCounts?: Map<string, number>;
+  agentEditedPaths?: Set<string>;
   activeFileId?: string | null;
   activeFileContent?: string | null;
   activeFilePath?: string | null;
@@ -88,6 +89,7 @@ function DirectoryNode({
   onFileClick,
   presence,
   snippetUsageCounts,
+  agentEditedPaths,
 }: {
   group: DirectoryGroup;
   isOpen: boolean;
@@ -95,6 +97,7 @@ function DirectoryNode({
   onFileClick: (fileId: string) => void;
   presence: WorkspacePresence[];
   snippetUsageCounts?: Map<string, number>;
+  agentEditedPaths?: Set<string>;
 }) {
   return (
     <div>
@@ -139,6 +142,7 @@ function DirectoryNode({
               onClick={() => onFileClick(file.id)}
               presence={presence}
               snippetUsageCount={snippetUsageCounts?.get(file.id)}
+              hasAgentEdits={agentEditedPaths?.has(file.path) ?? false}
             />
           ))}
         </div>
@@ -153,6 +157,7 @@ export function FileList({
   onAddFile,
   presence = [],
   snippetUsageCounts,
+  agentEditedPaths,
   activeFileId = null,
   activeFileContent = null,
   activeFilePath = null,
@@ -368,6 +373,7 @@ export function FileList({
                 onFileClick={onFileClick}
                 presence={presence}
                 snippetUsageCounts={snippetUsageCounts}
+                agentEditedPaths={agentEditedPaths}
               />
             ))}
           </div>

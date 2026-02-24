@@ -65,9 +65,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // Load messages for this session
+    const includeMetadata = request.nextUrl.searchParams.get('includeMetadata') === 'true';
+    const selectColumns = includeMetadata
+      ? 'id, role, content, metadata, created_at'
+      : 'id, role, content, created_at';
+
     const { data: messages, error: messagesError } = await supabase
       .from('ai_messages')
-      .select('id, role, content, created_at')
+      .select(selectColumns)
       .eq('session_id', session.id)
       .order('created_at', { ascending: true });
 
@@ -82,6 +87,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           role: m.role as 'user' | 'assistant',
           content: m.content,
           timestamp: m.created_at,
+          ...(includeMetadata && m.metadata ? { metadata: m.metadata } : {}),
         })),
     });
   } catch (error) {
@@ -94,6 +100,8 @@ const postSchema = z.object({
   content: z.string().min(1),
   /** Optional: target a specific session instead of the most recent one. */
   sessionId: z.string().uuid().optional(),
+  /** Optional: structured tool call metadata for context awareness. */
+  metadata: z.record(z.unknown()).nullable().optional(),
 });
 
 /**
@@ -113,7 +121,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!parsed.success) {
       throw APIError.badRequest('Invalid message: role and content required');
     }
-    const { role, content, sessionId: explicitSessionId } = parsed.data;
+    const { role, content, sessionId: explicitSessionId, metadata } = parsed.data;
 
     // Find or create session
     let sessionId: string;
@@ -177,6 +185,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         session_id: sessionId,
         role,
         content,
+        ...(metadata ? { metadata } : {}),
       })
       .select('id, role, content, created_at')
       .single();

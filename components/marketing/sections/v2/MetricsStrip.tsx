@@ -16,11 +16,12 @@ interface Metric {
 }
 
 const METRICS: Metric[] = [
-  { display: '5', target: 5, label: 'AI specialist agents — PM, Liquid, CSS, JS, Review' },
-  { display: '40+', target: null, label: 'Shopify object completions — products, collections, customers, and more' },
-  { display: '16', target: 16, label: 'Metafield input types — type-aware forms for every definition' },
-  { display: '8', target: 8, label: 'Accessibility rules scanned before deploy' },
-  { display: '0-100', target: null, label: 'Performance score per theme' },
+  { display: '4x', target: null, label: 'Faster with parallel specialists — CSS, Liquid, JS agents work simultaneously' },
+  { display: '55', target: 55, label: 'CX patterns detected — trust badges, cart optimization, mobile UX, and more' },
+  { display: '25', target: 25, label: 'Tool calls per turn — generous budget, no arbitrary limits blocking the agent' },
+  { display: '60%', target: null, label: 'Token savings on section files — schema-aware context stripping' },
+  { display: '6', target: 6, label: 'Knowledge modules loaded on-demand — only relevant Shopify expertise per request' },
+  { display: '3', target: 3, label: 'Diagnostic tools — rendering chain tracer, settings checker, visibility diagnoser' },
 ];
 
 /* ------------------------------------------------------------------ */

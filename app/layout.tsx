@@ -45,11 +45,12 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('synapse-theme');var dark=t?t==='dark':true;if(dark){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light'}}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}})();`,
+            __html: `(function(){try{var t=sessionStorage.getItem('synapse-theme-session');var dark=t?t==='dark':true;if(dark){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light'}try{localStorage.removeItem('synapse-theme')}catch(_){}}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}})();`,
           }}
         />
       </head>
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${GeistPixelGrid.variable} ${GeistPixelCircle.variable} ${GeistPixelTriangle.variable} ${GeistPixelLine.variable} antialiased`}
       >
         <Providers>{children}</Providers>

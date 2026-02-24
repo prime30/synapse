@@ -53,7 +53,7 @@ export function CheckpointBanner({
           type="button"
           onClick={onConfirm}
           disabled={isCreating}
-          className="px-3 py-1.5 text-xs rounded bg-[#28CD56] text-white hover:bg-[#28CD56]/90 disabled:opacity-50 transition-colors font-medium"
+          className="px-3 py-1.5 text-xs rounded bg-[oklch(0.745_0.189_148)] text-white hover:bg-[oklch(0.745_0.189_148)]/90 disabled:opacity-50 transition-colors font-medium"
         >
           {isCreating ? 'Saving...' : 'Save & Apply'}
         </button>

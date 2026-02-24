@@ -75,7 +75,7 @@ export function SocialProofSection() {
           <MagneticElement strength={6} radius={120}>
             <a
               href="/signup"
-              className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+              className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
             >
               Start Free
             </a>

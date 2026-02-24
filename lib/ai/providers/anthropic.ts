@@ -673,6 +673,14 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
       if (systemField !== undefined) body.system = systemField;
       if (options?.container && ptcEnabled) body.container = options.container;
       if (options?.contextManagement) body.context_management = options.contextManagement;
+      if (options?.toolChoice) {
+        if (options.toolChoice === 'any') {
+          body.tool_choice = { type: 'any' };
+        } else if (typeof options.toolChoice === 'object') {
+          body.tool_choice = options.toolChoice;
+        }
+        // 'auto' is the default, no need to set
+      }
 
       // 4-minute timeout for streaming tool completions
       const streamToolController = new AbortController();

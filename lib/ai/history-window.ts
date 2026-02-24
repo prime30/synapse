@@ -1,4 +1,6 @@
 import { estimateTokens } from './token-counter';
+import { estimateMetadataTokens } from './message-compression';
+import type { MessageMetadata } from '@/lib/types/database';
 
 const KEEP_RECENT = 10;
 
@@ -12,6 +14,8 @@ export interface HistoryMessage {
   content: string;
   /** Preserved from AIMessage for prompt caching. */
   cacheControl?: { type: 'ephemeral'; ttl?: '5m' | '1h' };
+  /** Tool call/result metadata for context awareness. */
+  metadata?: MessageMetadata | null;
 }
 
 export interface TrimResult {
@@ -51,8 +55,9 @@ export function trimHistory(
     return { messages: [], summary: '', trimmedCount: 0 };
   }
 
-  const totalTokens = estimateTokens(
-    messages.map((m) => m.content).join('')
+  const totalTokens = messages.reduce(
+    (sum, m) => sum + estimateTokens(m.content) + estimateMetadataTokens(m.metadata ?? null),
+    0,
   );
   if (totalTokens <= budget) {
     return { messages: [...messages], summary: '', trimmedCount: 0 };
@@ -77,7 +82,10 @@ export function trimHistory(
       ? `Older conversation summary:\n${summaryParts.join('\n')}`
       : '';
 
-    const keptTokens = estimateTokens(kept.map((m) => m.content).join(''));
+    const keptTokens = kept.reduce(
+      (sum, m) => sum + estimateTokens(m.content) + estimateMetadataTokens(m.metadata ?? null),
+      0,
+    );
     const summaryTokens = estimateTokens(summary);
     const combinedTokens = keptTokens + summaryTokens;
 

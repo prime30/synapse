@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import React, { Suspense, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { loader as monacoLoader } from '@monaco-editor/react';
@@ -51,6 +51,7 @@ import { LocalSyncIndicator } from '@/components/features/sync/LocalSyncIndicato
 import { UndoToast } from '@/components/ui/UndoToast';
 import { HomeModal } from '@/components/features/home/HomeModal';
 import { CommandPalette } from '@/components/editor/CommandPalette';
+import { KeyboardCheatsheet } from '@/components/editor/KeyboardCheatsheet';
 import type { PaletteCommand } from '@/components/editor/CommandPalette';
 import { ThemeConsole } from '@/components/editor/ThemeConsole';
 import type { ThemeConsoleTab, ThemeConsoleEntry } from '@/components/editor/ThemeConsole';
@@ -181,7 +182,10 @@ export default function ProjectPage() {
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
 
-  const searchParams = useSearchParams();
+  // useSearchParams is safe here because this page is always client-rendered
+  // and Next.js handles the Suspense boundary at the layout level for dynamic routes.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const [showHomeModal, setShowHomeModal] = useState(searchParams.get('home') === '1');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -191,6 +195,7 @@ export default function ProjectPage() {
   const [pendingAnnotation, setPendingAnnotation] = useState<AnnotationData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [showCheatsheet, setShowCheatsheet] = useState(false);
   const [activeFileContent, setActiveFileContent] = useState('');
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number } | null>(null);
@@ -595,6 +600,10 @@ export default function ProjectPage() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setShowCheatsheet((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handler);
@@ -1996,10 +2005,19 @@ export default function ProjectPage() {
                     onToggle={() => setConsoleOpen((o) => !o)}
                     activeTab={consoleTab}
                     onTabChange={setConsoleTab}
-                    entries={consoleEntries}
+                    entries={
+                      consoleTab === 'push-log'
+                        ? pushLog.map((e) => ({
+                            id: e.id,
+                            level: 'info' as const,
+                            message: `${e.trigger === 'auto' ? 'Auto-push' : 'Manual push'}: ${e.file_count} file${e.file_count !== 1 ? 's' : ''}${e.note ? ` — ${e.note}` : ''}`,
+                            timestamp: new Date(e.pushed_at).getTime(),
+                          }))
+                        : consoleEntries
+                    }
                     counts={{
-                      diagnostics: consoleEntries.filter((e) => consoleTab === 'diagnostics' || true).length,
-                      'push-log': 0,
+                      diagnostics: consoleEntries.length,
+                      'push-log': pushLog.length,
                       'theme-check': 0,
                     }}
                     onClear={handleConsoleClear}
@@ -2017,7 +2035,7 @@ export default function ProjectPage() {
                         gitSync.refreshStatus();
                         setCommitDialogOpen(true);
                       }}
-                      onPush={() => {}}
+                      onPush={handlePush}
                       onPull={async () => {
                         try {
                           const result = await gitSync.pull();
@@ -2343,6 +2361,13 @@ export default function ProjectPage() {
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        projectId={projectId}
+      />
+
+      {/* Keyboard shortcuts modal (Cmd+/) */}
+      <KeyboardCheatsheet
+        isOpen={showCheatsheet}
+        onClose={() => setShowCheatsheet(false)}
       />
 
       {/* EPIC 3 + A6: Command palette (Ctrl+P) — file search + command mode */}

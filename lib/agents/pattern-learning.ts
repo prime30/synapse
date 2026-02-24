@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { detectStyle } from '@/lib/ai/style-detector';
 import type {
   CodeChange,
   LearnedPattern,
@@ -170,5 +171,148 @@ export class PatternLearning {
     }
 
     return opportunities;
+  }
+
+  /** Store a pattern with theme_style category instead of coding_style */
+  private async storeThemePattern(
+    userId: string,
+    pattern: LearnedPattern,
+  ): Promise<void> {
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('category', 'theme_style')
+      .eq('key', pattern.pattern)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('user_preferences')
+        .update({
+          observation_count: existing.observation_count + 1,
+          last_reinforced: new Date().toISOString(),
+          confidence: Math.min(existing.confidence + 0.1, 1.0),
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase.from('user_preferences').insert({
+        user_id: userId,
+        category: 'theme_style',
+        key: pattern.pattern,
+        value: pattern.example ?? pattern.pattern,
+        file_type: pattern.fileType ?? null,
+        confidence: 1.0,
+        metadata: {
+          reasoning: pattern.reasoning,
+        },
+      });
+    }
+  }
+
+  /** Detect extended theme-level patterns via style analysis */
+  async detectExtendedPatterns(
+    projectId: string,
+    userId: string,
+    files: FileContext[],
+  ): Promise<LearnedPattern[]> {
+    try {
+      const liquid = files.filter((f) => f.fileName.endsWith('.liquid'));
+      const css = files.filter((f) => f.fileName.endsWith('.css'));
+      const jsTs = files.filter(
+        (f) =>
+          f.fileName.endsWith('.js') ||
+          f.fileName.endsWith('.ts'),
+      );
+
+      const samples = [
+        ...liquid.slice(0, 8),
+        ...css.slice(0, 6),
+        ...jsTs.slice(0, 6),
+      ].slice(0, 20);
+
+      if (samples.length === 0) return [];
+
+      const profile = detectStyle(
+        samples.map((f) => ({ path: f.fileName, content: f.content })),
+      );
+
+      const patterns: LearnedPattern[] = [];
+
+      patterns.push({
+        pattern: `CSS naming convention: ${profile.cssNamingConvention}`,
+        fileType: 'css',
+        example:
+          profile.cssNamingConvention === 'BEM'
+            ? '.block__element--modifier'
+            : '.kebab-case-name',
+        reasoning: 'Detected from project CSS files',
+      });
+
+      patterns.push({
+        pattern: `Liquid whitespace: ${profile.liquidWhitespace}`,
+        fileType: 'liquid',
+        example:
+          profile.liquidWhitespace === 'spaced'
+            ? '{{ variable }}'
+            : '{{variable}}',
+        reasoning: 'Detected from project Liquid files',
+      });
+
+      patterns.push({
+        pattern: `Section schema: ${profile.sectionSchemaStyle}`,
+        fileType: 'liquid',
+        example:
+          profile.sectionSchemaStyle === 'inline'
+            ? 'Schema at end of section file'
+            : 'Schema in separate region',
+        reasoning: 'Detected from project section files',
+      });
+
+      // Color usage detection across CSS files
+      let varCount = 0;
+      let hexCount = 0;
+      for (const f of css) {
+        varCount += (f.content.match(/var\(--/g) ?? []).length;
+        hexCount += (f.content.match(/#[0-9a-fA-F]{3,8}/g) ?? []).length;
+      }
+      patterns.push({
+        pattern:
+          varCount > hexCount
+            ? 'Uses CSS custom properties for colors'
+            : 'Uses hardcoded color values',
+        fileType: 'css',
+        example:
+          varCount > hexCount
+            ? 'color: var(--primary)'
+            : 'color: oklch(0.32 0 0)',
+        reasoning: `Detected ${varCount} var() vs ${hexCount} hex usages`,
+      });
+
+      for (const p of patterns) {
+        await this.storeThemePattern(userId, p);
+      }
+
+      return patterns;
+    } catch {
+      return [];
+    }
+  }
+
+  /** Get theme-style patterns for a user */
+  async getThemePatterns(userId: string): Promise<UserPreference[]> {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('category', 'theme_style')
+      .order('confidence', { ascending: false });
+
+    if (error) throw error;
+    return data ?? [];
   }
 }

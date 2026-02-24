@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Eye, AlertTriangle, X } from 'lucide-react';
 
-interface ClarificationOption {
+export interface ClarificationOption {
   id: string;
   label: string;
   recommended?: boolean;
+  actionType?: 'view_reference' | 'apply_anyway' | 'cancel' | 'select';
+  actionData?: Record<string, unknown>;
 }
 
 interface ClarificationCardProps {
@@ -21,9 +24,11 @@ interface ClarificationCardProps {
   /** Optional description for context. */
   description?: string;
   onSend?: (content: string) => void;
+  /** Callback for options with an actionType — receives the full option so the parent can route. */
+  onAction?: (option: ClarificationOption) => void;
 }
 
-export function ClarificationCard({ question, options, onSend, allowFreeform, round, maxRounds, description }: ClarificationCardProps) {
+export function ClarificationCard({ question, options, onSend, onAction, allowFreeform, round, maxRounds, description }: ClarificationCardProps) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [freeformText, setFreeformText] = useState('');
@@ -44,9 +49,13 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
   const handleSelect = useCallback((option: ClarificationOption) => {
     setSelectedId(option.id);
     setTimeout(() => {
-      onSend?.(option.label);
+      if (option.actionType && onAction) {
+        onAction(option);
+      } else {
+        onSend?.(option.label);
+      }
     }, 150);
-  }, [onSend]);
+  }, [onSend, onAction]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -179,6 +188,7 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
           const isRecommended = option.recommended === true;
           const isSelected = selectedId === option.id;
           const isFocused = focusedIndex === i;
+          const { actionType } = option;
 
           const base =
             'relative flex items-start gap-2 w-full text-left text-xs rounded-md px-3 py-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 disabled:opacity-60 disabled:cursor-default';
@@ -186,6 +196,12 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
           let state: string;
           if (isSelected) {
             state = 'bg-sky-500/15 border border-sky-500/40 text-sky-600 dark:text-sky-300';
+          } else if (actionType === 'apply_anyway') {
+            state =
+              'bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/25 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 dark:hover:bg-amber-500/25 hover:border-amber-500/40';
+          } else if (actionType === 'cancel') {
+            state =
+              'ide-surface hover:ide-surface-input border ide-border-subtle text-stone-400 dark:text-stone-500 hover:text-stone-500 dark:hover:text-stone-400';
           } else if (isRecommended) {
             state =
               'bg-emerald-500/5 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/40';
@@ -194,9 +210,27 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
               'ide-surface hover:ide-surface-input border ide-border-subtle ide-text-2 hover:ide-text';
           }
 
-          const numStyle = isRecommended
-            ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-            : 'ide-surface-inset ide-text-3';
+          const numStyle =
+            actionType === 'apply_anyway'
+              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+              : actionType === 'cancel'
+                ? 'ide-surface-inset text-stone-400 dark:text-stone-500'
+                : isRecommended
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+                  : 'ide-surface-inset ide-text-3';
+
+          const actionIcon =
+            actionType === 'view_reference' ? (
+              <Eye className="h-3 w-3 shrink-0 text-sky-500 dark:text-sky-400 mt-0.5" aria-hidden="true" />
+            ) : actionType === 'apply_anyway' ? (
+              <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+            ) : actionType === 'cancel' ? (
+              <X className="h-3 w-3 shrink-0 text-stone-400 dark:text-stone-500 mt-0.5" aria-hidden="true" />
+            ) : null;
+
+          const ariaLabel = actionType
+            ? `${option.label} (${actionType.replace(/_/g, ' ')})`
+            : undefined;
 
           return (
             <button
@@ -205,6 +239,7 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
               type="button"
               role="option"
               aria-selected={isFocused}
+              aria-label={ariaLabel}
               tabIndex={isFocused ? 0 : -1}
               onClick={() => handleSelect(option)}
               disabled={selectedId !== null}
@@ -215,6 +250,8 @@ export function ClarificationCard({ question, options, onSend, allowFreeform, ro
               >
                 {i + 1}
               </span>
+
+              {actionIcon}
 
               <span className="flex-1 leading-relaxed">{option.label}</span>
 

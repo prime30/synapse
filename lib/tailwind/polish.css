@@ -79,6 +79,11 @@
   75%      { transform: translateX(4px); }
 }
 
+@keyframes indeterminate-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 
 /* ─── Animation Utility Classes ────────────────────────────────────── */
 
@@ -95,6 +100,7 @@
 .animate-shimmer       { animation: shimmer 2s linear infinite; }
 .animate-bounce-subtle { animation: bounce-subtle 0.4s var(--ease-spring); }
 .animate-shake         { animation: shake 0.3s var(--ease-default); }
+.animate-indeterminate-slide { animation: indeterminate-slide 1.5s ease-in-out infinite; }
 
 /* Stagger children — add to parent, each child gets incremental delay */
 .stagger-children > :nth-child(1)  { animation-delay: 0ms; }
@@ -124,7 +130,8 @@
   .animate-pulse-gentle,
   .animate-shimmer,
   .animate-bounce-subtle,
-  .animate-shake {
+  .animate-shake,
+  .animate-indeterminate-slide {
     animation: none !important;
     opacity: 1;
     transform: none;

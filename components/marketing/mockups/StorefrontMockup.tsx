@@ -36,7 +36,7 @@ export function StorefrontMockup() {
 
   return (
     <motion.div
-      className="relative w-full max-w-4xl mx-auto rounded-2xl border border-stone-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-2xl shadow-stone-300/20 dark:shadow-black/40"
+      className="relative w-full max-w-4xl mx-auto rounded-2xl border border-stone-200 dark:border-white/10 bg-white dark:bg-[oklch(0.185_0_0)] overflow-hidden shadow-2xl shadow-stone-300/20 dark:shadow-black/40"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}

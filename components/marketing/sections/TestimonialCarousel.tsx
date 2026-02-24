@@ -102,7 +102,7 @@ export function TestimonialCarousel() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] py-16 md:py-24"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] py-16 md:py-24"
     >
       {/* Full-bleed top divider */}
       <div

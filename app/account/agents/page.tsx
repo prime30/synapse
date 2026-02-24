@@ -30,7 +30,7 @@ function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] dark:focus-visible:ring-offset-[#0a0a0a] ${
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)] dark:focus-visible:ring-offset-[oklch(0.145_0_0)] ${
         disabled
           ? 'cursor-not-allowed opacity-40'
           : 'cursor-pointer'

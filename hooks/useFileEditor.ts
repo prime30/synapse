@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useFile } from './useFile';
 import { useAutoSave } from './useAutoSave';
 import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
+import { emitFileSaved } from './useThemeHealth';
 
 /** Check if auto-sync is enabled for a project (stored in localStorage). */
 function isAutoSyncEnabled(projectId: string | null): boolean {
@@ -70,6 +71,7 @@ export function useFileEditor(fileId: string | null) {
     await refetch();
 
     const projectId = json.data?.project_id;
+    if (projectId) emitFileSaved(projectId);
 
     if (json.data?.shopifyPushQueued && projectId) {
       // Push-queue debounce is 800ms + push ~200-400ms; refresh shortly after

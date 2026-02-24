@@ -130,7 +130,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <button
           type="button"
           onClick={onNext}
-          className="mt-10 inline-flex items-center gap-2 px-8 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-medium text-sm transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)]"
+          className="mt-10 inline-flex items-center gap-2 px-8 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-medium text-sm transition-all shadow-[0_0_20px_oklch(0.696_0.17_162_/_0.3)] hover:shadow-[0_0_30px_oklch(0.696_0.17_162_/_0.5)]"
         >
           Get Started
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

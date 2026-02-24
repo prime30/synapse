@@ -116,62 +116,16 @@ export class LiquidAgent extends Agent {
   }
 
   parseResponse(raw: string, _task: AgentTask): AgentResult {
-    try {
-      // Try direct parse first (structured outputs), fall back to regex
-      let jsonString: string | null = null;
-      if (AI_FEATURES.structuredOutputs) {
-        try { JSON.parse(raw); jsonString = raw; } catch { /* fallthrough */ }
-      }
-      if (!jsonString) {
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        jsonString = jsonMatch?.[0] ?? null;
-      }
-      if (!jsonString) {
-        return { agentType: 'liquid', success: true, changes: [] };
-      }
-
-      const parsed = JSON.parse(jsonString) as {
-        changes?: Array<{
-          fileId?: string;
-          fileName?: string;
-          originalContent?: string;
-          proposedContent?: string;
-          patches?: CodePatch[];
-          reasoning?: string;
-          confidence?: number;
-        }>;
-      };
-
-      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => {
-        const originalContent = c.originalContent ?? '';
-        const patches = c.patches ?? [];
-        // Prefer patches; reconstruct proposedContent from them.
-        // Fall back to proposedContent if no patches provided.
-        const proposedContent = patches.length > 0
-          ? applyPatches(originalContent, patches)
-          : (c.proposedContent ?? '');
-
-        return {
-          fileId: c.fileId ?? '',
-          fileName: c.fileName ?? '',
-          originalContent,
-          proposedContent,
-          patches: patches.length > 0 ? patches : undefined,
-          reasoning: c.reasoning ?? '',
-          agentType: 'liquid' as const,
-          confidence: c.confidence ?? 0.8,
-        };
-      });
-
-      // Aggregate confidence: average across all changes (fallback 0.8)
-      const avgConfidence = changes.length > 0
-        ? changes.reduce((sum, ch) => sum + (ch.confidence ?? 0.8), 0) / changes.length
-        : 0.8;
-
-      return { agentType: 'liquid', success: true, changes, confidence: avgConfidence };
-    } catch {
-      return { agentType: 'liquid', success: true, changes: [] };
-    }
+    // When using executeWithTools, the specialist's edits are already applied
+    // via search_replace/propose_code_edit tools. The final response is just
+    // a summary. Return it as analysis text.
+    return {
+      agentType: 'liquid',
+      success: true,
+      analysis: raw,
+      changes: [],
+      confidence: 0.8,
+    };
   }
 }
 

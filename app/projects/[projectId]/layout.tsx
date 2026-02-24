@@ -1,4 +1,5 @@
 import { DesignScanProvider } from '@/contexts/DesignScanContext';
+import { ProjectGapProfileFetcher } from '@/components/projects/ProjectGapProfileFetcher';
 
 /**
  * Project-level layout.
@@ -14,5 +15,10 @@ export default function ProjectLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DesignScanProvider>{children}</DesignScanProvider>;
+  return (
+    <DesignScanProvider>
+      <ProjectGapProfileFetcher />
+      {children}
+    </DesignScanProvider>
+  );
 }

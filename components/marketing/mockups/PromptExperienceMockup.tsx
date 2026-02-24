@@ -462,7 +462,7 @@ export function PromptExperienceMockup() {
     phase === 'preview' || phase === 'hold';
 
   return (
-    <div className="rounded-2xl bg-white dark:bg-[#0a0a0a] border border-stone-200 dark:border-white/10 overflow-hidden shadow-xl shadow-black/[0.06] dark:shadow-2xl dark:shadow-black/30">
+    <div className="rounded-2xl bg-white dark:bg-[oklch(0.145_0_0)] border border-stone-200 dark:border-white/10 overflow-hidden shadow-xl shadow-black/[0.06] dark:shadow-2xl dark:shadow-black/30">
       {/* ── Prompt input area ──────────────────────────────────────── */}
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-start gap-3">
@@ -714,7 +714,7 @@ export function PromptExperienceMockup() {
         <AnimatePresence>
           {showPreview && (
             <motion.div
-              className="absolute inset-x-0 bottom-0 bg-white dark:bg-[#0a0a0a]"
+              className="absolute inset-x-0 bottom-0 bg-white dark:bg-[oklch(0.145_0_0)]"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}

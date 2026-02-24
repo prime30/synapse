@@ -58,6 +58,11 @@ export interface PreviewPanelHandle {
    * Phase 4a: Clear all injected CSS from the preview.
    */
   clearCSS(): Promise<void>;
+  /**
+   * Get recent console errors and warnings from the preview for verification.
+   * Returns { logs: Array<{ level, message, ts }> } or null if unavailable.
+   */
+  getConsoleLogs(search?: string): Promise<{ logs: Array<{ level: string; message: string; ts: number }> } | null>;
 }
 
 interface PreviewPanelProps {
@@ -362,6 +367,55 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     }
   }, []);
 
+  // ── getConsoleLogs: return recent console errors/warnings for verification (E2)
+  const getConsoleLogs = useCallback(
+    async (search?: string): Promise<{ logs: Array<{ level: string; message: string; ts: number }> } | null> => {
+      try {
+        const iframe = frameRef.current?.getIframe();
+        const contentWindow = iframe?.contentWindow;
+        if (!contentWindow) return null;
+
+        const requestId = crypto.randomUUID();
+
+        return new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            window.removeEventListener('message', handler);
+            resolve(null);
+          }, 3000);
+
+          function handler(event: MessageEvent) {
+            const msg = event.data;
+            if (
+              msg?.type === 'synapse-bridge-response' &&
+              msg?.action === 'getConsoleLogs' &&
+              (msg.id === requestId || msg.requestId === requestId)
+            ) {
+              clearTimeout(timer);
+              window.removeEventListener('message', handler);
+              const data = msg.data as { logs?: Array<{ level: string; message: string; ts: number }> } | undefined;
+              resolve(data?.logs ? { logs: data.logs } : { logs: [] });
+            }
+          }
+
+          window.addEventListener('message', handler);
+
+          contentWindow.postMessage(
+            {
+              type: 'synapse-bridge',
+              id: requestId,
+              action: 'getConsoleLogs',
+              payload: { search: search ?? '' },
+            },
+            '*'
+          );
+        });
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
   // BroadcastChannel for syncing refresh with detached window
   useEffect(() => {
     const channel = new BroadcastChannel(`synapse-preview-${projectId}`);
@@ -433,13 +487,14 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   useImperativeHandle(ref, () => ({
     getDOMContext,
     getRawSnapshot,
+    getConsoleLogs,
     async injectCSS(css: string) {
       sendBridgeMessage('injectCSS', { css });
     },
     async clearCSS() {
       sendBridgeMessage('clearCSS');
     },
-  }), [getDOMContext, getRawSnapshot, sendBridgeMessage]);
+  }), [getDOMContext, getRawSnapshot, getConsoleLogs, sendBridgeMessage]);
 
   // Keep refs in sync so the bridge-ready handler can re-enable inspect after page nav
   useEffect(() => { sendBridgeMessageRef.current = sendBridgeMessage; }, [sendBridgeMessage]);

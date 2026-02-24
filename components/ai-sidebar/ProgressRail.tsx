@@ -24,7 +24,7 @@ function getIndicatorClasses(status: RailPhaseStatus): string {
     case 'active':
       return `${base} bg-sky-500 dark:bg-sky-400 border-sky-500 dark:border-sky-400 text-white`;
     case 'completed':
-      return `${base} bg-[#28CD56] border-[#28CD56] text-white`;
+      return `${base} bg-[oklch(0.745_0.189_148)] border-[oklch(0.745_0.189_148)] text-white`;
     case 'error':
       return `${base} bg-red-500 dark:bg-red-400 border-red-500 dark:border-red-400 text-white`;
     case 'skipped':
@@ -81,13 +81,13 @@ function getLabelClasses(status: RailPhaseStatus): string {
 
 function getLineClasses(leftStatus: RailPhaseStatus, rightStatus: RailPhaseStatus): string {
   if (leftStatus === 'completed' && rightStatus === 'completed') {
-    return 'bg-[#28CD56]';
+    return 'bg-[oklch(0.745_0.189_148)]';
   }
   if (leftStatus === 'completed' && rightStatus === 'active') {
-    return 'bg-gradient-to-r from-[#28CD56] to-stone-200 dark:to-white/10';
+    return 'bg-gradient-to-r from-[oklch(0.745_0.189_148)] to-stone-200 dark:to-white/10';
   }
   if (leftStatus === 'completed') {
-    return 'bg-[#28CD56]';
+    return 'bg-[oklch(0.745_0.189_148)]';
   }
   return 'bg-stone-200 dark:bg-white/10';
 }

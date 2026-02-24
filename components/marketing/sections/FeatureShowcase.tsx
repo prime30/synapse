@@ -82,7 +82,7 @@ function FeatureRow({
 export function FeatureShowcase() {
   return (
     <section
-      className="bg-[#fafaf9] dark:bg-[#111] canvas-grid py-16 md:py-24"
+      className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.178_0_0)] canvas-grid py-16 md:py-24"
       data-navbar-theme="light"
     >
       <div className="max-w-6xl mx-auto px-6">

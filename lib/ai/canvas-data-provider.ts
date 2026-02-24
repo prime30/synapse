@@ -65,17 +65,17 @@ export interface AISuggestionNodeData {
 /* ------------------------------------------------------------------ */
 
 export const EDGE_COLORS: Record<FileDependency['dependencyType'], string> = {
-  liquid_include: '#3b82f6', // blue
-  asset_reference: '#22c55e', // green
-  css_import: '#f97316', // orange
-  css_class: '#a855f7', // purple
-  js_function: '#eab308', // yellow
-  js_import: '#f97316', // orange (same family as css_import)
-  template_section: '#06b6d4', // cyan
-  data_attribute: '#6b7280', // gray
-  schema_setting: '#ec4899', // pink
-  css_section: '#f97316', // orange (same family as css)
-  snippet_variable: '#8b5cf6', // violet
+  liquid_include: 'oklch(0.623 0.214 259)', // blue
+  asset_reference: 'oklch(0.723 0.191 149)', // green
+  css_import: 'oklch(0.702 0.183 52)', // orange
+  css_class: 'oklch(0.586 0.262 293)', // purple
+  js_function: 'oklch(0.795 0.184 86)', // yellow
+  js_import: 'oklch(0.702 0.183 52)', // orange (same family as css_import)
+  template_section: 'oklch(0.715 0.143 215)', // cyan
+  data_attribute: 'oklch(0.551 0.014 264)', // gray
+  schema_setting: 'oklch(0.627 0.265 3)', // pink
+  css_section: 'oklch(0.702 0.183 52)', // orange (same family as css)
+  snippet_variable: 'oklch(0.585 0.233 264)', // violet
 };
 
 /* ------------------------------------------------------------------ */

@@ -108,13 +108,13 @@ function ErrorContent() {
         <div className="mt-8 flex flex-col gap-3">
           <Link
             href="/auth/signin"
-            className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] dark:focus:ring-offset-[#0a0a0a]"
+            className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[oklch(0.145_0_0)] dark:focus:ring-offset-[oklch(0.145_0_0)]"
           >
             Try Again
           </Link>
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-lg border ide-border ide-surface-panel px-4 py-2.5 text-sm font-medium ide-text transition-colors ide-hover focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] dark:focus:ring-offset-[#0a0a0a]"
+            className="inline-flex items-center justify-center rounded-lg border ide-border ide-surface-panel px-4 py-2.5 text-sm font-medium ide-text transition-colors ide-hover focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[oklch(0.145_0_0)] dark:focus:ring-offset-[oklch(0.145_0_0)]"
           >
             Go Home
           </Link>

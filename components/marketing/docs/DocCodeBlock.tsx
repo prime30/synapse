@@ -70,7 +70,7 @@ export function DocCodeBlock({ code, language }: DocCodeBlockProps) {
           fontSize: '0.8125rem',
           lineHeight: '1.7',
         }}
-        className="!bg-stone-950 dark:!bg-[#0d0d0d] font-[family-name:var(--font-geist-mono)]"
+        className="!bg-stone-950 dark:!bg-[oklch(0.162_0_0)] font-[family-name:var(--font-geist-mono)]"
         wrapLongLines
       >
         {code}

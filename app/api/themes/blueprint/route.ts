@@ -97,7 +97,7 @@ function buildSections(tags: string[]): BlueprintSection[] {
           { value: 'outline', label: 'Outline' },
           { value: 'filled', label: 'Filled' },
         ] },
-        { id: 'background_color', type: 'color', label: 'Background', default: '#f8f8f8' },
+        { id: 'background_color', type: 'color', label: 'Background', default: 'oklch(0.977 0 0)' },
       ],
     },
   ];

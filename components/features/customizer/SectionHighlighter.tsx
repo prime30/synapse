@@ -55,7 +55,7 @@ export function SectionHighlighter({
       postToIframe(iframe, {
         type: 'synapse:highlight-section',
         sectionId: hoveredSectionId,
-        color: 'rgba(59, 130, 246, 0.15)',
+        color: 'oklch(0.623 0.214 259 / 0.15)',
       });
     }
 
@@ -78,7 +78,7 @@ export function SectionHighlighter({
       postToIframe(iframe, {
         type: 'synapse:select-section',
         sectionId: selectedSectionId,
-        color: 'rgba(59, 130, 246, 0.25)',
+        color: 'oklch(0.623 0.214 259 / 0.25)',
       });
     }
 

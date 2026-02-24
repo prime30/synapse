@@ -204,14 +204,14 @@ function StorefrontPreview() {
   }, []);
 
   return (
-    <div className={`h-full flex flex-col overflow-hidden relative ${isDark ? 'bg-[#0f1a0d]' : 'bg-[#fafaf9]'}`}>
+    <div className={`h-full flex flex-col overflow-hidden relative ${isDark ? 'bg-[oklch(0.19_0.03_130)]' : 'bg-[oklch(0.985_0.001_106)]'}`}>
       {/* Everything in one relative container */}
       <div className="flex-1 min-h-0 relative">
         {/* Floating announcement + nav — pinned over content */}
         <div className="absolute top-0 left-0 right-0 z-20">
           {/* Announcement bar — slim */}
           <motion.div
-            className={`pt-0 pb-px text-center ${isDark ? 'bg-[#2a3a24]/90' : 'bg-[#3a5230]/90'} backdrop-blur-sm`}
+            className={`pt-0 pb-px text-center ${isDark ? 'bg-[oklch(0.31_0.04_135)]/90' : 'bg-[oklch(0.39_0.06_135)]/90'} backdrop-blur-sm`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
@@ -225,7 +225,7 @@ function StorefrontPreview() {
             className={`flex items-center justify-between px-6 py-2 transition-all duration-300 ${
               navScrolled
                 ? isDark
-                  ? 'bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/[0.08]'
+                  ? 'bg-[oklch(0.21_0_0)]/80 backdrop-blur-md border-b border-white/[0.08]'
                   : 'bg-white/80 backdrop-blur-md border-b border-stone-200/60'
                 : 'bg-transparent border-b border-transparent'
             }`}
@@ -636,12 +636,12 @@ export function CodeEditorMockup() {
   ];
 
   return (
-    <div className="rounded-2xl bg-white dark:bg-[#111] border border-stone-200 dark:border-white/10 overflow-hidden h-[400px] flex flex-col">
+    <div className="rounded-2xl bg-white dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/10 overflow-hidden h-[400px] flex flex-col">
       {/* Title bar */}
-      <div className="h-10 bg-stone-50 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-4 gap-2">
-        <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-        <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-        <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+      <div className="h-10 bg-stone-50 dark:bg-[oklch(0.145_0_0)] border-b border-stone-200 dark:border-white/5 flex items-center px-4 gap-2">
+        <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.63_0.22_20)]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.84_0.16_80)]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.72_0.19_145)]" />
         {isPreview ? (
           <div className="ml-4 px-3 py-1 text-[11px] text-stone-500 dark:text-white/60 bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 rounded-t transition-all duration-300">
             Preview
@@ -846,7 +846,7 @@ export function CodeEditorMockup() {
         <AnimatePresence>
           {complete && !isPreview && (
             <motion.div
-              className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 dark:bg-[#111]/80 backdrop-blur-sm"
+              className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 dark:bg-[oklch(0.178_0_0)]/80 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -879,7 +879,7 @@ export function CodeEditorMockup() {
         <AnimatePresence>
           {isPreview && (
             <motion.div
-              className="absolute inset-x-0 bottom-0 z-20 h-full bg-white dark:bg-[#111]"
+              className="absolute inset-x-0 bottom-0 z-20 h-full bg-white dark:bg-[oklch(0.178_0_0)]"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
@@ -892,7 +892,7 @@ export function CodeEditorMockup() {
       </div>
 
       {/* Status bar */}
-      <div className="h-8 bg-stone-50 dark:bg-[#0a0a0a] border-t border-stone-200 dark:border-white/5 flex items-center px-4 gap-4">
+      <div className="h-8 bg-stone-50 dark:bg-[oklch(0.145_0_0)] border-t border-stone-200 dark:border-white/5 flex items-center px-4 gap-4">
         {AGENTS.map((agent, idx) => {
           const isActive =
             (phase === 'thinking' || phase === 'planning') ? idx === 0 :

@@ -30,8 +30,8 @@ export function BentoCarousel({ children, className = '' }: BentoCarouselProps) 
       </motion.div>
 
       {/* Fade edges */}
-      <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#0a0a0a] to-transparent pointer-events-none z-10" />
-      <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#0a0a0a] to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[oklch(0.145_0_0)] to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[oklch(0.145_0_0)] to-transparent pointer-events-none z-10" />
     </div>
   );
 }

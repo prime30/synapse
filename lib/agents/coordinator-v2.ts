@@ -63,39 +63,110 @@ import {
   addMessage,
 } from './execution-store';
 import { learnFromExecution, extractQueryTerms } from '@/lib/ai/term-mapping-learner';
+import { estimateTokens } from '@/lib/ai/token-counter';
+import { persistToolTurn } from '@/lib/ai/message-persistence';
+import { recordTierMetrics } from '@/lib/telemetry/tier-metrics';
 import { selectV2Tools } from './tools/v2-tool-definitions';
 import { executeToolCall, type ToolExecutorContext } from './tools/tool-executor';
 import { executeV2Tool, type V2ToolExecutorContext } from './tools/v2-tool-executor';
+import { expandKeepExisting } from './tools/keep-existing-expander';
 import { SpecialistLifecycleTracker } from './specialist-lifecycle';
 import {
   defaultSpecialistReactionRules,
   evaluateSpecialistReactions,
 } from './reaction-rules';
+import { parseHandoff } from './handoff-parser';
+import {
+  createWorktree,
+  getWorktreeSummary,
+  mergeMultipleWorktrees,
+} from './worktree/worktree-manager';
 import {
   V2_PM_SYSTEM_PROMPT,
   V2_CODE_OVERLAY,
   V2_PLAN_OVERLAY,
   V2_DEBUG_OVERLAY,
   V2_ASK_OVERLAY,
+  getModelOverlay,
 } from './prompts/v2-pm-prompt';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
 import { recordHistogram } from '@/lib/observability/metrics';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-/** Iteration limits per intent mode. Tightened to reduce exploration waste. */
+/** Iteration limits per intent mode (max tool-use rounds per run). */
 const ITERATION_LIMITS: Record<string, number> = {
-  ask: 3,
-  code: 8,
-  plan: 8,
-  debug: 8,
+  ask: 18,
+  code: 28,
+  plan: 18,
+  debug: 28,
 };
 
-/** Total timeout for the entire streamV2 execution. */
-const TOTAL_TIMEOUT_MS = 300_000; // 5 minutes
+/** Total timeout for the entire streamV2 execution. Env AGENT_TOTAL_TIMEOUT_MS overrides (e.g. 1800000 = 30 min). */
+const TOTAL_TIMEOUT_MS = Number(process.env.AGENT_TOTAL_TIMEOUT_MS) || 1_800_000; // 30 min default
 
 /** Max characters for a single tool result before truncation. */
 const MAX_TOOL_RESULT_CHARS = 6_000;
+
+/** Timeout for the first byte of a streaming response before falling back to batch. */
+const STREAM_FIRST_BYTE_TIMEOUT_MS = 30_000;
+
+/** How long to keep streaming marked as broken before retrying. */
+const STREAM_HEALTH_TTL_MS = 5 * 60_000;
+
+let v2StreamBroken = false;
+let v2StreamBrokenAt = 0;
+
+function isV2StreamBroken(): boolean {
+  if (!v2StreamBroken) return false;
+  if (Date.now() - v2StreamBrokenAt > STREAM_HEALTH_TTL_MS) {
+    v2StreamBroken = false;
+    v2StreamBrokenAt = 0;
+    return false;
+  }
+  return true;
+}
+
+function markV2StreamBroken(): void {
+  v2StreamBroken = true;
+  v2StreamBrokenAt = Date.now();
+  console.warn('[V2-StreamHealth] Streaming marked broken (TTL=5m)');
+}
+
+async function raceFirstByteV2(
+  streamResult: ToolStreamResult,
+  timeoutMs: number,
+): Promise<ToolStreamResult | null> {
+  if (timeoutMs <= 0) return streamResult;
+  const reader = streamResult.stream.getReader();
+  const readPromise = reader.read().then(({ done, value }) => (done ? null : value ?? null));
+  const timeoutPromise = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), timeoutMs));
+  const winner = await Promise.race([readPromise, timeoutPromise]);
+  if (winner === 'timeout') {
+    try { reader.cancel(); } catch { /* ignore */ }
+    reader.releaseLock();
+    return null;
+  }
+  const firstEvent = winner as ToolStreamEvent | null;
+  reader.releaseLock();
+  if (!firstEvent) return streamResult;
+  const originalStream = streamResult.stream;
+  const prependedStream = new ReadableStream<ToolStreamEvent>({
+    async start(controller) {
+      controller.enqueue(firstEvent!);
+      const innerReader = originalStream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await innerReader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+      } catch (err) { controller.error(err); }
+      finally { innerReader.releaseLock(); controller.close(); }
+    },
+  });
+  return { ...streamResult, stream: prependedStream, getUsage: streamResult.getUsage };
+}
 
 const LOOKUP_TOOL_NAMES = new Set([
   'read_file',
@@ -106,11 +177,6 @@ const LOOKUP_TOOL_NAMES = new Set([
   'list_files',
   'get_dependency_graph',
 ]);
-const PTC_PRE_EDIT_NON_MUTATING_TOOLS = new Set([
-  ...LOOKUP_TOOL_NAMES,
-  'code_execution',
-]);
-
 const MUTATING_CLIENT_TOOL_NAMES = new Set([
   'propose_code_edit',
   'search_replace',
@@ -125,6 +191,9 @@ const PRE_EDIT_BLOCK_THRESHOLD = 2;
 const PRE_EDIT_ENFORCEMENT_ABORT_THRESHOLD = 2;
 const REFERENTIAL_PRE_EDIT_LOOKUP_BUDGET = 0;
 const REFERENTIAL_PRE_EDIT_BLOCK_THRESHOLD = 1;
+
+/** Tool call cap: 0 = no cap; iteration limit and timeout guard the run. */
+const MAX_TOOL_CALLS = 0;
 
 function parseReviewToolContent(content: string): ReviewResult | null {
   if (!content || !/^Review\s+(APPROVED|NEEDS CHANGES)/m.test(content)) return null;
@@ -230,6 +299,7 @@ const V2_SERVER_TOOLS = new Set([
   'theme_check',
   'inspect_element',
   'get_page_snapshot',
+  'read_console_logs',
   'query_selector',
   'run_specialist',  // v2: specialist delegation is a server tool
   'run_review',      // v2: review is a server tool
@@ -242,6 +312,8 @@ const V2_ONLY_TOOLS = new Set(['run_specialist', 'run_review']);
 
 const symbolGraphCache = new SymbolGraphCache();
 const dependencyGraphCache = new DependencyGraphCache();
+
+
 
 // ── Prompt file extraction ────────────────────────────────────────────────────
 
@@ -397,14 +469,16 @@ export interface V2CoordinatorOptions {
   _tierOverride?: RoutingTier;
   /** Internal: escalation depth counter to prevent infinite recursion. */
   _escalationDepth?: number;
-  /** Internal: direct-enactment recovery retry depth counter. */
-  _enactmentRetryDepth?: number;
+  /** Internal: use lean pipeline (feature flag). */
+  _useLeanPipeline?: boolean;
   domContext?: string;
   memoryContext?: string;
   diagnosticContext?: string;
   activeFilePath?: string;
   openTabs?: string[];
   recentMessages?: string[];
+  /** Structured history with tool metadata (preferred over recentMessages). */
+  recentHistory?: AIMessage[];
   loadContent?: LoadContentFn;
   elementHint?: ElementHint;
   onProgress?: (event: {
@@ -420,13 +494,26 @@ export interface V2CoordinatorOptions {
     type: string;
     name: string;
     id: string;
+    toolCallId?: string;
     input?: Record<string, unknown>;
     result?: string;
     isError?: boolean;
     error?: string;
     recoverable?: boolean;
+    netZero?: boolean;
+    progress?: {
+      phase: string;
+      detail: string;
+      bytesProcessed?: number;
+      totalBytes?: number;
+      matchCount?: number;
+      lineNumber?: number;
+      percentage?: number;
+    };
   }) => void;
   onReasoningChunk?: (agent: string, chunk: string) => void;
+  /** Max parallel specialists (1–4). Default 3. */
+  maxParallelSpecialists?: number;
 }
 
 // ── V2 Context Builder ──────────────────────────────────────────────────────
@@ -590,7 +677,7 @@ export function compressOldToolResults(messages: AIMessage[]): void {
 
   for (let k = 0; k < toolResultMsgIndices.length - 1; k++) {
     const idx = toolResultMsgIndices[k];
-    const msg = messages[idx] as AIMessage & { __toolResults?: Array<{ content?: string; type?: string; tool_use_id?: string }> };
+    const msg = messages[idx] as AIMessage & { __toolResults?: Array<{ content?: string; type?: string; tool_use_id?: string; is_error?: boolean }> };
     if (!msg.__toolResults) continue;
 
     for (const block of msg.__toolResults) {
@@ -664,9 +751,20 @@ function applyReferentialArtifactsAsChanges(
       continue;
     }
     const targetNorm = norm(targetPath);
-    const target = allFiles.find(
+    let target = allFiles.find(
       (f) => norm(f.fileName) === targetNorm || norm(f.path ?? '') === targetNorm,
     );
+    if (!target) {
+      const basename = targetNorm.split('/').pop();
+      if (basename) {
+        target = allFiles.find(
+          (f) =>
+            norm(f.fileName).endsWith(`/${basename}`) ||
+            norm(f.fileName) === basename ||
+            (f.path && norm(f.path).endsWith(`/${basename}`)),
+        );
+      }
+    }
     if (!target) {
       missing.push(targetPath);
       continue;
@@ -696,7 +794,163 @@ function applyReferentialArtifactsAsChanges(
   return { applied, skipped, missing };
 }
 
+// â”€â”€ Style-aware context helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function selectReferenceSections(
+  userRequest: string,
+  activeFilePath: string | undefined,
+  allFiles: FileContext[],
+  fileTree: ShopifyFileTree | null,
+  maxRefs: number = 3,
+): FileContext[] {
+  const isSection = activeFilePath?.startsWith('sections/') ?? false;
+  const sectionIntent = /(?:create|add|edit|update|modify|change)\s+(?:a\s+)?(?:new\s+)?section/i.test(userRequest);
+  if (!isSection && !sectionIntent) return [];
+
+  const likeMatch = userRequest.match(/(?:like|similar to|based on|matching|same as)\s+['"]?([\w-]+)['"]?/i);
+  const likeTarget = likeMatch ? `sections/${likeMatch[1].replace(/\.liquid$/, '')}.liquid` : null;
+
+  const sections = allFiles.filter(f =>
+    f.fileName.startsWith('sections/') &&
+    f.fileName.endsWith('.liquid') &&
+    f.fileName !== activeFilePath
+  );
+
+  const results: FileContext[] = [];
+  if (likeTarget) {
+    const match = sections.find(f => f.fileName === likeTarget);
+    if (match) results.push(match);
+  }
+
+  const fileEntries = flattenFileTree(fileTree);
+  const ranked = sections
+    .filter(f => !results.includes(f))
+    .sort((a, b) => {
+      const aCount = fileEntries.get(a.fileName)?.usedBy?.length ?? 0;
+      const bCount = fileEntries.get(b.fileName)?.usedBy?.length ?? 0;
+      return bCount - aCount;
+    });
+
+  for (const s of ranked) {
+    if (results.length >= maxRefs) break;
+    results.push(s);
+  }
+
+  return results;
+}
+
+function flattenFileTree(tree: ShopifyFileTree | null): Map<string, ShopifyFileTreeEntry> {
+  const map = new Map<string, ShopifyFileTreeEntry>();
+  if (!tree) return map;
+  for (const dir of Object.values(tree.directories)) {
+    for (const entry of dir.files) {
+      map.set(entry.path, entry);
+    }
+  }
+  return map;
+}
+
+function findMainCssFile(allFiles: FileContext[]): FileContext | null {
+  const themeLayout = allFiles.find(f => f.fileName === 'layout/theme.liquid');
+  if (themeLayout?.content) {
+    const cssMatch = themeLayout.content.match(/\{\{\s*'([^']+\.css)'\s*\|\s*asset_url/);
+    if (cssMatch) {
+      const cssName = `assets/${cssMatch[1]}`;
+      const found = allFiles.find(f => f.fileName === cssName);
+      if (found) return found;
+    }
+  }
+
+  const candidates = ['assets/base.css', 'assets/theme.css', 'assets/main.css', 'assets/styles.css'];
+  for (const name of candidates) {
+    const found = allFiles.find(f => f.fileName === name);
+    if (found) return found;
+  }
+
+  let largest: FileContext | null = null;
+  let largestSize = 0;
+  for (const f of allFiles) {
+    if (f.fileName.startsWith('assets/') && f.fileName.endsWith('.css')) {
+      const size = f.content?.length ?? 0;
+      if (size > largestSize) {
+        largest = f;
+        largestSize = size;
+      }
+    }
+  }
+  return largest;
+}
+
+function findSnippetConsumers(
+  snippetPath: string,
+  allFiles: FileContext[],
+  maxConsumers: number = 3,
+): FileContext[] {
+  const snippetName = snippetPath.replace(/^snippets\//, '').replace(/\.liquid$/, '');
+  const renderRe = new RegExp(`\\{%[-\\s]*(?:render|include)\\s+'${snippetName}'`, 'i');
+  const consumers: FileContext[] = [];
+  for (const f of allFiles) {
+    if (consumers.length >= maxConsumers) break;
+    if (!f.content || !f.fileName.startsWith('sections/')) continue;
+    if (renderRe.test(f.content)) {
+      consumers.push(f);
+    }
+  }
+  return consumers;
+}
+
 type ExecutionPhase = 'resolveIntent' | 'buildPatch' | 'applyPatch' | 'verify' | 'complete';
+
+// ── Parallel execution helpers ──────────────────────────────────────────────
+
+type ToolEndEvent = Extract<ToolStreamEvent, { type: 'tool_end' }>;
+
+interface ParallelGroup {
+  parallel: ToolEndEvent[];
+  sequential: ToolEndEvent[];
+}
+
+/**
+ * Temporary safety gate: virtual worktree isolation is not yet wired into tool
+ * execution, so parallel server-tool writes can race on shared state.
+ */
+const ENABLE_UNISOLATED_PARALLEL_SERVER_TOOLS = false;
+
+/**
+ * Partition pending server-tool calls into two buckets:
+ *   • parallel  – tools whose declared target files don't overlap (safe to run concurrently)
+ *   • sequential – tools with file conflicts or no declared files (run one-at-a-time)
+ */
+function groupByFileOwnership(tools: ToolEndEvent[]): ParallelGroup {
+  if (!ENABLE_UNISOLATED_PARALLEL_SERVER_TOOLS) {
+    return { parallel: [], sequential: tools };
+  }
+  const parallel: ToolEndEvent[] = [];
+  const sequential: ToolEndEvent[] = [];
+  const claimedFiles = new Set<string>();
+
+  for (const tool of tools) {
+    const declaredFiles = Array.isArray(tool.input?.files)
+      ? (tool.input.files as string[])
+      : [];
+
+    if (declaredFiles.length === 0) {
+      sequential.push(tool);
+      continue;
+    }
+
+    const hasConflict = declaredFiles.some(f => claimedFiles.has(f));
+
+    if (hasConflict) {
+      sequential.push(tool);
+    } else {
+      parallel.push(tool);
+      declaredFiles.forEach(f => claimedFiles.add(f));
+    }
+  }
+
+  return { parallel, sequential };
+}
 
 // ── Main entry point ────────────────────────────────────────────────────────
 
@@ -767,11 +1021,12 @@ export async function streamV2(
     }
 
     // ── Build file context ──────────────────────────────────────────────
-    if (!options.isReferentialCodePrompt && shouldRequirePlanModeFirst({
+    if (shouldRequirePlanModeFirst({
       intentMode,
       tier,
       userRequest,
       recentMessages: options.recentMessages,
+      isReferentialCodePrompt: options.isReferentialCodePrompt,
     })) {
       const policyMessage = buildPlanModeRequiredMessage(tier);
       onProgress?.({
@@ -803,19 +1058,155 @@ export async function streamV2(
     // ── Build file context ──────────────────────────────────────────────
     const { preloaded, allFiles, manifest } = await buildV2Context(projectId, files, userRequest, options, tier);
 
+    // ── Canonical file resolution map ────────────────────────────────
+    // Normalizes all file references (fileId, fileName, path, basename) to
+    // a single FileContext. Eliminates all ad-hoc fuzzy matching.
+    const fileMap = new Map<string, FileContext>();
+    for (const f of allFiles) {
+      if (f.fileId) fileMap.set(f.fileId, f);
+      if (f.fileName) fileMap.set(f.fileName, f);
+      if (f.path) fileMap.set(f.path, f);
+      // basename: "snippets/hero.liquid" → "hero.liquid"
+      const basename = (f.path ?? f.fileName).split('/').pop();
+      if (basename) fileMap.set(basename, f);
+    }
+    function resolveFile(ref: string): FileContext | undefined {
+      return fileMap.get(ref)
+        ?? fileMap.get(ref.replace(/^\//, ''))
+        ?? Array.from(fileMap.values()).find(f =>
+          f.fileName?.endsWith(`/${ref}`) || f.path?.endsWith(`/${ref}`)
+        );
+    }
+
     // Format pre-loaded files for the user message
     const fileContents = preloaded
       .filter(f => f.content && !f.content.startsWith('['))
-      .map(f => `### ${f.fileName}\n\`\`\`${f.fileType}\n${f.content}\n\`\`\``)
+      .map(f => {
+        let content = f.content;
+        // Auto-strip schemas from section files to reduce context size
+        if (isSectionFile(f.fileName || f.path || '')) {
+          content = contentWithSchemaSummary(content);
+        }
+        return `### ${f.fileName}\n\`\`\`${f.fileType}\n${content}\n\`\`\``;
+      })
       .join('\n\n');
 
-    // ── Build system prompt (base + mode overlay) ─────────────────────
-    let systemPrompt = V2_PM_SYSTEM_PROMPT;
+    // ── Resolve model (used for overlay + provider selection) ───────────
+    const actionForModel: AIAction =
+      intentMode === 'ask' ? 'ask' : intentMode === 'debug' ? 'debug' : 'generate';
+    const model = resolveModel({
+      action: actionForModel,
+      forcedModel: options.forcedModel,
+      userOverride: options.model,
+      agentRole: 'project_manager',
+      tier,
+    });
+
+    // ── Build system prompt (base + knowledge modules + mode overlay) ──
+    let systemPrompt: string;
+    let knowledgeModuleIds: string[] = [];
+    try {
+      const { SLIM_PM_SYSTEM_PROMPT } = await import('@/lib/agents/prompts/v2-pm-prompt');
+      const { matchKnowledgeModules } = await import('@/lib/agents/knowledge/module-matcher');
+
+      let projectDir: string | undefined;
+      let disabledSkillIds: Set<string> = new Set();
+      let marketplaceModules: import('@/lib/agents/knowledge/module-matcher').KnowledgeModule[] = [];
+      try {
+        const { loadInstalledMarketplaceSkills } = await import('@/lib/agents/knowledge/marketplace-loader');
+        const { resolveProjectSlug, getLocalThemePath } = await import('@/lib/sync/disk-sync');
+        const { getDisabledSkillIds } = await import('@/lib/agents/knowledge/skill-settings');
+        const { createServiceClient } = await import('@/lib/supabase/admin');
+        const [slug, disabled, marketplace] = await Promise.all([
+          resolveProjectSlug(projectId).catch(() => null),
+          getDisabledSkillIds(projectId).catch(() => new Set<string>()),
+          loadInstalledMarketplaceSkills(projectId, createServiceClient()).catch(() => []),
+        ]);
+        projectDir = slug ? getLocalThemePath(slug) : undefined;
+        disabledSkillIds = disabled;
+        marketplaceModules = marketplace;
+      } catch {
+        // Marketplace/disk features unavailable — continue with built-in modules only
+      }
+
+      const modules = matchKnowledgeModules(userRequest, 2500, projectDir, disabledSkillIds, marketplaceModules);
+      knowledgeModuleIds = modules.map(m => m.id);
+      const moduleContent = modules.map(m => m.content).join('\n\n');
+      systemPrompt = moduleContent ? `${SLIM_PM_SYSTEM_PROMPT}\n\n${moduleContent}` : SLIM_PM_SYSTEM_PROMPT;
+      console.log(`[KM] Loaded modules: [${knowledgeModuleIds.join(', ')}], prompt tokens: ${estimateTokens(systemPrompt)}`);
+    } catch (promptErr) {
+      console.error('[KM] Failed to load knowledge modules, falling back to base prompt:', promptErr);
+      systemPrompt = V2_PM_SYSTEM_PROMPT;
+    }
+    const modelOverlay = getModelOverlay(model);
+    if (modelOverlay) {
+      systemPrompt += '\n' + modelOverlay;
+    }
     if (intentMode === 'code') systemPrompt += '\n\n' + V2_CODE_OVERLAY;
     else if (intentMode === 'plan') systemPrompt += '\n\n' + V2_PLAN_OVERLAY;
     else if (intentMode === 'debug') systemPrompt += '\n\n' + V2_DEBUG_OVERLAY;
     else if (intentMode === 'ask') systemPrompt += '\n\n' + V2_ASK_OVERLAY;
     systemPrompt += '\n\n' + buildMaximumEffortPolicyMessage();
+
+    // â”€â”€ Style-aware context assembly (Phases 1.1, 1.2, 2.2, 2.3) â”€â”€â”€â”€
+
+    // Phase 5: Unified style profile (merges design tokens + code style + patterns + memory)
+    let styleProfileContent = '';
+    let styleProfileStats = { tokenCount: 0, styleRuleCount: 0, patternCount: 0, memoryCount: 0, conflictResolutions: 0 };
+    try {
+      const profile = await buildUnifiedStyleProfile(projectId, userId, files);
+      styleProfileContent = profile.content;
+      styleProfileStats = profile.stats;
+    } catch { /* never blocks execution */ }
+
+    if (styleProfileContent) {
+      systemPrompt += '\n\n' + styleProfileContent;
+    }
+
+    // Extended pattern detection (run once per 5min, fire-and-forget)
+    try {
+      const patternLearner = new PatternLearning();
+      patternLearner.detectExtendedPatterns(projectId, userId, files).catch(() => {});
+    } catch { /* never blocks */ }
+
+    // Legacy designContext alias for downstream consumers
+    const designContext = styleProfileContent;
+
+    // Phase 1.2: Reference section injection
+    let fileTreeData: ShopifyFileTree | null = null;
+    try {
+      fileTreeData = await getFileTree(projectId);
+    } catch { /* best-effort */ }
+
+    const refSections = selectReferenceSections(
+      userRequest,
+      options.activeFilePath,
+      allFiles,
+      fileTreeData,
+    );
+
+    // Phase 2.2: CSS custom property preloading
+    const cssRelevant =
+      options.activeFilePath?.endsWith('.css') ||
+      /\b(css|style|color|font|spacing|theme)\b/i.test(userRequest);
+    let preloadedCssFile: FileContext | null = null;
+    if (cssRelevant) {
+      preloadedCssFile = findMainCssFile(allFiles);
+    }
+
+    // Phase 2.3: Reverse dependency context for snippets
+    let snippetConsumers: FileContext[] = [];
+    if (options.activeFilePath?.startsWith('snippets/')) {
+      snippetConsumers = findSnippetConsumers(options.activeFilePath, allFiles);
+    }
+
+    // Phase 1.2 cont: Add reference section guidance to system prompt
+    if (refSections.length > 0) {
+      systemPrompt +=
+        '\n\nMatch the design patterns, CSS class names, schema structure, ' +
+        'and color scheme handling from the reference sections below.';
+    }
+
 
     // ── Build initial messages ────────────────────────────────────────
     const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
@@ -824,8 +1215,13 @@ export async function streamV2(
     }
     const messages: AIMessage[] = [systemMsg];
 
-    // Conversation history (alternating user/assistant)
-    if (options.recentMessages?.length) {
+    // Conversation history — prefer structured history with tool metadata
+    if (options.recentHistory?.length) {
+      for (const histMsg of options.recentHistory) {
+        messages.push(histMsg);
+      }
+    } else if (options.recentMessages?.length) {
+      // Legacy fallback: alternating user/assistant from flat strings
       for (let i = 0; i < options.recentMessages.length; i++) {
         const role = i % 2 === 0 ? 'user' : 'assistant';
         messages.push({
@@ -833,9 +1229,10 @@ export async function streamV2(
           content: options.recentMessages[i],
         });
       }
-      // 4th cache breakpoint: mark last history message for caching
-      // TTL must be monotonically non-increasing: tools (1h) -> system (1h) -> history (1h) -> files (1h)
-      if (AI_FEATURES.promptCaching && messages.length > 1) {
+    }
+    if (messages.length > 1) {
+      // Cache breakpoint on last history message
+      if (AI_FEATURES.promptCaching) {
         const lastHistoryMsg = messages[messages.length - 1];
         lastHistoryMsg.cacheControl = { type: 'ephemeral', ttl: AI_FEATURES.promptCacheTtl };
       }
@@ -845,7 +1242,6 @@ export async function streamV2(
     const userMessageParts = [
       userRequest,
       '',
-      ...(options.memoryContext ? [options.memoryContext, ''] : []),
       ...(options.domContext ? [options.domContext, ''] : []),
       ...(options.diagnosticContext ? [`## DIAGNOSTICS:\n${options.diagnosticContext}`, ''] : []),
       '## PRE-LOADED FILES:',
@@ -865,16 +1261,6 @@ export async function streamV2(
     const hasPreview = !!options.domContext;
     const tools: ToolDefinition[] = selectV2Tools(intentMode, hasPreview, AI_FEATURES.programmaticToolCalling);
 
-    // ── Resolve model (tier-aware) ──────────────────────────────────
-    const actionForModel: AIAction =
-      intentMode === 'ask' ? 'ask' : intentMode === 'debug' ? 'debug' : 'generate';
-    const model = resolveModel({
-      action: actionForModel,
-      forcedModel: options.forcedModel,
-      userOverride: options.model,
-      agentRole: 'project_manager',
-      tier,
-    });
     const providerName = getProviderForModel(model);
     const provider = getAIProvider(providerName as Parameters<typeof getAIProvider>[0]);
 
@@ -882,12 +1268,12 @@ export async function streamV2(
 
     // ── Iteration state ───────────────────────────────────────────────
     let MAX_ITERATIONS = ITERATION_LIMITS[intentMode] ?? 10;
-    if (tier === 'TRIVIAL') MAX_ITERATIONS = Math.min(MAX_ITERATIONS, 3);
+    if (tier === 'TRIVIAL') MAX_ITERATIONS = Math.min(MAX_ITERATIONS, 6);
 
     // Phase 4: Fast Edit Path â€” bypass exploration for simple pre-loaded edits
     const fastEdit = isFastEditEligible(intentMode, tier, userRequest, preloaded);
     if (fastEdit) {
-      MAX_ITERATIONS = tier === 'TRIVIAL' ? 1 : 2;
+      MAX_ITERATIONS = tier === 'TRIVIAL' ? 4 : 6;
       systemPrompt += FAST_EDIT_SYSTEM_SUFFIX;
       systemMsg.content = systemPrompt; // Update cached message (strings are immutable)
       console.log('[V2] Fast edit path activated (MAX_ITERATIONS=2)');
@@ -926,12 +1312,6 @@ export async function streamV2(
     let executionPhase: ExecutionPhase = 'resolveIntent';
     let replayAppliedCount = 0;
     let replaySource: string | undefined;
-    const preEditLookupBudget = referentialCodePrompt
-      ? REFERENTIAL_PRE_EDIT_LOOKUP_BUDGET
-      : PRE_EDIT_LOOKUP_BUDGET;
-    const preEditBlockThreshold = referentialCodePrompt
-      ? REFERENTIAL_PRE_EDIT_BLOCK_THRESHOLD
-      : PRE_EDIT_BLOCK_THRESHOLD;
     let needsClarification = false;
     let hasStructuredClarification = false;
     let totalInputTokens = 0;
@@ -948,15 +1328,17 @@ export async function streamV2(
     let contextVersion = 0;
     const lookupCallVersion = new Map<string, number>();
     const lookupResultCache = new Map<string, { version: number; content: string; is_error?: boolean }>();
-    // Stricter enact bias in code mode: before first edit, allow only one lookup pass.
+    // Telemetry: track on-demand file reads and time-to-first-token
+    let filesReadOnDemand = 0;
+    let firstTokenMs = 0;
     let hasAttemptedEdit = false;
-    let preEditLookupCount = 0;
-    let preEditLookupBlockedCount = 0;
-    let forceNoLookupUntilEdit = false;
-    let enactEnforcementCount = 0;
-    let preEditExecutionOnlyIterations = 0;
+    let totalToolCalls = 0;
     let postEditNoChangeIterations = 0;
+    let readOnlyIterationCount = 0;
     let failedMutationCount = 0;
+    let debugFixAttemptCount = 0;
+    const proposeOnlyFiles = new Set<string>();
+    const toolOutputCache = new Map<string, string>();
     const invalidateProjectGraphs = () => {
       dependencyGraphCache.invalidateProject(projectId).catch(() => {});
       symbolGraphCache.invalidateProject(projectId).catch(() => {});
@@ -1078,6 +1460,7 @@ export async function streamV2(
       projectId,
       userId,
       loadContent: options.loadContent,
+      sessionId: options.sessionId,
     };
 
     // V2 tool executor context (for run_specialist, run_review)
@@ -1155,8 +1538,9 @@ export async function streamV2(
       },
       model: options.model,
       dependencyContext: undefined,
-      designContext: undefined,
+      designContext: designContext || undefined,
       memoryContext: options.memoryContext,
+      loadContent: options.loadContent,
       onProgress,
       specialistCallCount: { value: 0 },
       tier,
@@ -1169,6 +1553,103 @@ export async function streamV2(
       preloadedMap.set(f.fileName, f);
       if (f.path) preloadedMap.set(f.path, f);
     }
+
+    // â”€â”€ Inject style-aware reference context into preloadedMap â”€â”€â”€â”€â”€â”€
+
+    // Phase 1.2: Add reference sections to preloaded context
+    if (refSections.length > 0 && options.loadContent) {
+      const refIds = refSections
+        .filter(f => !f.content || f.content.startsWith('['))
+        .map(f => f.fileId);
+      if (refIds.length > 0) {
+        try {
+          const hydrated = await options.loadContent(refIds);
+          const hydratedMap = new Map(hydrated.map((f: FileContext) => [f.fileId, f]));
+          for (const ref of refSections) {
+            const h = hydratedMap.get(ref.fileId) ?? ref;
+            if (h.content && !h.content.startsWith('[')) {
+              preloadedMap.set(h.fileName, h);
+              if (h.path) preloadedMap.set(h.path, h);
+              readFiles.add(h.fileName);
+            }
+          }
+        } catch { /* best-effort hydration */ }
+      } else {
+        for (const ref of refSections) {
+          if (ref.content && !ref.content.startsWith('[')) {
+            preloadedMap.set(ref.fileName, ref);
+            if (ref.path) preloadedMap.set(ref.path, ref);
+            readFiles.add(ref.fileName);
+          }
+        }
+      }
+    }
+
+    // Phase 2.2: Add CSS file to preloaded context
+    if (preloadedCssFile && !preloadedMap.has(preloadedCssFile.fileName)) {
+      let cssContent = preloadedCssFile.content;
+      if (!cssContent || cssContent.startsWith('[')) {
+        if (options.loadContent) {
+          try {
+            const [hydrated] = await options.loadContent([preloadedCssFile.fileId]);
+            if (hydrated?.content) cssContent = hydrated.content;
+          } catch { /* best-effort */ }
+        }
+      }
+      if (cssContent && !cssContent.startsWith('[')) {
+        const cappedContent = cssContent.length > 10_000
+          ? cssContent.slice(0, 10_000) + '\n/* ... truncated at 10K chars ... */'
+          : cssContent;
+        const cssCopy = { ...preloadedCssFile, content: cappedContent };
+        preloadedMap.set(cssCopy.fileName, cssCopy);
+        if (cssCopy.path) preloadedMap.set(cssCopy.path, cssCopy);
+        readFiles.add(cssCopy.fileName);
+      }
+    }
+
+    // Phase 2.3: Add snippet consumer sections to preloaded context
+    if (snippetConsumers.length > 0 && options.loadContent) {
+      const consumerIds = snippetConsumers
+        .filter(f => !f.content || f.content.startsWith('['))
+        .map(f => f.fileId);
+      if (consumerIds.length > 0) {
+        try {
+          const hydrated = await options.loadContent(consumerIds);
+          const hydratedMap = new Map(hydrated.map((f: FileContext) => [f.fileId, f]));
+          for (const consumer of snippetConsumers) {
+            const h = hydratedMap.get(consumer.fileId) ?? consumer;
+            if (h.content && !h.content.startsWith('[')) {
+              preloadedMap.set(h.fileName, h);
+              if (h.path) preloadedMap.set(h.path, h);
+              readFiles.add(h.fileName);
+            }
+          }
+        } catch { /* best-effort hydration */ }
+      } else {
+        for (const consumer of snippetConsumers) {
+          if (consumer.content && !consumer.content.startsWith('[')) {
+            preloadedMap.set(consumer.fileName, consumer);
+            if (consumer.path) preloadedMap.set(consumer.path, consumer);
+            readFiles.add(consumer.fileName);
+          }
+        }
+      }
+    }
+
+    // Phase 1.3: Telemetry â€” style context loaded
+    onProgress?.({
+      type: 'thinking',
+      phase: 'analyzing',
+      label: 'Style profile loaded',
+      metadata: {
+        styleProfileRules: styleProfileStats.tokenCount + styleProfileStats.styleRuleCount + styleProfileStats.patternCount + styleProfileStats.memoryCount,
+        designTokenCount: styleProfileStats.tokenCount,
+        patternConflictResolutions: styleProfileStats.conflictResolutions,
+        referenceSectionsLoaded: refSections.length,
+        cssPreloaded: !!preloadedCssFile,
+        snippetConsumers: snippetConsumers.length,
+      },
+    });
 
     // ── Pre-loop referential short-circuit ──────────────────────────
     let skippedLoop = false;
@@ -1185,7 +1666,25 @@ export async function streamV2(
         skippedLoop = true;
         onProgress?.({ type: 'thinking', phase: 'executing',
           label: `Replayed ${preReplay.applied} artifact(s) directly — skipped exploration` });
+      } else if (preReplay.applied === 0) {
+        const unresolvedPaths = referentialArtifacts
+          .map(a => a.filePath ?? 'unknown')
+          .join(', ');
+        messages.push({
+          role: 'user',
+          content: `[SYSTEM] Referential artifacts could not be applied automatically (files: ${unresolvedPaths}). The proposed changes from the previous turn are included below for reference — apply them manually using search_replace or propose_code_edit.\n\n${referentialArtifacts.map(a => `File: ${a.filePath}\n\`\`\`\n${a.newContent?.slice(0, 3000) ?? '[no content]'}\n\`\`\``).join('\n\n')}`,
+        });
       }
+    }
+
+    // ── Validation baseline: capture pre-edit error counts ──────────
+    let baselineErrorCount = 0;
+    if (intentMode === 'code' || intentMode === 'debug') {
+      try {
+        const baselineFiles = allFiles.map((f) => ({ path: f.path ?? f.fileName, content: f.content }));
+        const baseline = runThemeCheck(baselineFiles, undefined, { bypassCache: true });
+        baselineErrorCount = baseline.errorCount;
+      } catch { /* theme check unavailable */ }
     }
 
     // ── Agent loop ────────────────────────────────────────────────────
@@ -1197,6 +1696,25 @@ export async function streamV2(
         break;
       }
 
+      // Mid-execution context summarization: compress oldest messages when approaching 80% of context limit
+      const contextTokens = messages.reduce(
+        (sum, m) => sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)),
+        0,
+      );
+      const contextLimit = model.includes('claude') ? 180_000 : model.includes('gpt') ? 120_000 : 100_000;
+      if (contextTokens > contextLimit * 0.8) {
+        const compressible = messages.filter((m, i) => i > 0 && m.role !== 'system');
+        if (compressible.length > 4) {
+          const oldest = compressible.slice(0, Math.floor(compressible.length / 2));
+          for (const msg of oldest) {
+            if (typeof msg.content === 'string' && msg.content.length > 500) {
+              msg.content = msg.content.slice(0, 200) + '\n[... compressed for context budget]';
+            }
+          }
+          console.log(`[V2] Context budget: ${contextTokens}/${contextLimit} tokens (${Math.round(contextTokens / contextLimit * 100)}%) — compressed ${oldest.length} old messages`);
+        }
+      }
+
       // Apply token budget before each iteration
       const budgeted = enforceRequestBudget(messages);
 
@@ -1206,6 +1724,7 @@ export async function streamV2(
 
       // Stream with tools — gate Anthropic-specific features by provider
       const isAnthropic = providerName === 'anthropic';
+
       const completionOpts: Record<string, unknown> = {
         model,
         maxTokens: intentMode === 'ask' ? 2048 : 4096,
@@ -1234,25 +1753,26 @@ export async function streamV2(
 
       let streamResult: ToolStreamResult;
 
-      try {
-        streamResult = await provider.streamWithTools(
-          budgeted.messages,
-          tools,
-          completionOpts,
-        );
-      } catch (err) {
-        console.warn('[V2] Stream creation failed, falling back to batch:', err);
-        onProgress?.({
-          type: 'thinking',
-          phase: 'analyzing',
-          label: 'Stream unavailable — using batch mode',
-        });
-        const batchResult = await provider.completeWithTools(
-          budgeted.messages,
-          tools,
-          completionOpts,
-        );
+      if (isV2StreamBroken()) {
+        const batchResult = await provider.completeWithTools(budgeted.messages, tools, completionOpts);
         streamResult = synthesizeBatchAsStream(batchResult);
+      } else {
+        let raced: ToolStreamResult | null = null;
+        try {
+          const rawStream = await provider.streamWithTools(budgeted.messages, tools, completionOpts);
+          raced = await raceFirstByteV2(rawStream, STREAM_FIRST_BYTE_TIMEOUT_MS);
+        } catch (err) {
+          console.warn('[V2] Stream creation failed:', err);
+          raced = null;
+        }
+        if (raced) {
+          streamResult = raced;
+        } else {
+          markV2StreamBroken();
+          onProgress?.({ type: 'thinking', phase: 'analyzing', label: 'Stream unavailable — using batch mode' });
+          const batchResult = await provider.completeWithTools(budgeted.messages, tools, completionOpts);
+          streamResult = synthesizeBatchAsStream(batchResult);
+        }
       }
 
       // Cache tool results during streaming (keyed by tool_use_id)
@@ -1278,6 +1798,7 @@ export async function streamV2(
 
           // ── Text streaming ──────────────────────────────────────────
           if (event.type === 'text_delta') {
+            if (firstTokenMs === 0) firstTokenMs = Date.now() - startTime;
             fullText += event.text;
             onContentChunk?.(event.text);
           }
@@ -1322,12 +1843,16 @@ export async function streamV2(
               }
 
               // Accumulate code changes + update in-memory state
+              const changesBeforeTool = accumulatedChanges.length;
               const syntheticMsg = handleClientTool(
                 event,
                 files,
                 preloadedMap,
                 accumulatedChanges,
+                resolveFile,
               );
+              const wasNetZero = MUTATING_CLIENT_TOOL_NAMES.has(event.name) &&
+                accumulatedChanges.length === changesBeforeTool;
               if (MUTATING_CLIENT_TOOL_NAMES.has(event.name)) {
                 hasAttemptedEdit = true;
                 mutatingAttemptedThisIteration = true;
@@ -1335,7 +1860,16 @@ export async function streamV2(
                 contextVersion += 1;
                 invalidateProjectGraphs();
               }
+              if (wasNetZero) {
+                onToolEvent?.({
+                  type: 'tool_result',
+                  name: event.name,
+                  id: event.id,
+                  netZero: true,
+                });
+              }
               iterToolResults.set(event.id, { content: syntheticMsg });
+              totalToolCalls += 1;
             }
           }
 
@@ -1365,49 +1899,46 @@ export async function streamV2(
         reader.releaseLock();
       }
 
-      // ── Execute pending server tools in parallel ──────────────────
+      // ── Execute pending server tools (with parallelism) ─────────────
       if (pendingServerTools.length > 0) {
+        const maxParallel = options.maxParallelSpecialists ?? 3;
+        const { parallel, sequential } = groupByFileOwnership(pendingServerTools);
+
         if (pendingServerTools.length > 1) {
-          console.log(`[V2] Executing ${pendingServerTools.length} server tools in parallel`);
+          console.log(
+            `[V2] Executing ${pendingServerTools.length} server tools ` +
+            `(${parallel.length} parallel, ${sequential.length} sequential)`,
+          );
         }
 
-        for (const evt of pendingServerTools) {
+        // Virtual worktrees for parallel agent isolation (F1)
+        const worktreeIds: string[] = [];
+        if (parallel.length > 0) {
+          const baseFileMap = new Map<string, string>(
+            allFiles.map((f) => [f.path ?? f.fileName, f.content]),
+          );
+          for (const evt of parallel) {
+            const wt = createWorktree(evt.id, baseFileMap);
+            worktreeIds.push(wt.id);
+            // TODO: Pass wt.id to tool executor via V2ToolExecutorContext so read_file/write_file
+            // use the virtual worktree instead of real files. Until then, specialists write to
+            // shared state and worktree merge is a no-op for conflict detection only.
+          }
+          const summary = getWorktreeSummary();
+          onProgress?.({
+            type: 'worktree_status',
+            worktrees: summary.worktrees,
+            conflicts: summary.conflicts,
+          });
+        }
+
+        // Shared closure: execute one server tool with all side-effects preserved.
+        const executeOneServerTool = async (evt: ToolEndEvent) => {
             const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
-            let toolResult: ToolResult;
+            let toolResult!: ToolResult;
             const lookupSig = LOOKUP_TOOL_NAMES.has(evt.name)
               ? buildLookupSignature(evt.name, evt.input)
               : null;
-
-            const shouldGatePreEditLookup =
-              intentMode === 'code' &&
-              !hasAttemptedEdit &&
-              !!lookupSig;
-
-            if (shouldGatePreEditLookup && (forceNoLookupUntilEdit || preEditLookupCount >= preEditLookupBudget)) {
-              toolResult = {
-                tool_use_id: evt.id,
-                content:
-                  `Skipped extra pre-edit lookup (${evt.name}). ` +
-                  `Context is already sufficient to start editing. ` +
-                  `Proceed with search_replace/propose_code_edit, or call ask_clarification if truly blocked.`,
-              };
-              iterToolResults.set(evt.id, { content: toolResult.content, is_error: false });
-              onProgress?.({
-                type: 'thinking',
-                phase: 'analyzing',
-                label: `Enact bias — blocked extra ${evt.name} before first edit`,
-              });
-              onToolEvent?.({
-                type: 'tool_call',
-                name: evt.name,
-                id: evt.id,
-                input: evt.input,
-                result: toolResult.content,
-                isError: false,
-              });
-              preEditLookupBlockedCount += 1;
-              continue;
-            }
 
             if (lookupSig && lookupCallVersion.get(lookupSig) === contextVersion) {
               const cachedLookup = lookupResultCache.get(lookupSig);
@@ -1431,7 +1962,7 @@ export async function streamV2(
                   result: toolResult.content,
                   isError: toolResult.is_error,
                 });
-                continue;
+                return;
               }
               toolResult = {
                 tool_use_id: evt.id,
@@ -1451,26 +1982,62 @@ export async function streamV2(
                 result: toolResult.content,
                 isError: false,
               });
-              continue;
+              return;
+            }
+
+            // Short-circuit read_file for cached tool outputs (B3: large result recovery)
+            const readFileId =
+              evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
+            if (readFileId && toolOutputCache.has(readFileId)) {
+              toolResult = { tool_use_id: evt.id, content: toolOutputCache.get(readFileId)! };
+              iterToolResults.set(evt.id, { content: toolResult.content, is_error: false });
+              onToolEvent?.({
+                type: 'tool_call',
+                name: evt.name,
+                id: evt.id,
+                input: evt.input,
+                result: toolResult.content.slice(0, 500) + (toolResult.content.length > 500 ? '...' : ''),
+                isError: false,
+              });
+              // Don't count: zero-cost cache hit (limit is for actual execution cost)
+              return;
             }
 
             // Short-circuit read_file for pre-loaded files
-            const readFileId =
-              evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
             const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
             let wasPreloadedReadHit = false;
 
             if (preloadedFile) {
               wasPreloadedReadHit = true;
+              onToolEvent?.({
+                type: 'tool_progress',
+                name: 'read_file',
+                id: evt.id,
+                toolCallId: evt.id,
+                progress: { phase: 'reading', detail: preloadedFile.fileName },
+              });
+              let content = preloadedFile.content;
+              const view = String(evt.input?.view ?? 'full');
+              if (view !== 'full' && isSectionFile(preloadedFile.fileName || preloadedFile.path || '')) {
+                if (view === 'markup') content = contentMarkupOnly(content);
+                else if (view === 'schema') content = contentSchemaOnly(content);
+              }
               toolResult = {
                 tool_use_id: evt.id,
-                content: preloadedFile.content,
+                content,
               };
               console.log(
                 `[V2] read_file short-circuited: ${preloadedFile.fileName} (pre-loaded)`,
               );
             } else if (V2_ONLY_TOOLS.has(evt.name)) {
               // V2-specific tools: run_specialist, run_review
+              onToolEvent?.({
+                type: 'tool_progress',
+                name: evt.name,
+                id: evt.id,
+                toolCallId: evt.id,
+                progress: { phase: 'executing', detail: `Running ${evt.name}...` },
+              });
               try {
                 toolResult = await executeV2Tool(toolCall, v2ToolCtx);
                 if (evt.name === 'run_review' && !toolResult.is_error) {
@@ -1483,7 +2050,6 @@ export async function streamV2(
                 if (evt.name === 'run_specialist' && !toolResult.is_error) {
                   hasAttemptedEdit = true;
                   executionPhase = 'applyPatch';
-                  forceNoLookupUntilEdit = false;
                   contextVersion += 1;
                   invalidateProjectGraphs();
                 }
@@ -1496,25 +2062,68 @@ export async function streamV2(
               }
             } else {
               // Standard server tools
-              try {
-                toolResult = await executeToolCall(toolCall, toolCtx);
-              } catch (err) {
-                toolResult = {
-                  tool_use_id: evt.id,
-                  content: `Tool execution failed: ${String(err)}`,
-                  is_error: true,
-                };
+              let intercepted = false;
+              if (evt.name === 'search_replace') {
+                const targetPath = (evt.input?.filePath ?? evt.input?.file_path) as string | undefined;
+                if (targetPath && proposeOnlyFiles.has(targetPath)) {
+                  toolResult = {
+                    tool_use_id: evt.id,
+                    content: `search_replace is disabled for ${targetPath} after repeated failures. Use propose_code_edit instead — it uses a unified diff and does not require exact string matching.`,
+                    is_error: true,
+                  };
+                  intercepted = true;
+                }
+              }
+              if (!intercepted) {
+                const progressDetail = (() => {
+                  if (evt.name === 'read_file') {
+                    return { phase: 'reading', detail: String(evt.input?.fileId || evt.input?.path || evt.input?.file_path || '') };
+                  }
+                  if (evt.name === 'grep_content' || evt.name === 'search_files') {
+                    return { phase: 'searching', detail: String(evt.input?.pattern || evt.input?.query || '') };
+                  }
+                  if (evt.name === 'search_replace' || evt.name === 'create_file' || evt.name === 'write_file') {
+                    return { phase: 'writing', detail: String(evt.input?.filePath || evt.input?.path || evt.input?.file_path || '') };
+                  }
+                  return { phase: 'executing', detail: `Running ${evt.name}...` };
+                })();
+                onToolEvent?.({
+                  type: 'tool_progress',
+                  name: evt.name,
+                  id: evt.id,
+                  toolCallId: evt.id,
+                  progress: progressDetail,
+                });
+                try {
+                  toolResult = await executeToolCall(toolCall, toolCtx);
+                } catch (err) {
+                  toolResult = {
+                    tool_use_id: evt.id,
+                    content: `Tool execution failed: ${String(err)}`,
+                    is_error: true,
+                  };
+                }
               }
             }
 
-            // Track read files for context expansion
+            // Track read files for context expansion and cache full content
             if (evt.name === 'read_file' && !toolResult.is_error) {
+              if (!wasPreloadedReadHit) filesReadOnDemand++;
               const fileId = evt.input?.fileId as string;
               if (fileId) readFiles.add(fileId);
               const matchedFile = files.find(
-                f => f.fileId === fileId || f.fileName === fileId,
+                f => f.fileId === fileId || f.fileName === fileId ||
+                     f.fileName.endsWith(`/${fileId}`) ||
+                     (f.path && f.path.endsWith(`/${fileId}`)),
               );
-              if (matchedFile) readFiles.add(matchedFile.fileName);
+              if (matchedFile) {
+                readFiles.add(matchedFile.fileName);
+                if (!toolResult.content.startsWith('Lines ')) {
+                  matchedFile.content = toolResult.content;
+                  preloadedMap.set(matchedFile.fileName, matchedFile);
+                  if (matchedFile.path) preloadedMap.set(matchedFile.path, matchedFile);
+                }
+              }
             }
 
             // Track searched files for term mapping learning
@@ -1531,10 +2140,7 @@ export async function streamV2(
               }
             }
 
-            // Track failed mutation attempts so the loop can detect and break stalls.
-            // A search_replace / write_file / propose_code_edit call that returns an error
-            // still counts as an "attempted edit" for the purpose of escaping the pre-edit
-            // lookup loop — but we separately track failures to trigger corrective injection.
+            // Track failed mutation attempts to trigger corrective injection on repeated failures.
             if (
               (evt.name === 'search_replace' || evt.name === 'write_file' || evt.name === 'propose_code_edit') &&
               toolResult.is_error
@@ -1545,14 +2151,60 @@ export async function streamV2(
               mutatingAttemptedThisIteration = true;
               executionPhase = 'applyPatch';
               forceNoLookupUntilEdit = false;
+
+              const failedFilePath = evt.input?.filePath as string | undefined;
+              const failedReason: MutationFailure['reason'] =
+                toolResult.content.includes('not found in') ? 'old_text_not_found'
+                : toolResult.content.includes('File not found') ? 'file_not_found'
+                : toolResult.content.includes('valid') ? 'validation_error'
+                : 'unknown';
+              const prevAttemptCount: number = (lastMutationFailure?.filePath === failedFilePath)
+                ? (lastMutationFailure!.attemptCount + 1)
+                : 1;
+              const fileContent = failedFilePath
+                ? preloaded.find(f => f.fileName === failedFilePath || f.path === failedFilePath)?.content
+                : undefined;
+              lastMutationFailure = {
+                toolName: evt.name as MutationFailure['toolName'],
+                filePath: failedFilePath ?? 'unknown',
+                reason: failedReason,
+                attemptedOldText: (evt.input?.old_text as string) ?? undefined,
+                attemptCount: prevAttemptCount,
+                fileLineCount: fileContent ? fileContent.split('\n').length : undefined,
+              };
             }
 
-            // Truncate large results
-            const truncatedContent =
-              toolResult.content.length > MAX_TOOL_RESULT_CHARS
-                ? toolResult.content.slice(0, MAX_TOOL_RESULT_CHARS) +
-                  `\n\n... [truncated — showing ${MAX_TOOL_RESULT_CHARS} of ${toolResult.content.length} chars]`
-                : toolResult.content;
+            // Auto-lint: run check_lint on mutated files (infrastructure — not counted in totalToolCalls)
+            if (
+              (MUTATING_CLIENT_TOOL_NAMES.has(evt.name) || evt.name === 'search_replace' || evt.name === 'create_file') &&
+              !toolResult.is_error
+            ) {
+              const lintFilePath = (evt.input?.filePath ?? evt.input?.path ?? evt.input?.file_path) as string | undefined;
+              if (lintFilePath && typeof lintFilePath === 'string') {
+                try {
+                  const lintResult = await executeToolCall(
+                    { id: `auto-lint-${Date.now()}`, name: 'check_lint', input: { fileName: lintFilePath } },
+                    toolCtx,
+                  );
+                  if (lintResult.content && !lintResult.content.includes('No lint errors') && !lintResult.content.includes('no issues')) {
+                    messages.push({
+                      role: 'user',
+                      content: `SYSTEM: Lint results for ${lintFilePath}:\n${lintResult.content}`,
+                    } as AIMessage);
+                  }
+                } catch { /* lint unavailable, continue */ }
+              }
+            }
+
+            // Truncate large results — cache full content for read_file retrieval
+            let truncatedContent = toolResult.content;
+            if (toolResult.content.length > MAX_TOOL_RESULT_CHARS) {
+              const summary = toolResult.content.slice(0, 2000);
+              const fullLength = toolResult.content.length;
+              const outputId = `tool-output-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              toolOutputCache.set(outputId, toolResult.content);
+              truncatedContent = `${summary}\n\n... (${fullLength} chars total, showing first 2000. Full output available — use read_file with fileId "${outputId}" to see more.)`;
+            }
 
             iterToolResults.set(evt.id, {
               content: truncatedContent,
@@ -1565,11 +2217,6 @@ export async function streamV2(
                 content: truncatedContent,
                 is_error: toolResult.is_error,
               });
-              if (shouldGatePreEditLookup && !wasPreloadedReadHit) {
-                preEditLookupCount += 1;
-              }
-            } else if (!lookupSig) {
-              preEditLookupBlockedCount = 0;
             }
 
             onToolEvent?.({
@@ -1589,6 +2236,76 @@ export async function streamV2(
                 recoverable: failedMutationCount < 3,
               });
             }
+            // Don't count short-circuited read_file (pre-loaded); limit is for actual execution
+            if (!wasPreloadedReadHit) totalToolCalls += 1;
+        };
+
+        // Run non-conflicting tools in parallel, chunked to maxParallel
+        if (parallel.length > 0) {
+          for (let i = 0; i < parallel.length; i += maxParallel) {
+            const chunk = parallel.slice(i, i + maxParallel);
+            await Promise.all(chunk.map(executeOneServerTool));
+          }
+        }
+
+        // Run file-conflicting / no-file-declared tools sequentially
+        for (const evt of sequential) {
+          await executeOneServerTool(evt);
+        }
+
+        // Merge virtual worktrees and handle conflicts (F1)
+        if (worktreeIds.length > 0) {
+          const mergeResult = mergeMultipleWorktrees(worktreeIds);
+          onProgress?.({
+            type: 'worktree_status',
+            worktrees: [],
+            conflicts: mergeResult.conflicts.map((c) => ({ path: c.path })),
+          });
+          if (mergeResult.conflicts.length > 0) {
+            messages.push({
+              role: 'user',
+              content: `SYSTEM: File conflicts detected between parallel specialists:\n${mergeResult.conflicts.map((c) => `- ${c.path} modified by both specialists`).join('\n')}\nResolve these conflicts.`,
+            });
+          }
+        }
+
+        // Collect handoffs from parallel specialist results
+        if (parallel.length > 1) {
+          const handoffs: Array<{ specialistType: string; handoff: ReturnType<typeof parseHandoff> }> = [];
+          for (const evt of parallel) {
+            const result = iterToolResults.get(evt.id);
+            if (result && !result.is_error) {
+              const handoff = parseHandoff(result.content);
+              if (handoff) {
+                handoffs.push({
+                  specialistType: String(evt.input?.type ?? evt.name),
+                  handoff,
+                });
+              }
+            }
+          }
+          if (handoffs.length > 0) {
+            const summary = handoffs
+              .filter((h): h is typeof h & { handoff: NonNullable<typeof h.handoff> } => h.handoff != null)
+              .map(
+                (h) =>
+                  `${h.specialistType}: ${h.handoff.completed ? 'completed' : 'incomplete'}` +
+                  (h.handoff.filesTouched.length ? `, files: [${h.handoff.filesTouched.join(', ')}]` : '') +
+                  (h.handoff.concerns.length ? `, concerns: [${h.handoff.concerns.join('; ')}]` : '') +
+                  (h.handoff.findings.length ? `, findings: [${h.handoff.findings.join('; ')}]` : ''),
+              )
+              .join('\n');
+            messages.push({
+              role: 'user',
+              content: `SYSTEM: Parallel specialists completed:\n${summary}\n\nReview concerns and findings before proceeding.`,
+            });
+            onProgress?.({
+              type: 'thinking',
+              phase: 'reviewing',
+              label: `${handoffs.length} specialists completed in parallel`,
+              detail: summary,
+            });
+          }
         }
       }
 
@@ -1646,29 +2363,59 @@ export async function streamV2(
         preEditLookupBlockedCount = 0;
       }
 
-      // If search_replace / propose_code_edit keeps failing, inject a correction
-      // message pointing the model at the pre-loaded content so it can build an
-      // exact match instead of guessing at the text.
-      if (intentMode === 'code' && failedMutationCount >= 2) {
-        const fileHints = preloaded.slice(0, 3).map(f =>
-          `File: ${f.fileName}\n---\n${(f.content ?? '').slice(0, 400)}${(f.content ?? '').length > 400 ? '\n...[truncated]' : ''}`,
-        ).join('\n\n');
-        const failedMutMsg =
-          'SYSTEM CORRECTION: Your search_replace or propose_code_edit calls have failed ' +
-          `${failedMutationCount} times. The most likely cause is that old_text does not exactly ` +
-          'match the file (including whitespace, indentation, and line endings). ' +
-          'RECOMMENDED FIX: Call extract_region with the function name, CSS selector, or Liquid block ' +
-          'you want to change. It returns the exact line-numbered snippet to copy verbatim as old_text.\n\n' +
-          'Alternatively, here are the first ~400 chars of the pre-loaded target files:\n\n' +
-          fileHints + '\n\n' +
-          'Copy the exact text verbatim as old_text. Do NOT paraphrase or normalize whitespace.';
+      // If search_replace / propose_code_edit keeps failing, inject a targeted
+      // correction with copy-safe file region so the model can fix its old_text.
+      if (intentMode === 'code' && failedMutationCount >= 3 && lastMutationFailure) {
+        const failure = lastMutationFailure!;
+        const targetFile = preloaded.find(
+          f => f.fileName === failure.filePath || f.path === failure.filePath,
+        );
+        const fileContent = targetFile?.content ?? '';
+        const region = failure.attemptedOldText
+          ? extractTargetRegion(fileContent, failure.attemptedOldText)
+          : null;
+        const lineCount = failure.fileLineCount ?? fileContent.split('\n').length;
+        const fileSizeNote = lineCount > 500
+          ? `\nNOTE: This file is ${lineCount} lines. If using propose_code_edit, include ALL content.`
+          : '';
+
+        let failedMutMsg =
+          `SYSTEM CORRECTION: search_replace failed ${failure.attemptCount} times on ${failure.filePath}.\n\n` +
+          'The text you provided as old_text does not match the file.';
+
+        if (region) {
+          failedMutMsg +=
+            ' Below is the relevant region.\n\n' +
+            'COPY-SAFE SNIPPET (use this as old_text):\n---\n' + region.rawSnippet + '\n---\n\n' +
+            'CONTEXT (line numbers for reference only -- do NOT copy these):\n---\n' + region.contextSnippet + '\n---\n\n' +
+            'OPTION 1: Copy the exact text from the COPY-SAFE SNIPPET above as old_text.\n' +
+            'OPTION 2: Use propose_code_edit with the full updated file content instead.' +
+            fileSizeNote;
+        } else {
+          failedMutMsg +=
+            '\n\nSwitch to propose_code_edit with the full updated file content.' + fileSizeNote;
+        }
+
+        // Architectural questioning after repeated failures
+        if (debugFixAttemptCount >= 3) {
+          failedMutMsg +=
+            '\n\nQUESTION YOUR APPROACH:\n' +
+            '- Are you editing the right file? Could the change belong in a different file?\n' +
+            '- Is the file structure different from what you assumed? Re-read it.\n' +
+            '- Would a completely different strategy (e.g., create_file instead of search_replace) work better?\n' +
+            '- Could the issue be in a different layer (CSS vs Liquid vs JS)?';
+        }
+
         messages.push({ role: 'user', content: failedMutMsg });
         onProgress?.({
           type: 'thinking',
           phase: 'analyzing',
           label: `Failed mutation recovery (${failedMutationCount} failures)`,
         });
-        failedMutationCount = 0; // reset to avoid flooding
+        failedMutationCount = 0;
+        if (failure.filePath) {
+          proposeOnlyFiles.add(failure.filePath);
+        }
         if (enactEnforcementCount >= PRE_EDIT_ENFORCEMENT_ABORT_THRESHOLD) {
           needsClarification = true;
           const abortMsg =
@@ -1679,50 +2426,63 @@ export async function streamV2(
           break;
         }
         enactEnforcementCount += 1;
+        if (debugFixAttemptCount >= 5) {
+          needsClarification = true;
+          const escalateMsg =
+            'Stopping after 5 failed fix attempts. The current approach is not working. ' +
+            'Please review the file content manually or try a different strategy.';
+          fullText = fullText.trim() ? `${fullText}\n\n${escalateMsg}` : escalateMsg;
+          onContentChunk?.(`\n\n${escalateMsg}`);
+          onProgress?.({
+            type: 'thinking',
+            phase: 'analyzing',
+            label: 'Debug escalation: stopping after repeated failures',
+          });
+          break;
+        }
       }
 
       // ── Execute PTC (server_tool_use) tool calls in parallel ────
       if (pendingPTCTools.length > 0) {
         console.log(`[V2-PTC] Executing ${pendingPTCTools.length} programmatic tool call(s)`);
 
-        // Pre-claim budget slots synchronously before parallel execution to avoid
-        // a race condition where all concurrent PTC calls see the same pre-increment
-        // count and all pass the gate simultaneously.
-        const ptcBudgetDecisions = pendingPTCTools.map((evt) => {
-          const shouldGate =
-            intentMode === 'code' &&
-            !hasAttemptedEdit &&
-            PTC_PRE_EDIT_NON_MUTATING_TOOLS.has(evt.name);
-          if (!shouldGate) return { evt, blocked: false };
-          if (forceNoLookupUntilEdit || preEditLookupCount >= preEditLookupBudget) {
-            preEditLookupBlockedCount += 1;
-            return { evt, blocked: true };
-          }
-          preEditLookupCount += 1; // pre-claim slot synchronously
-          return { evt, blocked: false };
-        });
-
         await Promise.all(
-          ptcBudgetDecisions.map(async ({ evt, blocked }) => {
+          pendingPTCTools.map(async (evt) => {
             const toolCall: AIToolCall = { id: evt.id, name: evt.name, input: evt.input };
             let toolResult: ToolResult;
             try {
-              if (blocked) {
-                toolResult = {
-                  tool_use_id: evt.id,
-                  content:
-                    `Skipped extra pre-edit PTC tool (${evt.name}). ` +
-                    `Context is already sufficient to start editing. ` +
-                    `Proceed with search_replace/propose_code_edit/create_file, or ask_clarification if blocked.`,
-                };
-              } else {
-                const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
-                const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
-                if (preloadedFile) {
-                  toolResult = { tool_use_id: evt.id, content: preloadedFile.content };
-                } else {
-                  toolResult = await executeToolCall(toolCall, toolCtx);
+              const readFileId = evt.name === 'read_file' ? (evt.input?.fileId as string) : null;
+              const preloadedFile = readFileId ? preloadedMap.get(readFileId) : null;
+              if (preloadedFile) {
+                onToolEvent?.({
+                  type: 'tool_progress',
+                  name: 'read_file',
+                  id: evt.id,
+                  toolCallId: evt.id,
+                  progress: { phase: 'reading', detail: preloadedFile.fileName },
+                });
+                let content = preloadedFile.content;
+                const view = String(evt.input?.view ?? 'full');
+                if (view !== 'full' && isSectionFile(preloadedFile.fileName || preloadedFile.path || '')) {
+                  if (view === 'markup') content = contentMarkupOnly(content);
+                  else if (view === 'schema') content = contentSchemaOnly(content);
                 }
+                toolResult = { tool_use_id: evt.id, content };
+              } else {
+                const ptcProgressDetail = (() => {
+                  if (evt.name === 'read_file') return { phase: 'reading', detail: String(evt.input?.fileId || evt.input?.path || '') };
+                  if (evt.name === 'grep_content' || evt.name === 'search_files') return { phase: 'searching', detail: String(evt.input?.pattern || evt.input?.query || '') };
+                  if (evt.name === 'search_replace' || evt.name === 'create_file' || evt.name === 'write_file') return { phase: 'writing', detail: String(evt.input?.filePath || evt.input?.path || '') };
+                  return { phase: 'executing', detail: `Running ${evt.name}...` };
+                })();
+                onToolEvent?.({
+                  type: 'tool_progress',
+                  name: evt.name,
+                  id: evt.id,
+                  toolCallId: evt.id,
+                  progress: ptcProgressDetail,
+                });
+                toolResult = await executeToolCall(toolCall, toolCtx);
               }
             } catch (err) {
               toolResult = {
@@ -1732,28 +2492,52 @@ export async function streamV2(
               };
             }
             if (evt.name === 'read_file' && !toolResult.is_error) {
-              const fileId = evt.input?.fileId as string;
-              if (fileId) readFiles.add(fileId);
+              const readFileId2 = evt.input?.fileId as string;
+              const wasPreloadHit = readFileId2 ? !!preloadedMap.get(readFileId2) : false;
+              if (!wasPreloadHit) filesReadOnDemand++;
+              if (readFileId2) readFiles.add(readFileId2);
             }
             if (MUTATING_CLIENT_TOOL_NAMES.has(evt.name) && !toolResult.is_error) {
               hasAttemptedEdit = true;
               mutatingAttemptedThisIteration = true;
               executionPhase = 'applyPatch';
-              forceNoLookupUntilEdit = false;
               contextVersion += 1;
               invalidateProjectGraphs();
+              debugFixAttemptCount = 0;
+
+              // Auto-lint PTC mutations (infrastructure — not counted)
+              const ptcLintPath = (evt.input?.filePath ?? evt.input?.path ?? evt.input?.file_path) as string | undefined;
+              if (ptcLintPath && typeof ptcLintPath === 'string') {
+                try {
+                  const ptcLintResult = await executeToolCall(
+                    { id: `auto-lint-ptc-${Date.now()}`, name: 'check_lint', input: { fileName: ptcLintPath } },
+                    toolCtx,
+                  );
+                  if (ptcLintResult.content && !ptcLintResult.content.includes('No lint errors') && !ptcLintResult.content.includes('no issues')) {
+                    messages.push({
+                      role: 'user',
+                      content: `SYSTEM: Lint results for ${ptcLintPath}:\n${ptcLintResult.content}`,
+                    } as AIMessage);
+                  }
+                } catch { /* lint unavailable */ }
+              }
             }
-            const truncatedContent =
-              toolResult.content.length > MAX_TOOL_RESULT_CHARS
-                ? toolResult.content.slice(0, MAX_TOOL_RESULT_CHARS) + '\n[truncated]'
-                : toolResult.content;
-            iterToolResults.set(evt.id, { content: truncatedContent, is_error: toolResult.is_error, isPTC: true });
+            totalToolCalls += 1;
+            let truncatedContentPTC = toolResult.content;
+            if (toolResult.content.length > MAX_TOOL_RESULT_CHARS) {
+              const ptcSummary = toolResult.content.slice(0, 2000);
+              const ptcFullLen = toolResult.content.length;
+              const ptcOutputId = `tool-output-ptc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              toolOutputCache.set(ptcOutputId, toolResult.content);
+              truncatedContentPTC = `${ptcSummary}\n\n... (${ptcFullLen} chars total, showing first 2000. Full output available — use read_file with fileId "${ptcOutputId}" to see more.)`;
+            }
+            iterToolResults.set(evt.id, { content: truncatedContentPTC, is_error: toolResult.is_error, isPTC: true });
             onToolEvent?.({
               type: 'tool_call',
               name: `ptc:${evt.name}`,
               id: evt.id,
               input: evt.input,
-              result: truncatedContent,
+              result: truncatedContentPTC,
               isError: toolResult.is_error,
             });
             if (toolResult.is_error) {
@@ -1761,7 +2545,7 @@ export async function streamV2(
                 type: 'tool_error',
                 name: `ptc:${evt.name}`,
                 id: evt.id,
-                error: truncatedContent,
+                error: truncatedContentPTC,
                 recoverable: true,
               });
             }
@@ -1793,35 +2577,43 @@ export async function streamV2(
         }
       } catch { /* getContextEdits may not be available */ }
 
-      const addedChangesThisIteration = accumulatedChanges.length > changesAtIterationStart;
-
-      // Pre-edit breaker: stop repeated execution/read loops before any mutation.
-      if (intentMode === 'code' && !hasAttemptedEdit) {
-        const hadExecutionNoMutation =
-          (pendingPTCTools.length > 0 || pendingServerTools.length > 0) &&
-          !mutatingAttemptedThisIteration &&
-          !addedChangesThisIteration;
-        if (hadExecutionNoMutation) {
-          preEditExecutionOnlyIterations += 1;
-          if (preEditExecutionOnlyIterations >= 2) {
-            needsClarification = true;
-            const preEditLoopMsg =
-              'Stopped after repeated execution/read iterations before any edit was applied. ' +
-              'Next step must be a mutating edit tool (search_replace/propose_code_edit/create_file) ' +
-              'or ask_clarification with exact missing details.';
-            fullText = fullText.trim() ? `${fullText}\n\n${preEditLoopMsg}` : preEditLoopMsg;
-            onProgress?.({
-              type: 'thinking',
-              phase: 'clarification',
-              label: 'Pre-edit loop detected — edit required',
-              detail: preEditLoopMsg,
-            });
-            break;
-          }
-        } else {
-          preEditExecutionOnlyIterations = 0;
-        }
+      // ── Tool call cap (optional): 0 = no cap
+      if (MAX_TOOL_CALLS > 0 && totalToolCalls >= MAX_TOOL_CALLS) {
+        fullText += '\n\nReached the tool call limit for this turn. Please continue in a follow-up message.';
+        onProgress?.({
+          type: 'thinking',
+          phase: 'analyzing',
+          label: `Tool call limit reached (${totalToolCalls}/${MAX_TOOL_CALLS})`,
+        });
+        break;
       }
+
+      // ── Read-only loop detection: force action after 3 read-only iterations
+      const READ_ONLY_TOOLS = new Set([
+        'read_file', 'grep_content', 'search_files', 'glob_files', 'list_files',
+        'get_dependency_graph', 'get_schema_settings', 'find_references',
+        'read_chunk', 'parallel_batch_read',
+      ]);
+      const iterToolNames = [...iterToolResults.keys()].map(() => ''); // tool names aren't tracked in results
+      const onlyReadToolsThisIter = !hasAttemptedEdit && !mutatingAttemptedThisIteration;
+      if (onlyReadToolsThisIter && (intentMode === 'code' || intentMode === 'debug')) {
+        readOnlyIterationCount = (readOnlyIterationCount ?? 0) + 1;
+        if (readOnlyIterationCount >= 3) {
+          messages.push({
+            role: 'user',
+            content:
+              'SYSTEM: You have investigated for 3 iterations without making changes. ' +
+              'You MUST now either: (1) call search_replace or propose_code_edit to make the change, ' +
+              '(2) call run_specialist to delegate the work, or (3) respond with your findings. ' +
+              'Do NOT read more files.',
+          } as AIMessage);
+          readOnlyIterationCount = 0;
+        }
+      } else {
+        readOnlyIterationCount = 0;
+      }
+
+      const addedChangesThisIteration = accumulatedChanges.length > changesAtIterationStart;
 
       // If we keep executing tools after edits without producing net new changes,
       // stop early and ask for clarification instead of looping.
@@ -1853,7 +2645,7 @@ export async function streamV2(
             mutatingAttemptedThisIteration;
           if (hadExecution) {
             postEditNoChangeIterations += 1;
-            if (postEditNoChangeIterations >= 2) {
+            if (postEditNoChangeIterations >= 4) {
               needsClarification = true;
               const breakerMsg =
                 'Stopped after repeated execution-only iterations with no net code changes. ' +
@@ -1891,15 +2683,13 @@ export async function streamV2(
       }
 
       // ── Multi-turn: append assistant + tool result messages ────────
-      // Filter thinking blocks from multi-turn messages — passing them back degrades quality
-      // (per Anthropic docs: "don't pass thinking back in user text blocks")
-      const filteredBlocks = rawBlocks.filter(
-        (b: unknown) => (b as { type?: string }).type !== 'thinking',
-      );
+      // Preserve thinking/reasoning blocks — dropping them causes ~30% perf regression.
+      // Anthropic docs warn against passing thinking back as *user text*, but keeping
+      // them in the assistant turn's __toolCalls array is the correct multi-turn format.
       const assistantMsg = {
         role: 'assistant',
         content: '',
-        __toolCalls: filteredBlocks,
+        __toolCalls: rawBlocks,
       } as unknown as AIMessage;
       messages.push(assistantMsg);
 
@@ -1939,6 +2729,15 @@ export async function streamV2(
           __toolResults: toolResultBlocks,
         } as unknown as AIMessage;
         messages.push(toolResultMsg);
+      }
+
+      // Persist tool turn to DB for cross-turn context awareness
+      if (options.sessionId) {
+        persistToolTurn(
+          options.sessionId,
+          rawBlocks.filter((b: { type: string }) => b.type === 'tool_use' || b.type === 'server_tool_use'),
+          toolResultBlocks.length > 0 ? toolResultBlocks : undefined,
+        ).catch(() => { /* non-blocking */ });
       }
 
       if (queuedReactionInstructions.length > 0) {
@@ -2004,43 +2803,20 @@ export async function streamV2(
     }
 
     if (intentMode === 'code' && directMutationRequested && accumulatedChanges.length === 0 && !needsClarification) {
-      const enactmentRetryDepth = options._enactmentRetryDepth ?? 0;
-      if (enactmentRetryDepth < 1) {
-        const recoveryInstruction =
-          'ENACTMENT RECOVERY MODE: You must produce at least one concrete mutating edit tool call ' +
-          '(search_replace, propose_code_edit, or create_file) in this pass. ' +
-          'Do not perform additional lookup/exploration unless absolutely necessary.';
-        onProgress?.({
-          type: 'thinking',
-          phase: 'validating',
-          label: 'Recovering — forcing direct enactment',
-          detail: 'Retrying once with strict enactment instructions.',
-        });
-        return streamV2(
-          `${executionId}-enact`,
-          projectId,
-          userId,
-          `${userRequest}\n\n${recoveryInstruction}`,
-          files,
-          userPreferences,
-          {
-            ...options,
-            _enactmentRetryDepth: enactmentRetryDepth + 1,
-          },
-        );
-      } else {
-        needsClarification = true;
-        const noChangeMsg =
-          'No code changes were applied for this direct-edit request. ' +
-          'Confirm the exact file/path and the literal before/after text so I can execute the edit deterministically.';
-        fullText = fullText.trim() ? `${fullText}\n\n${noChangeMsg}` : noChangeMsg;
-        onProgress?.({
-          type: 'thinking',
-          phase: 'clarification',
-          label: 'No changes applied — clarification required',
-          detail: noChangeMsg,
-        });
+      const noChangeMsg =
+        'I investigated the issue but could not determine a precise code fix from the available context. ' +
+        'Here is what I found — please let me know which specific change you\'d like me to make, ' +
+        'or provide the exact file and the text you want changed.';
+      if (!fullText.trim()) {
+        fullText = noChangeMsg;
       }
+      needsClarification = true;
+      onProgress?.({
+        type: 'thinking',
+        phase: 'clarification',
+        label: 'Investigation complete — awaiting direction',
+        detail: noChangeMsg,
+      });
     }
     if (
       intentMode === 'code' &&
@@ -2065,17 +2841,9 @@ export async function streamV2(
 
     executionPhase = 'verify';
     // ── EPIC 2a: Auto-review gate ──────────────────────────────────────────
-    const needsAutoReview = (
-      (tier === 'COMPLEX' || tier === 'ARCHITECTURAL') ||
-      (tier !== 'TRIVIAL' && tier !== 'SIMPLE' && (
-        accumulatedChanges.length >= 3 ||
-        accumulatedChanges.some(c =>
-          c.fileName.startsWith('templates/') ||
-          c.fileName === 'layout/theme.liquid' ||
-          c.proposedContent.includes('{% schema %}')
-        )
-      ))
-    );
+    // Always run auto-review when changes exist — the review catches
+    // incomplete implementations (e.g., Liquid changed but CSS missing)
+    const needsAutoReview = true;
     if (needsAutoReview && accumulatedChanges.length > 0) {
       onProgress?.({
         type: 'thinking',
@@ -2186,11 +2954,15 @@ export async function streamV2(
         label: `Verification complete (${totalCheckTimeMs}ms)`,
       });
 
-      if (!verification.passed) {
+      // Compare post-edit errors against baseline — only block on NEW errors
+      const postEditErrorCount = (themeCheckResult?.errorCount ?? 0) + verification.errorCount;
+      const newErrorsIntroduced = postEditErrorCount > baselineErrorCount;
+
+      if (newErrorsIntroduced) {
         onProgress?.({
           type: 'thinking',
           phase: 'validating',
-          label: `Found ${verification.errorCount} error(s) — self-correcting...`,
+          label: `New errors detected: ${postEditErrorCount - baselineErrorCount} new error(s) introduced`,
         });
         for (const issue of mergedIssues.filter(i => i.severity === 'error')) {
           onProgress?.({
@@ -2204,15 +2976,14 @@ export async function streamV2(
         }
         needsClarification = true;
         accumulatedChanges.length = 0;
-        fullText += `\n\nValidation gate blocked completion:\n${verification.formatted}`;
-      } else if (themeCheckResult && !themeCheckResult.passed) {
+        fullText += `\n\nValidation blocked: ${postEditErrorCount - baselineErrorCount} new error(s) introduced by this edit (baseline: ${baselineErrorCount}, post-edit: ${postEditErrorCount}).`;
+      } else if (!verification.passed || (themeCheckResult && !themeCheckResult.passed)) {
+        // Pre-existing errors — report but don't block
         onProgress?.({
-          type: 'diagnostics',
-          detail: `Theme check failed with ${themeCheckResult.errorCount} error(s) and ${themeCheckResult.warningCount} warning(s).`,
+          type: 'thinking',
+          phase: 'validating',
+          label: `Pre-existing: ${postEditErrorCount} error(s), no new errors introduced`,
         });
-        needsClarification = true;
-        accumulatedChanges.length = 0;
-        fullText += `\n\nTheme check gate blocked completion (${themeCheckResult.errorCount} error(s)).`;
       } else if (verification.warningCount > 0) {
         onProgress?.({
           type: 'thinking',
@@ -2268,9 +3039,8 @@ export async function streamV2(
         detail: artifact.markdown,
       });
       if (artifact.policyIssues.length > 0) {
-        needsClarification = true;
-        accumulatedChanges.length = 0;
-        fullText += `\n\nTheme policy gate blocked completion:\n${artifact.policyIssues.map((i) => `- ${i}`).join('\n')}`;
+        // Informational: policy issues are logged but don't block changes
+        fullText += `\n\n**Note:** Theme policy flagged ${artifact.policyIssues.length} issue(s):\n${artifact.policyIssues.map((i) => `- ${i}`).join('\n')}`;
       }
     }
 
@@ -2412,10 +3182,29 @@ export async function streamV2(
       }
     }
 
+    // Fire-and-forget: record tier-level telemetry
+    recordTierMetrics({
+      executionId,
+      tier,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      filesPreloaded: preloaded.length,
+      filesReadOnDemand,
+      iterations: iteration + 1,
+      firstTokenMs,
+      totalMs: Date.now() - startTime,
+      editSuccess: accumulatedChanges.length > 0,
+      pipelineVersion: options._useLeanPipeline ? 'lean' : 'legacy',
+    }).catch((err) => console.warn('[V2] Tier metrics recording failed:', err));
+
+    // If edits were successfully applied, this is not a clarification situation
+    // regardless of what post-loop checks decided. The agent did its job.
+    const finalNeedsClarification = accumulatedChanges.length > 0 ? false : needsClarification;
+
     const finalAnalysis = ensureCompletionResponseSections({
       analysis: fullText,
       intentMode,
-      needsClarification,
+      needsClarification: finalNeedsClarification,
       changes: accumulatedChanges,
       reviewResult: latestReviewResult,
     });
@@ -2426,7 +3215,7 @@ export async function streamV2(
       analysis: finalAnalysis,
       changes: accumulatedChanges.length > 0 ? accumulatedChanges : undefined,
       reviewResult: latestReviewResult,
-      needsClarification,
+      needsClarification: finalNeedsClarification,
       directStreamed: true,
       usage: {
         totalInputTokens,
@@ -2446,18 +3235,18 @@ export async function streamV2(
           sessionId: options.sessionId,
         },
       },
-      failureReason: lastMutationFailure?.reason === 'old_text_not_found'
+      failureReason: (lastMutationFailure as MutationFailure | null)?.reason === 'old_text_not_found'
         ? 'search_replace_failed'
-        : lastMutationFailure?.reason === 'file_not_found'
+        : (lastMutationFailure as MutationFailure | null)?.reason === 'file_not_found'
           ? 'file_not_found'
-          : lastMutationFailure?.reason === 'validation_error'
+          : (lastMutationFailure as MutationFailure | null)?.reason === 'validation_error'
             ? 'validation_failed'
             : null,
       suggestedAction: lastMutationFailure
         ? 'Try rephrasing the edit or paste the exact before/after code.'
         : null,
-      failedTool: lastMutationFailure?.toolName ?? null,
-      failedFilePath: lastMutationFailure?.filePath ?? null,
+      failedTool: (lastMutationFailure as MutationFailure | null)?.toolName ?? null,
+      failedFilePath: (lastMutationFailure as MutationFailure | null)?.filePath ?? null,
       verificationEvidence,
     };
   } catch (error) {
@@ -2533,15 +3322,31 @@ function handleClientTool(
   files: FileContext[],
   preloadedMap: Map<string, FileContext>,
   accumulatedChanges: CodeChange[],
+  resolveFileFn?: (ref: string) => FileContext | undefined,
 ): string {
   if (event.name === 'propose_code_edit') {
     const filePath = event.input?.filePath as string;
-    const newContent = event.input?.newContent as string;
+    let newContent = event.input?.newContent as string;
     const reasoning = event.input?.reasoning as string;
-    const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+    const matchedFile = resolveFileFn?.(filePath) ?? preloadedMap.get(filePath);
 
     const originalContent = matchedFile?.content ?? '';
-    if ((newContent ?? '') !== originalContent) {
+    if (newContent && /keep existing code/i.test(newContent)) {
+      newContent = expandKeepExisting(newContent, originalContent);
+    }
+    const isNetChange = (newContent ?? '') !== originalContent;
+
+    // Destructive change guard: block edits that remove >50% of file content.
+    // This catches model truncation where the LLM generates a partial file.
+    const origLen = originalContent.length;
+    const newLen = (newContent ?? '').length;
+    const isDestructive = origLen > 200 && newLen < origLen * 0.5;
+
+    if (isDestructive) {
+      return `BLOCKED: propose_code_edit for ${filePath} was rejected because it would remove ${Math.round((1 - newLen / origLen) * 100)}% of the file content (${origLen} → ${newLen} chars). This looks like model truncation, not an intentional edit. Use search_replace for targeted changes instead of rewriting the entire file.`;
+    }
+
+    if (isNetChange) {
       accumulatedChanges.push({
         fileId: matchedFile?.fileId ?? '',
         fileName: filePath ?? '',
@@ -2552,7 +3357,7 @@ function handleClientTool(
       });
     }
 
-    // Read-after-write: update in-memory state
+    // Read-after-write: update in-memory state (only if not destructive)
     if (matchedFile) {
       matchedFile.content = newContent ?? '';
       preloadedMap.set(filePath, matchedFile);
@@ -2562,6 +3367,9 @@ function handleClientTool(
       }
     }
 
+    if (!isNetChange) {
+      return `NET ZERO: propose_code_edit for ${filePath} produced no change — the file already contains the proposed content. Do NOT retry the same edit. Either the change was already applied, or you need a different approach. Summarize what you attempted and respond to the user.`;
+    }
     const lineCount = (newContent ?? '').split('\n').length;
     return `Full rewrite applied to ${filePath} (${lineCount} lines). The file is updated in your context.`;
   }
@@ -2571,7 +3379,7 @@ function handleClientTool(
     const oldText = event.input?.old_text as string;
     const newText = event.input?.new_text as string;
     const reasoning = event.input?.reasoning as string;
-    const matchedFile = files.find(f => f.fileName === filePath || f.path === filePath);
+    const matchedFile = resolveFileFn?.(filePath) ?? preloadedMap.get(filePath);
     const currentContent = matchedFile?.content ?? '';
     const replaceIdx = currentContent.indexOf(oldText);
     const proposedContent =
@@ -2581,7 +3389,8 @@ function handleClientTool(
           currentContent.slice(replaceIdx + oldText.length)
         : currentContent;
 
-    if (replaceIdx !== -1 && proposedContent !== currentContent) {
+    const isNetChange = replaceIdx !== -1 && proposedContent !== currentContent;
+    if (isNetChange) {
       accumulatedChanges.push({
         fileId: matchedFile?.fileId ?? '',
         fileName: filePath ?? '',
@@ -2600,6 +3409,13 @@ function handleClientTool(
       if (matchedFile.path && matchedFile.path !== filePath) {
         preloadedMap.set(matchedFile.path, matchedFile);
       }
+    }
+
+    if (replaceIdx === -1) {
+      return `MATCH FAILED: old_text was not found in ${filePath}. Re-read the file to get current content, then retry with the exact text. Do NOT guess.`;
+    }
+    if (!isNetChange) {
+      return `NET ZERO: search_replace for ${filePath} produced no change — old_text and new_text are identical. Do NOT retry. Summarize what you attempted and respond to the user.`;
     }
 
     const oldLines = (oldText ?? '').split('\n').length;

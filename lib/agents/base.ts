@@ -286,6 +286,7 @@ export abstract class Agent {
 
     // If provider doesn't support tools, fall back to regular execution
     if (!isToolProvider(this.provider)) {
+      console.log(`[Agent:${this.agentType}] Provider doesn't support tools (pre-resolve), falling back to execute()`);
       return this.execute(task, options);
     }
 
@@ -302,8 +303,13 @@ export abstract class Agent {
 
     // Re-check after provider swap
     if (!isToolProvider(this.provider)) {
+      console.log(`[Agent:${this.agentType}] Provider doesn't support tools (post-resolve, model=${model}), falling back to execute()`);
       return this.execute(task, options);
     }
+    console.log(`[Agent:${this.agentType}] Using executeWithTools with model=${model}, maxIterations=${maxIterations}`);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d09cca'},body:JSON.stringify({sessionId:'d09cca',location:'base.ts:executeWithTools-start',message:'executeWithTools active',data:{agentType:this.agentType,model,maxIterations,providerType:this.provider?.constructor?.name},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
 
     const toolProvider = this.provider;
 
@@ -327,15 +333,17 @@ export abstract class Agent {
       );
 
       if (result.stopReason === 'end_turn' || !result.toolCalls?.length) {
-        // Final response - parse it
+        console.log(`[Agent:${this.agentType}] Loop ended at iteration ${i}: stopReason=${result.stopReason}, toolCalls=${result.toolCalls?.length??0}, contentLen=${result.content?.length??0}`);
         return this.parseResponse(result.content, task);
       }
 
-      // Execute tool calls (some tools like semantic_search are async)
+      // Execute tool calls
       const toolResults: AIToolResult[] = [];
       for (const toolCall of result.toolCalls) {
+        console.log(`[Agent:${this.agentType}] iter=${i} tool=${toolCall.name} input_keys=${Object.keys(toolCall.input??{}).join(',')}`);
         options?.onToolUse?.(toolCall.name);
         const toolResult = await Promise.resolve(executeToolCall(toolCall, toolContext));
+        console.log(`[Agent:${this.agentType}] iter=${i} tool=${toolCall.name} error=${toolResult.is_error??false} result=${(toolResult.content??'').slice(0,150)}`);
         toolResults.push(toolResult);
       }
 

@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-02-24T20:53:01.595Z",
+  "projectId": "f70d9af0-616a-4723-b231-ada0f2d41d77",
+  "scenarios": [
+    {
+      "id": "change-color",
+      "passed": false,
+      "reason": "No code change made",
+      "toolCalls": 6,
+      "elapsedMs": 20698
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "total": 1,
+    "passRate": "0%",
+    "avgToolCalls": 6,
+    "avgTimeSeconds": 21
+  }
+}

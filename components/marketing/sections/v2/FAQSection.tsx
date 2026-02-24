@@ -138,7 +138,7 @@ export default function FAQSection() {
   return (
     <section
       ref={ref}
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
       itemScope
       itemType="https://schema.org/FAQPage"
     >

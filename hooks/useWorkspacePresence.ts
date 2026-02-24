@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { assignUserColor } from '@/lib/collaboration/user-colors';
 
+const DEBUG_WORKSPACE_PRESENCE = process.env.NEXT_PUBLIC_SUPABASE_REALTIME_DEBUG === '1';
+
 export interface WorkspacePresence {
   user_id: string;
   file_path: string | null;
@@ -66,11 +68,22 @@ export function useWorkspacePresence(
             }
           }
         }
-        console.log('[useWorkspacePresence] Presence sync: ' + list.length + ' user(s) in channel "' + channelName + '"', list.map(u => u.full_name || u.user_id.slice(0, 8)));
+        if (DEBUG_WORKSPACE_PRESENCE) {
+          console.log(
+            '[useWorkspacePresence] Presence sync: ' +
+              list.length +
+              ' user(s) in channel "' +
+              channelName +
+              '"',
+            list.map((u) => u.full_name || u.user_id.slice(0, 8)),
+          );
+        }
         setPresence(list);
       })
       .subscribe(async (status) => {
-        console.log('[useWorkspacePresence] Channel "' + channelName + '" subscribe status: ' + status);
+        if (DEBUG_WORKSPACE_PRESENCE) {
+          console.log('[useWorkspacePresence] Channel "' + channelName + '" subscribe status: ' + status);
+        }
         if (status !== 'SUBSCRIBED') return;
         const { data: { user } } = await client.auth.getUser();
         if (!user) return;

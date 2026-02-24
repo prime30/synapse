@@ -18,6 +18,51 @@
   var RESPONSE_TYPE = 'synapse-bridge-response';
 
   /* ------------------------------------------------------------------ */
+  /*  Console log capture for agent debugging                             */
+  /* ------------------------------------------------------------------ */
+  var _synConsoleLogs = [];
+  var _origConsole = {
+    error: console.error.bind(console),
+    warn: console.warn.bind(console),
+  };
+  console.error = function () {
+    var args = Array.prototype.slice.call(arguments);
+    _synConsoleLogs.push({ level: 'error', message: args.map(String).join(' '), ts: Date.now() });
+    if (_synConsoleLogs.length > 100) _synConsoleLogs.shift();
+    _origConsole.error.apply(console, arguments);
+  };
+  console.warn = function () {
+    var args = Array.prototype.slice.call(arguments);
+    _synConsoleLogs.push({ level: 'warn', message: args.map(String).join(' '), ts: Date.now() });
+    if (_synConsoleLogs.length > 100) _synConsoleLogs.shift();
+    _origConsole.warn.apply(console, arguments);
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Network request capture for agent debugging                         */
+  /* ------------------------------------------------------------------ */
+  var _synNetworkLogs = [];
+  var _origFetch = window.fetch.bind(window);
+  window.fetch = function () {
+    var args = Array.prototype.slice.call(arguments);
+    var start = Date.now();
+    var url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+    var method = (args[1] && args[1].method) || 'GET';
+    return _origFetch.apply(window, args).then(
+      function (res) {
+        _synNetworkLogs.push({ url: url, method: method, status: res.status, duration: Date.now() - start, ts: Date.now() });
+        if (_synNetworkLogs.length > 50) _synNetworkLogs.shift();
+        return res;
+      },
+      function (err) {
+        _synNetworkLogs.push({ url: url, method: method, status: 0, duration: Date.now() - start, error: err.message, ts: Date.now() });
+        if (_synNetworkLogs.length > 50) _synNetworkLogs.shift();
+        throw err;
+      }
+    );
+  };
+
+  /* ------------------------------------------------------------------ */
   /*  Helpers                                                            */
   /* ------------------------------------------------------------------ */
 
@@ -793,6 +838,30 @@
   /** ping -- health check */
   actions.ping = function () {
     return { version: 1, ready: true, url: window.location.href };
+  };
+
+  /** getConsoleLogs -- return recent console errors/warnings for agent debugging */
+  actions.getConsoleLogs = function (payload) {
+    var data = payload || {};
+    var search = (data.search || '').toString();
+    var logs = search
+      ? _synConsoleLogs.filter(function (l) {
+          return l.message.toLowerCase().indexOf(search.toLowerCase()) >= 0;
+        })
+      : _synConsoleLogs.slice(-50);
+    return { logs: logs };
+  };
+
+  /** getNetworkRequests -- return recent network requests for agent debugging */
+  actions.getNetworkRequests = function (payload) {
+    var data = payload || {};
+    var search = (data.search || '').toString();
+    var reqs = search
+      ? _synNetworkLogs.filter(function (r) {
+          return r.url.toLowerCase().indexOf(search.toLowerCase()) >= 0;
+        })
+      : _synNetworkLogs.slice(-30);
+    return { requests: reqs };
   };
 
   /* ------------------------------------------------------------------ */

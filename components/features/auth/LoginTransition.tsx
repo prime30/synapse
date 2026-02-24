@@ -205,7 +205,7 @@ function LoginTransitionInner({
     <AnimatePresence mode="wait">
       {visible && (
         <motion.div
-          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#0a0a0a]"
+          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[oklch(0.145_0_0)]"
           role="dialog"
           aria-modal="true"
           aria-label="Signing in"
@@ -219,7 +219,7 @@ function LoginTransitionInner({
             aria-hidden="true"
             style={{
               background:
-                'radial-gradient(circle, rgba(40,205,86,0.06) 0%, transparent 60%)',
+                'radial-gradient(circle, oklch(0.745 0.189 148 / 0.06) 0%, transparent 60%)',
             }}
           />
 
@@ -290,7 +290,7 @@ function LoginTransitionInner({
               >
                 <span className="inline-flex items-center gap-2">
                   <svg
-                    className="w-4 h-4 text-[#28cd56]"
+                    className="w-4 h-4 text-[oklch(0.745_0.189_148)]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

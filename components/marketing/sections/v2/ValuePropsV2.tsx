@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Code, Monitor, Bot } from 'lucide-react';
+import { Code, Monitor, Bot, Palette } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Data                                                               */
@@ -30,6 +30,13 @@ const CARDS = [
       'A PM agent for scope, a Liquid specialist for templates, CSS and JS specialists for styling and behavior, and a Review agent that checks before deploy. Each routes to the right model — Claude, GPT-4o, or Gemini. Ask in plain English, get answers that know Shopify.',
     accent: 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400',
   },
+  {
+    icon: Palette,
+    title: "Learns your theme's DNA",
+    description:
+      'Detects your color tokens, CSS naming, Liquid conventions, and schema patterns — then matches them in every edit. No style guides needed.',
+    accent: 'bg-rose-500/10 text-rose-600 dark:bg-rose-400/10 dark:text-rose-400',
+  },
 ] as const;
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -45,7 +52,7 @@ export function ValuePropsV2() {
   return (
     <section
       ref={ref}
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
         {/* ── Header ───────────────────────────────────────────────── */}
@@ -64,11 +71,14 @@ export function ValuePropsV2() {
           <p className="mt-4 text-lg text-stone-500 dark:text-white/50 leading-relaxed">
             Every feature is designed for one thing: keep you in the zone. No
             context switches, no hunting for docs, no guessing.
+            <span className="block mt-2 text-stone-600 dark:text-white/70 font-medium">
+              Only Synapse understands Shopify themes at the schema level.
+            </span>
           </p>
         </motion.div>
 
         {/* ── Cards ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {CARDS.map((card, index) => {
             const Icon = card.icon;
 

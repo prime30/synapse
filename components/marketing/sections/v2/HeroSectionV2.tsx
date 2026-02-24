@@ -49,7 +49,7 @@ export default function HeroSectionV2() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       {/* ── Gradient blobs ──────────────────────────────────────────── */}
       <div
@@ -59,7 +59,7 @@ export default function HeroSectionV2() {
         <div
           className="absolute w-[600px] h-[600px] rounded-full opacity-[0.15] dark:opacity-[0.08]"
           style={{
-            background: 'radial-gradient(circle, #28CD56 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.745 0.189 148) 0%, transparent 70%)',
             filter: 'blur(120px)',
             top: '10%',
             left: '15%',
@@ -69,7 +69,7 @@ export default function HeroSectionV2() {
         <div
           className="absolute w-[500px] h-[500px] rounded-full opacity-[0.12] dark:opacity-[0.06]"
           style={{
-            background: 'radial-gradient(circle, #615AF2 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.54 0.24 272) 0%, transparent 70%)',
             filter: 'blur(120px)',
             top: '20%',
             right: '10%',
@@ -79,7 +79,7 @@ export default function HeroSectionV2() {
         <div
           className="absolute w-[450px] h-[450px] rounded-full opacity-[0.1] dark:opacity-[0.05]"
           style={{
-            background: 'radial-gradient(circle, #F5A623 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.78 0.16 70) 0%, transparent 70%)',
             filter: 'blur(120px)',
             bottom: '15%',
             left: '40%',
@@ -89,7 +89,7 @@ export default function HeroSectionV2() {
         <div
           className="absolute w-[400px] h-[400px] rounded-full opacity-[0.08] dark:opacity-[0.04]"
           style={{
-            background: 'radial-gradient(circle, #00D1C1 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.76 0.14 190) 0%, transparent 70%)',
             filter: 'blur(120px)',
             top: '50%',
             left: '5%',
@@ -103,7 +103,7 @@ export default function HeroSectionV2() {
         className="absolute left-0 right-0 bottom-0 h-[70%] pointer-events-none z-0"
         style={{
           background:
-            'radial-gradient(ellipse 80% 60% at 50% 60%, rgba(40,205,86,0.14) 0%, rgba(40,205,86,0.05) 35%, transparent 70%)',
+            'radial-gradient(ellipse 80% 60% at 50% 60%, oklch(0.745 0.189 148 / 0.14) 0%, oklch(0.745 0.189 148 / 0.05) 35%, transparent 70%)',
         }}
         aria-hidden="true"
       />

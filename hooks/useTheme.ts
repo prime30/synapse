@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
-const STORAGE_KEY = 'synapse-theme';
+const SESSION_STORAGE_KEY = 'synapse-theme-session';
+const LEGACY_STORAGE_KEY = 'synapse-theme';
 const CUSTOM_EVENT = 'synapse-theme-change';
 
 // ── External store helpers ────────────────────────────────────────────────────
@@ -34,25 +35,29 @@ function setDark(dark: boolean): void {
   if (dark) {
     document.documentElement.classList.add('dark');
     document.documentElement.style.colorScheme = 'dark';
-    localStorage.setItem(STORAGE_KEY, 'dark');
+    sessionStorage.setItem(SESSION_STORAGE_KEY, 'dark');
   } else {
     document.documentElement.classList.remove('dark');
     document.documentElement.style.colorScheme = 'light';
-    localStorage.setItem(STORAGE_KEY, 'light');
+    sessionStorage.setItem(SESSION_STORAGE_KEY, 'light');
   }
+  // Ensure legacy persistent preference cannot override dark-first defaults.
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
   // Notify same-tab subscribers
   window.dispatchEvent(new Event(CUSTOM_EVENT));
 }
 
 let themeRepaired = false;
 
-/** One-time repair: sync DOM to localStorage (run once per page load). */
+/** One-time repair: sync DOM to session preference (run once per page load). */
 function repairThemeFromStorage(): void {
   if (themeRepaired) return;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
     const wantDark = stored ? stored === 'dark' : true;
     const hasDark = document.documentElement.classList.contains('dark');
+    // Remove any old persistent theme value so each new session defaults to dark.
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     if (hasDark === wantDark) {
       themeRepaired = true;
       return;
@@ -76,10 +81,11 @@ function repairThemeFromStorage(): void {
 /**
  * Shared theme hook used by the marketing Navbar and the onboarding wizard.
  *
- * - Reads from `localStorage('synapse-theme')` + the `.dark` class on `<html>`
+ * - Defaults to dark for each new browser session
+ * - Reads from `sessionStorage('synapse-theme-session')` + the `.dark` class on `<html>`
  * - SSR-safe via `useSyncExternalStore` (returns `false` on the server)
  * - Cross-tab sync via the `storage` event
- * - On mount, repairs DOM to match localStorage so HMR/reload never flips theme.
+ * - On mount, repairs DOM to match the current session preference.
  */
 export function useTheme(): { isDark: boolean; toggle: () => void } {
   const isDark = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

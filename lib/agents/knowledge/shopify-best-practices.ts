@@ -1,6 +1,11 @@
 /**
  * Centralized Shopify knowledge modules for agent prompts.
  * Import into agent system prompts to inject domain-specific best practices.
+ *
+ * TODO: Wire into coordinator's system prompt assembly (Knowledge Modules plan).
+ * Exports: SCHEMA_BEST_PRACTICES, PERFORMANCE_PATTERNS, DAWN_CONVENTIONS,
+ * ACCESSIBILITY_REQUIREMENTS, THEME_ARCHITECTURE, DIAGNOSTIC_REASONING,
+ * getKnowledgeForAgent, ALL_KNOWLEDGE.
  */
 
 // --- Schema Best Practices ---

@@ -5,8 +5,12 @@
  * and the tuned model, scoring each with the full eval dimensions from behavior spec.
  *
  * Usage:
- *   npx tsx scripts/run-finetune-eval.ts [--mode v1|v2]
+ *   npx tsx scripts/run-finetune-eval.ts [--mode v1|v2|bugs]
  *     [--json-file <path>] [--fail-on-regression]
+ *
+ * Modes:
+ *   v1, v2 - CX scenarios (mode inference, conversation quality, etc.)
+ *   bugs   - Real-bug eval suite (10 scenarios, fix correctness scoring)
  *
  * Outputs a comparison summary showing where the tuned model improves or regresses.
  */
@@ -18,6 +22,8 @@ import {
   createHarnessFixtureFiles,
   runSynapseHarness,
 } from '../lib/agents/testing/synapse-harness';
+import { BUG_SCENARIOS } from '../lib/agents/testing/bug-scenarios';
+import { generateThemeFixture } from '../lib/agents/testing/theme-fixtures';
 import {
   scoreModeInference,
   scoreClarificationQuality,
@@ -28,7 +34,13 @@ import {
   buildEvalSummary,
   type FinetuneEvalResult,
 } from '../lib/finetune/eval-dimensions';
+import {
+  scoreBugFix,
+  type BugFixScore,
+  type AgentBugFixOutput,
+} from '../lib/finetune/bug-fix-scoring';
 import type { IntentMode } from '../lib/finetune/behavior-spec';
+import type { FileContext } from '../lib/types/agent';
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -42,7 +54,7 @@ function hasFlag(name: string): boolean {
   return process.argv.includes(`--${name}`);
 }
 
-type Mode = 'v1' | 'v2';
+type Mode = 'v1' | 'v2' | 'bugs';
 
 function inferIntent(prompt: string): IntentMode {
   const p = prompt.toLowerCase();
@@ -117,7 +129,7 @@ const EVAL_SCENARIOS: EvalScenario[] = [
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function runEvalScenario(
-  mode: Mode,
+  mode: 'v1' | 'v2',
   contender: string,
   scenario: EvalScenario,
 ): Promise<FinetuneEvalResult | null> {
@@ -175,6 +187,103 @@ async function runEvalScenario(
   }
 }
 
+// ── Bug Eval Runner ───────────────────────────────────────────────────────────
+
+function fixtureToFileContext(files: Array<{ path: string; content: string }>): FileContext[] {
+  return files.map((f, i) => {
+    const ext = f.path.split('.').pop() ?? '';
+    let fileType: FileContext['fileType'] = 'other';
+    if (ext === 'liquid') fileType = 'liquid';
+    else if (ext === 'css') fileType = 'css';
+    else if (ext === 'js') fileType = 'javascript';
+    return {
+      fileId: `f-bug-${i}`,
+      fileName: f.path.split('/').pop() ?? f.path,
+      path: f.path,
+      fileType,
+      content: f.content,
+    };
+  });
+}
+
+async function runBugScenario(
+  mode: 'v1' | 'v2',
+  scenario: (typeof BUG_SCENARIOS)[number],
+): Promise<BugFixScore> {
+  const fixture = generateThemeFixture(scenario);
+  const files = fixtureToFileContext(fixture.files);
+
+  const output = await runSynapseHarness({
+    mode,
+    prompt: scenario.userPrompt,
+    intentMode: 'debug',
+    files,
+  });
+
+  const pathByFileId = new Map(files.map((f) => [f.fileId, f.path]));
+  const pathByFileName = new Map(files.map((f) => [f.fileName, f.path]));
+  const changes: Array<{ file: string; content: string }> = (output.result.changes ?? []).map(
+    (c) => {
+      const p = pathByFileId.get(c.fileId) ?? pathByFileName.get(c.fileName ?? '') ?? c.fileName ?? c.fileId ?? '';
+      return { file: p, content: c.proposedContent ?? '' };
+    },
+  );
+
+  const toolCalls = output.metrics.toolCallCount;
+  const agentOutput: AgentBugFixOutput = { changes, toolCalls };
+
+  return scoreBugFix(scenario, agentOutput);
+}
+
+async function runBugsMode(jsonFile: string | undefined, failOnRegression: boolean) {
+  const harnessMode: 'v1' | 'v2' = 'v2';
+  console.log(`Running real-bug eval suite (${BUG_SCENARIOS.length} scenarios)...`);
+
+  const scenarios: BugFixScore[] = [];
+  for (const scenario of BUG_SCENARIOS) {
+    console.log(`\n--- ${scenario.id}: ${scenario.description} ---`);
+    try {
+      const score = await runBugScenario(harnessMode, scenario);
+      scenarios.push(score);
+      console.log(
+        `  Score: ${score.totalScore}/4 (file=${score.foundCorrectFile} change=${score.madeChange} correct=${score.changeCorrect} noRegress=${score.noRegressions})`,
+      );
+    } catch (err) {
+      console.error(`  Error:`, err instanceof Error ? err.message : String(err));
+      scenarios.push({
+        scenarioId: scenario.id,
+        foundCorrectFile: false,
+        madeChange: false,
+        changeCorrect: false,
+        noRegressions: false,
+        toolCallsUsed: 0,
+        totalScore: 0,
+      });
+    }
+  }
+
+  const totalScore = scenarios.reduce((s, r) => s + r.totalScore, 0);
+  const maxScore = BUG_SCENARIOS.length * 4;
+  const passRate = maxScore > 0 ? `${((totalScore / maxScore) * 100).toFixed(1)}%` : '0%';
+
+  const output = { scenarios, totalScore, maxScore, passRate };
+
+  console.log('\n=== Bug Eval Summary ===');
+  console.log(`Total score: ${totalScore}/${maxScore}`);
+  console.log(`Pass rate: ${passRate}`);
+
+  if (jsonFile) {
+    const outPath = path.isAbsolute(jsonFile) ? jsonFile : path.join(process.cwd(), jsonFile);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, JSON.stringify(output, null, 2), 'utf8');
+    console.log(`\nWrote JSON to ${outPath}`);
+  }
+
+  if (failOnRegression && totalScore < maxScore * 0.5) {
+    process.exitCode = 2;
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -185,14 +294,20 @@ async function main() {
   const jsonFile = parseArg('json-file');
   const failOnRegression = hasFlag('fail-on-regression');
 
-  console.log(`Running finetune evaluation suite in ${mode} mode...`);
+  if (mode === 'bugs') {
+    await runBugsMode(jsonFile, failOnRegression);
+    return;
+  }
+
+  const harnessMode = mode as 'v1' | 'v2';
+  console.log(`Running finetune evaluation suite in ${harnessMode} mode...`);
 
   const contender = 'baseline';
   const results: FinetuneEvalResult[] = [];
 
   for (const scenario of EVAL_SCENARIOS) {
     console.log(`\n--- ${scenario.label} ---`);
-    const result = await runEvalScenario(mode, contender, scenario);
+    const result = await runEvalScenario(harnessMode, contender, scenario);
     if (result) {
       results.push(result);
       console.log(`  Mode inference: ${result.modeInference.correct ? 'pass' : 'fail'}`);

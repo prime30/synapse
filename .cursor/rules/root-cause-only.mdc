@@ -1,0 +1,60 @@
+---
+description: "HARD RULE: Fix root causes, never symptoms. No workarounds, no patches, no band-aids."
+alwaysApply: true
+---
+
+# Root Cause Only (HARD RULE)
+
+## When This Applies
+
+Every time you are about to write code to fix a bug, resolve an error, or address user feedback. There are NO exceptions.
+
+## Procedure
+
+Before writing ANY fix, you MUST complete these steps IN ORDER:
+
+### Step 1: Trace to the root
+
+Ask yourself: "Why does this happen?" Then ask "Why?" again on the answer. Repeat until you reach a design-level cause (not a symptom). Document the chain:
+
+```
+Symptom: "needs input" badge shows after changes
+Why? → needsClarification is true after changes
+Why? → validation gate clears accumulatedChanges
+Why? → theme check runs on entire theme, finds pre-existing errors
+Why? → no baseline comparison (before vs after edit)
+ROOT CAUSE: validation has no baseline → should diff error counts, not check absolutes
+```
+
+### Step 2: Verify you're at the root
+
+The root cause passes these tests:
+- Fixing it eliminates the symptom AND prevents recurrence
+- It doesn't require "also fixing" something else to work
+- It's a design/architecture issue, not a "missing check" or "wrong value"
+
+If your fix is "add an if-statement" or "catch this error" or "add a fallback" — you're at a symptom, not the root. Go deeper.
+
+### Step 3: Check for existing workarounds
+
+Search the codebase for prior patches on the same issue. If you find any, REMOVE THEM as part of your fix. A proper root cause fix makes all workarounds unnecessary.
+
+### Step 4: Fix once, fix completely
+
+- One code path, not multiple fallbacks
+- No "try A, if that fails try B, if that fails try C" chains
+- No feature flags to "gradually roll out" a fix — either it's correct or it's not
+- No "informational only" downgrades of safety checks — fix the check to be accurate instead
+
+## What Constitutes a Workaround (NEVER DO THESE)
+
+- Adding a fallback/retry around a broken function instead of fixing the function
+- Catching an error and returning a default instead of preventing the error
+- Adding a UI indicator to explain broken behavior instead of fixing the behavior
+- Making a validation "informational" because it has false positives instead of eliminating the false positives
+- Adding a second code path "in case the first one fails" instead of making the first one reliable
+- Suppressing an error message instead of resolving the condition that causes it
+
+## Enforcement
+
+If the user points out that a fix is a workaround, acknowledge it immediately, revert to root cause analysis, and fix properly. Do not defend the workaround.

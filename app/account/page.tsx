@@ -58,7 +58,7 @@ function ProgressRing({
     <svg height={radius * 2} width={radius * 2} className="shrink-0">
       {/* background ring */}
       <circle
-        stroke="#1f2937"
+        stroke="oklch(0.279 0.012 256)"
         fill="transparent"
         strokeWidth={stroke}
         r={normalizedRadius}
@@ -67,7 +67,7 @@ function ProgressRing({
       />
       {/* progress ring */}
       <circle
-        stroke="#10b981"
+        stroke="oklch(0.696 0.17 162)"
         fill="transparent"
         strokeWidth={stroke}
         strokeLinecap="round"
@@ -184,41 +184,41 @@ export default function AccountOverviewPage() {
             >
               <defs>
                 <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop offset="0%" stopColor="oklch(0.696 0.17 162)" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="oklch(0.696 0.17 162)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#1f2937"
+                stroke="oklch(0.279 0.012 256)"
                 vertical={false}
               />
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#6b7280', fontSize: 11 }}
-                axisLine={{ stroke: '#1f2937' }}
+                tick={{ fill: 'oklch(0.551 0.014 264)', fontSize: 11 }}
+                axisLine={{ stroke: 'oklch(0.279 0.012 256)' }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#6b7280', fontSize: 11 }}
+                tick={{ fill: 'oklch(0.551 0.014 264)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 allowDecimals={false}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#111827',
-                  border: '1px solid #1f2937',
+                  backgroundColor: 'oklch(0.21 0.012 264)',
+                  border: '1px solid oklch(0.279 0.012 256)',
                   borderRadius: '0.5rem',
                   fontSize: 12,
-                  color: '#f3f4f6',
+                  color: 'oklch(0.967 0.003 264)',
                 }}
-                labelStyle={{ color: '#9ca3af' }}
+                labelStyle={{ color: 'oklch(0.702 0.015 264)' }}
               />
               <Area
                 type="monotone"
                 dataKey="requests"
-                stroke="#10b981"
+                stroke="oklch(0.696 0.17 162)"
                 strokeWidth={2}
                 fill="url(#areaFill)"
               />

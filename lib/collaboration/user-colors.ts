@@ -1,14 +1,14 @@
 const COLOR_PALETTE = [
-  '#60A5FA',
-  '#34D399',
-  '#FBBF24',
-  '#F87171',
-  '#A78BFA',
-  '#F472B6',
-  '#22D3EE',
-  '#F97316',
-  '#84CC16',
-  '#E879F9',
+  'oklch(0.718 0.158 248)',
+  'oklch(0.765 0.177 163)',
+  'oklch(0.852 0.167 84)',
+  'oklch(0.704 0.191 22)',
+  'oklch(0.667 0.174 277)',
+  'oklch(0.699 0.186 349)',
+  'oklch(0.777 0.152 210)',
+  'oklch(0.702 0.183 52)',
+  'oklch(0.777 0.196 120)',
+  'oklch(0.694 0.21 313)',
 ];
 
 export function assignUserColor(userId: string): string {

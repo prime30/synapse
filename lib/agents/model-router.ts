@@ -50,6 +50,11 @@ export const MODELS = {
   // Google -- Gemini 2 (legacy)
   GEMINI_PRO: 'gemini-2.0-flash',
   GEMINI_FLASH: 'gemini-2.0-flash-lite',
+
+  // xAI -- Grok
+  GROK_4: 'grok-4',
+  GROK_FAST: 'grok-4-1-fast-reasoning',
+  GROK_CODE: 'grok-code-fast-1',
 } as const;
 
 export type ModelId = (typeof MODELS)[keyof typeof MODELS];
@@ -63,7 +68,7 @@ export type ModelId = (typeof MODELS)[keyof typeof MODELS];
 export const MODEL_MAP: Record<AIAction, ModelId> = {
   analyze:          MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6 for rate-limit headroom)
   generate:         MODELS.CLAUDE_OPUS,      // Specialists (Liquid/JS/CSS): Opus for best code quality
-  review:           MODELS.GPT_4O,           // Review uses GPT-4o
+  review:           MODELS.CLAUDE_SONNET,    // Review uses Sonnet
   summary:          MODELS.CLAUDE_HAIKU,     // Summaries use Haiku (fast + cheap)
   fix:              MODELS.CLAUDE_OPUS,      // Specialists: Opus for multi-step fixes
   explain:          MODELS.CLAUDE_SONNET,    // Explanations use Sonnet
@@ -74,7 +79,7 @@ export const MODEL_MAP: Record<AIAction, ModelId> = {
   classify:         MODELS.CLAUDE_HAIKU,     // Request classification (fast + cheap)
   classify_trivial: MODELS.CLAUDE_HAIKU,     // Trivial-tier PM execution (Haiku)
   ask:              MODELS.CLAUDE_HAIKU,     // Ask-mode fast path (3-5x faster)
-  debug:            MODELS.GPT_4O,           // Debug: Codex (GPT-4o) for diagnostics
+  debug:            MODELS.CLAUDE_OPUS,      // Debug: Opus for reliable edits after diagnosis
 };
 
 // ── Agent defaults ──────────────────────────────────────────────────────────
@@ -135,6 +140,7 @@ export function getProviderForModel(model: string): ProviderName {
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'openai';
   if (model.startsWith('gemini-')) return 'google';
+  if (model.startsWith('grok-')) return 'xai';
   if (model.startsWith('synapse-')) return 'openai-compat';
 
   // EPIC E: Check custom model prefixes
@@ -192,16 +198,14 @@ export function resolveModel(options: ResolveModelOptions = {}): string {
     }
   }
 
-  // 0. TRIVIAL / SIMPLE tier: use Haiku for fast, cheap execution (asks and simple edits).
+  // 0. TRIVIAL / SIMPLE tier: use Haiku only for non-editing actions.
+  // Code-producing actions (generate, fix, refactor, analyze) stay on Sonnet
+  // because Haiku often explains instead of editing.
   if (tier === 'TRIVIAL' || tier === 'SIMPLE') {
     if (
       action === 'ask' ||
       action === 'classify_trivial' ||
-      action === 'analyze' ||
-      action === 'plan' ||
-      action === 'generate' ||
-      action === 'fix' ||
-      action === 'refactor' ||
+      action === 'classify' ||
       action === 'explain' ||
       action === 'chat'
     ) {
@@ -224,6 +228,14 @@ export function resolveModel(options: ResolveModelOptions = {}): string {
     if (action === 'analyze' || action === 'plan') {
       return MODELS.CLAUDE_SONNET;
     }
+  }
+
+  // 0.9 Grok routing: use Grok for non-tool conversational actions.
+  // Only for actions that DON'T need tool calling (summary, explain).
+  // Ask/chat stay on Claude because the coordinator needs tool support.
+  if (process.env.XAI_API_KEY) {
+    if (action === 'summary') return MODELS.GROK_FAST;
+    if (action === 'explain') return MODELS.GROK_4;
   }
 
   // 1. Action override — certain actions are locked to specific models

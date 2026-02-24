@@ -56,6 +56,9 @@ export interface ThinkingStep {
     changes?: Array<{ fileName: string; confidence?: number; reasoning?: string }>;
     diagnosticDetails?: Array<{ fileName: string; line: number; column?: number; message: string; severity: 'error' | 'warning'; suggestion?: string }>;
     cost?: { inputTokens: number; outputTokens: number; perAgent?: Array<{ agentType: string; inputTokens: number; outputTokens: number }> };
+    designTokenCount?: number;
+    styleProfileRules?: number;
+    referenceFiles?: Array<{ fileName: string; path?: string }>;
     [key: string]: unknown;
   };
   /** Live LLM reasoning text accumulated from streaming 'reasoning' SSE events. */
@@ -361,6 +364,17 @@ function StepMetadata({ step, onOpenFile }: { step: ThinkingStep; onOpenFile?: (
           )}
         </div>
       )}
+      {/* Reference sections */}
+      {meta.referenceFiles && meta.referenceFiles.length > 0 && (
+        <div role="group" aria-label="Reference sections" className="space-y-1">
+          <span className="text-[10px] ide-text-muted uppercase tracking-wider">Reference sections</span>
+          <div className="flex flex-wrap gap-1">
+            {meta.referenceFiles.map((f) => (
+              <FileChip key={f.path ?? f.fileName} fileName={f.fileName} path={f.path} onOpenFile={onOpenFile} />
+            ))}
+          </div>
+        </div>
+      )}
       {/* Delegations */}
       {meta.delegations && meta.delegations.length > 0 && (
         <div className="space-y-1">
@@ -390,7 +404,7 @@ function StepMetadata({ step, onOpenFile }: { step: ThinkingStep; onOpenFile?: (
 function PhaseCheckbox({ checked, active }: { checked: boolean; active: boolean }) {
   if (checked) {
     return (
-      <div className="w-4 h-4 rounded border-2 border-[#28CD56] bg-[#28CD56] flex items-center justify-center shrink-0" role="checkbox" aria-checked="true">
+      <div className="w-4 h-4 rounded border-2 border-[oklch(0.745_0.189_148)] bg-[oklch(0.745_0.189_148)] flex items-center justify-center shrink-0" role="checkbox" aria-checked="true">
         <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
@@ -621,6 +635,15 @@ export function ThinkingBlock({
                                     )}
                                     {step.routingTier && (
                                       <RoutingTierBadge tier={step.routingTier} model={step.model} />
+                                    )}
+                                    {(step.metadata?.styleProfileRules ?? step.metadata?.designTokenCount) != null && (
+                                      <span
+                                        className="text-[10px] ide-text-quiet font-mono shrink-0"
+                                        aria-label="Style profile rule count"
+                                        aria-live="polite"
+                                      >
+                                        Style profile: {step.metadata?.styleProfileRules ?? step.metadata?.designTokenCount} rules
+                                      </span>
                                     )}
                                     {step.diagnostics && (
                                       <span className="ml-1.5 inline-flex items-center gap-1">

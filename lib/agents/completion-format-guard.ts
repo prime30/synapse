@@ -43,7 +43,11 @@ function formatValidation(reviewResult?: ReviewResult, analysis?: string): strin
 
 export function ensureCompletionResponseSections(input: GuardInput): string {
   const original = (input.analysis ?? '').trim();
-  if (input.intentMode !== 'code' || input.needsClarification) return original;
+  const hasChanges = input.changes && input.changes.length > 0;
+  // Skip for ask/plan modes with no changes — those don't need structured summaries.
+  if (!hasChanges && input.intentMode !== 'code' && input.intentMode !== 'debug') return original;
+  // In code/debug mode, ALWAYS append the summary — even on needsClarification.
+  // The user must know what was attempted and why it didn't stick.
 
   const hasWhat = hasHeading(original, WHAT_HEADING);
   const hasWhy = hasHeading(original, WHY_HEADING);

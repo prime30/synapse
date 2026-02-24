@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 
 const CHAR_DELAY_MS = 30;
 const AGENT_COLORS = ['text-green-400', 'text-blue-400', 'text-purple-400'] as const;
-const AGENT_GLOW = ['shadow-[0_0_8px_rgba(34,197,94,0.6)]', 'shadow-[0_0_8px_rgba(59,130,246,0.6)]', 'shadow-[0_0_8px_rgba(168,85,247,0.6)]'] as const;
+const AGENT_GLOW = ['shadow-[0_0_8px_oklch(0.723_0.191_149_/_0.6)]', 'shadow-[0_0_8px_oklch(0.623_0.214_259_/_0.6)]', 'shadow-[0_0_8px_oklch(0.586_0.262_293_/_0.6)]'] as const;
 
 type AgentIndex = 0 | 1 | 2;
 

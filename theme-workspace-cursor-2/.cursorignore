@@ -1,5 +1,0 @@
-# Speed up Cursor Headless CLI: avoid indexing irrelevant files.
-.git/
-node_modules/
-*.map
-.DS_Store

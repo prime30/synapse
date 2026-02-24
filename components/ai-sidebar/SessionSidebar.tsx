@@ -21,6 +21,10 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import type { ChatSession } from './SessionHistory';
+import { ConversationSearch } from './ConversationSearch';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { SessionSummary } from './SessionSummary';
+import { ConversationExport } from './ConversationExport';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,6 +92,12 @@ interface SessionSidebarProps {
     note: string | null;
     fileCount: number;
   }>;
+  /** Project ID for ConversationSearch (cross-session message search). */
+  projectId?: string;
+  /** Called when user selects a message from ConversationSearch. Switch to session and optionally scroll to message. */
+  onSelectMessage?: (messageId: string, sessionId: string) => void;
+  /** Messages for the active session (for ConversationExport). Only passed when session is active. */
+  activeSessionMessages?: Array<{ role: string; content: string; created_at?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +130,9 @@ export function SessionSidebar({
   onOpenTemplates,
   onOpenTraining,
   pushLog = [],
+  projectId,
+  onSelectMessage,
+  activeSessionMessages = [],
 }: SessionSidebarProps) {
   const [, startSidebarTransition] = useTransition();
   const [collapsed, setCollapsed] = useState(() => {
@@ -134,6 +147,7 @@ export function SessionSidebar({
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState<Record<string, boolean>>({});
   const bulkMenuRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -350,17 +364,35 @@ export function SessionSidebar({
                 </button>
               </div>
               {hasDiffStats(session) ? (
-                <p className="text-[10px] leading-tight mt-0.5 flex items-center gap-1.5">
-                  <span className="text-green-500 dark:text-green-400">
-                    +{session.linesAdded ?? 0}
-                  </span>
-                  <span className="text-red-500 dark:text-red-400">
-                    -{session.linesDeleted ?? 0}
-                  </span>
-                  <span className="ide-text-muted">
-                    {session.filesAffected ?? 0} Files
-                  </span>
-                </p>
+                <>
+                  <p className="text-[10px] leading-tight mt-0.5 flex items-center gap-1.5">
+                    <span className="text-green-500 dark:text-green-400">
+                      +{session.linesAdded ?? 0}
+                    </span>
+                    <span className="text-red-500 dark:text-red-400">
+                      -{session.linesDeleted ?? 0}
+                    </span>
+                    <span className="ide-text-muted">
+                      {session.filesAffected ?? 0} Files
+                    </span>
+                  </p>
+                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                    <SessionSummary
+                      filesChanged={session.filesAffected ?? 0}
+                      linesAdded={session.linesAdded ?? 0}
+                      linesRemoved={session.linesDeleted ?? 0}
+                      patternsLearned={[]}
+                      duration=""
+                      isExpanded={summaryExpanded[session.id] ?? false}
+                      onToggle={() =>
+                        setSummaryExpanded((prev) => ({
+                          ...prev,
+                          [session.id]: !(prev[session.id] ?? false),
+                        }))
+                      }
+                    />
+                  </div>
+                </>
               ) : (
                 <p className="text-[10px] ide-text-muted leading-tight mt-0.5">
                   {relativeTime(session.updatedAt)}
@@ -378,6 +410,12 @@ export function SessionSidebar({
 
         {!isEditing && (
           <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 mt-0.5">
+            {isActive && activeSessionMessages.length > 0 && (
+              <ConversationExport
+                messages={activeSessionMessages}
+                sessionTitle={session.title || undefined}
+              />
+            )}
             {onRename && (
               <button
                 type="button"
@@ -502,6 +540,12 @@ export function SessionSidebar({
               {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               New Agent
             </button>
+            {projectId && onSelectMessage && (
+              <ConversationSearch
+                projectId={projectId}
+                onSelectMessage={onSelectMessage}
+              />
+            )}
             {hasMore && onLoadAllHistory && (
               <button
                 type="button"
@@ -629,9 +673,15 @@ export function SessionSidebar({
         )}
 
         {filteredSessions.length === 0 && !collapsed && (
-          <p className="px-2 py-6 text-center text-[10px] ide-text-muted">
-            {debouncedQuery ? 'No matching agents' : 'No agents yet'}
-          </p>
+          isLoading ? (
+            <div className="px-2 py-4">
+              <Skeleton variant="list" lines={4} />
+            </div>
+          ) : (
+            <p className="px-2 py-6 text-center text-[10px] ide-text-muted">
+              {debouncedQuery ? 'No matching agents' : 'No agents yet'}
+            </p>
+          )
         )}
 
         {filteredSessions.map((s) => renderSessionItem(s, false))}

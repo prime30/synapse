@@ -30,7 +30,7 @@ export default function DownloadPage() {
   return (
     <>
       <Navbar />
-      <main className="relative z-10 bg-[#fafaf9] dark:bg-[#0a0a0a] film-grain">
+      <main className="relative z-10 bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] film-grain">
         <DownloadHero />
         <Footer />
       </main>

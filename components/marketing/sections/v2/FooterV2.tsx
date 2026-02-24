@@ -43,7 +43,7 @@ export default function FooterV2() {
   return (
     <footer
       ref={ref}
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] border-t border-stone-200 dark:border-white/10 overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] border-t border-stone-200 dark:border-white/10 overflow-hidden"
       aria-label="Site footer"
     >
       <motion.div

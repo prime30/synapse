@@ -43,7 +43,7 @@ export function HowItWorksV2() {
     <section
       ref={ref}
       id="how-it-works"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
         {/* ── Header ───────────────────────────────────────────────── */}
@@ -85,7 +85,7 @@ export function HowItWorksV2() {
               >
                 {/* Step number — opaque background so line doesn't show through */}
                 <div className="relative z-10 mb-5">
-                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-white dark:bg-[#0a0a0a] border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
+                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-white dark:bg-[oklch(0.145_0_0)] border border-stone-200 dark:border-white/10 flex items-center justify-center shadow-sm">
                     <PixelAccent className="!text-2xl md:!text-3xl">{step.number}</PixelAccent>
                   </div>
                 </div>

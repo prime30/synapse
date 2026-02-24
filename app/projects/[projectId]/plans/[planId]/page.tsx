@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -360,7 +360,7 @@ export default function PlanPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex items-center justify-center">
         <div className="text-sm text-stone-500 dark:text-gray-400">Loading plan...</div>
       </div>
     );
@@ -368,7 +368,7 @@ export default function PlanPage() {
 
   if (error && !plan) {
     return (
-      <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex items-center justify-center">
         <div className="text-center space-y-3">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           <button
@@ -388,7 +388,7 @@ export default function PlanPage() {
   /* -- Render ----------------------------------------------------- */
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]">
       {/* Conflict banner */}
       {conflict && (
         <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 px-6 py-3 flex items-center justify-between">
@@ -449,13 +449,13 @@ export default function PlanPage() {
                 setEditingName(false);
               }
             }}
-            className="text-lg font-semibold text-stone-900 dark:text-white bg-transparent border-b-2 border-[#28CD56] outline-none px-1 min-w-[200px]"
+            className="text-lg font-semibold text-stone-900 dark:text-white bg-transparent border-b-2 border-[oklch(0.745_0.189_148)] outline-none px-1 min-w-[200px]"
           />
         ) : (
           <button
             type="button"
             onClick={() => setEditingName(true)}
-            className="text-lg font-semibold text-stone-900 dark:text-white hover:text-[#28CD56] transition-colors cursor-text text-left"
+            className="text-lg font-semibold text-stone-900 dark:text-white hover:text-[oklch(0.745_0.189_148)] transition-colors cursor-text text-left"
             title="Click to rename"
           >
             {draftName}
@@ -474,7 +474,7 @@ export default function PlanPage() {
             {draftStatus}
           </button>
           {showStatusDropdown && (
-            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[120px]">
+            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[120px]">
               {STATUS_OPTIONS.map((s) => (
                 <button
                   key={s}
@@ -485,7 +485,7 @@ export default function PlanPage() {
                   }}
                   className={`w-full text-left px-3 py-1.5 text-sm capitalize hover:bg-stone-50 dark:hover:bg-white/5 transition-colors ${
                     s === draftStatus
-                      ? 'text-[#28CD56] font-medium'
+                      ? 'text-[oklch(0.745_0.189_148)] font-medium'
                       : 'text-stone-700 dark:text-gray-300'
                   }`}
                 >
@@ -503,7 +503,7 @@ export default function PlanPage() {
           disabled={saving || !isDirty}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             isDirty
-              ? 'bg-[#28CD56] text-white hover:bg-[#22b84a] shadow-sm'
+              ? 'bg-[oklch(0.745_0.189_148)] text-white hover:bg-[oklch(0.684_0.178_149)] shadow-sm'
               : 'bg-stone-100 text-stone-400 dark:bg-white/5 dark:text-gray-500 cursor-not-allowed'
           }`}
         >
@@ -521,7 +521,7 @@ export default function PlanPage() {
             <EllipsisIcon className="w-5 h-5" />
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[150px]">
+            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[150px]">
               <button
                 type="button"
                 onClick={archivePlan}
@@ -547,7 +547,7 @@ export default function PlanPage() {
           <div className="flex items-center gap-3">
             <div className="flex-1 h-2 bg-stone-200 dark:bg-white/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#28CD56] rounded-full transition-all duration-300"
+                className="h-full bg-[oklch(0.745_0.189_148)] rounded-full transition-all duration-300"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
@@ -579,7 +579,7 @@ export default function PlanPage() {
         </div>
 
         {contentMode === 'view' ? (
-          <div className="prose prose-stone dark:prose-invert max-w-none prose-headings:text-stone-900 dark:prose-headings:text-white prose-p:text-stone-600 dark:prose-p:text-gray-400 prose-a:text-[#28CD56] prose-code:text-sm prose-code:bg-stone-100 dark:prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded">
+          <div className="prose prose-stone dark:prose-invert max-w-none prose-headings:text-stone-900 dark:prose-headings:text-white prose-p:text-stone-600 dark:prose-p:text-gray-400 prose-a:text-[oklch(0.745_0.189_148)] prose-code:text-sm prose-code:bg-stone-100 dark:prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded">
             {draftContent ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{draftContent}</ReactMarkdown>
             ) : (
@@ -597,7 +597,7 @@ export default function PlanPage() {
               resizeTextarea();
             }}
             placeholder="Write your plan in Markdown..."
-            className="w-full min-h-[300px] bg-white dark:bg-[#111] border border-stone-200 dark:border-white/10 rounded-lg p-4 text-sm text-stone-900 dark:text-white font-mono leading-relaxed placeholder:text-stone-400 dark:placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-[#28CD56]/30 focus:border-[#28CD56] resize-none"
+            className="w-full min-h-[300px] bg-white dark:bg-[oklch(0.176_0_0)] border border-stone-200 dark:border-white/10 rounded-lg p-4 text-sm text-stone-900 dark:text-white font-mono leading-relaxed placeholder:text-stone-400 dark:placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-[oklch(0.745_0.189_148)]/30 focus:border-[oklch(0.745_0.189_148)] resize-none"
           />
         )}
       </div>
@@ -627,8 +627,8 @@ export default function PlanPage() {
                   onClick={() => toggleTodo(todo)}
                   className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
                     todo.status === 'completed'
-                      ? 'bg-[#28CD56] border-[#28CD56] text-white'
-                      : 'border-stone-300 dark:border-white/20 hover:border-[#28CD56]'
+                      ? 'bg-[oklch(0.745_0.189_148)] border-[oklch(0.745_0.189_148)] text-white'
+                      : 'border-stone-300 dark:border-white/20 hover:border-[oklch(0.745_0.189_148)]'
                   }`}
                   aria-label={`Toggle "${todo.content}"`}
                 >
@@ -647,7 +647,7 @@ export default function PlanPage() {
                       if (e.key === 'Escape') setEditingTodoId(null);
                     }}
                     autoFocus
-                    className="flex-1 text-sm bg-transparent border-b border-[#28CD56] outline-none text-stone-900 dark:text-white px-1"
+                    className="flex-1 text-sm bg-transparent border-b border-[oklch(0.745_0.189_148)] outline-none text-stone-900 dark:text-white px-1"
                   />
                 ) : (
                   <span
@@ -698,7 +698,7 @@ export default function PlanPage() {
                   }}
                   autoFocus
                   placeholder="What needs to be done?"
-                  className="flex-1 text-sm bg-transparent border-b border-stone-300 dark:border-white/20 outline-none text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 px-1 focus:border-[#28CD56]"
+                  className="flex-1 text-sm bg-transparent border-b border-stone-300 dark:border-white/20 outline-none text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 px-1 focus:border-[oklch(0.745_0.189_148)]"
                 />
               </div>
             )}
@@ -709,7 +709,7 @@ export default function PlanPage() {
             <button
               type="button"
               onClick={() => setAddingTodo(true)}
-              className="mt-3 flex items-center gap-1.5 text-sm text-stone-500 dark:text-gray-400 hover:text-[#28CD56] transition-colors"
+              className="mt-3 flex items-center gap-1.5 text-sm text-stone-500 dark:text-gray-400 hover:text-[oklch(0.745_0.189_148)] transition-colors"
             >
               <PlusIcon className="w-4 h-4" />
               Add todo

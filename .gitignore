@@ -56,6 +56,10 @@ components/marketing/dev/
 # Local theme file sync (dev-only mirror of Supabase files)
 .synapse-themes/
 
+# Theme workspace duplicates (only theme-workspace/ is canonical)
+theme-workspace-cursor*/
+theme-workspace - Copy/
+
 # Local file cache (theme files cached on disk for zero-latency agent reads)
 .cache/
 

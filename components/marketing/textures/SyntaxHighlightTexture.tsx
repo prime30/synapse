@@ -8,12 +8,12 @@ interface Token {
 }
 
 const TOKEN_COLORS: Record<Token['type'], string> = {
-  keyword: '#06b6d4',    // cyan-500
-  string: '#0ea5e9',     // sky-500
-  comment: '#44403c',    // dark stone
-  tag: '#0284c7',        // sky-600
-  attribute: '#78716c',  // stone-500
-  plain: '#57534e',      // stone-600
+  keyword: 'oklch(0.715 0.143 215)',    // cyan-500
+  string: 'oklch(0.685 0.169 237)',     // sky-500
+  comment: 'oklch(0.374 0.01 68)',      // dark stone
+  tag: 'oklch(0.588 0.158 242)',        // sky-600
+  attribute: 'oklch(0.553 0.013 58)',   // stone-500
+  plain: 'oklch(0.444 0.011 74)',       // stone-600
 };
 
 // Simple tokenizer for Liquid-like code

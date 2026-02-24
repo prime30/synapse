@@ -5,6 +5,7 @@ import { PREVIEW_SYNC_EVENT } from '@/lib/preview/sync-listener';
 import { snapshotToDOMElements } from '@/lib/preview/dom-context-formatter';
 import {
   compareSnapshots,
+  formatRegressions,
   type PreviewVerificationResult,
   type DOMSnapshot as VerifierDOMSnapshot,
 } from '@/lib/agents/preview-verifier';
@@ -129,6 +130,30 @@ export function usePreviewVerification(
 
         // Run comparison
         const result = compareSnapshots(beforeVerifier, afterVerifier);
+
+        // E2: Check for new console errors (last 5 seconds)
+        const getConsoleLogs = previewRef.current.getConsoleLogs;
+        if (getConsoleLogs) {
+          try {
+            const consoleResult = await getConsoleLogs('error');
+            const logs = consoleResult?.logs ?? [];
+            const cutoff = Date.now() - 5000;
+            const recentErrors = logs.filter((l) => l.ts > cutoff);
+            if (recentErrors.length > 0) {
+              for (const l of recentErrors) {
+                result.regressions.push({
+                  type: 'console_error',
+                  description: l.message,
+                  severity: 'error',
+                });
+              }
+              result.passed = false;
+              result.formatted = formatRegressions(result.regressions);
+            }
+          } catch {
+            // Console log fetch failed — skip, don't fail verification
+          }
+        }
 
         setState({ isVerifying: false, result, error: null });
         return result;

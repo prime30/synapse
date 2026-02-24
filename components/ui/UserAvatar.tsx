@@ -48,7 +48,7 @@ export function UserAvatar({
   fullName,
   email,
   userId,
-  fallbackColor = '#6b7280',
+  fallbackColor = 'oklch(0.551 0.027 264)',
   size = 'md',
   className = '',
 }: UserAvatarProps) {

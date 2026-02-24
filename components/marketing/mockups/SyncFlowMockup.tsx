@@ -6,9 +6,9 @@ const THEMES = [
 
 export function SyncFlowMockup() {
   return (
-    <div className="rounded-2xl bg-[#111] border border-white/5 overflow-hidden">
+    <div className="rounded-2xl bg-[oklch(0.178_0_0)] border border-white/5 overflow-hidden">
       {/* Top bar */}
-      <div className="h-10 bg-[#0a0a0a] border-b border-white/5 flex items-center px-4">
+      <div className="h-10 bg-[oklch(0.145_0_0)] border-b border-white/5 flex items-center px-4">
         <span className="text-[11px] text-white/60">Shopify Sync</span>
         <div className="ml-auto flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-green-500" />

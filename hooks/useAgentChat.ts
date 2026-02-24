@@ -21,7 +21,7 @@ interface UseAgentChatReturn {
   /** Add a message to local state only -- no DB persist. For streaming placeholders. */
   addLocalMessage: (msg: ChatMessage) => void;
   /** Update a message's content in local state only (for streaming chunks). */
-  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome'>>) => void;
+  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus'>>) => void;
   /** Persist the final content of a streamed message to the DB. */
   finalizeMessage: (id: string) => void;
 
@@ -352,7 +352,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── updateMessage (local only) ──────────────────────────────────────────
 
-  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'verificationEvidence'>>) => {
+  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus'>>) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content, ...meta } : m)),
     );

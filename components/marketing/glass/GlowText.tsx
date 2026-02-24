@@ -29,15 +29,15 @@ const colorMap = {
 };
 
 const glowColorMap = {
-  accent: 'drop-shadow-[0_0_20px_rgba(40,205,86,0.35)]',
-  white: 'drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]',
-  'warm-gray': 'drop-shadow-[0_0_15px_rgba(120,113,108,0.2)]',
+  accent: 'drop-shadow-[0_0_20px_oklch(0.745_0.189_148_/_0.35)]',
+  white: 'drop-shadow-[0_0_20px_oklch(1_0_0_/_0.2)]',
+  'warm-gray': 'drop-shadow-[0_0_15px_oklch(0.553_0.013_58_/_0.2)]',
 };
 
 const accentGlowKeyframes = [
-  'drop-shadow(0 0 20px rgba(40,205,86,0.25))',
-  'drop-shadow(0 0 36px rgba(40,205,86,0.5))',
-  'drop-shadow(0 0 20px rgba(40,205,86,0.25))',
+  'drop-shadow(0 0 20px oklch(0.745 0.189 148 / 0.25))',
+  'drop-shadow(0 0 36px oklch(0.745 0.189 148 / 0.5))',
+  'drop-shadow(0 0 20px oklch(0.745 0.189 148 / 0.25))',
 ];
 
 export function GlowText({

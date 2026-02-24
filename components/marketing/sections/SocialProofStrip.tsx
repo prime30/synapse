@@ -27,7 +27,7 @@ export function SocialProofStrip() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="bg-[#fafaf9] dark:bg-[#0a0a0a] group relative overflow-hidden"
+      className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] group relative overflow-hidden"
     >
       {/* Hover ghost code overlay */}
       <div
@@ -79,7 +79,7 @@ export function SocialProofStrip() {
                 className="absolute inset-0"
                 style={{
                   width: '400%',
-                  background: 'linear-gradient(105deg, transparent 0%, transparent 30%, #28CD56 42%, #28CD56 58%, transparent 70%, transparent 100%)',
+                  background: 'linear-gradient(105deg, transparent 0%, transparent 30%, oklch(0.745 0.189 148) 42%, oklch(0.745 0.189 148) 58%, transparent 70%, transparent 100%)',
                   animation: 'stats-shimmer 3s ease-in-out forwards',
                 }}
               />

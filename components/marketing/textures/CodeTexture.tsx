@@ -37,8 +37,8 @@ const CODE_SNIPPETS: Record<string, string> = {
 {% endfor %}`,
   css: `/* Synapse Generated Styles */
 :root {
-  --color-primary: #0c0c0c;
-  --color-accent: #0ea5e9;
+  --color-primary: oklch(0.156 0 0);
+  --color-accent: oklch(0.685 0.169 237);
   --font-heading: 'Geist Sans', sans-serif;
   --font-body: 'Geist Sans', sans-serif;
 }

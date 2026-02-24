@@ -73,7 +73,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-stone-50 dark:bg-white/5',
     taskBg: 'bg-stone-100 dark:bg-white/10',
     taskText: 'text-stone-600 dark:text-white/60',
-    glowShadow: 'shadow-[0_0_20px_rgba(168,162,158,0.2)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.709_0.01_56_/_0.2)]',
   },
   {
     name: 'PM Agent',
@@ -83,7 +83,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-blue-50 dark:bg-blue-500/10',
     taskBg: 'bg-blue-100/60 dark:bg-blue-500/10',
     taskText: 'text-blue-700 dark:text-blue-300',
-    glowShadow: 'shadow-[0_0_20px_rgba(59,130,246,0.25)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.623_0.214_259_/_0.25)]',
   },
   {
     name: 'Liquid Agent',
@@ -93,7 +93,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-green-50 dark:bg-green-500/10',
     taskBg: 'bg-green-100/60 dark:bg-green-500/10',
     taskText: 'text-green-700 dark:text-green-300',
-    glowShadow: 'shadow-[0_0_20px_rgba(34,197,94,0.25)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.723_0.191_149_/_0.25)]',
   },
   {
     name: 'JS Agent',
@@ -103,7 +103,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-amber-50 dark:bg-amber-500/10',
     taskBg: 'bg-amber-100/60 dark:bg-amber-500/10',
     taskText: 'text-amber-700 dark:text-amber-300',
-    glowShadow: 'shadow-[0_0_20px_rgba(245,158,11,0.25)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.769_0.188_70_/_0.25)]',
   },
   {
     name: 'CSS Agent',
@@ -113,7 +113,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-pink-50 dark:bg-pink-500/10',
     taskBg: 'bg-pink-100/60 dark:bg-pink-500/10',
     taskText: 'text-pink-700 dark:text-pink-300',
-    glowShadow: 'shadow-[0_0_20px_rgba(236,72,153,0.25)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.627_0.265_3_/_0.25)]',
   },
   {
     name: 'Review Agent',
@@ -123,7 +123,7 @@ const ALL_AGENTS: AgentDef[] = [
     activeBg: 'bg-purple-50 dark:bg-purple-500/10',
     taskBg: 'bg-purple-100/60 dark:bg-purple-500/10',
     taskText: 'text-purple-700 dark:text-purple-300',
-    glowShadow: 'shadow-[0_0_20px_rgba(168,85,247,0.25)]',
+    glowShadow: 'shadow-[0_0_20px_oklch(0.586_0.262_293_/_0.25)]',
   },
 ];
 
@@ -359,7 +359,7 @@ export function AgentHubDiagram() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] py-16 md:py-24 overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] py-16 md:py-24 overflow-hidden"
       aria-label="Agent workflow: from your prompt to deployed output"
     >
       {/* Live region: announces current step for screen readers */}
@@ -407,7 +407,7 @@ export function AgentHubDiagram() {
                           style={{
                             zIndex: ALL_AGENTS.length - i,
                             transform: `translateY(-${offset}px) translateX(${xShift}px)`,
-                            filter: `drop-shadow(0 ${4 + i * 3}px ${8 + i * 4}px rgba(0,0,0,${0.04 + i * 0.02}))`,
+                            filter: `drop-shadow(0 ${4 + i * 3}px ${8 + i * 4}px oklch(0 0 0 / ${0.04 + i * 0.02}))`,
                           }}
                           transition={layoutTransition}
                         >

@@ -32,6 +32,22 @@ export interface OrchestrationActivitySignal {
   details?: Record<string, unknown>;
 }
 
+/** Progress event emitted during tool execution (between tool_start and tool_call) */
+export interface ToolProgressEvent {
+  type: 'tool_progress';
+  toolCallId: string;
+  name: string;
+  progress: {
+    phase: string;
+    detail: string;
+    bytesProcessed?: number;
+    totalBytes?: number;
+    matchCount?: number;
+    lineNumber?: number;
+    percentage?: number;
+  };
+}
+
 /** A message exchanged between agents through the coordinator */
 export interface AgentMessage {
   id: string;

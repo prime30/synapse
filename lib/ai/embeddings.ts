@@ -89,21 +89,22 @@ export async function storeFileEmbedding(
   fileName: string,
   contentHash: string,
   embedding: number[],
+  chunkIndex: number = 0,
+  chunkText?: string,
 ): Promise<void> {
   const supabase = await createClient();
 
   const { error } = await supabase
     .from('file_embeddings')
-    .upsert(
-      {
-        project_id: projectId,
-        file_id: fileId,
-        file_name: fileName,
-        content_hash: contentHash,
-        embedding: `[${embedding.join(',')}]`,
-      },
-      { onConflict: 'project_id,file_id' }
-    );
+    .insert({
+      project_id: projectId,
+      file_id: fileId,
+      file_name: fileName,
+      content_hash: contentHash,
+      embedding: `[${embedding.join(',')}]`,
+      chunk_index: chunkIndex,
+      chunk_text: chunkText ?? null,
+    });
 
   if (error) {
     console.warn('[embeddings] Failed to store embedding (table may not exist):', error.message);
@@ -193,12 +194,60 @@ export async function indexProjectFiles(
     return true;
   });
 
-  // Process in batches of 20
+  // AST-driven chunking: split each file into structural chunks before embedding
+  const { chunkFile } = await import('@/lib/parsers/ast-chunker');
+
+  const allChunks: Array<{
+    fileId: string;
+    fileName: string;
+    contentHash: string;
+    chunkIndex: number;
+    chunkContent: string;
+    chunkType: string;
+    metadata: Record<string, unknown>;
+  }> = [];
+
+  for (const f of toIndex) {
+    // Delete old embeddings for this file before re-indexing
+    await supabase
+      .from('file_embeddings')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('file_id', f.fileId);
+
+    const chunks = chunkFile(f.content, f.fileName);
+    if (chunks.length === 0) {
+      // Fallback: embed the whole file as one chunk
+      allChunks.push({
+        fileId: f.fileId,
+        fileName: f.fileName,
+        contentHash: f.contentHash,
+        chunkIndex: 0,
+        chunkContent: f.content.slice(0, 8000),
+        chunkType: 'full_file',
+        metadata: {},
+      });
+    } else {
+      for (let ci = 0; ci < chunks.length; ci++) {
+        allChunks.push({
+          fileId: f.fileId,
+          fileName: f.fileName,
+          contentHash: f.contentHash,
+          chunkIndex: ci,
+          chunkContent: chunks[ci].content.slice(0, 8000),
+          chunkType: chunks[ci].type,
+          metadata: chunks[ci].metadata,
+        });
+      }
+    }
+  }
+
+  // Process chunks in batches of 20
   const BATCH_SIZE = 20;
-  for (let i = 0; i < toIndex.length; i += BATCH_SIZE) {
-    const batch = toIndex.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
+    const batch = allChunks.slice(i, i + BATCH_SIZE);
     try {
-      const embeddings = await generateEmbeddingsBatch(batch.map(f => f.content));
+      const embeddings = await generateEmbeddingsBatch(batch.map(c => c.chunkContent));
       for (let j = 0; j < batch.length; j++) {
         await storeFileEmbedding(
           projectId,
@@ -206,6 +255,8 @@ export async function indexProjectFiles(
           batch[j].fileName,
           batch[j].contentHash,
           embeddings[j],
+          batch[j].chunkIndex,
+          batch[j].chunkContent,
         );
         indexed++;
       }

@@ -69,7 +69,7 @@ export function Navbar() {
 
   const handleCtaAction = useCallback(() => {
     if (isAuthenticated) {
-      router.push('/onboarding');
+      router.push('/projects');
       return;
     }
 
@@ -79,7 +79,7 @@ export function Navbar() {
   return (
     <>
       <motion.header
-        className="sticky top-0 z-50 w-full bg-[#fafaf9]/90 dark:bg-[#0a0a0a]/90 backdrop-blur-md border-b border-stone-200 dark:border-white/10"
+        className="sticky top-0 z-50 w-full bg-[oklch(0.985_0.001_106)]/90 dark:bg-[oklch(0.145_0_0)]/90 backdrop-blur-md border-b border-stone-200 dark:border-white/10"
         initial={{ y: -64 }}
         animate={ready ? { y: 0 } : { y: -64 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] as const }}
@@ -203,7 +203,7 @@ export function Navbar() {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            className="fixed inset-0 z-[60] bg-[#0a0a0a]/95 backdrop-blur-2xl flex flex-col items-center justify-center gap-8"
+            className="fixed inset-0 z-[60] bg-[oklch(0.145_0_0)]/95 backdrop-blur-2xl flex flex-col items-center justify-center gap-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

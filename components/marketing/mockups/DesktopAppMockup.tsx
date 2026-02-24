@@ -66,19 +66,19 @@ export function DesktopAppMockup() {
         className="absolute -inset-8 rounded-3xl opacity-40 dark:opacity-25 blur-3xl pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse at 50% 40%, rgba(40,205,86,0.15), rgba(14,165,233,0.08) 60%, transparent 80%)',
+            'radial-gradient(ellipse at 50% 40%, oklch(0.745 0.189 148 / 0.15), oklch(0.685 0.169 237 / 0.08) 60%, transparent 80%)',
         }}
         aria-hidden
       />
 
       {/* Window frame */}
-      <div className="relative rounded-xl overflow-hidden border border-stone-200/80 dark:border-white/10 shadow-2xl bg-[#1e1e1e]">
+      <div className="relative rounded-xl overflow-hidden border border-stone-200/80 dark:border-white/10 shadow-2xl bg-[oklch(0.227_0_0)]">
         {/* Title bar */}
-        <div className="flex items-center h-9 px-3 bg-[#2d2d2d] border-b border-white/5 select-none">
+        <div className="flex items-center h-9 px-3 bg-[oklch(0.28_0_0)] border-b border-white/5 select-none">
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-            <span className="w-3 h-3 rounded-full bg-[#febc2e]" />
-            <span className="w-3 h-3 rounded-full bg-[#28c840]" />
+            <span className="w-3 h-3 rounded-full bg-[oklch(0.63_0.22_20)]" />
+            <span className="w-3 h-3 rounded-full bg-[oklch(0.84_0.16_80)]" />
+            <span className="w-3 h-3 rounded-full bg-[oklch(0.72_0.19_145)]" />
           </div>
           <div className="flex-1 text-center">
             <span className="text-[11px] text-white/30 tracking-wide">
@@ -91,7 +91,7 @@ export function DesktopAppMockup() {
         {/* Main layout: sidebar + editor + chat */}
         <div className="flex h-[420px] sm:h-[480px]">
           {/* File sidebar */}
-          <div className="hidden sm:flex flex-col w-48 border-r border-white/5 bg-[#252526] overflow-hidden">
+          <div className="hidden sm:flex flex-col w-48 border-r border-white/5 bg-[oklch(0.244_0_0)] overflow-hidden">
             <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/25">
               Explorer
             </div>
@@ -121,13 +121,13 @@ export function DesktopAppMockup() {
           {/* Code editor */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Tabs */}
-            <div className="flex items-center h-8 bg-[#252526] border-b border-white/5">
+            <div className="flex items-center h-8 bg-[oklch(0.244_0_0)] border-b border-white/5">
               {MOCK_TABS.map((tab, i) => (
                 <div
                   key={tab}
                   className={`px-3 h-full flex items-center text-[11px] border-r border-white/5 ${
                     i === 1
-                      ? 'bg-[#1e1e1e] text-white/80'
+                      ? 'bg-[oklch(0.227_0_0)] text-white/80'
                       : 'text-white/30'
                   }`}
                 >
@@ -168,7 +168,7 @@ export function DesktopAppMockup() {
           </div>
 
           {/* AI Chat sidebar */}
-          <div className="hidden md:flex flex-col w-56 border-l border-white/5 bg-[#252526]">
+          <div className="hidden md:flex flex-col w-56 border-l border-white/5 bg-[oklch(0.244_0_0)]">
             <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/25 border-b border-white/5">
               AI Agent
             </div>

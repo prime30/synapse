@@ -9,6 +9,22 @@
  */
 
 import { getSuggestionStats, getDampeningFactor } from './action-history';
+import {
+  generateNextStepChips,
+  type NextStepChip,
+  type NextStepContext,
+} from './next-steps-generator';
+
+/** Re-export for callers that have themeGaps (e.g. from detectThemeGaps). */
+export { generateNextStepChips, type NextStepChip, type NextStepContext };
+
+/**
+ * Generate next-step chips when themeGaps are available.
+ * Call this after detectThemeGaps() to get CX-aware follow-up suggestions.
+ */
+export function getNextStepChips(context: NextStepContext): NextStepChip[] {
+  return generateNextStepChips(context);
+}
 
 export interface Suggestion {
   id: string;

@@ -86,7 +86,7 @@ registerPreviewCacheInvalidator(invalidatePreviewCache);
 /* ------------------------------------------------------------------ */
 
 const NO_PREVIEW_HTML = (msg: string) =>
-  `<html><body style="font-family:system-ui;color:#888;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">${msg}</body></html>`;
+  `<html><body style="font-family:system-ui;color:oklch(0.637 0 0);display:flex;align-items:center;justify-content:center;height:100vh;margin:0">${msg}</body></html>`;
 
 /**
  * Auto-retrying preview page shown while the dev theme is being populated.
@@ -94,11 +94,11 @@ const NO_PREVIEW_HTML = (msg: string) =>
  */
 const SYNCING_PREVIEW_HTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Synapse Preview</title></head>
-<body style="font-family:system-ui;color:#999;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0f">
+<body style="font-family:system-ui;color:oklch(0.685 0 0);display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:oklch(0.145 0.003 285)">
   <div style="text-align:center" id="sync-msg">
-    <div style="width:32px;height:32px;border:2px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
-    <p style="font-size:14px;color:#aaa;margin:0 0 4px">Syncing files to preview theme&hellip;</p>
-    <p style="font-size:12px;color:#666;margin:0">The parent IDE will refresh this when ready.</p>
+    <div style="width:32px;height:32px;border:2px solid oklch(0.32 0 0);border-top-color:oklch(0.718 0.158 248);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
+    <p style="font-size:14px;color:oklch(0.734 0 0);margin:0 0 4px">Syncing files to preview theme&hellip;</p>
+    <p style="font-size:12px;color:oklch(0.49 0 0);margin:0">The parent IDE will refresh this when ready.</p>
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
   <script>
@@ -121,9 +121,9 @@ const SYNCING_PREVIEW_HTML = `<!DOCTYPE html>
       if(count>30){
         sessionStorage.removeItem(key);
         document.getElementById('sync-msg').innerHTML=
-          '<p style="font-size:14px;color:#f87171;margin:0 0 8px">Preview timed out</p>'+
-          '<p style="font-size:12px;color:#666;margin:0 0 12px">The dev theme may still be syncing.</p>'+
-          '<button onclick="sessionStorage.removeItem(\\''+key+'\\');location.reload()" style="padding:6px 16px;border:1px solid #444;border-radius:6px;background:transparent;color:#aaa;cursor:pointer;font-size:13px">Retry</button>';
+          '<p style="font-size:14px;color:oklch(0.704 0.191 22);margin:0 0 8px">Preview timed out</p>'+
+          '<p style="font-size:12px;color:oklch(0.49 0 0);margin:0 0 12px">The dev theme may still be syncing.</p>'+
+          '<button onclick="sessionStorage.removeItem(\\''+key+'\\');location.reload()" style="padding:6px 16px;border:1px solid oklch(0.368 0 0);border-radius:6px;background:transparent;color:oklch(0.734 0 0);cursor:pointer;font-size:13px">Retry</button>';
       } else {
         // Exponential backoff: 4s, 5s, 6s... up to 15s max
         var delay=Math.min(4000+count*500,15000);

@@ -25,7 +25,7 @@ export function FilePreviewCard({ fileName, content, language, lineCount }: File
         </span>
       </div>
 
-      <pre className="p-3 overflow-x-auto text-xs leading-relaxed">
+      <pre className="p-3 overflow-x-hidden text-xs leading-relaxed whitespace-pre-wrap break-words">
         <code className="text-stone-700 dark:text-stone-300 font-mono">{displayContent}</code>
       </pre>
 

@@ -59,7 +59,7 @@ async function captureAfterScreenshot(executionId: string, projectId: string): P
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
     const { id: executionId } = await params;
     const body = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(body);
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (!change.fileId || !change.proposedContent) continue;
 
       try {
-        await updateFile(change.fileId, { content: change.proposedContent });
+        await updateFile(change.fileId, { content: change.proposedContent, userId });
         invalidateFileContent(change.fileId);
         appliedCount++;
 

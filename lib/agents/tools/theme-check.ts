@@ -709,14 +709,14 @@ export function formatThemeCheckResult(result: ThemeCheckResult, maxChars: numbe
 
 /**
  * Generate an SVG placeholder image.
- * Uses IDE accent color (#28CD56) and stone neutrals.
+ * Uses IDE accent color (oklch(0.745 0.189 148)) and stone neutrals.
  */
 export function generatePlaceholderSVG(
   width: number = 800,
   height: number = 600,
   text: string = 'Placeholder',
-  bgColor: string = '#f5f5f4',
-  textColor: string = '#78716c',
+  bgColor: string = 'oklch(0.97 0.001 106)',
+  textColor: string = 'oklch(0.553 0.013 58)',
 ): string {
   // Sanitize text for SVG
   const safeText = text.replace(/[<>&"']/g, (c) => {
@@ -726,8 +726,8 @@ export function generatePlaceholderSVG(
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="${bgColor}"/>
-  <rect x="20" y="20" width="${width - 40}" height="${height - 40}" rx="8" fill="none" stroke="#d6d3d1" stroke-width="2" stroke-dasharray="8,4"/>
+  <rect x="20" y="20" width="${width - 40}" height="${height - 40}" rx="8" fill="none" stroke="oklch(0.869 0.005 56)" stroke-width="2" stroke-dasharray="8,4"/>
   <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${Math.min(width, height) / 12}" fill="${textColor}">${safeText}</text>
-  <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${Math.min(width, height) / 20}" fill="#a8a29e">${width} × ${height}</text>
+  <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${Math.min(width, height) / 20}" fill="oklch(0.709 0.01 56)">${width} × ${height}</text>
 </svg>`;
 }

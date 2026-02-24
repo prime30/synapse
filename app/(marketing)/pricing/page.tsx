@@ -227,23 +227,23 @@ function TierCard({ tier, annual }: { tier: Tier; annual: boolean }) {
               height: '200%',
               top: '-50%',
               left: '-50%',
-              background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(40,205,86,0.5) 60deg, rgba(40,205,86,0.7) 90deg, transparent 150deg, transparent 360deg)',
+              background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, oklch(0.745 0.189 148 / 0.5) 60deg, oklch(0.745 0.189 148 / 0.7) 90deg, transparent 150deg, transparent 360deg)',
               animation: 'prompt-border-spin 3s linear infinite',
             }}
           />
-          <div className="absolute inset-[1.5px] rounded-[10px] bg-[#fafaf9] dark:bg-[#0a0a0a]" />
+          <div className="absolute inset-[1.5px] rounded-[10px] bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]" />
         </div>
       )}
 
       <div
         className={`relative flex flex-col rounded-xl border p-6 md:p-8 transition-shadow ${
           tier.highlighted
-            ? 'border-accent/30 dark:border-accent/20 bg-[#fafaf9] dark:bg-white/[0.03]'
+            ? 'border-accent/30 dark:border-accent/20 bg-[oklch(0.985_0.001_106)] dark:bg-white/[0.03]'
             : 'border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.03]'
         }`}
         style={
           tier.highlighted
-            ? { boxShadow: '0 0 40px rgba(40,205,86,0.1), 0 0 80px rgba(40,205,86,0.05)' }
+            ? { boxShadow: '0 0 40px oklch(0.745 0.189 148 / 0.1), 0 0 80px oklch(0.745 0.189 148 / 0.05)' }
             : undefined
         }
       >
@@ -284,7 +284,7 @@ function TierCard({ tier, annual }: { tier: Tier; annual: boolean }) {
           href={tier.ctaHref}
           className={`block w-full py-3 rounded-full text-center font-semibold transition-shadow mb-8 ${
             tier.highlighted
-              ? 'gradient-accent text-white hover:shadow-[0_0_30px_rgba(40,205,86,0.35)]'
+              ? 'gradient-accent text-white hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)]'
               : 'border border-stone-200 dark:border-white/10 text-stone-900 dark:text-white bg-stone-50 dark:bg-white/5 hover:border-accent/30 dark:hover:border-accent/30'
           }`}
         >
@@ -310,7 +310,7 @@ export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
 
   return (
-    <div className="relative film-grain bg-[#fafaf9] dark:bg-[#0a0a0a] min-h-screen">
+    <div className="relative film-grain bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] min-h-screen">
       <Navbar />
 
       <main className="pt-32 pb-24">

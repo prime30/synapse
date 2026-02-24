@@ -12,7 +12,7 @@ export const metadata = {
  */
 export default function PublicMarketingPage() {
   return (
-    <main className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] pt-24 pb-16">
+    <main className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] pt-24 pb-16">
       <div className="max-w-4xl mx-auto px-6">
         <h1 className="text-2xl font-medium text-stone-900 dark:text-white mb-2">
           Generated marketing assets

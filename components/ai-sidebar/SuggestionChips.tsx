@@ -110,7 +110,7 @@ export function SuggestionChips({
       onKeyDown={handleKeyDown}
       onFocus={() => { if (focusedIndex < 0) setFocusedIndex(0); }}
       onBlur={(e) => { if (!containerRef.current?.contains(e.relatedTarget as Node)) setFocusedIndex(-1); }}
-      className={`flex flex-nowrap gap-1.5 overflow-x-auto scrollbar-hide outline-none ${className}`}
+      className={`flex flex-wrap gap-1.5 outline-none ${className}`}
     >
       {allChips.map((s, i) => {
         const isFocused = focusedIndex === i;

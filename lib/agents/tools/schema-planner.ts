@@ -60,7 +60,7 @@ function toLabel(id: string): string {
 function defaultForType(type: string, id: string): unknown {
   switch (type) {
     case 'checkbox': return !id.startsWith('hide_');
-    case 'color': return '#000000';
+    case 'color': return 'oklch(0 0 0)';
     case 'range': return 4;
     case 'number': return 0;
     case 'text': return '';

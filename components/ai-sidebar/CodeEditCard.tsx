@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, FileCode, ExternalLink } from 'lucide-react';
 import { InlineDiffViewer } from '@/components/features/suggestions/InlineDiffViewer';
+import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
+import { clampConfidence, getConfidenceLabel } from '@/lib/agents/confidence-flow';
 
 function computeDiffStats(original: string, proposed: string): { added: number; removed: number } {
   const oldLines = original.split('\n');
@@ -24,6 +26,7 @@ interface CodeEditProps {
   newContent: string;
   originalContent?: string;
   status: 'pending' | 'applied' | 'rejected';
+  confidence?: number;
   onApplyCode?: (code: string, fileId: string, fileName: string) => void;
   resolveFileId?: (path: string) => string | null;
   onOpenFile?: (filePath: string) => void;
@@ -36,6 +39,7 @@ export function CodeEditCard({
   newContent,
   originalContent,
   status,
+  confidence,
   onApplyCode,
   resolveFileId,
   onOpenFile,
@@ -117,6 +121,9 @@ export function CodeEditCard({
             <span className="text-red-500 dark:text-red-400">-{diffStats.removed}</span>
           </span>
         )}
+        {clampConfidence(confidence) != null && (
+          <ConfidenceBadge confidence={confidence} className="shrink-0" />
+        )}
         {effectiveStatus === 'applied' && (
           <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 ml-auto">Applied</span>
         )}
@@ -183,6 +190,12 @@ export function CodeEditCard({
             <pre className="max-h-[240px] overflow-auto rounded ide-surface-input p-2 text-[11px] font-mono ide-text-2 border ide-border-subtle">
               <code>{newContent}</code>
             </pre>
+          )}
+
+          {clampConfidence(confidence) != null && getConfidenceLabel(clampConfidence(confidence)!) && (
+            <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+              Review recommended
+            </p>
           )}
 
           {effectiveStatus === 'pending' && (

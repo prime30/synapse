@@ -79,11 +79,11 @@ function CodeMockup({ inView }: { inView: boolean }) {
   }, [visibleLines]);
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 overflow-hidden h-[220px] sm:h-[280px] md:h-[400px] flex flex-col">
-      <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5 shrink-0">
-        <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
-        <div className="w-2 h-2 rounded-full bg-[#febc2e]" />
-        <div className="w-2 h-2 rounded-full bg-[#28c840]" />
+    <div className="rounded-xl bg-stone-50 dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/5 overflow-hidden h-[220px] sm:h-[280px] md:h-[400px] flex flex-col">
+      <div className="h-7 bg-stone-100 dark:bg-[oklch(0.145_0_0)] border-b border-stone-200 dark:border-white/5 flex items-center px-3 gap-1.5 shrink-0">
+        <div className="w-2 h-2 rounded-full bg-[oklch(0.63_0.22_20)]" />
+        <div className="w-2 h-2 rounded-full bg-[oklch(0.84_0.16_80)]" />
+        <div className="w-2 h-2 rounded-full bg-[oklch(0.72_0.19_145)]" />
         <span className="ml-3 text-[10px] text-stone-400 dark:text-white/40">hero-section.liquid</span>
       </div>
       <div ref={codeScrollRef} className="flex-1 min-h-0 p-3 font-mono text-[11px] sm:text-[10px] leading-5 overflow-y-auto">
@@ -105,7 +105,7 @@ function CodeMockup({ inView }: { inView: boolean }) {
           </motion.div>
         ))}
       </div>
-      <div className="h-7 bg-stone-100 dark:bg-[#0a0a0a] border-t border-stone-200 dark:border-white/5 flex items-center px-3 gap-3">
+      <div className="h-7 bg-stone-100 dark:bg-[oklch(0.145_0_0)] border-t border-stone-200 dark:border-white/5 flex items-center px-3 gap-3">
         {CARD_AGENTS.map((a, idx) => (
           <div key={a.name} className="flex items-center gap-1">
             <div className={`w-1.5 h-1.5 rounded-full ${a.color} transition-transform duration-300 ${idx === activeAgent ? 'scale-150' : 'scale-100'}`} />
@@ -137,7 +137,7 @@ function ContextMockup({ inView }: { inView: boolean }) {
     { from: 'product.liquid', to: 'price.liquid', type: 'render' },
   ];
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 p-4 space-y-2">
+    <div className="rounded-xl bg-stone-50 dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/5 p-4 space-y-2">
       <div className="text-[9px] text-stone-400 dark:text-white/30 uppercase tracking-widest mb-2">Dependencies</div>
       {deps.map((dep, i) => (
         <motion.div
@@ -173,7 +173,7 @@ function SyncStatusMockup({ inView }: { inView: boolean }) {
   }, [inView]);
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 p-4 space-y-3">
+    <div className="rounded-xl bg-stone-50 dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/5 p-4 space-y-3">
       <div className="flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full transition-colors duration-500 ${connected ? 'bg-green-500' : 'bg-stone-300 dark:bg-white/20'}`} />
         <span className="text-[11px] text-stone-600 dark:text-white/60">
@@ -259,7 +259,7 @@ function VersionTimelineMockup({ inView }: { inView: boolean }) {
     : TIMELINE_ENTRIES;
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 p-4">
+    <div className="rounded-xl bg-stone-50 dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/5 p-4">
       <div className="flex items-start gap-3">
         <div className="flex flex-col items-center gap-0 pt-1">
           {entries.slice(0, showNew ? visibleCount + 1 : visibleCount).map((_, i) => (
@@ -319,7 +319,7 @@ function LiquidValidationMockup({ inView }: { inView: boolean }) {
   ];
 
   return (
-    <div className="rounded-xl bg-stone-50 dark:bg-[#111] border border-stone-200 dark:border-white/5 p-4 space-y-2">
+    <div className="rounded-xl bg-stone-50 dark:bg-[oklch(0.178_0_0)] border border-stone-200 dark:border-white/5 p-4 space-y-2">
       {checks.map((check, i) => (
         <motion.div
           key={check.label}
@@ -409,10 +409,10 @@ function RowDivider() {
 /* ------------------------------------------------------------------ */
 
 const CARD_GLOW_COLORS = [
-  '40,205,86',   // green — Context Intelligence
-  '59,130,246',  // blue — Shopify Sync
-  '168,85,247',  // purple — Version Control
-  '6,182,212',   // cyan — Liquid Intelligence
+  '0.745 0.189 148',   // green — Context Intelligence
+  '0.623 0.214 259',   // blue — Shopify Sync
+  '0.586 0.262 293',   // purple — Version Control
+  '0.715 0.143 215',   // cyan — Liquid Intelligence
 ];
 
 function SecondaryFeatureCard({
@@ -451,7 +451,7 @@ function SecondaryFeatureCard({
       transition={{ duration: 0.4, delay: 0.2 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       style={{
         boxShadow: showGlow
-          ? `0 0 ${12 + powerPct * 20}px rgba(${rgb},${0.08 + powerPct * 0.15}), 0 0 ${40 + powerPct * 25}px rgba(${rgb},${powerPct * 0.06})`
+          ? `0 0 ${12 + powerPct * 20}px oklch(${rgb} / ${0.08 + powerPct * 0.15}), 0 0 ${40 + powerPct * 25}px oklch(${rgb} / ${powerPct * 0.06})`
           : undefined,
         transition: 'box-shadow 0.5s ease-out',
       }}
@@ -465,16 +465,16 @@ function SecondaryFeatureCard({
               height: '200%',
               top: '-50%',
               left: '-50%',
-              background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(${rgb},0.5) 60deg, rgba(${rgb},0.7) 90deg, transparent 150deg, transparent 360deg)`,
+              background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, oklch(${rgb} / 0.5) 60deg, oklch(${rgb} / 0.7) 90deg, transparent 150deg, transparent 360deg)`,
               animation: powerPct >= 1 ? 'prompt-border-spin 3s linear infinite' : undefined,
               transform: `rotate(${powerPct * 360}deg)`,
             }}
           />
-          <div className="absolute inset-[1.5px] rounded-[10px] bg-[#fafaf9] dark:bg-[#111]" />
+          <div className="absolute inset-[1.5px] rounded-[10px] bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.178_0_0)]" />
         </div>
       )}
       <div
-        className={`relative p-5 md:p-6 rounded-xl bg-[#fafaf9] dark:bg-[#111] transition-colors duration-500 ${showGlow ? '' : 'border border-stone-200 dark:border-white/10'}`}
+        className={`relative p-5 md:p-6 rounded-xl bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.178_0_0)] transition-colors duration-500 ${showGlow ? '' : 'border border-stone-200 dark:border-white/10'}`}
       >
         <span className="text-[10px] font-medium tracking-widest uppercase text-stone-400 dark:text-white/40">
           {card.label}
@@ -684,7 +684,7 @@ export function FeatureCards() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="relative bg-white dark:bg-[#0a0a0a]"
+      className="relative bg-white dark:bg-[oklch(0.145_0_0)]"
     >
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden="true">
         <div className="relative h-full">

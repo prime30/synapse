@@ -219,20 +219,20 @@ function MarkdownRendererInner({
 
     // ── Table ───────────────────────────────────────────────────────────
     table: ({ children }) => (
-      <div className="overflow-x-auto my-2">
-        <table className="w-full border-collapse">{children}</table>
+      <div className="overflow-x-hidden my-2">
+        <table className="w-full border-collapse table-fixed">{children}</table>
       </div>
     ),
     thead: ({ children }) => (
       <thead className="ide-surface-inset">{children}</thead>
     ),
     th: ({ children }) => (
-      <th className="border ide-border-subtle px-2 py-1.5 text-left text-xs font-semibold ide-text">
+      <th className="border ide-border-subtle px-2 py-1.5 text-left text-xs font-semibold ide-text break-words">
         {children}
       </th>
     ),
     td: ({ children }) => (
-      <td className="border ide-border-subtle px-2 py-1.5 text-xs ide-text-2">{children}</td>
+      <td className="border ide-border-subtle px-2 py-1.5 text-xs ide-text-2 break-words">{children}</td>
     ),
 
     // ── Links ───────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ function MarkdownRendererInner({
   if (!content?.trim()) return null;
 
   return (
-    <div className="markdown-renderer">
+    <div className="markdown-renderer overflow-x-hidden break-words min-w-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeSanitize]}

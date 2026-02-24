@@ -111,7 +111,7 @@ sequenceDiagram
 
 ### Tier 1 — Stream Route Integration
 
-**Step 4: Update stream route to use `streamWithTools()**` — [app/api/agents/stream/route.ts](app/api/agents/stream/route.ts)
+**Step 4: Update stream route to use `streamWithTools()`** — [app/api/agents/stream/route.ts](app/api/agents/stream/route.ts)
 
 - After coordinator completes, call `selectToolsForRequest(intentMode, request, hasPreview)`
 - If tools returned (length > 0 and mode is not `ask`):

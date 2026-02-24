@@ -54,7 +54,7 @@ export function CaseStudySection() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden="true">
         <div className="relative h-full">

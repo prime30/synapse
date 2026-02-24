@@ -1,0 +1,38 @@
+---
+description: "HARD RULE: Restart dev server immediately if browser navigation fails or page is unreachable."
+alwaysApply: true
+---
+
+# Server Restart Protocol (HARD RULE)
+
+## When This Applies
+
+Any time the browser cannot load a page from the local dev server (localhost). This includes:
+- `chrome-error://chromewebdata/` responses
+- Navigation timeouts or aborts
+- Empty page snapshots (0 refs) on pages that should have content
+- HTTP connection refused or timeout errors
+
+## Procedure
+
+1. **Do NOT retry the same URL more than once.** If the second attempt also fails, immediately restart.
+2. **Kill all processes on the target port:**
+   ```powershell
+   $pids = (netstat -ano | Select-String ":PORT.*LISTENING" | ForEach-Object { ($_ -split '\s+')[-1] } | Sort-Object -Unique)
+   foreach ($p in $pids) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }
+   Start-Sleep -Seconds 2
+   Remove-Item -Force "PATH_TO_PROJECT\.next\dev\lock" -ErrorAction SilentlyContinue
+   ```
+3. **Start a fresh dev server** in the background.
+4. **Wait for startup** (15-20 seconds).
+5. **Verify with HTTP request** before attempting browser navigation:
+   ```powershell
+   (Invoke-WebRequest -Uri "http://localhost:PORT" -UseBasicParsing -TimeoutSec 10).StatusCode
+   ```
+6. **Only navigate the browser** after confirming a 200 response.
+
+## Never
+
+- Never retry browser navigation more than twice on a dead server.
+- Never wait indefinitely hoping the server will recover.
+- Never skip the HTTP verification step before browser navigation.

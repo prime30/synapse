@@ -1,18 +1,21 @@
 'use client';
 
 import React, { useState } from 'react';
+import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
+import { clampConfidence } from '@/lib/agents/confidence-flow';
 
 interface FileCreateCardProps {
   fileName: string;
   content: string;
   reasoning?: string;
   status: 'pending' | 'confirmed' | 'cancelled';
+  confidence?: number;
   onConfirm?: (fileName: string, content: string) => void;
   onCancel?: () => void;
   onStatusChange?: (status: 'confirmed' | 'cancelled') => void;
 }
 
-export function FileCreateCard({ fileName, content, reasoning, status, onConfirm, onStatusChange }: FileCreateCardProps) {
+export function FileCreateCard({ fileName, content, reasoning, status, confidence, onConfirm, onStatusChange }: FileCreateCardProps) {
   const [localStatus, setLocalStatus] = useState(status);
   const [expanded, setExpanded] = useState(false);
 
@@ -49,12 +52,17 @@ export function FileCreateCard({ fileName, content, reasoning, status, onConfirm
           </svg>
           <span className="font-mono text-[11px] ide-text-1 truncate">{fileName}</span>
         </div>
-        {effectiveStatus === 'confirmed' && (
-          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Created</span>
-        )}
-        {effectiveStatus === 'cancelled' && (
-          <span className="text-[10px] text-red-500 dark:text-red-400 font-medium">Cancelled</span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {clampConfidence(confidence) != null && (
+            <ConfidenceBadge confidence={confidence} />
+          )}
+            {effectiveStatus === 'confirmed' && (
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Created</span>
+          )}
+          {effectiveStatus === 'cancelled' && (
+            <span className="text-[10px] text-red-500 dark:text-red-400 font-medium">Cancelled</span>
+          )}
+        </div>
       </div>
 
       {reasoning && (

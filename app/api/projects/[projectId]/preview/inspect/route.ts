@@ -34,7 +34,7 @@ export async function POST(
       throw APIError.badRequest('action is required');
     }
 
-    const validActions = ['inspect', 'listAppElements', 'getStylesheets', 'getPageSnapshot', 'querySelector'];
+    const validActions = ['inspect', 'listAppElements', 'getStylesheets', 'getPageSnapshot', 'querySelector', 'getConsoleLogs', 'getNetworkRequests'];
     if (!validActions.includes(action)) {
       throw APIError.badRequest(`Invalid action: ${action}. Must be one of: ${validActions.join(', ')}`);
     }
@@ -43,8 +43,12 @@ export async function POST(
       throw APIError.badRequest('selector is required for this action');
     }
 
+    // getConsoleLogs and getNetworkRequests use optional search param from body for cache key
+    const search = (action === 'getConsoleLogs' || action === 'getNetworkRequests') && typeof body.search === 'string' ? body.search : undefined;
+    const cacheKey = (action === 'getConsoleLogs' || action === 'getNetworkRequests') ? search : selector;
+
     // Check cache first
-    const cached = await domCache.get(projectId, action, selector);
+    const cached = await domCache.get(projectId, action, cacheKey);
     if (cached) {
       return NextResponse.json({
         success: true,
@@ -89,13 +93,15 @@ export async function PUT(
     const body = await request.json().catch(() => ({}));
     const action = typeof body.action === 'string' ? body.action : null;
     const selector = typeof body.selector === 'string' ? body.selector : undefined;
+    const search = (action === 'getConsoleLogs' || action === 'getNetworkRequests') && typeof body.search === 'string' ? body.search : undefined;
+    const cacheKey = (action === 'getConsoleLogs' || action === 'getNetworkRequests') ? search : selector;
     const data = body.data;
 
     if (!action || data === undefined) {
       throw APIError.badRequest('action and data are required');
     }
 
-    await domCache.set(projectId, action, data, selector);
+    await domCache.set(projectId, action, data, cacheKey);
 
     return NextResponse.json({ success: true, cached: true });
   } catch (error) {

@@ -143,7 +143,7 @@ export function Preloader() {
     <AnimatePresence mode="wait">
       {visible && (
         <motion.div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#fafaf9]"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#fafaf9] dark:bg-[#0a0a0a]"
           initial={false}
           exit={{ clipPath: 'inset(0 0 100% 0)' }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -152,12 +152,12 @@ export function Preloader() {
           <div
             className="absolute w-[50vmax] h-[50vmax] rounded-full pointer-events-none"
             style={{
-              background: 'radial-gradient(circle, rgba(40,205,86,0.08) 0%, transparent 60%)',
+              background: 'radial-gradient(circle, oklch(0.745 0.189 148 / 0.08) 0%, transparent 60%)',
             }}
           />
 
           {/* Logo — scramble + reveal, same as header */}
-          <span className="relative inline-flex items-center text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-stone-900 z-10">
+          <span className="relative inline-flex items-center text-4xl md:text-5xl lg:text-6xl tracking-[0.2em] uppercase font-normal text-stone-900 dark:text-white z-10">
             {/* Invisible sizer: stable box across phases */}
             <span className="inline-flex invisible pointer-events-none" aria-hidden="true">
               {DISPLAY_CHARS.map((ch, i) => (

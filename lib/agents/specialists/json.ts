@@ -60,35 +60,13 @@ export class JSONAgent extends Agent {
   }
 
   parseResponse(raw: string, _task: AgentTask): AgentResult {
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return { agentType: 'json', success: true, changes: [] };
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        changes?: Array<{
-          fileId?: string;
-          fileName?: string;
-          originalContent?: string;
-          proposedContent?: string;
-          reasoning?: string;
-        }>;
-      };
-
-      const changes: CodeChange[] = (parsed.changes ?? []).map((c) => ({
-        fileId: c.fileId ?? '',
-        fileName: c.fileName ?? '',
-        originalContent: c.originalContent ?? '',
-        proposedContent: c.proposedContent ?? '',
-        reasoning: c.reasoning ?? '',
-        agentType: 'json' as const,
-      }));
-
-      return { agentType: 'json', success: true, changes };
-    } catch {
-      return { agentType: 'json', success: true, changes: [] };
-    }
+    return {
+      agentType: 'json',
+      success: true,
+      analysis: raw,
+      changes: [],
+      confidence: 0.8,
+    };
   }
 }
 

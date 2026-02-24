@@ -80,7 +80,7 @@ export function StatusBar({ fileName, content, language, filePath, cursorPositio
   const langLabel = LANGUAGE_LABELS[language];
 
   return (
-    <div className="h-[22px] flex items-center gap-2 px-3 bg-[#fafaf9] dark:bg-[#0a0a0a]/80 border-t ide-border-subtle text-[11px] ide-text-muted select-none shrink-0">
+    <div className="h-[22px] flex items-center gap-2 px-3 bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]/80 border-t ide-border-subtle text-[11px] ide-text-muted select-none shrink-0">
       {/* File name */}
       {fileName && (
         <>

@@ -31,10 +31,10 @@ import {
 export const RUN_SPECIALIST_TOOL: ToolDefinition = {
   name: 'run_specialist',
   description:
-    'Delegate a scoped coding task to a specialist agent. Use this for complex domain-specific edits ' +
-    'that benefit from specialist knowledge (Liquid templating, CSS styling, JavaScript logic, JSON schema). ' +
-    'The specialist will generate code changes that the user sees as diffs. ' +
-    'You receive a summary of what changed so you can continue planning.',
+    'Delegate a scoped coding task to a specialist agent. Use this for domain-specific edits. ' +
+    'For feature additions, call run_specialist MULTIPLE TIMES in the SAME response — once for each file type needed ' +
+    '(liquid for markup, css for styling, javascript for behavior). All specialists run in parallel. ' +
+    'Each specialist reads the target file and makes search_replace edits directly.',
   input_schema: {
     type: 'object',
     properties: {
@@ -53,6 +53,12 @@ export const RUN_SPECIALIST_TOOL: ToolDefinition = {
         type: 'array',
         items: { type: 'string' },
         description: 'File paths the specialist should focus on',
+      },
+      files: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Files this specialist will modify. Declaring files enables parallel execution with other specialists targeting different files.',
       },
     },
     required: ['agent', 'task', 'affectedFiles'],
@@ -187,6 +193,12 @@ export function selectV2Tools(
   if (intentMode === 'debug') {
     const themeCheck = AGENT_TOOLS.find((t) => t.name === 'theme_check');
     if (themeCheck) tools.push(themeCheck);
+    const traceChain = AGENT_TOOLS.find((t) => t.name === 'trace_rendering_chain');
+    if (traceChain) tools.push(traceChain);
+    const checkSetting = AGENT_TOOLS.find((t) => t.name === 'check_theme_setting');
+    if (checkSetting) tools.push(checkSetting);
+    const diagVis = AGENT_TOOLS.find((t) => t.name === 'diagnose_visibility');
+    if (diagVis) tools.push(diagVis);
   }
 
   return enablePTC ? annotatePTC(tools) : annotateEagerStreaming(tools);

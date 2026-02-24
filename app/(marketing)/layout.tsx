@@ -16,7 +16,7 @@ export default function MarketingLayout({
 }) {
   return (
     <div
-      className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased bg-[#fafaf9] text-stone-900 min-h-screen`}
+      className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased bg-[oklch(0.985_0.001_106)] text-stone-900 min-h-screen`}
     >
       <MarketingShell>{children}</MarketingShell>
     </div>

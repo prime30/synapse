@@ -21,7 +21,7 @@ export default function FeaturesHero() {
   return (
     <section
       ref={ref}
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       {/* Subtle gradient glow */}
       <div
@@ -29,7 +29,7 @@ export default function FeaturesHero() {
         aria-hidden="true"
         style={{
           background:
-            'radial-gradient(ellipse 60% 40% at 50% 80%, rgba(40,205,86,0.08) 0%, transparent 70%)',
+            'radial-gradient(ellipse 60% 40% at 50% 80%, oklch(0.745 0.189 148 / 0.08) 0%, transparent 70%)',
         }}
       />
 

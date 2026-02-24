@@ -23,8 +23,8 @@ export function ThemeToggle({ isDark, onToggle, variant = 'dark' }: ThemeToggleP
       className={cn(
         'relative inline-flex items-center rounded-full overflow-hidden isolate backdrop-blur-xl h-8 p-0.5',
         variant === 'dark'
-          ? 'bg-zinc-800/90 border border-white/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
-          : 'bg-zinc-100/90 border border-zinc-200/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)]'
+          ? 'bg-zinc-800/90 border border-white/5 shadow-[inset_0_2px_4px_oklch(0_0_0_/_0.4)]'
+          : 'bg-zinc-100/90 border border-zinc-200/80 shadow-[inset_0_1px_3px_oklch(0_0_0_/_0.06)]'
       )}
     >
       {/* Sliding glass indicator */}
@@ -32,8 +32,8 @@ export function ThemeToggle({ isDark, onToggle, variant = 'dark' }: ThemeToggleP
         className={cn(
           'absolute rounded-full overflow-hidden',
           variant === 'dark'
-            ? 'bg-gradient-to-b from-white/15 to-white/10 border border-white/20 shadow-[0_1px_4px_rgba(0,0,0,0.08),0_4px_20px_rgba(255,255,255,0.12)]'
-            : 'bg-gradient-to-b from-white/95 to-white/70 border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.15),inset_0_2px_0_rgba(255,255,255,0.5)]'
+            ? 'bg-gradient-to-b from-white/15 to-white/10 border border-white/20 shadow-[0_1px_4px_oklch(0_0_0_/_0.08),0_4px_20px_oklch(1_0_0_/_0.12)]'
+            : 'bg-gradient-to-b from-white/95 to-white/70 border border-white/60 shadow-[0_4px_20px_oklch(0_0_0_/_0.15),inset_0_2px_0_oklch(1_0_0_/_0.5)]'
         )}
         initial={false}
         animate={{ x: pillX }}
@@ -43,7 +43,7 @@ export function ThemeToggle({ isDark, onToggle, variant = 'dark' }: ThemeToggleP
 
       {/* Accent glow bar */}
       <motion.div
-        className="absolute h-[2px] rounded-full bg-accent shadow-[0_0_8px_rgba(40,205,86,0.6)] bottom-[1px]"
+        className="absolute h-[2px] rounded-full bg-accent shadow-[0_0_8px_oklch(0.745_0.189_148_/_0.6)] bottom-[1px]"
         initial={false}
         animate={{ x: barX }}
         transition={{ type: 'spring', stiffness: 350, damping: 32, mass: 1.0, delay: 0.04 }}
@@ -61,7 +61,7 @@ export function ThemeToggle({ isDark, onToggle, variant = 'dark' }: ThemeToggleP
           top: PAD,
           bottom: PAD,
           width: BTN,
-          background: 'radial-gradient(ellipse at 50% 80%, rgba(40,205,86,0.15) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse at 50% 80%, oklch(0.745 0.189 148 / 0.15) 0%, transparent 60%)',
         }}
       />
 
@@ -110,7 +110,7 @@ export function ThemeToggle({ isDark, onToggle, variant = 'dark' }: ThemeToggleP
         <motion.div
           className="absolute inset-0 rounded-full pointer-events-none"
           style={{
-            background: `radial-gradient(ellipse at ${isDark ? 30 : 70}% 20%, rgba(255,255,255,0.06) 0%, transparent 50%)`,
+            background: `radial-gradient(ellipse at ${isDark ? 30 : 70}% 20%, oklch(1 0 0 / 0.06) 0%, transparent 50%)`,
           }}
           animate={{ opacity: [0.5, 0.7, 0.5] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}

@@ -78,7 +78,7 @@ export class ChatErrorBoundary extends React.Component<
             Reset Chat View
           </button>
           {process.env.NODE_ENV === 'development' && this.state.error && (
-            <pre className="mt-2 max-w-full overflow-auto rounded ide-surface-panel border ide-border p-2 text-left text-[10px] text-red-600 dark:text-red-400">
+            <pre className="mt-2 max-w-full overflow-y-auto overflow-x-hidden rounded ide-surface-panel border ide-border p-2 text-left text-[10px] text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">
               {this.state.error.message}
             </pre>
           )}

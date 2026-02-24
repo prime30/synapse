@@ -84,7 +84,7 @@ export function ScrollRevealSection() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className="relative isolate bg-[#fafaf9] dark:bg-[#0a0a0a] h-[200vh] md:h-[300vh]"
+      className="relative isolate bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] h-[200vh] md:h-[300vh]"
     >
       {/* Vertical frame lines (max-w-6xl) */}
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none z-[1]" aria-hidden="true">

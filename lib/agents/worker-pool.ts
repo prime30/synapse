@@ -79,7 +79,7 @@ const READ_ONLY_TOOLS = new Set([
   'grep_content', 'glob_files', 'semantic_search', 'run_diagnostics',
   'validate_syntax', 'fetch_url', 'web_search',
   // Preview DOM read tools (Phase 3)
-  'inspect_element', 'get_page_snapshot', 'query_selector',
+  'inspect_element', 'get_page_snapshot', 'query_selector', 'read_console_logs',
   // Shopify read tools (Phase 4)
   'list_themes', 'list_store_resources', 'get_shopify_asset',
   // Validation tools (Phase 6)

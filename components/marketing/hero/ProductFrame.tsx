@@ -28,10 +28,10 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
 
   const glowShadow = useTransform(
     glowIntensity,
-    (v) => `0 0 ${v}px rgba(14,165,233,${v / 100}), 0 0 ${v * 2}px rgba(14,165,233,${v / 200})`
+    (v) => `0 0 ${v}px oklch(0.685 0.169 237 / ${v / 100}), 0 0 ${v * 2}px oklch(0.685 0.169 237 / ${v / 200})`
   );
 
-  const borderColorValue = useTransform(borderOpacity, (v) => `rgba(14,165,233,${v})`);
+  const borderColorValue = useTransform(borderOpacity, (v) => `oklch(0.685 0.169 237 / ${v})`);
 
   const borderPerimeter = 2000;
   const borderDashOffset = useTransform(progress, [0, 0.35], [borderPerimeter, 0]);
@@ -55,7 +55,7 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
         style={{
           border: '1px solid',
           borderColor: borderColorValue,
-          background: 'rgba(20, 20, 20, 0.8)',
+          background: 'oklch(0.185 0 0 / 0.8)',
           backdropFilter: 'blur(20px)',
         }}
       >
@@ -69,7 +69,7 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
             rx={12}
             ry={12}
             fill="none"
-            stroke="rgba(14,165,233,0.6)"
+            stroke="oklch(0.685 0.169 237 / 0.6)"
             strokeWidth={1}
             strokeDasharray={borderPerimeter}
             style={{ strokeDashoffset: borderDashOffset }}
@@ -88,7 +88,7 @@ export function ProductFrame({ children, progress, pulseTrigger = 0, className =
         </div>
 
         {/* Content area */}
-        <div className="relative aspect-[16/10] overflow-hidden bg-[#0a0a0a]">
+        <div className="relative aspect-[16/10] overflow-hidden bg-[oklch(0.145_0_0)]">
           {children}
         </div>
       </motion.div>

@@ -26,7 +26,7 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain, Bug } from 'lucide-react';
 import { PromptTemplateLibrary } from './PromptTemplateLibrary';
 import { ShareButton } from './ShareButton';
 import { ConflictResolver } from './ConflictResolver';
@@ -38,6 +38,17 @@ import { ContextMeter } from './ContextMeter';
 import type { ChatSession } from './SessionHistory';
 import { logInteractionEvent } from '@/lib/ai/interaction-client';
 import { PlanMentionPopover, type PlanMention } from './PlanMentionPopover';
+import { MessageFeedback } from './MessageFeedback';
+import { StreamingIndicator } from './StreamingIndicator';
+import { AgentCard } from './AgentCard';
+import { NextStepChips, type NextStepChip } from './NextStepChips';
+import { EmptyStateCoaching } from './EmptyStateCoaching';
+import { GlobalUndo } from './GlobalUndo';
+import { MessageActions } from './MessageActions';
+import { useToolProgress } from '@/hooks/useToolProgress';
+import { useChatScroll } from '@/hooks/useChatScroll';
+import { useChatAttachments } from '@/hooks/useChatAttachments';
+import { WorktreeStatus } from './WorktreeStatus';
 
 /** Sanitize user message content for the sticky prompt banner. */
 function sanitizeForStickyPrompt(content: string): string {
@@ -94,7 +105,7 @@ function SelectedCodePill({
         <span className="ml-1 opacity-70">{expanded ? '▼' : '▶'}</span>
       </button>
       {expanded && (
-        <pre className="mt-1 p-2 rounded border ide-border ide-surface-inset text-[11px] overflow-x-auto max-h-48 overflow-y-auto whitespace-pre">
+        <pre className="mt-1 p-2 rounded border ide-border ide-surface-inset text-[11px] max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words">
           <code>{code}</code>
         </pre>
       )}
@@ -185,7 +196,8 @@ export type ContentBlock =
       cardType?: 'plan' | 'code_edit' | 'clarification' | 'file_create' |
                  'preview_nav' | 'file_op' | 'shopify_op' | 'screenshot' |
                  'screenshot_comparison' | 'change_preview' | 'theme_artifact';
-      cardData?: unknown; error?: string }
+      cardData?: unknown; error?: string; validationSuggestions?: string[];
+      progress?: { phase: string; detail: string; percentage?: number } }
   | { type: 'thinking'; id: string; startedAt: number;
       reasoningText: string; done: boolean; elapsedMs: number };
 
@@ -207,9 +219,9 @@ export interface ChatMessage {
 
   // ── Tool card metadata (Phase 3) ────────────────────────────────────
   /** Proposed implementation plan from propose_plan tool. */
-  planData?: { title: string; description: string; steps: PlanStep[]; filePath?: string };
+  planData?: { title: string; description: string; steps: PlanStep[]; filePath?: string; confidence?: number };
   /** Proposed code edits from propose_code_edit tool. */
-  codeEdits?: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected' }>;
+  codeEdits?: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected'; confidence?: number }>;
   /** Clarification question from ask_clarification tool or SSE clarification event. */
   clarification?: {
     question: string;
@@ -222,7 +234,7 @@ export interface ChatMessage {
   /** Preview navigation from navigate_preview tool. */
   previewNav?: { path: string; description?: string };
   /** New file creation from create_file tool. */
-  fileCreates?: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled' }>;
+  fileCreates?: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled'; confidence?: number }>;
   /** Currently active tool call (loading state). */
   activeToolCall?: { name: string; id: string };
   /** Citation references from the citations API. */
@@ -245,10 +257,32 @@ export interface ChatMessage {
   rateLimitHit?: boolean;
   /** Final execution outcome for this assistant run. */
   executionOutcome?: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input';
+  /** Structured failure metadata from coordinator (source-of-truth). */
+  failureReason?: string;
+  suggestedAction?: string;
+  failedTool?: string;
+  failedFilePath?: string;
+  /** Which review section failed (spec, code_quality, or both). */
+  reviewFailedSection?: 'spec' | 'code_quality' | 'both' | null;
+  /** Whether the referential replay step failed for this run. */
+  referentialReplayFailed?: boolean;
+  /** Verification evidence from post-loop checks. */
+  verificationEvidence?: {
+    syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
+    themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+    checkedFiles: string[];
+    totalCheckTimeMs: number;
+  };
 
   // ── Cursor-style content blocks (ephemeral, not persisted) ─────────
   /** Ordered content blocks for interleaved rendering. If present, drives Cursor-style rendering. */
   blocks?: ContentBlock[];
+
+  /** F1: Virtual worktree status for parallel agent isolation. */
+  worktreeStatus?: {
+    worktrees: Array<{ id: string; agentId: string; modifiedCount: number; createdCount: number }>;
+    conflicts: Array<{ path: string }>;
+  };
 }
 
 function outcomeBadgeConfig(outcome: NonNullable<ChatMessage['executionOutcome']>): {
@@ -283,9 +317,21 @@ function outcomeBadgeConfig(outcome: NonNullable<ChatMessage['executionOutcome']
   };
 }
 
+/** Active parallel specialists (from worker_progress SSE events). */
+export type ActiveSpecialist = {
+  id: string;
+  type: string;
+  label: string;
+  status: 'running' | 'complete' | 'failed';
+  files: string[];
+  startedAt: number;
+};
+
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   isLoading?: boolean;
+  /** Live parallel specialist progress (from worker_progress SSE). Shown when size > 1. */
+  activeSpecialists?: Map<string, ActiveSpecialist>;
   onSend: (content: string) => void;
   placeholder?: string;
   className?: string;
@@ -309,6 +355,8 @@ interface ChatInterfaceProps {
   isReviewingTranscript?: boolean;
   /** Open Developer Memory panel. */
   onOpenMemory?: () => void;
+  /** Open bug report modal. */
+  onReportBug?: () => void;
   /** Whether Developer Memory panel is currently open. */
   isMemoryOpen?: boolean;
   /** Currently selected AI model */
@@ -478,22 +526,27 @@ const MODEL_LABELS: Record<string, string> = {
 // ── Action-specific loading labels ────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
-  analyze: 'Analyzing your request',
+  analyze: 'Analyzing',
   generate: 'Generating code',
   review: 'Reviewing files',
   fix: 'Fixing issues',
   explain: 'Explaining',
-  refactor: 'Refactoring code',
-  document: 'Generating documentation',
-  plan: 'Generating plan',
+  refactor: 'Refactoring',
+  document: 'Writing docs',
+  plan: 'Planning',
   summary: 'Summarizing',
 };
 
-function getThinkingLabel(action?: string, reviewFileCount?: number): string {
-  if (action === 'review' && reviewFileCount != null) {
-    return `Reviewing ${reviewFileCount} file${reviewFileCount !== 1 ? 's' : ''}`;
-  }
+const INTENT_LABELS: Record<string, string> = {
+  ask: 'Thinking',
+  code: 'Working',
+  plan: 'Planning',
+  debug: 'Investigating',
+};
+
+function getThinkingLabel(action?: string, _reviewFileCount?: number, intent?: string): string {
   if (action && action in ACTION_LABELS) return ACTION_LABELS[action];
+  if (intent && intent in INTENT_LABELS) return INTENT_LABELS[intent];
   return 'Thinking';
 }
 
@@ -619,7 +672,8 @@ function ModeSwitchButton({
 }
 
 // ── CollapsedToolGroup ────────────────────────────────────────────────────────
-// Renders N repeated same-label tool_action blocks as a single collapsible row.
+// Cursor-style: collapses ALL tool actions into a single line that shows
+// the latest action. Click to expand the full list. Keeps the chat clean.
 
 interface CollapsedToolGroupProps {
   label: string;
@@ -650,9 +704,14 @@ function CollapsedToolGroup({
 }: CollapsedToolGroupProps) {
   const [expanded, setExpanded] = React.useState(false);
 
+  const latestBlock = blocks[blocks.length - 1];
+  const latestLabel = latestBlock?.label || latestBlock?.subtitle || label;
+  const doneCount = blocks.filter(b => b.status === 'done').length;
+  const isAllDone = status !== 'loading';
+
   return (
     <div className="my-1 rounded-md border ide-border-subtle overflow-hidden">
-      {/* Summary row */}
+      {/* Single summary line — shows latest action, updates in real-time */}
       <button
         type="button"
         onClick={() => setExpanded(p => !p)}
@@ -665,18 +724,20 @@ function CollapsedToolGroup({
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
             </svg>
           ) : (
-            <svg className="h-4 w-4 text-[#28CD56]" viewBox="0 0 20 20" fill="currentColor">
+            <svg className="h-4 w-4 text-[oklch(0.745_0.189_148)]" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
             </svg>
           )}
         </div>
 
-        {/* Label + count badge */}
+        {/* Latest action label — this updates as the agent works */}
         <span className="flex-1 min-w-0 text-xs ide-text-2 font-medium truncate">
-          {label}
+          {latestLabel}
         </span>
-        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ide-surface-inset ide-text-muted border ide-border-subtle">
-          ×{count}
+
+        {/* Step counter: "3/7" style */}
+        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium tabular-nums ide-surface-inset ide-text-muted border ide-border-subtle">
+          {isAllDone ? `${count} step${count !== 1 ? 's' : ''}` : `${doneCount}/${count}`}
         </span>
 
         {/* Chevron */}
@@ -688,7 +749,7 @@ function CollapsedToolGroup({
         </svg>
       </button>
 
-      {/* Expanded individual rows */}
+      {/* Expanded: compact list of all tool actions */}
       {expanded && (
         <div className="border-t ide-border-subtle divide-y ide-border-subtle">
           {blocks.map(block => (
@@ -715,6 +776,7 @@ function CollapsedToolGroup({
 export function ChatInterface({
   messages,
   isLoading,
+  activeSpecialists = new Map(),
   onSend,
   placeholder = 'Ask the agent...',
   className = '',
@@ -728,6 +790,7 @@ export function ChatInterface({
   onReviewTranscript,
   isReviewingTranscript = false,
   onOpenMemory,
+  onReportBug,
   isMemoryOpen = false,
   currentModel,
   onModelChange,
@@ -815,6 +878,12 @@ export function ChatInterface({
     && messages[messages.length - 1]?.role === 'assistant'
     && stickyPromptDismissedId !== lastUserMessage.id
   );
+
+  // TODO: Replace inline attachment state below with useChatAttachments()
+  // The hook provides: attachedImage, attachedFiles, isUploadingImage, isDraggingOver, fileInputRef,
+  // addImage, removeImage, removeAttachedFile, addAttachedFile, handlePaste, handleDragOver, handleDragLeave, handleDrop, handleFileSelect
+  // Keeping inline logic for now to avoid breaking existing behavior.
+  void useChatAttachments;
 
   // EPIC 8: Image attachment state
   const [attachedImage, setAttachedImage] = useState<{ file: File; preview: string } | null>(null);
@@ -911,6 +980,12 @@ export function ChatInterface({
   // Prompt progress / countdown
   const promptProgress = usePromptProgress(!!isLoading, currentAction, intentMode);
 
+  // Tool progress tracking for EnhancedTypingIndicator
+  const { activeTools } = useToolProgress();
+
+  // NextStepChips state (chips populated externally; wired with empty default)
+  const [nextStepChips] = useState<NextStepChip[]>([]);
+
   // Use actual context stats from the latest assistant message when present (bounded context from backend)
   const lastContextStats = useMemo(() => {
     const last = [...messages].reverse().find((m) => m.role === 'assistant' && m.contextStats);
@@ -934,6 +1009,11 @@ export function ChatInterface({
     loadedFileTokens,
   );
   const currentModelOption = MODEL_OPTIONS.find((o) => o.value === currentModel);
+
+  // TODO: Replace inline scroll logic below with useChatScroll({ isLoading: !!isLoading, scrollDeps: [messages, responseSuggestions] })
+  // The hook provides: scrollRef, scrollToBottom, isAtBottom, showScrollButton
+  // Keeping inline logic for now to avoid breaking existing behavior.
+  void useChatScroll;
 
   // Auto-scroll to bottom (only when user hasn't scrolled up)
   useEffect(() => {
@@ -1289,14 +1369,19 @@ export function ChatInterface({
   }, [isLoading, messages, intentMode, maxAgents, specialistMode, errorCode]);
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
+    <div className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-x-hidden ${className}`}>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto space-y-3 p-2"
+        className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 space-y-3 p-2"
         role="log"
         aria-label="Conversation"
         aria-busy={isLoading || false}
       >
+        {/* Global undo button (wired with empty stack; useUndoStack not yet available) */}
+        <div data-testid="global-undo-slot" className="flex justify-end px-2 py-1">
+          <GlobalUndo undoStack={[]} onUndo={() => {}} />
+        </div>
+
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
           <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/30 rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
@@ -1404,6 +1489,21 @@ export function ChatInterface({
                 </button>
               ))}
             </div>
+            {/* Empty-state coaching suggestions */}
+            <EmptyStateCoaching
+              suggestions={contextSuggestions.slice(0, 3).map((s) => ({
+                label: s.label,
+                prompt: s.prompt ?? s.label,
+              }))}
+              onSelect={(prompt) => {
+                const el = inputRef.current;
+                if (el) {
+                  el.value = prompt;
+                  setInputHasText(true);
+                  el.focus();
+                }
+              }}
+            />
           </div>
         )}
 
@@ -1446,15 +1546,15 @@ export function ChatInterface({
         {messages.map((m, idx) => (
           <div
             key={m.id}
-            className={`group/msg relative transition-all duration-250 ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}
+            className={`group/msg relative transition-all duration-250 min-w-0 overflow-x-hidden ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}
             style={
               editAnimatingId === m.id || (editAnimatingId && idx > messages.findIndex((msg) => msg.id === editAnimatingId))
                 ? { opacity: 0, transform: 'translateY(40px) scale(0.95)', pointerEvents: 'none' as const }
                 : undefined
             }
           >
-            {/* Hover action buttons */}
-            <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10 ide-surface-pop rounded-md px-0.5 py-0.5 border ide-border-subtle">
+            {/* Hover action buttons — select-none + pointer-events isolation so they don't block text selection */}
+            <div className="absolute -top-1 right-1 hidden group-hover/msg:flex items-center gap-0.5 z-10 ide-surface-pop rounded-md px-0.5 py-0.5 border ide-border-subtle select-none">
               {/* Edit & resend (user messages only) */}
               {m.role === 'user' && onEditMessage && !isLoading && (
                 <button
@@ -1545,10 +1645,37 @@ export function ChatInterface({
                   <GitBranch className="h-3 w-3" />
                 </button>
               )}
+              {/* MessageActions component (extended per-message actions) */}
+              <MessageActions
+                messageId={m.id}
+                role={m.role}
+                isPinned={pinnedMessageIds.has(m.id)}
+                isLastAssistant={m.role === 'assistant' && idx === messages.length - 1}
+                isLoading={isLoading}
+                onEdit={m.role === 'user' && onEditMessage ? () => {
+                  const content = m.content;
+                  setEditAnimatingId(m.id);
+                  setTimeout(() => {
+                    onTruncateMessages?.(idx);
+                    setEditAnimatingId(null);
+                    const el = inputRef.current;
+                    if (el) {
+                      el.value = content;
+                      setInputHasText(true);
+                      el.focus();
+                    }
+                  }, 250);
+                } : undefined}
+                onCopyResponse={m.role === 'assistant' ? () => handleCopyResponse(m) : undefined}
+                onCopyPrompt={m.role === 'assistant' ? () => handleCopyPrompt(m.id, idx) : undefined}
+                onPin={() => togglePin(m.id)}
+                onRegenerate={m.role === 'assistant' && idx === messages.length - 1 && onRegenerateMessage ? onRegenerateMessage : undefined}
+                onFork={onForkAtMessage && m.role === 'assistant' ? () => onForkAtMessage(idx) : undefined}
+              />
             </div>
 
             <div
-              className={`text-sm leading-relaxed ${
+              className={`text-sm leading-relaxed select-text break-words min-w-0 ${
                 m.role === 'user'
                   ? 'rounded-md px-3 py-2 ide-surface-inset ide-text'
                   : 'px-3 py-1 ide-text'
@@ -1560,14 +1687,18 @@ export function ChatInterface({
                   {m.blocks && m.blocks.length > 0 ? (
                     <>
                       {(() => {
-                        // Group consecutive tool_action blocks with identical labels
-                        // into a single collapsible row. Blocks with cards or errors
-                        // are never grouped so their expandable content stays reachable.
+                        // Collect ALL collapsible tool_action blocks into one group.
+                        // Non-collapsible blocks (thinking, text, cards, errors) render
+                        // individually. The single tool group is inserted at the position
+                        // of the first tool_action block.
                         type BlockGroup =
                           | { kind: 'single'; block: ContentBlock }
                           | { kind: 'group'; label: string; blocks: Extract<ContentBlock, { type: 'tool_action' }>[] };
 
+                        const collapsible: Extract<ContentBlock, { type: 'tool_action' }>[] = [];
                         const groups: BlockGroup[] = [];
+                        let toolGroupInserted = false;
+
                         for (const block of m.blocks) {
                           const isCollapsible =
                             block.type === 'tool_action' &&
@@ -1575,18 +1706,24 @@ export function ChatInterface({
                             block.status !== 'error';
 
                           if (isCollapsible) {
-                            const last = groups[groups.length - 1];
-                            if (last?.kind === 'group' && last.label === block.label) {
-                              last.blocks.push(block as Extract<ContentBlock, { type: 'tool_action' }>);
-                            } else {
+                            collapsible.push(block as Extract<ContentBlock, { type: 'tool_action' }>);
+                            if (!toolGroupInserted) {
                               groups.push({
                                 kind: 'group',
                                 label: block.label,
-                                blocks: [block as Extract<ContentBlock, { type: 'tool_action' }>],
+                                blocks: collapsible,
                               });
+                              toolGroupInserted = true;
                             }
                           } else {
                             groups.push({ kind: 'single', block });
+                          }
+                        }
+                        // Update the group label to the latest tool action
+                        if (collapsible.length > 0 && toolGroupInserted) {
+                          const groupEntry = groups.find((g) => g.kind === 'group');
+                          if (groupEntry && groupEntry.kind === 'group') {
+                            groupEntry.label = collapsible[collapsible.length - 1].label;
                           }
                         }
 
@@ -1686,6 +1823,9 @@ export function ChatInterface({
                           />
                         ) : null;
                       })()}
+                      {!isLoading && projectId && (
+                        <MessageFeedback messageId={m.id} projectId={projectId} />
+                      )}
                     </>
                   ) : (
                     <>
@@ -1728,6 +1868,7 @@ export function ChatInterface({
                         {m.planData && (
                           <PlanCard
                             planData={m.planData}
+                            confidence={m.planData.confidence}
                             onOpenPlanFile={onOpenPlanFile}
                             onBuildPlan={onBuildPlan}
                           />
@@ -1808,6 +1949,7 @@ export function ChatInterface({
                             content={fc.content}
                             reasoning={fc.reasoning}
                             status={fc.status}
+                            confidence={fc.confidence}
                             onConfirm={onConfirmFileCreate}
                           />
                         ))}
@@ -1838,6 +1980,9 @@ export function ChatInterface({
                           />
                         ) : null;
                       })()}
+                      {!isLoading && projectId && (
+                        <MessageFeedback messageId={m.id} projectId={projectId} />
+                      )}
                       {isLoading && idx === messages.length - 1 && (m.content?.trim().length ?? 0) > 0 && (
                         <span
                           className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
@@ -1891,6 +2036,15 @@ export function ChatInterface({
                     code quality issues
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Referential replay failure badge */}
+            {m.role === 'assistant' && m.referentialReplayFailed && (
+              <div className="mt-0.5 px-3">
+                <span className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 border-orange-500/30 bg-orange-500/10">
+                  referential replay failed
+                </span>
               </div>
             )}
 
@@ -1977,13 +2131,29 @@ export function ChatInterface({
           </div>
         )}
 
-        {/* Loading indicator — only shown when no thinking/blocks yet (before first SSE event); shimmer on text, no circle loader */}
-        {isLoading && !(lastMessage?.role === 'assistant' && (lastMessage?.thinkingSteps?.length || lastMessage?.blocks?.length)) && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg ide-surface-input border ide-border-subtle">
-            <span className="text-xs ide-text-2 font-medium italic animate-pulse">
-              {getThinkingLabel(currentAction, reviewFileCount)}
-              <ThinkingDots />
-            </span>
+        {/* Single loading indicator — shows only before content arrives */}
+        <StreamingIndicator
+          state={
+            !isLoading ? 'idle' :
+            (lastMessage?.role === 'assistant' && (lastMessage?.thinkingSteps?.length || lastMessage?.blocks?.length || lastMessage?.content)) ? 'streaming' :
+            'waiting'
+          }
+          label={getThinkingLabel(currentAction, reviewFileCount, intentMode)}
+        />
+
+        {/* Parallel specialist progress — shown when 2+ specialists are active */}
+        {activeSpecialists.size > 1 && (
+          <div className="flex flex-wrap gap-2 px-4 py-3" data-testid="parallel-agents">
+            {[...activeSpecialists.values()].map((spec) => (
+              <AgentCard
+                key={spec.id}
+                workerId={spec.id}
+                label={spec.label}
+                status={spec.status === 'complete' ? 'complete' : 'running'}
+                files={spec.files}
+                elapsedSeconds={Math.floor((Date.now() - spec.startedAt) / 1000)}
+              />
+            ))}
           </div>
         )}
 
@@ -2035,6 +2205,14 @@ export function ChatInterface({
           </button>
         </div>
       )}
+
+      {/* F1: Virtual worktree status bar (parallel branches + conflicts) */}
+      {(() => {
+        const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+        const ws = lastAssistant?.worktreeStatus;
+        const show = ws && (ws.worktrees.length > 0 || ws.conflicts.length > 0);
+        return show ? <WorktreeStatus worktrees={ws!.worktrees} conflicts={ws!.conflicts} /> : null;
+      })()}
 
       {/* Input area */}
       <div className="flex-shrink-0">
@@ -2092,6 +2270,23 @@ export function ChatInterface({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {/* Next-step suggestion chips above input */}
+          {nextStepChips.length > 0 && !isLoading && projectId && (
+            <NextStepChips
+              chips={nextStepChips}
+              onSelect={(prompt) => {
+                const el = inputRef.current;
+                if (el) {
+                  el.value = prompt;
+                  setInputHasText(true);
+                  el.focus();
+                }
+              }}
+              isTyping={!!isLoading}
+              projectId={projectId}
+            />
+          )}
+
           {/* Hidden file input for image attachment */}
           <input
             ref={fileInputRef}
@@ -2185,13 +2380,7 @@ export function ChatInterface({
               )}
             </div>
 
-            {/* Compact progress rail (docked above input footer) */}
-            {!messages[messages.length - 1]?.blocks?.length && (
-              <ProgressRail
-                steps={activeRailSteps}
-                isStreaming={!!isLoading}
-              />
-            )}
+            {/* Progress rail removed — single loading indicator is sufficient */}
 
             {/* Compact bento controls above footer (right-aligned) */}
             <div className="flex justify-end px-2 pt-1">
@@ -2221,6 +2410,17 @@ export function ChatInterface({
                     aria-label={isReviewingTranscript ? 'Reviewing transcript' : 'Review this chat transcript'}
                   >
                     <BookOpen className={`h-[11px] w-[11px] ${isReviewingTranscript ? 'animate-pulse' : ''}`} />
+                  </button>
+                )}
+                {onReportBug && (
+                  <button
+                    type="button"
+                    onClick={onReportBug}
+                    className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md ide-text-3 ide-surface-input border ide-border hover:text-red-500 dark:hover:text-red-400 hover:border-stone-300 dark:hover:border-white/20 transition-colors"
+                    title="Report a bug"
+                    aria-label="Report a bug"
+                  >
+                    <Bug className="h-[11px] w-[11px]" />
                   </button>
                 )}
                 <div className="h-4 w-px ide-border-subtle" />

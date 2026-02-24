@@ -69,7 +69,7 @@ const STEPS: WorkflowStep[] = [
     cta: 'Try a prompt',
     color: 'text-stone-500',
     dotClass: 'bg-stone-400',
-    glowColor: 'rgba(120,113,108,0.4)',
+    glowColor: 'oklch(0.553 0.013 58 / 0.4)',
     features: [
       {
         title: 'Natural Language Input',
@@ -96,7 +96,7 @@ const STEPS: WorkflowStep[] = [
     cta: 'See it plan',
     color: 'text-blue-500',
     dotClass: 'bg-blue-500',
-    glowColor: 'rgba(59,130,246,0.4)',
+    glowColor: 'oklch(0.623 0.214 259 / 0.4)',
     features: [
       {
         title: 'Task Decomposition',
@@ -113,6 +113,21 @@ const STEPS: WorkflowStep[] = [
         description:
           'Only the files relevant to your request are loaded into context — keeping agents fast and focused.',
       },
+      {
+        title: 'Safe Parallel Tasks',
+        description:
+          'Breaks complex requests into safe parallel tasks.',
+      },
+      {
+        title: 'Automatic Queue Management',
+        description:
+          'Three specialists can work simultaneously — if two need the same file, they queue automatically.',
+      },
+      {
+        title: 'Adaptive Concurrency',
+        description:
+          'Adjusts concurrency based on how your theme files connect.',
+      },
     ],
   },
   {
@@ -123,7 +138,7 @@ const STEPS: WorkflowStep[] = [
     cta: 'Watch them work',
     color: 'text-green-500',
     dotClass: 'bg-green-500',
-    glowColor: 'rgba(34,197,94,0.4)',
+    glowColor: 'oklch(0.723 0.191 149 / 0.4)',
     features: [
       {
         title: 'Liquid Agent',
@@ -150,7 +165,7 @@ const STEPS: WorkflowStep[] = [
     cta: 'Ship your theme',
     color: 'text-purple-500',
     dotClass: 'bg-purple-500',
-    glowColor: 'rgba(168,85,247,0.4)',
+    glowColor: 'oklch(0.586 0.262 293 / 0.4)',
     features: [
       {
         title: 'Quality Checks',
@@ -166,6 +181,21 @@ const STEPS: WorkflowStep[] = [
         title: 'One-Click Deploy',
         description:
           'Preview on a live rendering of your store, then push to production. Version control and instant rollback are built in.',
+      },
+      {
+        title: 'Reference & Style Integrity',
+        description:
+          'Every edit checked for broken references, missing schema settings, and style consistency.',
+      },
+      {
+        title: 'Design Token Enforcement',
+        description:
+          'Catches hardcoded colors that should use your design tokens.',
+      },
+      {
+        title: 'Self-Correcting Edits',
+        description:
+          'Self-correcting — fixes issues automatically before asking you to review.',
       },
     ],
   },
@@ -301,7 +331,7 @@ function BackgroundEffects({
           style={{
             y: reducedMotion ? 0 : layer1Y,
             background:
-              'radial-gradient(circle 600px at 50% 20%, rgb(168,162,158), transparent)',
+              'radial-gradient(circle 600px at 50% 20%, oklch(0.709 0.01 56), transparent)',
             willChange: 'transform',
           }}
         />
@@ -313,7 +343,7 @@ function BackgroundEffects({
             x: reducedMotion ? 0 : layer2X,
             y: reducedMotion ? 0 : layer2Y,
             background:
-              'radial-gradient(circle 500px at 30% 50%, rgb(59,130,246), transparent)',
+              'radial-gradient(circle 500px at 30% 50%, oklch(0.623 0.214 259), transparent)',
             willChange: 'transform',
           }}
         />
@@ -324,7 +354,7 @@ function BackgroundEffects({
           style={{
             y: reducedMotion ? 0 : layer3Y,
             background:
-              'radial-gradient(circle 500px at 70% 80%, rgb(168,85,247), transparent)',
+              'radial-gradient(circle 500px at 70% 80%, oklch(0.586 0.262 293), transparent)',
             willChange: 'transform',
           }}
         />
@@ -379,7 +409,7 @@ function SVGTravelPath({
           {/* Draw-on path */}
           <path
             d={CONNECTOR_PATH}
-            stroke="#28CD56"
+            stroke="oklch(0.745 0.189 148)"
             strokeWidth={config.strokeWidth}
             pathLength={1}
             strokeDasharray="1"
@@ -400,7 +430,7 @@ function SVGTravelPath({
                   height: config.haloSize,
                   top: reducedMotion ? '90%' : `${dotTop}%`,
                   transform: 'translate(-50%, -50%)',
-                  background: `rgba(40, 205, 86, ${config.haloOpacity})`,
+                  background: `oklch(0.745 0.189 148 / ${config.haloOpacity})`,
                   borderRadius: '50%',
                   filter:
                     config.hasPlasma && inView && !reducedMotion
@@ -421,7 +451,7 @@ function SVGTravelPath({
                   height: config.tailHeight,
                   top: `${dotTop}%`,
                   transform: 'translate(-50%, -100%)',
-                  background: `radial-gradient(ellipse 100% 200% at 50% 100%, rgba(40,205,86,${config.tailOpacity}), transparent 70%)`,
+                  background: `radial-gradient(ellipse 100% 200% at 50% 100%, oklch(0.745 0.189 148 / ${config.tailOpacity}), transparent 70%)`,
                   borderRadius: '50%',
                   filter: tier === 2 ? 'blur(2px)' : undefined,
                   opacity: visible ? 1 : 0,
@@ -438,11 +468,11 @@ function SVGTravelPath({
                 height: config.dotSize,
                 top: reducedMotion ? '90%' : `${dotTop}%`,
                 transform: 'translate(-50%, -50%)',
-                background: '#28CD56',
+                background: 'oklch(0.745 0.189 148)',
                 borderRadius: '50%',
                 opacity: config.dotOpacity,
                 boxShadow: config.hasRing
-                  ? '0 0 0 3px rgba(40,205,86,0.3)'
+                  ? '0 0 0 3px oklch(0.745 0.189 148 / 0.3)'
                   : undefined,
               }}
             />
@@ -549,7 +579,7 @@ function GlassCard({
   return (
     <div
       className={`relative rounded-xl border overflow-hidden transition-all duration-500
-        bg-[#f5f5f4] dark:bg-[#1a1a1a]
+        bg-[oklch(0.97_0.001_106)] dark:bg-[oklch(0.21_0_0)]
         ${isActive
           ? 'border-stone-300 dark:border-white/15 shadow-lg shadow-stone-300/30 dark:shadow-green-900/20'
           : 'border-stone-200/60 dark:border-white/10 shadow-sm'}
@@ -566,7 +596,7 @@ function GlassCard({
             style={{
               width: 120,
               background:
-                'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)',
+                'linear-gradient(90deg, transparent 0%, oklch(1 0 0 / 0.06) 50%, transparent 100%)',
               animation: 'card-shimmer 3s ease-in-out infinite',
             }}
           />
@@ -822,7 +852,7 @@ function BuildAgentsCard({
   }, [isActive]);
 
   return (
-    <div className={`grid grid-cols-3 ${isCompact ? 'gap-1.5' : 'gap-3'} rounded-xl ${isCompact ? 'p-1.5' : 'p-2'} bg-[#f5f5f4] dark:bg-[#1a1a1a]`}>
+    <div className={`grid grid-cols-3 ${isCompact ? 'gap-1.5' : 'gap-3'} rounded-xl ${isCompact ? 'p-1.5' : 'p-2'} bg-[oklch(0.97_0.001_106)] dark:bg-[oklch(0.21_0_0)]`}>
       {AGENTS.map((agent, i) => (
         <GlassCard
           key={agent.name}
@@ -1003,7 +1033,7 @@ function ArchitectureFlow({
               style={{
                 width: config.haloSize,
                 height: config.haloSize,
-                background: `rgba(40, 205, 86, ${config.haloOpacity})`,
+                background: `oklch(0.745 0.189 148 / ${config.haloOpacity})`,
                 filter: config.hasPlasma
                   ? `url(#plasma) blur(${config.haloBlur}px)`
                   : `blur(${config.haloBlur}px)`,
@@ -1034,7 +1064,7 @@ function ArchitectureFlow({
               height: config.tailHeight,
               marginLeft: -(config.dotSize / 2),
               marginTop: -config.tailHeight,
-              background: `radial-gradient(ellipse 100% 200% at 50% 100%, rgba(40,205,86,${config.tailOpacity}), transparent 70%)`,
+              background: `radial-gradient(ellipse 100% 200% at 50% 100%, oklch(0.745 0.189 148 / ${config.tailOpacity}), transparent 70%)`,
               borderRadius: '50%',
             }}
           />
@@ -1044,9 +1074,9 @@ function ArchitectureFlow({
           style={{
             width: config.dotSize,
             height: config.dotSize,
-            background: '#28CD56',
+                    background: 'oklch(0.745 0.189 148)',
             opacity: config.dotOpacity,
-            boxShadow: config.hasRing ? '0 0 0 2px rgba(40,205,86,0.3)' : undefined,
+            boxShadow: config.hasRing ? '0 0 0 2px oklch(0.745 0.189 148 / 0.3)' : undefined,
             transition: 'width 0.4s, height 0.4s',
           }}
         />
@@ -1079,7 +1109,7 @@ function ArchitectureFlow({
                   style={{
                     top: containerH / 2 + cardH / 2,
                     height: connectorHeight,
-                    background: '#28CD56',
+                    background: 'oklch(0.745 0.189 148)',
                   }}
                 />
               )}
@@ -1177,12 +1207,11 @@ function StepTextPanel({
 /*  Mobile step card — stacked fallback                                */
 /* ------------------------------------------------------------------ */
 
-/** Extract the raw RGB values from the step's glowColor for dynamic border/glow */
-function extractRGB(glowColor: string): string {
-  const m = glowColor.match(/rgba?\(([^)]+)\)/);
-  if (!m) return '40,205,86';
-  const parts = m[1].split(',').map((s) => s.trim());
-  return `${parts[0]},${parts[1]},${parts[2]}`;
+/** Extract the base oklch values (L C H) from the step's glowColor for dynamic border/glow */
+function extractOKLCH(glowColor: string): string {
+  const m = glowColor.match(/oklch\(([^/]+?)(?:\s*\/\s*[\d.]+)?\)/);
+  if (!m) return '0.745 0.189 148';
+  return m[1].trim();
 }
 
 function MobileStepCard({
@@ -1210,7 +1239,7 @@ function MobileStepCard({
 
   const powerPct = Math.min(1, Math.max(0, (tick - 15) / 20));
   const showPowerUp = tick > 15;
-  const rgb = extractRGB(step.glowColor);
+  const oklch = extractOKLCH(step.glowColor);
 
   return (
     <div ref={ref} className="relative z-[3]">
@@ -1225,7 +1254,7 @@ function MobileStepCard({
           className="relative rounded-xl"
           style={{
             boxShadow: showPowerUp
-              ? `0 0 ${15 + powerPct * 25}px rgba(${rgb},${0.1 + powerPct * 0.2}), 0 0 ${50 + powerPct * 30}px rgba(${rgb},${powerPct * 0.08})`
+              ? `0 0 ${15 + powerPct * 25}px oklch(${oklch} / ${0.1 + powerPct * 0.2}), 0 0 ${50 + powerPct * 30}px oklch(${oklch} / ${powerPct * 0.08})`
               : undefined,
             transition: 'box-shadow 0.5s ease-out',
           }}
@@ -1240,19 +1269,19 @@ function MobileStepCard({
                   height: '200%',
                   top: '-50%',
                   left: '-50%',
-                  background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(${rgb},0.5) 60deg, rgba(${rgb},0.7) 90deg, transparent 150deg, transparent 360deg)`,
+                  background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, oklch(${oklch} / 0.5) 60deg, oklch(${oklch} / 0.7) 90deg, transparent 150deg, transparent 360deg)`,
                   animation: powerPct >= 1 ? 'prompt-border-spin 2.5s linear infinite' : undefined,
                   transform: `rotate(${powerPct * 360}deg)`,
                 }}
               />
-              <div className="absolute inset-[1.5px] rounded-[10px] bg-[#fafaf9] dark:bg-[#0a0a0a]" />
+              <div className="absolute inset-[1.5px] rounded-[10px] bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]" />
             </div>
           )}
 
           <div
-            className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-[#fafaf9]/80 dark:bg-white/[0.02] p-5 sm:p-6 space-y-5 transition-colors duration-500"
+            className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-[oklch(0.985_0.001_106)]/80 dark:bg-white/[0.02] p-5 sm:p-6 space-y-5 transition-colors duration-500"
             style={{
-              borderColor: showPowerUp ? `rgba(${rgb},${0.15 + powerPct * 0.35})` : undefined,
+              borderColor: showPowerUp ? `oklch(${oklch} / ${0.15 + powerPct * 0.35})` : undefined,
             }}
           >
             <div className="flex items-center gap-3">
@@ -1260,8 +1289,8 @@ function MobileStepCard({
                 <span
                   className="w-2 h-2 rounded-full relative z-10"
                   style={{
-                    background: `rgb(${rgb})`,
-                    boxShadow: showPowerUp ? `0 0 8px rgba(${rgb},${powerPct * 0.6})` : undefined,
+                    background: `oklch(${oklch})`,
+                    boxShadow: showPowerUp ? `0 0 8px oklch(${oklch} / ${powerPct * 0.6})` : undefined,
                   }}
                 />
               </span>
@@ -1336,7 +1365,7 @@ function MobilePromptCard() {
         className="relative rounded-xl"
         style={{
           boxShadow: powerUp
-            ? `0 0 ${20 + powerPct * 30}px rgba(40,205,86,${0.15 + powerPct * 0.25}), 0 0 ${60 + powerPct * 40}px rgba(40,205,86,${powerPct * 0.12})`
+            ? `0 0 ${20 + powerPct * 30}px oklch(0.745 0.189 148 / ${0.15 + powerPct * 0.25}), 0 0 ${60 + powerPct * 40}px oklch(0.745 0.189 148 / ${powerPct * 0.12})`
             : undefined,
           transition: 'box-shadow 0.4s ease-out',
         }}
@@ -1350,17 +1379,17 @@ function MobilePromptCard() {
                 height: '200%',
                 top: '-50%',
                 left: '-50%',
-                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(40,205,86,0.5) 60deg, rgba(40,205,86,0.7) 90deg, transparent 150deg, transparent 360deg)',
+                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, oklch(0.745 0.189 148 / 0.5) 60deg, oklch(0.745 0.189 148 / 0.7) 90deg, transparent 150deg, transparent 360deg)',
                 animation: powerPct >= 1 ? 'prompt-border-spin 2s linear infinite' : undefined,
                 transform: `rotate(${powerPct * 360}deg)`,
               }}
             />
-            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[#0a0a0a]" />
+            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[oklch(0.145_0_0)]" />
           </div>
         )}
         <div
           className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-sm overflow-hidden transition-colors duration-500"
-          style={{ borderColor: powerUp ? `rgba(40,205,86,${0.2 + powerPct * 0.4})` : undefined }}
+          style={{ borderColor: powerUp ? `oklch(0.745 0.189 148 / ${0.2 + powerPct * 0.4})` : undefined }}
         >
           <div className="px-3 pt-2.5 pb-1.5 min-h-[2.5rem]">
             <p className="text-sm text-stone-700 dark:text-white/70 leading-relaxed">
@@ -1381,8 +1410,8 @@ function MobilePromptCard() {
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center transition-all duration-500"
               style={{
-                background: charsToShow > 0 ? '#28CD56' : undefined,
-                boxShadow: powerUp ? `0 0 10px rgba(40,205,86,${powerPct * 0.6})` : undefined,
+                  background: charsToShow > 0 ? 'oklch(0.745 0.189 148)' : undefined,
+                  boxShadow: powerUp ? `0 0 10px oklch(0.745 0.189 148 / ${powerPct * 0.6})` : undefined,
               }}
             >
               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1425,7 +1454,7 @@ function TypingPromptPreview({ progress }: { progress: number }) {
         className="relative rounded-xl"
         style={{
           boxShadow: showPowerUp
-            ? `0 0 ${20 + powerUpProgress * 30}px rgba(40,205,86,${0.15 + powerUpProgress * 0.25}), 0 0 ${60 + powerUpProgress * 40}px rgba(40,205,86,${powerUpProgress * 0.12})`
+            ? `0 0 ${20 + powerUpProgress * 30}px oklch(0.745 0.189 148 / ${0.15 + powerUpProgress * 0.25}), 0 0 ${60 + powerUpProgress * 40}px oklch(0.745 0.189 148 / ${powerUpProgress * 0.12})`
             : undefined,
           transition: 'box-shadow 0.4s ease-out',
         }}
@@ -1443,13 +1472,13 @@ function TypingPromptPreview({ progress }: { progress: number }) {
                 height: '200%',
                 top: '-50%',
                 left: '-50%',
-                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(40,205,86,0.5) 60deg, rgba(40,205,86,0.7) 90deg, transparent 150deg, transparent 360deg)',
+                background: 'conic-gradient(from 0deg at 50% 50%, transparent 0deg, oklch(0.745 0.189 148 / 0.5) 60deg, oklch(0.745 0.189 148 / 0.7) 90deg, transparent 150deg, transparent 360deg)',
                 animation: showPowerUp && powerUpProgress >= 1 ? 'prompt-border-spin 2s linear infinite' : undefined,
                 transform: `rotate(${powerUpProgress * 360}deg)`,
               }}
             />
             {/* Inner mask to make it a border, not a fill */}
-            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[#0a0a0a]" />
+            <div className="absolute inset-[1.5px] rounded-[10px] bg-white dark:bg-[oklch(0.145_0_0)]" />
           </div>
         )}
 
@@ -1457,7 +1486,7 @@ function TypingPromptPreview({ progress }: { progress: number }) {
           className="relative rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-sm overflow-hidden transition-colors duration-500"
           style={{
             borderColor: showPowerUp
-              ? `rgba(40,205,86,${0.2 + powerUpProgress * 0.4})`
+              ? `oklch(0.745 0.189 148 / ${0.2 + powerUpProgress * 0.4})`
               : undefined,
           }}
         >
@@ -1484,8 +1513,8 @@ function TypingPromptPreview({ progress }: { progress: number }) {
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-500"
                 style={{
-                  background: showPowerUp ? '#28CD56' : charsToShow > 0 ? '#28CD56' : undefined,
-                  boxShadow: showPowerUp ? `0 0 12px rgba(40,205,86,${powerUpProgress * 0.6})` : undefined,
+                  background: showPowerUp ? 'oklch(0.745 0.189 148)' : charsToShow > 0 ? 'oklch(0.745 0.189 148)' : undefined,
+                  boxShadow: showPowerUp ? `0 0 12px oklch(0.745 0.189 148 / ${powerUpProgress * 0.6})` : undefined,
                 }}
               >
                 <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1562,7 +1591,7 @@ export function AgentScrollStory() {
     <section
       ref={sectionRef}
       data-navbar-theme="light"
-      className={`relative bg-[#fafaf9] dark:bg-[#0a0a0a] ${
+      className={`relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] ${
         isDesktop ? 'min-h-[900vh] overflow-x-clip pt-24 md:pt-32' : 'py-20 md:py-32 overflow-hidden'
       }`}
       aria-label="Agent workflow: four-step scroll story"
@@ -1584,7 +1613,7 @@ export function AgentScrollStory() {
           </div>
           {/* Left column gradient mask — fades dot grid behind text */}
           <div
-            className="absolute inset-y-0 left-0 w-[55%] pointer-events-none z-[2] bg-gradient-to-r from-[#fafaf9] via-[#fafaf9]/80 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/80 dark:to-transparent"
+            className="absolute inset-y-0 left-0 w-[55%] pointer-events-none z-[2] bg-gradient-to-r from-[oklch(0.985_0.001_106)] via-[oklch(0.985_0.001_106)]/80 to-transparent dark:from-[oklch(0.145_0_0)] dark:via-[oklch(0.145_0_0)]/80 dark:to-transparent"
             aria-hidden="true"
           />
 

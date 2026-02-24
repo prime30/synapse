@@ -16,6 +16,12 @@ import type { UserPreference } from '@/lib/types/agent';
 import { streamV2 } from '@/lib/agents/coordinator-v2';
 import type { V2CoordinatorOptions } from '@/lib/agents/coordinator-v2';
 import { trimHistory } from '@/lib/ai/history-window';
+import { loadHistoryForCoordinator } from '@/lib/ai/message-persistence';
+import { compressHistoryForBudget } from '@/lib/ai/message-compression';
+import type { MessageMetadata } from '@/lib/types/database';
+import { updateFile } from '@/lib/services/files';
+import { invalidateFileContent } from '@/lib/supabase/file-loader';
+import { schedulePushForProject } from '@/lib/shopify/push-queue';
 import { isCircuitOpen } from '@/lib/ai/circuit-breaker';
 import { MODELS, getProviderForModel } from '@/lib/agents/model-router';
 import { AgentCoordinator } from '@/lib/agents/coordinator';
@@ -67,6 +73,7 @@ const streamSchema = z.object({
     cssClasses: z.array(z.string()).optional(),
     selector: z.string().optional(),
   }).optional(),
+  subagentCount: z.number().int().min(1).max(4).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -248,14 +255,45 @@ export async function POST(req: NextRequest) {
               /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(body.request) ||
               /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(body.request)
             );
-          const trimmed = trimHistory(
-            body.history.map((h) => ({ role: h.role, content: h.content })),
-            {
-              budget: referentialCodePrompt ? 60_000 : 30_000,
-              keepRecent: referentialCodePrompt ? 24 : 10,
-            },
-          );
-          const recentMessages = trimmed.messages.map((m) => m.content);
+          // Load structured history from DB if sessionId available; fall back to flat strings
+          const historyBudget = referentialCodePrompt ? 60_000 : 30_000;
+          let recentHistory: Awaited<ReturnType<typeof loadHistoryForCoordinator>> | undefined;
+          let recentMessages: string[] | undefined;
+          try {
+            if (body.sessionId) {
+              const structuredHistory = await loadHistoryForCoordinator(body.sessionId);
+              if (structuredHistory.length > 0) {
+                const compressed = compressHistoryForBudget(
+                  structuredHistory.map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                    metadata: (m as Record<string, unknown>).__toolCalls
+                      ? { toolCalls: (m as Record<string, unknown>).__toolCalls as MessageMetadata['toolCalls'] }
+                      : (m as Record<string, unknown>).__toolResults
+                        ? { toolResults: (m as Record<string, unknown>).__toolResults as MessageMetadata['toolResults'] }
+                        : null,
+                    created_at: new Date().toISOString(),
+                  })),
+                  historyBudget,
+                );
+                recentHistory = compressed.map((c) => {
+                  const msg: Record<string, unknown> = { role: c.role, content: c.content };
+                  if (c.metadata?.toolCalls) msg.__toolCalls = c.metadata.toolCalls;
+                  if (c.metadata?.toolResults) msg.__toolResults = c.metadata.toolResults;
+                  return msg as (typeof structuredHistory)[number];
+                });
+              }
+            }
+          } catch {
+            // Fall back to flat history on any error
+          }
+          if (!recentHistory) {
+            const trimmed = trimHistory(
+              body.history.map((h) => ({ role: h.role, content: h.content })),
+              { budget: historyBudget, keepRecent: referentialCodePrompt ? 24 : 10 },
+            );
+            recentMessages = trimmed.messages.map((m) => m.content);
+          }
           const incomingArtifacts = body.referentialArtifacts ?? [];
           let resolvedArtifacts = incomingArtifacts;
           if (referentialCodePrompt && incomingArtifacts.length === 0) {
@@ -272,9 +310,14 @@ export async function POST(req: NextRequest) {
           }
 
           let firstTokenRecorded = false;
+          const maxParallelSpecialists = Math.min(
+            Math.max(Number(body.subagentCount) || 3, 1),
+            4,
+          );
           const coordinatorOptions: V2CoordinatorOptions = {
             sessionId: body.sessionId,
             intentMode: body.intentMode ?? 'code',
+            maxParallelSpecialists,
             isReferentialCodePrompt: referentialCodePrompt,
             referentialArtifacts: resolvedArtifacts,
             model: fallbackChain[0],
@@ -284,6 +327,7 @@ export async function POST(req: NextRequest) {
             activeFilePath: body.activeFilePath,
             openTabs: body.openTabs,
             recentMessages,
+            recentHistory,
             loadContent,
             elementHint: body.elementHint,
             onProgress: (event) => emitEvent(event),
@@ -391,6 +435,7 @@ export async function POST(req: NextRequest) {
                   activeFilePath: body.activeFilePath,
                   openTabs: body.openTabs,
                   recentMessages,
+                  recentHistory,
                   loadContent,
                   elementHint: body.elementHint,
                   onProgress: (event: ThinkingEvent) => emitEvent(event as unknown as Record<string, unknown>),
@@ -447,6 +492,123 @@ export async function POST(req: NextRequest) {
                 : needsInput
                   ? 'needs-input'
                   : 'no-change';
+          // Auto-apply changes to file records and push to Shopify
+          if (outcome === 'applied' && result.changes && result.changes.length > 0) {
+            let appliedCount = 0;
+            const skippedDestructive: string[] = [];
+            for (const change of result.changes) {
+              console.log(`[V2 Stream] Processing change: fileName=${change.fileName}, fileId=${change.fileId || '(empty)'}, proposedContent=${change.proposedContent?.length ?? 0} chars, originalContent=${(change.originalContent ?? '').length} chars`);
+              if (!change.proposedContent) {
+                console.warn(`[V2 Stream] Skipping ${change.fileName} — proposedContent is empty`);
+                continue;
+              }
+
+              // Resolve fileId: if missing, look up by fileName/path in the DB
+              let resolvedFileId = change.fileId;
+              if (!resolvedFileId && change.fileName) {
+                try {
+                  const supabaseAdmin = createServiceClient();
+                  // Try path match first, then name match
+                  const { data: pathMatch } = await supabaseAdmin
+                    .from('files')
+                    .select('id')
+                    .eq('project_id', body.projectId)
+                    .eq('path', change.fileName)
+                    .limit(1)
+                    .maybeSingle();
+                  if (pathMatch?.id) {
+                    resolvedFileId = pathMatch.id;
+                  } else {
+                    const { data: nameMatch } = await supabaseAdmin
+                      .from('files')
+                      .select('id')
+                      .eq('project_id', body.projectId)
+                      .eq('name', change.fileName)
+                      .limit(1)
+                      .maybeSingle();
+                    if (nameMatch?.id) {
+                      resolvedFileId = nameMatch.id;
+                    } else {
+                      // Try partial match: fileName might be "snippets/file.liquid" but DB has "file.liquid"
+                      const baseName = change.fileName.split('/').pop() ?? change.fileName;
+                      const { data: baseMatch } = await supabaseAdmin
+                        .from('files')
+                        .select('id')
+                        .eq('project_id', body.projectId)
+                        .eq('name', baseName)
+                        .limit(1)
+                        .maybeSingle();
+                      if (baseMatch?.id) resolvedFileId = baseMatch.id;
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`[V2 Stream] fileId lookup error for ${change.fileName}:`, err);
+                }
+              }
+              if (!resolvedFileId) {
+                console.warn(`[V2 Stream] Cannot resolve fileId for "${change.fileName}" in project ${body.projectId} — skipping auto-apply`);
+                emitEvent({
+                  type: 'thinking',
+                  phase: 'validating',
+                  label: `Could not auto-apply ${change.fileName} — file not found in project`,
+                });
+                continue;
+              }
+
+              // Safeguard: reject changes that remove >50% of the file content.
+              // This catches model truncation where propose_code_edit sends a
+              // near-empty file to replace hundreds of lines.
+              const origLen = (change.originalContent ?? '').length;
+              const newLen = change.proposedContent.length;
+              if (origLen > 200 && newLen < origLen * 0.5) {
+                console.warn(
+                  `[V2 Stream] BLOCKED destructive change to ${change.fileName}: ` +
+                  `${origLen} chars → ${newLen} chars (${Math.round((1 - newLen / origLen) * 100)}% removed)`,
+                );
+                skippedDestructive.push(change.fileName);
+                continue;
+              }
+
+              try {
+                await updateFile(resolvedFileId, { content: change.proposedContent, userId });
+                invalidateFileContent(resolvedFileId);
+                appliedCount++;
+                console.log(`[V2 Stream] Auto-applied ${change.fileName} (fileId=${resolvedFileId}, ${change.proposedContent.length} chars)`);
+              } catch (err) {
+                console.warn(`[V2 Stream] Auto-apply failed for ${change.fileName} (fileId=${resolvedFileId}):`, err);
+                emitEvent({
+                  type: 'thinking',
+                  phase: 'validating',
+                  label: `Failed to save ${change.fileName}: ${err instanceof Error ? err.message : 'unknown error'}`,
+                });
+              }
+            }
+            if (skippedDestructive.length > 0) {
+              emitEvent({
+                type: 'thinking',
+                phase: 'validating',
+                label: `Blocked ${skippedDestructive.length} destructive edit(s) — file(s) would lose >50% content`,
+                detail: skippedDestructive.join(', '),
+              });
+            }
+            if (appliedCount > 0) {
+              schedulePushForProject(body.projectId);
+              emitEvent({
+                type: 'shopify_push',
+                status: 'scheduled',
+                appliedFiles: appliedCount,
+              });
+              console.log(`[V2 Stream] Auto-apply complete: ${appliedCount}/${result.changes.length} files saved, push scheduled`);
+            } else {
+              console.warn(`[V2 Stream] Auto-apply: 0/${result.changes.length} files saved — all skipped or failed`);
+              emitEvent({
+                type: 'thinking',
+                phase: 'validating',
+                label: `Changes tracked but not saved to files — check file IDs`,
+              });
+            }
+          }
+
           emitEvent({
             type: 'execution_outcome',
             executionId,

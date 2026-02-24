@@ -112,14 +112,14 @@ export function LogoSlider() {
     <motion.section
       ref={ref}
       data-navbar-theme="light"
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden py-6"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden py-6"
       initial={{ opacity: 0 }}
       animate={inView ? { opacity: 1 } : { opacity: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Fade edges */}
-      <div className="absolute inset-y-0 left-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-r from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-l from-[#fafaf9] dark:from-[#0a0a0a] to-transparent pointer-events-none" />
+      <div className="absolute inset-y-0 left-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-r from-[oklch(0.985_0.001_106)] dark:from-[oklch(0.145_0_0)] to-transparent pointer-events-none" />
+      <div className="absolute inset-y-0 right-0 w-8 sm:w-16 md:w-24 z-10 bg-gradient-to-l from-[oklch(0.985_0.001_106)] dark:from-[oklch(0.145_0_0)] to-transparent pointer-events-none" />
 
       <div className="logo-marquee-track flex whitespace-nowrap items-center">
         {items.map((item, i) => (

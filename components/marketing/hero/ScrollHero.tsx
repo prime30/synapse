@@ -111,7 +111,7 @@ export function ScrollHero() {
 
   const backgroundGradient = useTransform(
     scrollYProgress,
-    (v) => `radial-gradient(ellipse at 50% 50%, rgba(14,165,233,${0.02 + v * 0.06}) 0%, rgba(10,10,10,1) 70%)`
+    (v) => `radial-gradient(ellipse at 50% 50%, oklch(0.685 0.169 237 / ${0.02 + v * 0.06}) 0%, oklch(0.145 0 0) 70%)`
   );
   const heroOpacity = useTransform(scrollYProgress, [0.85, 1], [1, 0]);
 
@@ -126,7 +126,7 @@ export function ScrollHero() {
   return (
     <section ref={containerRef} className="relative" style={{ height: '500vh' }}>
       <motion.div className="group sticky top-0 h-screen overflow-hidden" style={{ opacity: heroOpacity }}>
-        <motion.div className="absolute inset-0 bg-[#0a0a0a]" style={{ background: backgroundGradient }} />
+        <motion.div className="absolute inset-0 bg-[oklch(0.145_0_0)]" style={{ background: backgroundGradient }} />
 
         <div
           className="absolute inset-0 opacity-0 group-hover:opacity-[0.03] pointer-events-none font-mono text-[9px] leading-[13px] text-stone-500 dark:text-stone-400 whitespace-pre overflow-hidden select-none transition-opacity duration-500"
@@ -161,8 +161,8 @@ export function ScrollHero() {
                   ctaButtons={
                     index === 4 ? (
                       <>
-                        <a href="/signup" className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
-                        <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium text-lg focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
+                        <a href="/signup" className="inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)] transition-shadow focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)]">Start Free</a>
+                        <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium text-lg focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)]">Watch Demo</a>
                       </>
                     ) : undefined
                   }
@@ -173,12 +173,12 @@ export function ScrollHero() {
                         <input
                           type="email"
                           placeholder="Enter your email"
-                          className="w-full sm:flex-1 h-12 px-4 rounded-full glass-dark text-white placeholder:text-white/40 focus:outline-none focus:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] transition-colors"
+                          className="w-full sm:flex-1 h-12 px-4 rounded-full glass-dark text-white placeholder:text-white/40 focus:outline-none focus:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)] transition-colors"
                           aria-label="Email"
                         />
-                        <a href="/signup" className="w-full sm:w-auto inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_rgba(40,205,86,0.35)] transition-shadow shrink-0 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Start Free</a>
+                        <a href="/signup" className="w-full sm:w-auto inline-flex items-center justify-center px-10 py-3.5 gradient-accent text-white font-semibold rounded-full hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)] transition-shadow shrink-0 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)]">Start Free</a>
                       </div>
-                      <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]">Watch Demo</a>
+                      <a href="#demo" className="inline-flex items-center justify-center px-10 py-3.5 glass-dark rounded-full text-white font-medium focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[oklch(0.145_0_0)]">Watch Demo</a>
                     </div>
                   )}
                 </ScrollFold>

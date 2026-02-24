@@ -17,7 +17,7 @@ export default function FeaturesPage() {
   return (
     <>
       <Navbar />
-      <main className="relative z-10 bg-[#fafaf9] dark:bg-[#0a0a0a] film-grain">
+      <main className="relative z-10 bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] film-grain">
       {/* Compact hero — no product mockup (that lives on the home page) */}
       <FeaturesHero />
 

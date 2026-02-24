@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Layout, Shield, FolderOpen, Sparkles, Check } from 'lucide-react';
+import { Layout, Shield, FolderOpen, Sparkles, Check, Zap, Brain, Users, Eye } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Data                                                               */
@@ -31,6 +31,9 @@ const PILLARS = [
       'Run an 8-rule accessibility scanner and fix issues inline',
       'Image optimization detector catches heavy assets before production',
       'Two-tier deploy: rule-based scan then full AI review, plus role-based approval for teams',
+      'Every change validated before deploy \u2014 catch issues before they reach your store',
+      'Broken Liquid syntax, missing assets, and accessibility issues flagged automatically',
+      'Self-correcting edits \u2014 the agent fixes its own mistakes before asking you to review',
     ],
   },
   {
@@ -51,10 +54,65 @@ const PILLARS = [
     tint: 'bg-violet-50 dark:bg-violet-500/5',
     iconAccent: 'text-violet-600 dark:text-violet-400',
     bullets: [
-      'Proactive nudges before you open chat — the IDE suggests what to fix next',
-      'Spatial canvas: dependency graph with AI suggestion nodes',
-      'Chromatic IDE: UI tints based on your theme\u2019s color palette',
-      'Batch operations: fix all similar across files with batch undo',
+      'Learns your CSS naming, Liquid whitespace, and schema conventions',
+      '\u2018Make it like hero-banner\u2019 \u2014 understands reference intent and matches existing patterns',
+      'Preferences persist across sessions and improve with every edit you approve',
+      'Design tokens, code style, and learned patterns merged into one system',
+    ],
+  },
+  {
+    icon: Zap,
+    title: 'Parallel Agent Execution',
+    tint: 'bg-sky-50 dark:bg-sky-500/5',
+    iconAccent: 'text-sky-600 dark:text-sky-400',
+    bullets: [
+      'Multiple AI specialists work simultaneously on different files',
+      'CSS fixes and Liquid changes run in parallel \u2014 2-4x faster for multi-file tasks',
+      'Live progress cards show each specialist\u2019s status in real-time',
+      'Automatic conflict detection when specialists touch the same file',
+      'Structured handoffs let the PM make informed next-step decisions',
+    ],
+  },
+  {
+    icon: Brain,
+    title: 'Shopify Intelligence',
+    tint: 'bg-rose-50 dark:bg-rose-500/5',
+    iconAccent: 'text-rose-600 dark:text-rose-400',
+    bullets: [
+      'Rendering chain tracer \u2014 instantly maps layout \u2192 template \u2192 section \u2192 snippet \u2192 asset',
+      'Settings checker \u2014 diagnoses disabled features in settings_data.json in one call',
+      'Visibility diagnoser \u2014 checks CSS, Liquid, JS, and settings simultaneously for "not showing" bugs',
+      '55 CX patterns detect missing trust badges, cart optimization, and conversion opportunities',
+      'Predictive chips suggest next improvements based on what you just changed',
+      'Theme health scan runs on project load \u2014 a11y, performance, and CX gaps surfaced automatically',
+    ],
+  },
+  {
+    icon: Eye,
+    title: 'Always-Streaming Activity',
+    tint: 'bg-orange-50 dark:bg-orange-500/5',
+    iconAccent: 'text-orange-600 dark:text-orange-400',
+    bullets: [
+      'See everything the agent does in real-time \u2014 file reads, searches, edits streaming live',
+      'Progress bars on every tool call \u2014 no more blank spinners',
+      'Schema-aware context \u2014 section schemas summarized to save 60% of tokens',
+      'Token budget badge shows remaining capacity before context limits',
+      'Auto-verify after every edit \u2014 preview checked for regressions, console errors caught',
+      'Confidence badges on code changes \u2014 green, amber, or red based on agent certainty',
+    ],
+  },
+  {
+    icon: Users,
+    title: 'Skill Marketplace & Feedback',
+    tint: 'bg-teal-50 dark:bg-teal-500/5',
+    iconAccent: 'text-teal-600 dark:text-teal-400',
+    bullets: [
+      'Community skill marketplace \u2014 browse, install, and rate Shopify-specific AI skills',
+      'Knowledge modules load on-demand \u2014 only relevant expertise injected per request',
+      'Thumbs up/down on every response feeds into agent learning',
+      'Inline corrections \u2014 tell the agent what it should have done differently',
+      'Conversation search, export, and shareable session summaries',
+      'Agent memory dashboard \u2014 see what the agent has learned about your project',
     ],
   },
 ] as const;
@@ -73,7 +131,7 @@ export function FeatureDeepDive() {
     <section
       id="features"
       ref={ref}
-      className="relative bg-[#fafaf9] dark:bg-[#0a0a0a] overflow-hidden"
+      className="relative bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
         {/* ── Header ───────────────────────────────────────────────── */}

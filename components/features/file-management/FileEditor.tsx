@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useCallback, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { useFileEditor } from '@/hooks/useFileEditor';
 import { CollaborativeCursors } from '@/components/editor/CollaborativeCursors';
 import { MonacoEditor, type EditorLanguage } from '@/components/editor/MonacoEditor';
+import { useAgentEdits } from '@/hooks/useAgentEdits';
 import type { RemoteCursor } from '@/hooks/useRemoteCursors';
 import { useCollaborativeEditor, type CollaborativePeer } from '@/hooks/useCollaborativeEditor';
 import type { CollaborationUser } from '@/lib/collaboration/yjs-supabase-provider';
@@ -82,18 +83,33 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
     cancel,
   } = useFileEditor(fileId);
 
+  const { clearEdits: clearAgentEdits, getEdits: getAgentEdits } = useAgentEdits();
+
   // Ref to the underlying Monaco editor instance for imperative operations
   const monacoEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const handleEditorMount = useCallback((editorInstance: editor.IStandaloneCodeEditor) => {
     monacoEditorRef.current = editorInstance;
   }, []);
 
+  // Debounce content changes to avoid re-render storms during paste
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSetContent = useMemo(() => {
+    if (collaborative || locked || isLoading) return () => {};
+    return (value: string) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        setContent(value);
+        if (filePath) clearAgentEdits(filePath);
+      }, 50);
+    };
+  }, [collaborative, locked, isLoading, setContent, filePath, clearAgentEdits]);
+
   // Collaborative editor (when enabled)
   const collab = useCollaborativeEditor({
     projectId: projectId || '',
     fileId: fileId || '',
     initialContent: content,
-    user: collaborationUser || { userId: '', name: 'Anonymous', color: '#60A5FA' },
+    user: collaborationUser || { userId: '', name: 'Anonymous', color: 'oklch(0.718 0.174 253)' },
     solo: !collaborative,
   });
 
@@ -169,7 +185,7 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
         <CollaborativeCursors cursors={cursors} />
         <MonacoEditor
           value={collaborative ? undefined : (isLoading ? '' : effectiveContent)}
-          onChange={(collaborative || locked || isLoading) ? () => {} : setContent}
+          onChange={debouncedSetContent}
           language={fileType as EditorLanguage}
           onSaveKeyDown={handleSaveKeyDown}
           readOnly={locked || isLoading}
@@ -185,6 +201,7 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
           }}
           enableInlineCompletions={enableInlineCompletions}
           filePathForCompletions={filePath}
+          agentEdits={filePath ? getAgentEdits(filePath) : undefined}
         />
       </div>
     </div>

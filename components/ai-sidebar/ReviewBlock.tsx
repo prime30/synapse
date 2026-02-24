@@ -14,6 +14,7 @@ export interface CodeEdit {
   newContent: string;
   originalContent?: string;
   status: 'pending' | 'applied' | 'rejected';
+  confidence?: number;
 }
 
 interface ReviewBlockProps {
@@ -137,6 +138,7 @@ export function ReviewBlock({
                   newContent={edit.newContent}
                   originalContent={edit.originalContent}
                   status={edit.status}
+                  confidence={edit.confidence}
                   onApplyCode={onApplyCode}
                   resolveFileId={resolveFileId}
                   onOpenFile={onOpenFile}

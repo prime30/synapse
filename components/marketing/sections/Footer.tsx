@@ -70,14 +70,14 @@ export function Footer() {
   return (
     <footer
       ref={footerRef}
-      className="relative bg-white dark:bg-[#0a0a0a] border-t border-stone-200 dark:border-white/5 overflow-hidden"
+      className="relative bg-white dark:bg-[oklch(0.145_0_0)] border-t border-stone-200 dark:border-white/5 overflow-hidden"
       aria-label="Site footer"
     >
       {/* Green gradient ellipse — bottom-left */}
       <div
         className="absolute w-[500px] h-[400px] pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse, rgba(40, 205, 86, 0.15) -1%, transparent 60%)',
+          background: 'radial-gradient(ellipse, oklch(0.745 0.189 148 / 0.15) -1%, transparent 60%)',
           left: '-241px',
           bottom: '-236px',
         }}

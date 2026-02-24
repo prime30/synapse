@@ -48,7 +48,7 @@ export default function FinalCTAV2() {
 
   const handleCtaAction = useCallback(() => {
     if (isAuthenticated) {
-      router.push('/onboarding');
+      router.push('/projects');
       return;
     }
     openAuthModal('signup');
@@ -59,7 +59,7 @@ export default function FinalCTAV2() {
   return (
     <section
       ref={ref}
-      className="relative bg-gradient-to-br from-[#fafaf9] via-[#f0f7f1] to-[#fafaf9] dark:from-[#0a0a0a] dark:via-[#0d1a0f] dark:to-[#0a0a0a] overflow-hidden"
+      className="relative bg-gradient-to-br from-[oklch(0.985_0.001_106)] via-[oklch(0.965_0.02_145)] to-[oklch(0.985_0.001_106)] dark:from-[oklch(0.145_0_0)] dark:via-[oklch(0.18_0.02_150)] dark:to-[oklch(0.145_0_0)] overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-8 md:px-10 py-16 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">

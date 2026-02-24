@@ -36,7 +36,7 @@ const fadeUp = {
 
 export default function AboutPage() {
   return (
-    <div className="relative film-grain bg-stone-50 dark:bg-[#0a0a0a] min-h-screen">
+    <div className="relative film-grain bg-stone-50 dark:bg-[oklch(0.145_0_0)] min-h-screen">
       <Navbar />
 
       <main className="pt-32 pb-24">
@@ -151,7 +151,7 @@ export default function AboutPage() {
             </p>
             <Link
               href="/careers"
-              className="inline-block gradient-accent text-white px-8 py-3 rounded-full font-semibold hover:shadow-[0_0_30px_rgba(40,205,86,0.4)] transition-shadow"
+              className="inline-block gradient-accent text-white px-8 py-3 rounded-full font-semibold hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.4)] transition-shadow"
             >
               View open roles &rarr;
             </Link>

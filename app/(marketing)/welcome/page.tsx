@@ -33,7 +33,7 @@ const STEPS: Array<{
 
 export default function WelcomePage() {
   return (
-    <div className="relative min-h-screen film-grain bg-[#0a0a0a]">
+    <div className="relative min-h-screen film-grain bg-[oklch(0.145_0_0)]">
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-radial from-sky-500/5 via-transparent to-transparent" />
       </div>
@@ -102,7 +102,7 @@ export default function WelcomePage() {
         >
           <Link
             href="/projects"
-            className="inline-flex items-center justify-center px-10 py-4 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] transition-shadow"
+            className="inline-flex items-center justify-center px-10 py-4 gradient-accent text-white font-semibold rounded-full text-lg hover:shadow-[0_0_30px_oklch(0.685_0.169_237_/_0.4)] transition-shadow"
           >
             Open Synapse
           </Link>

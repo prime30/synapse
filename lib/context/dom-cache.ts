@@ -21,6 +21,8 @@ const DEFAULT_TTLS: Record<string, number> = {
   getStylesheets: 300_000,      // 5 min -- stylesheets rarely change
   inspect: 30_000,              // 30s -- element state may change
   querySelector: 30_000,        // 30s
+  getConsoleLogs: 5_000,        // 5s -- console logs change frequently
+  getNetworkRequests: 5_000,    // 5s -- network requests change frequently
   ping: 5_000,                  // 5s
 };
 

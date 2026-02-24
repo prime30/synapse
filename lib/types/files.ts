@@ -42,6 +42,8 @@ export interface UpdateFileInput {
   name?: string;
   path?: string;
   content?: string;
+  /** When provided, a version snapshot is captured before the update. */
+  userId?: string;
 }
 
 export interface FileFilter {

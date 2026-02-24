@@ -44,7 +44,7 @@ function OnboardingContent() {
 
 function OnboardingSkeleton() {
   return (
-    <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0a0a0a] flex flex-col">
+    <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex flex-col">
       {/* Top bar skeleton */}
       <div className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
         <div className="flex items-center gap-2">

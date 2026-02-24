@@ -18,6 +18,8 @@ import { ReviewAgent } from '../review';
 import type { AgentExecuteOptions } from '../base';
 import { Agent } from '../base';
 import { getAIProvider } from '@/lib/ai/get-provider';
+import type { ToolExecutorContext } from './tool-executor';
+import { ContextEngine } from '@/lib/ai/context-engine';
 import { MODELS } from '../model-router';
 import type { SpecialistLifecycleEvent } from '../specialist-lifecycle';
 import { createPlan, updatePlan, readPlanForAgent } from '@/lib/services/plans';
@@ -77,6 +79,8 @@ export interface V2ToolExecutorContext {
   specialistCallCount?: { value: number };
   /** Routing tier for review model selection (Codex vs Opus by tier). */
   tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+  /** Content hydrator for loading file stubs on demand. */
+  loadContent?: (fileIds: string[]) => Promise<Array<{ fileId: string; content: string }>>;
 }
 
 // -- Helpers -----------------------------------------------------------------
@@ -91,16 +95,24 @@ function truncate(text: string, max: number = MAX_RESULT_CHARS): string {
  * Uses `.endsWith` for partial-path matching.  If `affectedFiles` is empty
  * or undefined, all files are returned.
  */
-function scopeFiles(allFiles: FileContext[], affectedFiles?: string[]): FileContext[] {
-  if (!affectedFiles || affectedFiles.length === 0) return allFiles;
+function scopeFiles(
+  allFiles: FileContext[],
+  affectedFiles?: string[],
+): { files: FileContext[]; usedFallback: boolean } {
+  if (!affectedFiles || affectedFiles.length === 0) return { files: allFiles, usedFallback: false };
 
-  return allFiles.filter((f) => {
+  const matched = allFiles.filter((f) => {
     const name = f.fileName;
     const path = f.path ?? '';
     return affectedFiles.some(
       (af) => name === af || path === af || name.endsWith(af) || path.endsWith(af),
     );
   });
+  if (matched.length === 0) {
+    // Fallback to full context when declared paths fail to match any file.
+    return { files: allFiles, usedFallback: true };
+  }
+  return { files: matched, usedFallback: false };
 }
 
 function createSpecialist(name: SpecialistName): Agent {
@@ -178,9 +190,13 @@ export async function executeV2Tool(
       const agentName = String(toolCall.input.agent ?? '');
       const specialistAgent = agentName as SpecialistName;
       const task = String(toolCall.input.task ?? '');
+      const inputFiles = Array.isArray(toolCall.input.files)
+        ? (toolCall.input.files as string[]).map(String)
+        : [];
       const affectedFiles = Array.isArray(toolCall.input.affectedFiles)
         ? (toolCall.input.affectedFiles as string[]).map(String)
         : [];
+      const files = inputFiles.length > 0 ? inputFiles : affectedFiles;
 
       if (!VALID_SPECIALISTS.includes(agentName as SpecialistName)) {
         return {
@@ -204,6 +220,9 @@ export async function executeV2Tool(
       }
 
       try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d09cca'},body:JSON.stringify({sessionId:'d09cca',location:'v2-tool-executor.ts:run_specialist',message:'PM calling run_specialist',data:{agentName,task:task.slice(0,300),files},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
         console.log(
           `[V2ToolExecutor] Running specialist "${agentName}" -- task: ${task.slice(0, 120)}`,
         );
@@ -212,13 +231,13 @@ export async function executeV2Tool(
           type: 'dispatched',
           agent: specialistAgent,
           timestampMs: dispatchTs,
-          details: { affectedFiles },
+          details: { affectedFiles: files },
         });
         ctx.onActivitySignal?.({
           type: 'specialist_dispatched',
           agent: specialistAgent,
           timestampMs: dispatchTs,
-          details: { affectedFiles },
+          details: { affectedFiles: files },
         });
         const startTs = Date.now();
         ctx.onSpecialistLifecycleEvent?.({
@@ -240,10 +259,12 @@ export async function executeV2Tool(
           workerId: agentName,
           label: `${agentName} specialist`,
           status: 'running',
-          metadata: { agentType: agentName, affectedFiles },
+          files,
+          metadata: { agentType: agentName, affectedFiles: files },
         });
         const specialist = createSpecialist(specialistAgent);
-        const scopedFiles = scopeFiles(ctx.files, affectedFiles);
+        const scoped = scopeFiles(ctx.files, files);
+        const scopedFiles = scoped.files;
 
         const agentContext: AgentContext = {
           executionId: ctx.executionId,
@@ -263,23 +284,112 @@ export async function executeV2Tool(
           context: agentContext,
         };
 
-        const executeOptions: AgentExecuteOptions = {
+        // Build a ToolExecutorContext so the specialist can use tools
+        // (read_file, search_replace, grep_content, etc.) directly.
+        let specialistSupabase: import('@supabase/supabase-js').SupabaseClient | undefined;
+        let supabaseInitError: string | null = null;
+        try {
+          const { createServiceClient } = await import('@/lib/supabase/admin');
+          specialistSupabase = createServiceClient();
+        } catch (err) {
+          supabaseInitError = err instanceof Error ? err.message : String(err);
+        }
+        if (!specialistSupabase) {
+          const message = `Specialist failed to initialize file writer: ${supabaseInitError ?? 'service client unavailable'}`;
+          ctx.onSpecialistLifecycleEvent?.({
+            type: 'failed',
+            agent: specialistAgent,
+            timestampMs: Date.now(),
+            details: { error: message },
+          });
+          return {
+            tool_use_id: toolCall.id,
+            content: truncate(message),
+            is_error: true,
+          };
+        }
+
+        const specialistTrackedChanges: CodeChange[] = [];
+
+        const specialistToolCtx: ToolExecutorContext = {
+          files: scopedFiles,
+          contextEngine: new ContextEngine(8_000),
+          projectId: ctx.projectId,
+          userId: ctx.userId,
+          loadContent: ctx.loadContent,
+          supabaseClient: specialistSupabase,
+          sessionId: ctx.executionId,
+          onFileChanged: (change) => {
+            const codeChange: CodeChange = {
+              fileId: change.fileId,
+              fileName: change.fileName,
+              originalContent: change.originalContent,
+              proposedContent: change.proposedContent,
+              reasoning: change.reasoning || `Applied by ${specialistAgent} specialist`,
+              agentType: specialistAgent,
+            };
+            specialistTrackedChanges.push(codeChange);
+            ctx.onCodeChange?.(codeChange);
+          },
+        };
+
+        const executeOptions: AgentExecuteOptions & { maxIterations?: number; onToolUse?: (name: string) => void } = {
           action: 'generate',
+          maxIterations: 8,
           ...(ctx.model ? { model: ctx.model } : {}),
           ...(ctx.onReasoningChunk
             ? { onReasoningChunk: (chunk: string) => ctx.onReasoningChunk!(agentName, chunk) }
             : {}),
+          onToolUse: (toolName: string) => {
+            ctx.onProgress?.({
+              type: 'tool_progress',
+              name: toolName,
+              id: `specialist-${agentName}-${Date.now()}`,
+              toolCallId: `specialist-${agentName}-${Date.now()}`,
+              progress: { phase: 'executing', detail: `${agentName}: ${toolName}` },
+            });
+          },
         };
 
-        const result: AgentResult = await specialist.execute(agentTask, executeOptions);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d09cca'},body:JSON.stringify({sessionId:'d09cca',location:'v2-tool-executor.ts:specialist-entry',message:'Specialist executeWithTools called',data:{agentName,task:task.slice(0,200),filesCount:scopedFiles.length,hasSupabase:!!specialistSupabase},timestamp:Date.now(),hypothesisId:'H3,H4'})}).catch(()=>{});
+        // #endregion
+        // Specialist uses tools: reads files, makes search_replace edits directly
+        const result: AgentResult = await specialist.executeWithTools(
+          agentTask,
+          specialistToolCtx,
+          executeOptions,
+        );
 
-        if (result.changes && result.changes.length > 0) {
-          for (const change of result.changes) {
-            ctx.onCodeChange?.(change);
-          }
+        if (!result.success) {
+          const errMsg =
+            result.error?.message ||
+            result.analysis ||
+            `Specialist ${agentName} returned unsuccessful result`;
+          return {
+            tool_use_id: toolCall.id,
+            content: truncate(`Specialist ${agentName} failed: ${errMsg}`),
+            is_error: true,
+          };
         }
 
-        const changesCount = result.changes?.length ?? 0;
+        const validChanges = specialistTrackedChanges.filter(
+          (c) => c.proposedContent && c.proposedContent.length > 0,
+        );
+        const changesCount = validChanges.length;
+        if (changesCount === 0) {
+          const fallbackNote = scoped.usedFallback
+            ? ' File scoping fell back to project-wide context because declared files did not match.'
+            : '';
+          return {
+            tool_use_id: toolCall.id,
+            content: truncate(
+              `Specialist ${agentName} completed with 0 file changes. Re-scope files and provide exact target edits.${fallbackNote}`,
+            ),
+            is_error: true,
+          };
+        }
+
         const analysisBrief = result.analysis
           ? ` ${result.analysis.slice(0, 300)}`
           : '';

@@ -174,7 +174,7 @@ export function RemoteCursorOverlay({ peers, editorRef }: RemoteCursorOverlayPro
 
         if (!position) return null;
 
-        const color = peer.color || '#3b82f6'; // Default blue
+        const color = peer.color || 'oklch(0.623 0.214 259)';
 
         return (
           <React.Fragment key={peer.userId}>

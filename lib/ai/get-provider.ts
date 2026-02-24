@@ -26,6 +26,13 @@ export function getAIProvider(provider: AIProvider = "openai"): AIProviderInterf
       providers.anthropic = createAnthropicProvider();
     } else if (provider === "google") {
       providers.google = createGoogleProvider();
+    } else if (provider === "xai") {
+      providers.xai = createOpenAICompatProvider({
+        name: 'xai',
+        baseURL: 'https://api.x.ai/v1',
+        apiKey: process.env.XAI_API_KEY ?? '',
+        defaultModel: 'grok-4',
+      });
     } else if (customProviderConfigs.has(provider)) {
       // EPIC E: Custom OpenAI-compatible provider
       providers[provider] = createOpenAICompatProvider(customProviderConfigs.get(provider)!);

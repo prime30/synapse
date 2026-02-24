@@ -60,7 +60,7 @@ function DependencyEdgeInner(props: EdgeProps) {
 
   const depType = edgeData?.dependencyType ?? 'liquid_include';
   const refCount = edgeData?.referenceCount ?? 0;
-  const strokeColor = EDGE_COLORS[depType] ?? '#6b7280';
+  const strokeColor = EDGE_COLORS[depType] ?? 'oklch(0.551 0.027 264)';
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,

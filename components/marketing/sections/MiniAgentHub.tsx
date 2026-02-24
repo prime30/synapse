@@ -261,11 +261,11 @@ export function MiniAgentHub({ inView }: { inView: boolean }) {
         <div className="flex items-center justify-center gap-1.5">
           <div
             className="w-1.5 h-1.5 rounded-full transition-colors duration-400"
-            style={{ backgroundColor: showDeployed ? '#22c55e' : '#d6d3d1' }}
+            style={{ backgroundColor: showDeployed ? 'oklch(0.723 0.191 149)' : 'oklch(0.869 0.005 56)' }}
           />
           <span
             className="text-[9px] font-medium leading-none transition-colors duration-400"
-            style={{ color: showDeployed ? '#15803d' : '#a8a29e' }}
+            style={{ color: showDeployed ? 'oklch(0.448 0.119 151)' : 'oklch(0.709 0.01 56)' }}
           >
             {showDeployed ? 'Deployed to store' : 'Awaiting output'}
           </span>

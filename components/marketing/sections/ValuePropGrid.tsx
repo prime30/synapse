@@ -68,7 +68,7 @@ export function ValuePropGrid() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="bg-[#fafaf9] dark:bg-[#111] group relative pt-20 md:pt-28 pb-0 overflow-hidden"
+      className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.178_0_0)] group relative pt-20 md:pt-28 pb-0 overflow-hidden"
     >
       {/* ── Vertical frame lines + green ellipse (clipped to content width) */}
       <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none overflow-hidden" aria-hidden="true">
@@ -82,7 +82,7 @@ export function ValuePropGrid() {
           style={{
             top: '-200px',
             right: '-243px',
-            background: 'radial-gradient(rgb(40, 205, 86) 0%, transparent 87%)',
+            background: 'radial-gradient(oklch(0.745 0.189 148) 0%, transparent 87%)',
             filter: 'blur(117px)',
           }}
         />
@@ -150,10 +150,10 @@ export function ValuePropGrid() {
             // Rotate gradient positions per card for variety
             const offset = index * 17;
             const meshBg = [
-              `radial-gradient(circle at ${(20 + offset) % 100}% ${(30 + offset * 0.7) % 100}%, rgba(40,205,86,0.6) 0%, transparent 50%)`,
-              `radial-gradient(circle at ${(80 - offset * 0.5) % 100}% ${(20 + offset * 1.2) % 100}%, rgba(59,130,246,0.5) 0%, transparent 50%)`,
-              `radial-gradient(circle at ${(60 + offset * 0.8) % 100}% ${(80 - offset * 0.6) % 100}%, rgba(168,85,247,0.4) 0%, transparent 50%)`,
-              `radial-gradient(circle at ${(30 + offset * 0.4) % 100}% ${(70 - offset * 0.3) % 100}%, rgba(40,205,86,0.3) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(20 + offset) % 100}% ${(30 + offset * 0.7) % 100}%, oklch(0.745 0.189 148 / 0.6) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(80 - offset * 0.5) % 100}% ${(20 + offset * 1.2) % 100}%, oklch(0.623 0.214 259 / 0.5) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(60 + offset * 0.8) % 100}% ${(80 - offset * 0.6) % 100}%, oklch(0.586 0.262 293 / 0.4) 0%, transparent 50%)`,
+              `radial-gradient(circle at ${(30 + offset * 0.4) % 100}% ${(70 - offset * 0.3) % 100}%, oklch(0.745 0.189 148 / 0.3) 0%, transparent 50%)`,
             ].join(', ');
 
             return (

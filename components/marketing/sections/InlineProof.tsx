@@ -11,7 +11,7 @@ export function InlineProof() {
     <section
       ref={ref}
       data-navbar-theme="light"
-      className="bg-[#fafaf9] dark:bg-[#0a0a0a]"
+      className="bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]"
     >
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-24 text-center">
         <motion.blockquote

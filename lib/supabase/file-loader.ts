@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createNamespacedCache } from '@/lib/cache/cache-adapter';
+import { ensureFileTreeFresh } from '@/lib/supabase/shopify-file-tree';
+import type { FileInput } from '@/lib/supabase/shopify-file-tree';
 
 /** Lazy load local-file-cache (uses Node `fs`) so bundlers don't try to resolve it in Edge/client. */
 async function getLocalFileCache() {
@@ -250,6 +252,16 @@ export async function loadProjectFiles(
   }
 
   console.log(`[file-loader] Loaded metadata for ${allFiles.length} files in ${projectId}`);
+
+  // Fire-and-forget: regenerate Shopify file tree if stale or file count changed
+  const treeInputs: FileInput[] = (files ?? []).map((f: { id: string; name: string; path: string | null; file_type: string; size_bytes: number | null }) => ({
+    fileId: f.id,
+    fileName: f.name,
+    path: f.path ?? undefined,
+    fileType: f.file_type,
+    size_bytes: f.size_bytes ?? undefined,
+  }));
+  ensureFileTreeFresh(projectId, allFiles.length, treeInputs).catch(() => {});
 
   return {
     allFiles,

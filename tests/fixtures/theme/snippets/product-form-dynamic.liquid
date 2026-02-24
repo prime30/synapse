@@ -1,0 +1,323 @@
+{%- comment -%}
+  Product form with variant swatch selection, quantity controls,
+  and restock badge for out-of-stock items.
+{%- endcomment -%}
+
+{%- assign current_variant = product.selected_or_first_available_variant -%}
+{%- assign product_form_id = 'product-form-' | append: section.id -%}
+
+<div class='t4s-product-form' data-product-form>
+  {%- form 'product',
+    product,
+    id: product_form_id,
+    data-type: 'add-to-cart-form'
+  -%}
+    <input type='hidden' name='id' value='{{ current_variant.id }}'>
+
+    {%- if product.has_only_default_variant == false -%}
+      {%- for option in product.options_with_values -%}
+        {%- liquid
+          assign option_index = forloop.index0
+          assign is_color = false
+          if option.name == 'Color' or option.name == 'Colour'
+            assign is_color = true
+          endif
+        -%}
+
+        <div class='t4s-swatch' data-option-index='{{ option_index }}'>
+          <label class='t4s-swatch__label'>{{ option.name }}</label>
+
+          {%- for value in option.values -%}
+            {%- liquid
+              assign variant_available = false
+              for variant in product.variants
+                if variant.options[option_index] == value
+                  if variant.available
+                    assign variant_available = true
+                    break
+                  endif
+                endif
+              endfor
+
+              assign color_nickname = ''
+              if is_color
+                assign color_nickname = value | handleize
+              endif
+
+              assign color_is_available = variant_available
+            -%}
+
+            <!-- Swatch item: renders color preview or text label -->
+            {%- capture swatch_classes -%}
+              t4s-swatch__item {{ color_swatch }} bg_color_{{ value | handle }} lazyloadt4s
+            {%- endcapture -%}
+
+            <div
+              data-img-el
+              class='{{ swatch_classes }}'
+              data-value='{{ value }}'
+              data-available='{{ color_is_available }}'
+              data-option='{{ option.name }}'
+              data-selected_opt1='{{ product.selected_or_first_available_variant.option1 | handle }}'
+              data-selected_opt2='{{ product.selected_or_first_available_variant.option2 | handle }}'
+            >
+              <img crossorigin='anonymous'>
+            </div>
+
+            {%- unless color_is_available -%}
+              <span class='t4s-swatch__restock-badge'>Awaiting Restock</span>
+            {%- endunless -%}
+
+            <span class='t4s-swatch__label'>
+              {{- value | replace: '"', '' -}}
+            </span>
+
+            {%- if color_nickname != blank -%}
+              <span class='t4s-swatch__nickname'>{{ color_nickname }}</span>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- comment -%} Quantity selector {%- endcomment -%}
+    <div class='t4s-quantity-wrapper' data-quantity-wrapper>
+      <button
+        type='button'
+        class='t4s-quantity-control t4s-quantity-minus'
+        data-quantity-minus
+        aria-label='Decrease quantity'
+      >
+        <svg width='12' height='2'>
+          <rect width="12" height="2" fill="currentColor"/>
+        </svg>
+      </button>
+      <input
+        type='number'
+        name='quantity'
+        id='quantity-{{ section.id }}'
+        class='t4s-quantity-input'
+        value='1'
+        min='1'
+        max='{{ current_variant.inventory_quantity | default: 99 }}'
+        aria-label='Quantity'
+      >
+      <button
+        type='button'
+        class='t4s-quantity-control t4s-quantity-plus'
+        data-quantity-plus
+        aria-label='Increase quantity'
+      >
+        <svg width='12' height='12'>
+          <path d="M6 0v12M0 6h12" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </button>
+    </div>
+
+    {%- comment -%} Add to cart button {%- endcomment -%}
+    <button
+      type='submit'
+      name='add'
+      class='t4s-btn-addtocart'
+      {% unless current_variant.available %}
+        disabled
+      {% endunless %}
+    >
+      {%- if current_variant.available -%}
+        {{ 'products.product.add_to_cart' | t }}
+      {%- else -%}
+        {{ 'products.product.sold_out' | t }}
+      {%- endif -%}
+    </button>
+
+    {%- if section.settings.show_dynamic_checkout -%}
+      {{ form | payment_button }}
+    {%- endif -%}
+  {%- endform -%}
+</div>
+
+<script>
+  (function () {
+    const form = document.getElementById('{{ product_form_id }}');
+    if (!form) return;
+
+    function setSoldOut(isSoldOut, badge) {
+      if (isSoldOut) {
+        if (badge) badge.classList.add('is-visible');
+        form.querySelector('.t4s-btn-addtocart').disabled = true;
+        form.querySelector('.t4s-btn-addtocart').textContent =
+          '{{ "products.product.sold_out" | t }}';
+      } else {
+        if (badge) badge.classList.remove('is-visible');
+        form.querySelector('.t4s-btn-addtocart').disabled = false;
+        form.querySelector('.t4s-btn-addtocart').textContent =
+          '{{ "products.product.add_to_cart" | t }}';
+      }
+    }
+
+    function updateColorAvailability(selectedColor) {
+      const swatchItems = form.querySelectorAll(
+        '[data-option="Color"] .t4s-swatch__item, [data-option="Colour"] .t4s-swatch__item'
+      );
+      swatchItems.forEach(function (item) {
+        const isAvailable = item.getAttribute('data-available') === 'true';
+        const badge = item.parentElement.querySelector(
+          '.t4s-swatch__restock-badge'
+        );
+        if (!isAvailable) {
+          item.classList.add('is-sold-out');
+          setSoldOut(true, badge);
+        } else {
+          item.classList.remove('is-sold-out');
+          setSoldOut(false, badge);
+        }
+      });
+    }
+
+    function initOptionInfoHandler() {
+      const swatches = form.querySelectorAll('.t4s-swatch__item');
+      swatches.forEach(function (swatch) {
+        swatch.addEventListener('click', function () {
+          const optionName =
+            this.closest('[data-option]').getAttribute('data-option');
+          const value = this.getAttribute('data-value');
+          if (optionName === 'Color' || optionName === 'Colour') {
+            updateColorAvailability(value);
+          }
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initOptionInfoHandler);
+    } else {
+      initOptionInfoHandler();
+    }
+
+    document.addEventListener('shopify:section:load', initOptionInfoHandler);
+  })();
+</script>
+
+{%- if PR_buy_pr
+  and current_variant_available != true
+  and type != 'main_sticky'
+-%}
+  <style>
+    #t4s-callBackVariant{{ product_form_id }} .shopify-payment-button { display: none;}
+  </style>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Product Form Dynamic",
+  "tag": "div",
+  "class": "t4s-product-form-wrapper",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_quantity",
+      "label": "Show quantity selector",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_dynamic_checkout",
+      "label": "Show dynamic checkout button",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "swatch_style",
+      "label": "Swatch display style",
+      "options": [
+        { "value": "circle", "label": "Circle" },
+        { "value": "square", "label": "Square" },
+        { "value": "pill", "label": "Pill" }
+      ],
+      "default": "circle"
+    },
+    {
+      "type": "range",
+      "id": "swatch_size",
+      "label": "Swatch size",
+      "min": 20,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "color",
+      "id": "restock_badge_color",
+      "label": "Restock badge color",
+      "default": "#ff6b6b"
+    },
+    {
+      "type": "text",
+      "id": "restock_badge_text",
+      "label": "Restock badge text",
+      "default": "Awaiting Restock"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_available_lengths",
+      "label": "Show available lengths for out-of-stock colors",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "available_lengths_prefix",
+      "label": "Available lengths prefix text",
+      "default": "Available in:"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "size_chart",
+      "name": "Size Chart",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "text",
+          "id": "chart_title",
+          "label": "Chart title",
+          "default": "Size Guide"
+        },
+        {
+          "type": "richtext",
+          "id": "chart_content",
+          "label": "Chart content"
+        }
+      ]
+    },
+    {
+      "type": "trust_badge",
+      "name": "Trust Badge",
+      "limit": 4,
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "badge_image",
+          "label": "Badge image"
+        },
+        {
+          "type": "text",
+          "id": "badge_text",
+          "label": "Badge text",
+          "default": "Free shipping"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product Form",
+      "settings": {
+        "show_quantity": true,
+        "show_dynamic_checkout": true,
+        "swatch_style": "circle"
+      }
+    }
+  ]
+}
+{% endschema %}
