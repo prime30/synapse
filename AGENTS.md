@@ -64,3 +64,5 @@ ESLint exits with warnings (mostly `@typescript-eslint/no-unused-vars` and `reac
 - The workspace rule `.cursor/rules/dev-server.mdc` requires the dev server to always run on port 3000.
 - `node-pty` (native addon in devDependencies) may produce build warnings during `npm install` — this is normal and does not affect functionality.
 - The `/projects` route is a server-side redirect to `/onboarding` — there is no standalone projects list page.
+- `@floating-ui/dom` is a required runtime dependency (used by `Tooltip.tsx`) that may be missing after a fresh `npm install`. Install with `npm install @floating-ui/dom` if you see a "Module not found: Can't resolve '@floating-ui/dom'" build error.
+- When killing the dev server, use `netstat -tlnp | grep 3000` to find the actual PID — stale `next-server` processes can hold the port even after the parent npm process exits.
