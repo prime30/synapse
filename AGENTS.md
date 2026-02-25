@@ -2,6 +2,10 @@
 
 ## Cursor Cloud specific instructions
 
+### HARD RULE: Never write to Shopify
+
+**Agents must NEVER push, write, create, update, or delete any data on Shopify.** This includes themes, assets, files, products, pages, collections, discounts, inventory, navigation menus, and any other Shopify resource. All Shopify API interactions during testing must be **read-only** (GET requests / read queries only). This rule applies to manual testing, automated tests, and any code execution. Violating this rule risks corrupting a live store.
+
 ### Overview
 
 Synapse is an AI-powered Shopify theme development platform. It is a Next.js 16 app (App Router, TypeScript) backed by Supabase (Postgres, Auth, Storage) with multi-provider AI (Anthropic, OpenAI, Google).
