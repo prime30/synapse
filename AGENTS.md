@@ -44,9 +44,17 @@ These are codebase issues, not environment problems. Expect ~121/130 test files 
 
 ESLint exits with warnings (mostly `@typescript-eslint/no-unused-vars` and `react-hooks/set-state-in-effect`). These are pre-existing and not blocking for development.
 
+### Authentication for manual testing
+
+- The sign-in page is at `/auth/signin`. In dev mode a "Dev Quick Login" button auto-creates accounts using `SUPABASE_SERVICE_ROLE_KEY`.
+- **New user creation may fail** with "Database error creating new user" if the Supabase project's auth triggers are broken or the DB schema is missing. In that case, reset an existing user's password via the Supabase Admin API (`PUT /auth/v1/admin/users/{id}`) and log in with those credentials.
+- The onboarding wizard at `/onboarding` gates IDE access behind a Shopify store connection. You can skip steps via `?step=import` and then "Skip for now", but reaching the IDE (`/projects/{id}`) requires a `shopify_connections` record. Without it, the smart gate in `OnboardingWizard.tsx` redirects back to onboarding.
+- Projects can be created via `POST /api/projects` (cookie-based auth required; Bearer tokens alone don't work for cookie-dependent server components).
+
 ### Gotchas
 
 - The `npm run lint` command runs ESLint plus two custom scripts (`check-no-emoji.mjs` and `check-supabase-migration-versions.mjs`).
 - Next.js build uses `--webpack` flag (not Turbopack) for both dev and production.
 - The workspace rule `.cursor/rules/dev-server.mdc` requires the dev server to always run on port 3000.
 - `node-pty` (native addon in devDependencies) may produce build warnings during `npm install` — this is normal and does not affect functionality.
+- The `/projects` route is a server-side redirect to `/onboarding` — there is no standalone projects list page.
