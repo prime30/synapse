@@ -2,9 +2,9 @@
 
 ## Cursor Cloud specific instructions
 
-### HARD RULE: Never write to Shopify
+### HARD RULE: Cursor Cloud agents must never write to Shopify
 
-**Agents must NEVER push, write, create, update, or delete any data on Shopify.** This includes themes, assets, files, products, pages, collections, discounts, inventory, navigation menus, and any other Shopify resource. All Shopify API interactions during testing must be **read-only** (GET requests / read queries only). This rule applies to manual testing, automated tests, and any code execution. Violating this rule risks corrupting a live store.
+**When running in a Cursor Cloud agent environment**, agents must NEVER push, write, create, update, or delete any data on Shopify. This includes themes, assets, files, products, pages, collections, discounts, inventory, navigation menus, and any other Shopify resource. All Shopify API interactions during agent testing must be **read-only** (GET requests / read queries only). This rule does NOT apply to the application's normal runtime behavior or to human developers — only to automated Cursor Cloud agent sessions.
 
 ### Overview
 
