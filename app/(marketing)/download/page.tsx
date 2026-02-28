@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
 import { DownloadHero } from './DownloadHero';
+import { getLatestRelease } from '@/lib/releases/github';
+
+export const revalidate = 300; // ISR: re-fetch GitHub release every 5 minutes
 
 export const metadata: Metadata = {
   title: 'Download Synapse Desktop — Native App for Windows, macOS & Linux',
@@ -11,7 +14,7 @@ export const metadata: Metadata = {
     title: 'Download Synapse Desktop',
     description:
       'The Synapse editor as a native desktop app. Offline mode, local file access, auto-updates.',
-    url: 'https://synapse.so/download',
+    url: 'https://synapse.shop/download',
     siteName: 'Synapse',
     type: 'website',
   },
@@ -22,16 +25,18 @@ export const metadata: Metadata = {
       'The Synapse editor as a native desktop app. Offline mode, local file access, auto-updates.',
   },
   alternates: {
-    canonical: 'https://synapse.so/download',
+    canonical: 'https://synapse.shop/download',
   },
 };
 
-export default function DownloadPage() {
+export default async function DownloadPage() {
+  const release = await getLatestRelease();
+
   return (
     <>
       <Navbar />
       <main className="relative z-10 bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] film-grain">
-        <DownloadHero />
+        <DownloadHero release={release} />
         <Footer />
       </main>
     </>

@@ -13,50 +13,62 @@ import {
   Shield,
   HardDrive,
   Cpu,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePageReady } from '@/components/marketing/PreloaderContext';
 import { MagneticElement } from '@/components/marketing/interactions/MagneticElement';
 import { PixelAccent } from '@/components/marketing/interactions/PixelAccent';
 import { DesktopAppMockup } from '@/components/marketing/mockups/DesktopAppMockup';
+import type { LatestRelease, ReleaseAsset } from '@/lib/releases/github';
+import { formatBytes } from '@/lib/releases/github';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const APP_VERSION = '0.1.0';
+const GITHUB_RELEASES_URL = 'https://github.com/prime30/synapse/releases';
+const APP_URL = 'https://synapse.shop';
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 type Platform = 'windows' | 'mac' | 'linux' | null;
 
-interface PlatformInfo {
+interface PlatformMeta {
   label: string;
   icon: typeof Monitor;
-  primary: { file: string; format: string };
-  secondary: { file: string; format: string };
+  getPrimary: (r: LatestRelease) => ReleaseAsset | null;
+  getSecondary: (r: LatestRelease) => ReleaseAsset | null;
+  primaryFormat: string;
+  secondaryFormat: string;
   requirements: string[];
 }
 
-const PLATFORMS: Record<Exclude<Platform, null>, PlatformInfo> = {
+const PLATFORMS: Record<Exclude<Platform, null>, PlatformMeta> = {
   windows: {
     label: 'Windows',
     icon: Monitor,
-    primary: { file: `Synapse-${APP_VERSION}-Setup.exe`, format: '.exe Installer' },
-    secondary: { file: `Synapse-${APP_VERSION}-Portable.exe`, format: 'Portable .exe' },
+    getPrimary: (r) => r.platforms.windows.installer,
+    getSecondary: (r) => r.platforms.windows.portable,
+    primaryFormat: '.exe Installer',
+    secondaryFormat: 'Portable .exe',
     requirements: ['Windows 10 or later', '64-bit (x64)', '4 GB RAM minimum'],
   },
   mac: {
     label: 'macOS',
     icon: Apple,
-    primary: { file: `Synapse-${APP_VERSION}.dmg`, format: '.dmg (Universal)' },
-    secondary: { file: `Synapse-${APP_VERSION}-arm64.zip`, format: 'Apple Silicon .zip' },
+    getPrimary: (r) => r.platforms.mac.dmg,
+    getSecondary: (r) => r.platforms.mac.zip_arm64,
+    primaryFormat: '.dmg (Universal)',
+    secondaryFormat: 'Apple Silicon .zip',
     requirements: ['macOS 12 Monterey or later', 'Apple Silicon or Intel', '4 GB RAM minimum'],
   },
   linux: {
     label: 'Linux',
     icon: Terminal,
-    primary: { file: `Synapse-${APP_VERSION}.AppImage`, format: '.AppImage' },
-    secondary: { file: `synapse_${APP_VERSION}_amd64.deb`, format: 'Debian .deb' },
+    getPrimary: (r) => r.platforms.linux.appimage,
+    getSecondary: (r) => r.platforms.linux.deb,
+    primaryFormat: '.AppImage',
+    secondaryFormat: 'Debian .deb',
     requirements: ['Ubuntu 20.04+ / Fedora 36+', '64-bit (x64)', '4 GB RAM minimum'],
   },
 };
@@ -75,7 +87,7 @@ const FEATURES = [
   {
     icon: RefreshCw,
     title: 'Auto updates',
-    description: 'New versions install silently in the background. Always on the latest release.',
+    description: 'New versions appear as an in-app prompt with a changelog. Install when ready.',
   },
   {
     icon: Shield,
@@ -101,7 +113,8 @@ const FEATURES = [
 function detectPlatform(): Platform {
   if (typeof navigator === 'undefined') return null;
   const ua = navigator.userAgent.toLowerCase();
-  const platform = (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform?.toLowerCase() ?? '';
+  const platform =
+    (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform?.toLowerCase() ?? '';
   if (platform.includes('win') || ua.includes('win')) return 'windows';
   if (platform.includes('mac') || ua.includes('mac')) return 'mac';
   if (ua.includes('linux')) return 'linux';
@@ -114,23 +127,28 @@ function detectPlatform(): Platform {
 
 function PlatformCard({
   id,
-  info,
+  meta,
+  release,
   isDetected,
   delay,
 }: {
   id: Exclude<Platform, null>;
-  info: PlatformInfo;
+  meta: PlatformMeta;
+  release: LatestRelease | null;
   isDetected: boolean;
   delay: number;
 }) {
-  const ref = useRef<HTMLAnchorElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: '-40px' });
-  const Icon = info.icon;
+  const Icon = meta.icon;
+
+  const primary = release ? meta.getPrimary(release) : null;
+  const secondary = release ? meta.getSecondary(release) : null;
+  const href = primary?.url ?? GITHUB_RELEASES_URL;
 
   return (
-    <motion.a
+    <motion.div
       ref={ref}
-      href={`/releases/latest/${info.primary.file}`}
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay, ease: EASE }}
@@ -157,19 +175,21 @@ function PlatformCard({
         <Icon size={26} />
       </div>
 
-      <h3 className="text-lg font-semibold text-stone-900 dark:text-white mb-1">
-        {info.label}
-      </h3>
+      <h3 className="text-lg font-semibold text-stone-900 dark:text-white mb-1">{meta.label}</h3>
 
       {/* Formats */}
       <div className="mt-1 space-y-0.5 mb-4">
-        <p className="text-sm text-stone-500 dark:text-white/40">{info.primary.format}</p>
-        <p className="text-sm text-stone-400 dark:text-white/25">{info.secondary.format}</p>
+        <p className="text-sm text-stone-500 dark:text-white/40">
+          {primary?.name ?? meta.primaryFormat}
+        </p>
+        {secondary && (
+          <p className="text-sm text-stone-400 dark:text-white/25">{secondary.name}</p>
+        )}
       </div>
 
       {/* Requirements */}
       <ul className="mt-auto space-y-1">
-        {info.requirements.map((req) => (
+        {meta.requirements.map((req) => (
           <li
             key={req}
             className="text-[12px] text-stone-400 dark:text-white/25 flex items-start gap-1.5"
@@ -180,12 +200,35 @@ function PlatformCard({
         ))}
       </ul>
 
-      {/* Download action */}
-      <div className="mt-5 flex items-center gap-2 text-sm font-medium text-accent translate-y-0 opacity-70 group-hover:opacity-100 transition-all">
-        <Download size={15} />
-        Download {info.primary.format}
-      </div>
-    </motion.a>
+      {/* Primary download action */}
+      <a
+        href={href}
+        target={primary ? undefined : '_blank'}
+        rel={primary ? undefined : 'noopener noreferrer'}
+        className="mt-5 flex items-center gap-2 text-sm font-medium text-accent translate-y-0 opacity-70 group-hover:opacity-100 transition-all"
+      >
+        {primary ? <Download size={15} /> : <ExternalLink size={15} />}
+        {primary
+          ? `Download ${meta.primaryFormat}`
+          : 'View on GitHub'}
+      </a>
+
+      {/* Secondary download */}
+      {secondary && (
+        <a
+          href={secondary.url}
+          className="mt-1.5 flex items-center gap-1.5 text-xs text-stone-400 dark:text-white/25 opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <Download size={12} />
+          {secondary.name}
+          {secondary.size > 0 && (
+            <span className="text-stone-300 dark:text-white/15">
+              ({formatBytes(secondary.size)})
+            </span>
+          )}
+        </a>
+      )}
+    </motion.div>
   );
 }
 
@@ -225,7 +268,7 @@ function FeatureCard({
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function DownloadHero() {
+export function DownloadHero({ release }: { release: LatestRelease | null }) {
   const ready = usePageReady();
   const [detected, setDetected] = useState<Platform>(null);
   const featureRef = useRef<HTMLDivElement>(null);
@@ -235,7 +278,9 @@ export function DownloadHero() {
     setDetected(detectPlatform());
   }, []);
 
+  const version = release?.version ?? null;
   const primary = detected ? PLATFORMS[detected] : null;
+  const primaryAsset = release && detected ? primary?.getPrimary(release) ?? null : null;
   const otherPlatforms = (['windows', 'mac', 'linux'] as const).filter((p) => p !== detected);
 
   return (
@@ -243,10 +288,7 @@ export function DownloadHero() {
       {/* ── Hero Section ───────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         {/* Grid divider rails */}
-        <div
-          className="absolute inset-0 max-w-6xl mx-auto pointer-events-none"
-          aria-hidden
-        >
+        <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden>
           <div className="relative h-full">
             <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
             <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
@@ -268,7 +310,7 @@ export function DownloadHero() {
           >
             <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-1.5 text-xs font-medium text-stone-500 dark:text-white/40 backdrop-blur-sm">
               <Download size={12} />
-              Desktop App — v{APP_VERSION}
+              {version ? `Desktop App — v${version}` : 'Desktop App'}
             </span>
           </motion.div>
 
@@ -295,66 +337,64 @@ export function DownloadHero() {
           </motion.p>
 
           {/* Primary CTA */}
-          {primary && (
-            <motion.div
-              className="mt-10 flex flex-col items-center gap-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={ready ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.35, ease: EASE }}
-            >
-              <MagneticElement strength={6} radius={120}>
-                <a
-                  href={`/releases/latest/${primary.primary.file}`}
-                  className="inline-flex items-center gap-2.5 rounded-full bg-accent px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover hover:shadow-accent/30 transition-all"
-                >
-                  <Download size={18} strokeWidth={2.5} />
-                  Download for {primary.label}
-                </a>
-              </MagneticElement>
+          <motion.div
+            className="mt-10 flex flex-col items-center gap-3"
+            initial={{ opacity: 0, y: 20 }}
+            animate={ready ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.35, ease: EASE }}
+          >
+            {primaryAsset && primary ? (
+              <>
+                <MagneticElement strength={6} radius={120}>
+                  <a
+                    href={primaryAsset.url}
+                    className="inline-flex items-center gap-2.5 rounded-full bg-accent px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover hover:shadow-accent/30 transition-all"
+                  >
+                    <Download size={18} strokeWidth={2.5} />
+                    Download for {primary.label}
+                  </a>
+                </MagneticElement>
 
-              <div className="flex items-center gap-4 text-sm text-stone-400 dark:text-white/30">
-                <span>{primary.primary.format}</span>
-                <span className="w-px h-3 bg-stone-200 dark:bg-white/10" />
-                <span>v{APP_VERSION}</span>
-                <span className="w-px h-3 bg-stone-200 dark:bg-white/10" />
-                <span>~120 MB</span>
-              </div>
+                <div className="flex items-center gap-4 text-sm text-stone-400 dark:text-white/30">
+                  <span>{primary.primaryFormat}</span>
+                  <span className="w-px h-3 bg-stone-200 dark:bg-white/10" />
+                  <span>v{version}</span>
+                  {primaryAsset.size > 0 && (
+                    <>
+                      <span className="w-px h-3 bg-stone-200 dark:bg-white/10" />
+                      <span>{formatBytes(primaryAsset.size)}</span>
+                    </>
+                  )}
+                </div>
 
-              {/* Other platforms */}
-              <p className="mt-1 text-sm text-stone-400 dark:text-white/25">
-                Also available for{' '}
-                {otherPlatforms.map((p, i) => (
-                  <span key={p}>
-                    <a
-                      href={`#platforms`}
-                      className="underline underline-offset-2 hover:text-stone-600 dark:hover:text-white/40 transition-colors"
-                    >
-                      {PLATFORMS[p].label}
-                    </a>
-                    {i < otherPlatforms.length - 1 ? ' and ' : ''}
-                  </span>
-                ))}
-              </p>
-            </motion.div>
-          )}
-
-          {/* No-JS fallback: show all three links */}
-          {!primary && (
-            <motion.div
-              className="mt-10 flex flex-col items-center gap-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={ready ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.35, ease: EASE }}
-            >
+                <p className="mt-1 text-sm text-stone-400 dark:text-white/25">
+                  Also available for{' '}
+                  {otherPlatforms.map((p, i) => (
+                    <span key={p}>
+                      <a
+                        href="#platforms"
+                        className="underline underline-offset-2 hover:text-stone-600 dark:hover:text-white/40 transition-colors"
+                      >
+                        {PLATFORMS[p].label}
+                      </a>
+                      {i < otherPlatforms.length - 1 ? ' and ' : ''}
+                    </span>
+                  ))}
+                </p>
+              </>
+            ) : (
+              /* No release yet — link to GitHub */
               <a
-                href="#platforms"
+                href={release?.releaseUrl ?? GITHUB_RELEASES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2.5 rounded-full bg-accent px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all"
               >
-                <Download size={18} strokeWidth={2.5} />
-                Choose your platform
+                <ExternalLink size={18} strokeWidth={2.5} />
+                {release ? `View Release v${release.version}` : 'View all releases'}
               </a>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
         </div>
 
         {/* Desktop Mockup */}
@@ -365,10 +405,7 @@ export function DownloadHero() {
 
       {/* ── Features Section ───────────────────────────────────────── */}
       <section className="relative border-t border-stone-200 dark:border-white/5">
-        <div
-          className="absolute inset-0 max-w-6xl mx-auto pointer-events-none"
-          aria-hidden
-        >
+        <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden>
           <div className="relative h-full">
             <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
             <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
@@ -386,8 +423,8 @@ export function DownloadHero() {
               Built for your workflow
             </h2>
             <p className="mt-3 text-stone-500 dark:text-white/50 text-lg max-w-lg mx-auto">
-              Everything you get in the browser, plus native capabilities that
-              make development faster.
+              Everything you get in the browser, plus native capabilities that make development
+              faster.
             </p>
           </motion.div>
 
@@ -404,10 +441,7 @@ export function DownloadHero() {
         id="platforms"
         className="relative border-t border-stone-200 dark:border-white/5 scroll-mt-20"
       >
-        <div
-          className="absolute inset-0 max-w-6xl mx-auto pointer-events-none"
-          aria-hidden
-        >
+        <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden>
           <div className="relative h-full">
             <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
             <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
@@ -429,7 +463,8 @@ export function DownloadHero() {
               <PlatformCard
                 key={id}
                 id={id}
-                info={PLATFORMS[id]}
+                meta={PLATFORMS[id]}
+                release={release}
                 isDetected={detected === id}
                 delay={i * 0.1}
               />
@@ -440,12 +475,14 @@ export function DownloadHero() {
           <div className="mt-10 text-center">
             <p className="text-sm text-stone-400 dark:text-white/25">
               Need a different format?{' '}
-              <Link
-                href="/releases"
+              <a
+                href={GITHUB_RELEASES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="underline underline-offset-2 hover:text-stone-600 dark:hover:text-white/40 transition-colors"
               >
-                View all releases
-              </Link>
+                View all releases on GitHub
+              </a>
               {' · '}
               <Link
                 href="/changelog"
@@ -460,10 +497,7 @@ export function DownloadHero() {
 
       {/* ── Legal / System Requirements Footer ─────────────────────── */}
       <section className="relative border-t border-stone-200 dark:border-white/5">
-        <div
-          className="absolute inset-0 max-w-6xl mx-auto pointer-events-none"
-          aria-hidden
-        >
+        <div className="absolute inset-0 max-w-6xl mx-auto pointer-events-none" aria-hidden>
           <div className="relative h-full">
             <div className="absolute top-0 bottom-0 left-0 w-px bg-stone-200 dark:bg-white/10" />
             <div className="absolute top-0 bottom-0 right-0 w-px bg-stone-200 dark:bg-white/10" />
@@ -472,9 +506,8 @@ export function DownloadHero() {
 
         <div className="relative max-w-6xl mx-auto px-8 md:px-10 py-12 text-center">
           <p className="text-xs text-stone-400 dark:text-white/25 max-w-lg mx-auto leading-relaxed">
-            Synapse Desktop requires a 64-bit operating system. Windows 10+,
-            macOS 12+, or Ubuntu 20.04+ recommended. The app auto-updates to the
-            latest stable version.{' '}
+            Synapse Desktop requires a 64-bit operating system. Windows 10+, macOS 12+, or Ubuntu
+            20.04+ recommended. Updates are opt-in — you choose when to install.{' '}
             <Link
               href="/terms"
               className="underline underline-offset-2 hover:text-stone-500 dark:hover:text-white/40 transition-colors"
