@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, nativeImage, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, Menu, Tray, shell, nativeImage, dialog, ipcMain, session } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -14,6 +14,7 @@ let mainWindow = null;
 let tray = null;
 let nextServer = null;
 let splashWindow = null;
+let previewView = null;
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -129,6 +130,19 @@ function createSplash() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Server env injection (production only)                            */
+/* ------------------------------------------------------------------ */
+
+function loadServerEnv() {
+  try {
+    const p = path.join(process.resourcesPath, 'server.env.json');
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Next.js production server                                          */
 /* ------------------------------------------------------------------ */
 
@@ -140,9 +154,11 @@ function startNextServer() {
 
     const env = {
       ...process.env,
+      ...loadServerEnv(),
       NODE_ENV: 'production',
       PORT: String(PROD_PORT),
       HOSTNAME: '127.0.0.1',
+      NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${PROD_PORT}`,
       NEXT_PUBLIC_ENABLE_LOCAL_SYNC: '1',
     };
 
@@ -167,6 +183,10 @@ function startNextServer() {
     nextServer.on('exit', (code) => {
       if (code !== 0 && code !== null) {
         console.error(`Next.js server exited with code ${code}`);
+        dialog.showErrorBox(
+          'Startup Error',
+          `Synapse server exited with code ${code}. Please reinstall the app.`,
+        );
       }
       nextServer = null;
     });
@@ -391,26 +411,24 @@ function createTray() {
 function setupAutoUpdater() {
   if (IS_DEV) return;
 
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
     console.log('Update available:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('app:update-available', {
+        version: info.version,
+        releaseNotes: typeof info.releaseNotes === 'string'
+          ? info.releaseNotes
+          : (info.releaseNotes?.[0]?.note ?? 'See release notes on GitHub.'),
+      });
+    }
   });
 
-  autoUpdater.on('update-downloaded', (info) => {
-    console.log('Update downloaded:', info.version);
+  autoUpdater.on('update-downloaded', () => {
     if (mainWindow) {
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Update Ready',
-        message: `Synapse v${info.version} has been downloaded. It will be installed when you restart the app.`,
-        buttons: ['Restart Now', 'Later'],
-      }).then(({ response }) => {
-        if (response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
+      mainWindow.webContents.send('app:update-downloaded');
     }
   });
 
@@ -418,7 +436,7 @@ function setupAutoUpdater() {
     console.error('Auto-updater error:', err);
   });
 
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdates();
 }
 
 /* ------------------------------------------------------------------ */
@@ -432,7 +450,7 @@ function getSyncDir() {
   if (IS_DEV) {
     return path.join(process.cwd(), '.synapse-themes');
   }
-  return path.join(process.resourcesPath, 'standalone', '.synapse-themes');
+  return path.join(app.getPath('userData'), 'synapse-themes');
 }
 
 function updateTrayStatus(status) {
@@ -666,8 +684,95 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle('fs:get-sync-path', () => {
-    return path.join(process.cwd(), '.synapse-themes');
+  ipcMain.handle('fs:get-sync-path', () => getSyncDir());
+
+  // ── Preview WebContentsView (native Shopify storefront rendering) ──
+
+  let updatePreviewBounds = null;
+
+  ipcMain.handle('preview:navigate', (_event, url) => {
+    if (!mainWindow) return;
+    if (!previewView) {
+      const previewSession = session.fromPartition('persist:shopify-preview');
+      previewView = new WebContentsView({
+        webPreferences: {
+          session: previewSession,
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+      mainWindow.contentView.addChildView(previewView);
+
+      updatePreviewBounds = () => {
+        if (!previewView || !mainWindow) return;
+        const bounds = mainWindow.getContentBounds();
+        previewView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+      };
+      mainWindow.on('resize', updatePreviewBounds);
+      mainWindow.on('moved', updatePreviewBounds);
+      updatePreviewBounds();
+
+      // Notify renderer of every navigation so it can react to login redirects
+      previewView.webContents.on('did-navigate', (_e, navUrl) => {
+        if (mainWindow) mainWindow.webContents.send('preview:url-changed', navUrl);
+      });
+      previewView.webContents.on('did-navigate-in-page', (_e, navUrl) => {
+        if (mainWindow) mainWindow.webContents.send('preview:url-changed', navUrl);
+      });
+    }
+    previewView.webContents.loadURL(url);
+  });
+
+  ipcMain.handle('preview:resize', (_event, bounds) => {
+    if (!previewView) return;
+    previewView.setBounds({
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+    });
+  });
+
+  ipcMain.handle('preview:destroy', () => {
+    if (!previewView || !mainWindow) return;
+    if (updatePreviewBounds) {
+      mainWindow.off('resize', updatePreviewBounds);
+      mainWindow.off('moved', updatePreviewBounds);
+      updatePreviewBounds = null;
+    }
+    mainWindow.contentView.removeChildView(previewView);
+    previewView.webContents.close();
+    previewView = null;
+  });
+
+  ipcMain.handle('preview:refresh', () => {
+    if (!previewView) return;
+    previewView.webContents.reload();
+  });
+
+  ipcMain.handle('preview:set-viewport', (_event, width, height) => {
+    if (!previewView) return;
+    previewView.webContents.enableDeviceEmulation({
+      screenPosition: 'mobile',
+      screenSize: { width, height },
+      viewSize: { width, height },
+      viewPosition: { x: 0, y: 0 },
+      deviceScaleFactor: 0,
+      scale: 1,
+    });
+  });
+
+  ipcMain.handle('preview:get-url', () => {
+    return previewView?.webContents?.getURL() ?? null;
+  });
+
+  ipcMain.handle('app:start-update-download', () => {
+    autoUpdater.downloadUpdate();
+  });
+
+  ipcMain.handle('app:restart-to-update', () => {
+    autoUpdater.quitAndInstall();
   });
 }
 

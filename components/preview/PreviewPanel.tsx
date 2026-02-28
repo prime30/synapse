@@ -3,10 +3,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { PreviewFrame } from './PreviewFrame';
 import type { PreviewFrameHandle } from './PreviewFrame';
+import { PreviewSessionModal } from './PreviewSessionModal';
 import { PageTypeSelector } from './PageTypeSelector';
 import { CreateTemplateModal } from './CreateTemplateModal';
 import { usePreviewRefresh } from '@/hooks/usePreviewRefresh';
 import { buildPreviewUrl } from '@/lib/preview/url-generator';
+import type { PreviewMode } from '@/lib/preview/url-generator';
 import { formatDOMContext } from '@/lib/preview/dom-context-formatter';
 import type { DOMSnapshot } from '@/lib/preview/dom-context-formatter';
 import type { PreviewResource } from '@/lib/types/preview';
@@ -19,6 +21,8 @@ import {
   flattenRelevantFiles,
   type VisibleSection,
 } from '@/lib/preview/relevant-liquid-files';
+import { isElectron } from '@/lib/utils/environment';
+import { useDevStorePreview } from '@/hooks/useDevStorePreview';
 
 /** Element data returned by the bridge's element-selected action */
 export interface SelectedElement {
@@ -128,6 +132,65 @@ const DEVICES = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Relevant liquid file tabs with hidden scrollbar + chevron overflow indicator
+// ---------------------------------------------------------------------------
+
+function RelevantFileTabs({ files, onFileClick }: { files: string[]; onFileClick?: (fp: string) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScroll(el.scrollWidth > el.clientWidth + 1);
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [checkOverflow, files]);
+
+  const scrollRight = useCallback(() => {
+    scrollRef.current?.scrollBy({ left: 120, behavior: 'smooth' });
+  }, []);
+
+  return (
+    <div className="flex items-center gap-0.5 min-w-0 flex-1">
+      <div ref={scrollRef} className="flex items-center gap-1 min-w-0 overflow-hidden">
+        {files.map((fp) => (
+          <button
+            key={fp}
+            type="button"
+            onClick={() => onFileClick?.(fp)}
+            className="inline-flex items-center shrink-0 rounded-md ide-surface-inset px-2 py-0.5 text-[11px] font-mono ide-text-2 hover:ide-text hover:bg-accent/10 transition-colors truncate max-w-[180px] cursor-pointer"
+            title={`Open ${fp}`}
+          >
+            {fp.split('/').pop()}
+          </button>
+        ))}
+      </div>
+      {canScroll && (
+        <button
+          type="button"
+          onClick={scrollRight}
+          className="inline-flex items-center justify-center h-5 w-5 shrink-0 rounded ide-text-muted hover:ide-text-2 transition-colors"
+          title="Scroll to see more files"
+          aria-label="Scroll to see more files"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   function PreviewPanel(
     {
@@ -156,6 +219,16 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const [deviceWidth, setDeviceWidth] = useState<number>(DESKTOP_BREAKPOINT);
   const [selectedResource, setSelectedResource] = useState<PreviewResource | null>(null);
   const [createModalType, setCreateModalType] = useState<string | null>(null);
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [desktopLoginRequired, setDesktopLoginRequired] = useState(false);
+  const [previewSessionStatus, setPreviewSessionStatus] = useState<'none' | 'active' | 'expired' | 'auto' | 'online' | 'tka' | 'cli'>('none');
+  const [onlineTokenExpiry, setOnlineTokenExpiry] = useState<string | null>(null);
+  const [cliStatus, setCLIStatus] = useState<'stopped' | 'pulling' | 'starting' | 'running' | 'error'>('stopped');
+  const [cliError, setCLIError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('proxy');
+  const desktopPreviewRef = useRef<HTMLDivElement>(null);
+  const isDesktopApp = useMemo(() => isElectron(), []);
+  const { status: devStoreStatus } = useDevStorePreview(projectId);
   // showRelevantFiles state removed — pills are always visible now
   const frameRef = useRef<PreviewFrameHandle>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
@@ -448,17 +521,172 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const isSyncing = syncStatus === 'syncing';
   const showSyncBadge = isSourceThemePreview || isSyncing;
 
-  // Listen for sync-complete postMessage from syncing iframe
+  // Listen for postMessages from the preview iframe (sync status, open modal)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === 'synapse-preview-syncing') {
         // The iframe is showing the syncing page — parent knows to push
         // a refresh when sync completes (handled by usePreviewRefresh).
       }
+      if (e.data?.type === 'synapse-open-session-modal') {
+        setSessionModalOpen(true);
+      }
+      if (e.data?.type === 'synapse-start-cli-preview') {
+        startCLIPreview();
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  // Start the CLI dev server for preview
+  const startCLIPreview = useCallback(async () => {
+    if (cliStatus === 'pulling' || cliStatus === 'starting' || cliStatus === 'running') return;
+    setCLIStatus('pulling');
+    setCLIError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/cli-preview`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        setCLIStatus('error');
+        setCLIError(data.error ?? 'Failed to start CLI preview');
+        return;
+      }
+      setCLIStatus(data.status === 'running' ? 'running' : 'starting');
+    } catch (err) {
+      setCLIStatus('error');
+      setCLIError(err instanceof Error ? err.message : 'Network error');
+    }
+  }, [projectId, cliStatus]);
+
+  // Poll CLI status while it's starting
+  useEffect(() => {
+    if (cliStatus !== 'starting' && cliStatus !== 'pulling') return;
+    let cancelled = false;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/cli-preview`);
+        if (cancelled) return;
+        const data = await res.json();
+        if (data.status === 'running') {
+          setCLIStatus('running');
+          setPreviewSessionStatus('cli');
+          setPreviewMode('cli');
+          setRefreshToken((prev) => prev + 1);
+          clearInterval(poll);
+        } else if (data.status === 'error') {
+          setCLIStatus('error');
+          setCLIError(data.error ?? 'CLI server failed');
+          clearInterval(poll);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [cliStatus, projectId]);
+
+  // Check preview session status via the preview-session API
+  useEffect(() => {
+    if (!projectId || !themeId) return;
+    let cancelled = false;
+    async function checkSession() {
+      try {
+        // Check CLI status first
+        const cliRes = await fetch(`/api/projects/${projectId}/cli-preview`);
+        if (!cancelled) {
+          const cliData = await cliRes.json();
+          if (cliData.running) {
+            setCLIStatus('running');
+            setPreviewSessionStatus('cli');
+            setPreviewMode('cli');
+            return;
+          }
+        }
+
+        const res = await fetch(`/api/projects/${projectId}/preview-session`);
+        if (cancelled) return;
+        const data = await res.json();
+        if (data.status === 'tka') {
+          setPreviewSessionStatus('tka');
+        } else if (data.status === 'online') {
+          setPreviewSessionStatus('online');
+          setOnlineTokenExpiry(data.expires_at ?? null);
+        } else if (data.status === 'auto' || data.status === 'active') {
+          setPreviewSessionStatus(data.status);
+        } else if (data.status === 'expired') {
+          setPreviewSessionStatus('expired');
+        } else {
+          setPreviewSessionStatus('none');
+        }
+      } catch {
+        // Network error — leave status as-is
+      }
+    }
+    checkSession();
+    return () => { cancelled = true; };
+  }, [projectId, themeId, refreshToken]);
+
+  // Electron: listen for navigation events from the WebContentsView
+  // If Shopify redirects to admin login, show a login prompt overlay.
+  // Once the user logs in and the URL returns to the storefront, auto-retry the preview.
+  useEffect(() => {
+    if (!isDesktopApp) return;
+
+    const removeListener = window.electron?.on('preview:url-changed', (url: string) => {
+      const isLoginPage = url.includes('/admin/auth/login') || url.includes('/admin/login');
+      const isAdminDashboard = url.includes('/admin') && !isLoginPage;
+
+      if (isLoginPage) {
+        setDesktopLoginRequired(true);
+      } else if (isAdminDashboard && desktopLoginRequired) {
+        // User just finished logging in — navigate to the preview URL
+        setDesktopLoginRequired(false);
+        if (storeDomain && themeId) {
+          const cleanDomain = storeDomain.replace(/^https?:\/\//, '');
+          const previewUrl = `https://${cleanDomain}/${effectivePath.replace(/^\//, '')}?preview_theme_id=${themeId}&_fd=0&pb=0`;
+          window.electron?.preview.navigate(previewUrl);
+        }
+      } else if (!isLoginPage && !isAdminDashboard) {
+        // Back on the storefront — clear the login prompt
+        setDesktopLoginRequired(false);
+      }
+    });
+
+    return () => removeListener?.();
+  }, [isDesktopApp, storeDomain, themeId, effectivePath, desktopLoginRequired]);
+
+  // Electron WebContentsView: navigate when path or theme changes
+  useEffect(() => {
+    if (!isDesktopApp || !storeDomain || !themeId) return;
+    const cleanDomain = storeDomain.replace(/^https?:\/\//, '');
+    const url = `https://${cleanDomain}/${effectivePath.replace(/^\//, '')}?preview_theme_id=${themeId}&_fd=0&pb=0`;
+    window.electron?.preview.navigate(url);
+  }, [isDesktopApp, storeDomain, themeId, effectivePath]);
+
+  // Electron BrowserView: resize to match container
+  useEffect(() => {
+    if (!isDesktopApp || !desktopPreviewRef.current) return;
+    const el = desktopPreviewRef.current;
+    const observer = new ResizeObserver(() => {
+      const rect = el.getBoundingClientRect();
+      window.electron?.preview.resize({
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      window.electron?.preview.destroy();
+    };
+  }, [isDesktopApp]);
+
+  // Electron BrowserView: refresh when refreshToken changes
+  useEffect(() => {
+    if (!isDesktopApp) return;
+    window.electron?.preview.refresh();
+  }, [isDesktopApp, refreshToken]);
 
   const sendBridgeMessage = useCallback(
     (action: string, payload?: Record<string, unknown>) => {
@@ -507,13 +735,13 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   }, [inspecting, sendBridgeMessage]);
 
   const handleDetach = useCallback(() => {
-    const previewUrl = buildPreviewUrl({ projectId, path: effectivePath });
+    const previewUrl = buildPreviewUrl({ projectId, path: effectivePath, mode: previewMode, parityDiagnostic: true });
     const features = 'width=1280,height=900,menubar=no,toolbar=no,location=no,status=no';
     const win = window.open(previewUrl, `synapse-preview-${projectId}`, features);
     if (win) {
       setDetachedWindow(win);
     }
-  }, [projectId, effectivePath]);
+  }, [projectId, effectivePath, previewMode]);
 
   const handleReattach = useCallback(() => {
     if (detachedWindow && !detachedWindow.closed) {
@@ -533,8 +761,6 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   // (Customizer Mode V1 / direct Shopify API calls) and kept in props
   // to maintain the interface contract. onElementSelected is handled
   // by the parent via the bridge's message listener in page.tsx.
-  void storeDomain;
-  void themeId;
   void onElementSelected;
 
   return (
@@ -543,32 +769,8 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     >
       {/* ── Preview toolbar row ──────────────────────────────────── */}
       <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1.5 border-b ide-border-subtle' : ''}`}>
-        {/* Left: device switcher + inspect + annotate */}
+        {/* Left: inspect + annotate */}
         <div className="flex items-center gap-1">
-          <div className="flex items-center gap-0.5 rounded-md ide-surface-inset p-0.5">
-            {DEVICES.map((device) => {
-              const isActive = deviceWidth === device.width;
-              return (
-                <button
-                  key={device.id}
-                  type="button"
-                  onClick={() => setDeviceWidth(device.width)}
-                  className={`rounded p-1.5 transition-colors ${
-                    isActive
-                      ? 'ide-active ide-text'
-                      : 'ide-text-muted hover:ide-text-2 ide-hover'
-                  }`}
-                  title={device.label}
-                  aria-label={device.label}
-                >
-                  {device.icon}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="w-px h-4 ide-border-subtle mx-0.5" />
-
           {/* Inspect toggle */}
           <button
             type="button"
@@ -624,8 +826,22 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
           )}
         </div>
 
-        {/* Center: page type dropdown + refresh icon */}
+        {/* Center: device breakpoint + page type dropdown + refresh icon */}
         <div className="flex-1 flex items-center justify-center gap-1">
+          {/* Device breakpoint — cycles on click */}
+          <button
+            type="button"
+            onClick={() => {
+              const idx = DEVICES.findIndex((d) => d.width === deviceWidth);
+              const next = DEVICES[(idx + 1) % DEVICES.length];
+              setDeviceWidth(next.width);
+            }}
+            className="rounded p-1.5 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+            title={DEVICES.find((d) => d.width === deviceWidth)?.label ?? 'Device'}
+            aria-label={`Switch device (${DEVICES.find((d) => d.width === deviceWidth)?.label ?? 'Desktop'})`}
+          >
+            {DEVICES.find((d) => d.width === deviceWidth)?.icon ?? DEVICES[0].icon}
+          </button>
           <PageTypeSelector
             templates={templateEntries}
             selectedTemplate={selectedTemplate}
@@ -666,8 +882,46 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
           </button>
         </div>
 
-        {/* Right: status badges + pop out */}
+        {/* Right: mode toggle + status badges + pop out */}
         <div className="flex items-center gap-1.5">
+          {/* Preview mode toggle */}
+          {!isDesktopApp && themeId && (
+            <div className="flex items-center rounded-md bg-stone-100 dark:bg-white/5 p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewMode('cli');
+                  setRefreshToken((prev) => prev + 1);
+                }}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  previewMode === 'cli'
+                    ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white shadow-sm'
+                    : 'ide-text-muted hover:text-stone-900 dark:hover:text-white'
+                }`}
+                title="CLI mode: uses Shopify CLI dev server for live draft preview"
+              >
+                CLI
+              </button>
+              {devStoreStatus.connected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewMode('devstore');
+                    setRefreshToken((prev) => prev + 1);
+                  }}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    previewMode === 'devstore'
+                      ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white shadow-sm'
+                      : 'ide-text-muted hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                  title="Dev Store mode: preview on your connected development store"
+                >
+                  Dev Store
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Dev theme sync status badge */}
           {showSyncBadge && (
             <span className="flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400">
@@ -688,6 +942,179 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               </span>
               {liveChangeCount} live
             </span>
+          )}
+
+          {/* Preview session status badge */}
+          {isDesktopApp && themeId && !desktopLoginRequired && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500"
+              title="Native preview — Shopify admin session used directly"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Native preview
+            </span>
+          )}
+          {isDesktopApp && themeId && desktopLoginRequired && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-400"
+              title="Log in to Shopify admin in the preview pane to enable draft theme preview"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+              </span>
+              Login required
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewSessionStatus === 'cli' && previewMode === 'cli' && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500"
+              title="Shopify CLI dev server running — live draft theme preview"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              CLI Preview
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewSessionStatus === 'tka' && previewMode === 'proxy' && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500"
+              title="Shopify storefront proxy — rendering through Shopify's native renderer"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Proxy Preview
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewSessionStatus === 'tka' && previewMode === 'cli' && cliStatus !== 'running' && (
+            <button
+              type="button"
+              onClick={startCLIPreview}
+              disabled={cliStatus === 'pulling' || cliStatus === 'starting'}
+              className="flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400 hover:bg-sky-500/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+              title={cliStatus === 'pulling' ? 'Pulling theme files...' : cliStatus === 'starting' ? 'Starting CLI dev server...' : 'Start Shopify CLI preview for draft theme'}
+            >
+              {(cliStatus === 'pulling' || cliStatus === 'starting') && (
+                <span className="w-3 h-3 border border-sky-400 border-t-transparent rounded-full animate-spin" />
+              )}
+              {cliStatus === 'pulling' ? 'Pulling theme...' : cliStatus === 'starting' ? 'Starting...' : 'Start Preview'}
+            </button>
+          )}
+          {!isDesktopApp && themeId && previewSessionStatus === 'tka' && previewMode === 'cli' && cliStatus === 'error' && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-400 cursor-pointer"
+              onClick={() => setSessionModalOpen(true)}
+              title={cliError ?? 'CLI preview error'}
+            >
+              Error
+            </span>
+          )}
+          {/* Dev Store status badges */}
+          {!isDesktopApp && themeId && previewMode === 'devstore' && devStoreStatus.connected && (devStoreStatus.pendingFileCount ?? 0) === 0 && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500"
+              title="Dev store connected and synced"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Dev Store Preview
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewMode === 'devstore' && devStoreStatus.connected && (devStoreStatus.pendingFileCount ?? 0) > 0 && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-400"
+              title={`${devStoreStatus.pendingFileCount} file${devStoreStatus.pendingFileCount === 1 ? '' : 's'} not pushed to dev store`}
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+              </span>
+              {devStoreStatus.pendingFileCount} change{devStoreStatus.pendingFileCount === 1 ? '' : 's'} not pushed
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewMode === 'devstore' && !devStoreStatus.connected && (
+            <span
+              className="flex items-center gap-1.5 rounded-md bg-stone-500/10 px-2 py-1 text-[11px] font-medium text-stone-400"
+              title="No dev store connected"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-stone-400" />
+              </span>
+              Connect Dev Store
+            </span>
+          )}
+          {!isDesktopApp && themeId && previewSessionStatus === 'online' && (
+            <button
+              type="button"
+              onClick={() => setSessionModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              title={onlineTokenExpiry
+                ? `Preview authorized — expires ${new Date(onlineTokenExpiry).toLocaleTimeString()}`
+                : 'Preview authorized via online token'}
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Draft preview
+            </button>
+          )}
+          {!isDesktopApp && themeId && (previewSessionStatus === 'active' || previewSessionStatus === 'auto') && (
+            <button
+              type="button"
+              onClick={() => setSessionModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-500 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              title="Preview session connected — showing draft theme"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Draft preview
+            </button>
+          )}
+          {!isDesktopApp && themeId && (previewSessionStatus === 'expired' || previewSessionStatus === 'none') && (
+            <button
+              type="button"
+              onClick={() => setSessionModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-md bg-stone-500/10 px-2 py-1 text-[11px] font-medium text-stone-400 dark:text-gray-500 hover:bg-stone-500/20 hover:text-stone-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+              title={previewSessionStatus === 'expired'
+                ? 'Preview session expired — click to reconnect'
+                : 'Showing published theme — connect session for draft preview'}
+            >
+              {previewSessionStatus === 'expired' ? 'Session expired' : 'Published theme'}
+              <span className="text-sky-500 ml-0.5">Connect</span>
+            </button>
+          )}
+
+          {/* Preview draft in browser (opens with user's Shopify session) */}
+          {themeId && (
+            <button
+              type="button"
+              onClick={() => {
+                const domain = storeDomain.replace(/^https?:\/\//, '');
+                const previewPath = liveUrlPath || effectivePath || '/';
+                window.open(
+                  `https://${domain}${previewPath}${previewPath.includes('?') ? '&' : '?'}preview_theme_id=${themeId}`,
+                  '_blank'
+                );
+              }}
+              className="rounded p-1.5 ide-text-muted hover:ide-text-2 ide-hover transition-colors"
+              title="Preview draft theme in browser (requires Shopify admin login)"
+              aria-label="Preview draft theme in browser"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
           )}
 
           {/* Pop out / Bring back */}
@@ -719,33 +1146,24 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
       {/* ── URL path + relevant files bar ────────────────────────── */}
       {!isDetached && (
         <div className={`flex items-center gap-2 shrink-0 ${fill ? 'px-2 py-1 border-b ide-border-subtle' : 'px-1 py-1'}`}>
-          <div className="flex items-center gap-1.5 shrink-0 min-w-0 max-w-[40%] rounded-md ide-surface-inset px-2.5 py-1">
+          <div
+            className="flex items-center gap-1.5 shrink-0 min-w-0 max-w-[50%] rounded-md ide-surface-inset px-2.5 py-1 group cursor-default"
+            title={`Proxy: ${storeDomain} | Theme: ${themeId} | Path: ${liveUrlPath || effectivePath || '/'}`}
+          >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 ide-text-muted">
               <circle cx="12" cy="12" r="10" />
               <line x1="2" y1="12" x2="22" y2="12" />
               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
             </svg>
-            <span className="text-[11px] font-mono ide-text-3 truncate" title={liveUrlPath || effectivePath || '/'}>
+            <span className="text-[11px] font-mono ide-text-3 truncate">
               {liveUrlPath || effectivePath || '/'}
             </span>
+            <span className="text-[10px] font-mono ide-text-muted truncate hidden group-hover:inline">
+              {storeDomain} &middot; theme:{themeId}
+            </span>
           </div>
-          <span className="text-[10px] ide-text-muted shrink-0" title="Preview shows your Shopify dev theme. Enable Auto-push on save in the Shopify panel to update the preview when you save files.">
-            Shopify dev theme · push on save is optional
-          </span>
           {relevantLiquidFiles && relevantLiquidFiles.length > 0 && (
-            <div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
-              {relevantLiquidFiles.map((fp) => (
-                <button
-                  key={fp}
-                  type="button"
-                  onClick={() => onRelevantFileClick?.(fp)}
-                  className="inline-flex items-center shrink-0 rounded-md ide-surface-inset px-2 py-0.5 text-[11px] font-mono ide-text-2 hover:ide-text hover:bg-accent/10 transition-colors truncate max-w-[180px] cursor-pointer"
-                  title={`Open ${fp}`}
-                >
-                  {fp.split('/').pop()}
-                </button>
-              ))}
-            </div>
+            <RelevantFileTabs files={relevantLiquidFiles} onFileClick={onRelevantFileClick} />
           )}
         </div>
       )}
@@ -774,16 +1192,39 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
         </div>
       ) : (
         <div className={fill ? 'flex-1 min-h-0 relative' : 'relative'}>
-          <PreviewFrame
-            ref={frameRef}
-            projectId={projectId}
-            path={effectivePath}
-            isFullscreen={isFullscreen}
-            refreshToken={refreshToken}
-            isRefreshing={isRefreshing || isSyncing}
-            deviceWidth={deviceWidth}
-            fill={fill}
-          />
+          {isDesktopApp ? (
+            <div className={`relative ${fill ? 'absolute inset-0' : 'h-[600px]'}`}>
+              <div
+                ref={desktopPreviewRef}
+                className="absolute inset-0"
+                style={deviceWidth ? { width: deviceWidth, margin: '0 auto' } : undefined}
+              />
+              {desktopLoginRequired && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-end pb-8 pointer-events-none">
+                  <div className="pointer-events-auto mx-4 max-w-sm w-full rounded-xl border border-stone-200 dark:border-white/10 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-sm shadow-2xl p-4 text-center space-y-2">
+                    <p className="text-sm font-semibold text-stone-900 dark:text-white">
+                      Log in to preview draft theme
+                    </p>
+                    <p className="text-xs text-stone-500 dark:text-gray-400">
+                      Sign in to your Shopify admin above. Once logged in, your unpublished theme will load automatically.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <PreviewFrame
+              ref={frameRef}
+              projectId={projectId}
+              path={effectivePath}
+              isFullscreen={isFullscreen}
+              refreshToken={refreshToken}
+              isRefreshing={isRefreshing || isSyncing}
+              deviceWidth={deviceWidth}
+              fill={fill}
+              mode={previewMode}
+            />
+          )}
           {/* Phase 3a: Annotation overlay — key forces fresh state on each activation */}
           {annotating && (
             <PreviewAnnotator
@@ -812,6 +1253,20 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
           onClose={() => setCreateModalType(null)}
         />
       )}
+
+      {/* Preview session modal */}
+      <PreviewSessionModal
+        isOpen={sessionModalOpen}
+        onClose={() => setSessionModalOpen(false)}
+        projectId={projectId}
+        storeDomain={storeDomain}
+        onSessionSaved={() => {
+          setPreviewSessionStatus('tka');
+          setRefreshToken((prev) => prev + 1);
+          // Auto-start CLI preview after TKA password is saved
+          setTimeout(() => startCLIPreview(), 500);
+        }}
+      />
     </section>
   );
   }
