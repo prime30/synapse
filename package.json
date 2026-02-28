@@ -1,11 +1,12 @@
 {
   "name": "synapse1",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 --webpack",
     "dev:webpack": "next dev -p 3000 --webpack",
     "dev:electron": "concurrently \"cross-env NEXT_PUBLIC_ENABLE_LOCAL_SYNC=1 npm run dev\" \"wait-on tcp:3000 && electron electron/main.js\"",
+    "dev:desktop": "concurrently \"npm run dev\" \"cd electron && npm run start:dev\"",
     "build": "next build --webpack",
     "build:desktop": "npm run build && npm run icons && cd electron && npx electron-builder",
     "build:desktop:win": "npm run build && npm run icons && cd electron && npx electron-builder --win",
@@ -41,7 +42,10 @@
     "eval:e2e": "npx tsx scripts/run-e2e-eval.ts",
     "finetune:eval:ci": "npx tsx scripts/run-finetune-eval.ts --mode v2 --json-file .verification/finetune-eval-summary.json --fail-on-regression",
     "finetune:weekly": "npx tsx scripts/run-weekly-learning-cycle.ts --json-file .verification/weekly-cycle-report.json",
-    "finetune:baseline": "npx tsx scripts/run-weekly-learning-cycle.ts --capture-baseline --json-file .verification/weekly-cycle-report.json"
+    "finetune:baseline": "npx tsx scripts/run-weekly-learning-cycle.ts --capture-baseline --json-file .verification/weekly-cycle-report.json",
+    "bump:patch": "node scripts/bump-version.mjs patch",
+    "bump:minor": "node scripts/bump-version.mjs minor",
+    "bump:major": "node scripts/bump-version.mjs major"
   },
   "dependencies": {
     "@contentful/rich-text-react-renderer": "^16.1.6",
@@ -64,10 +68,12 @@
     "diff": "^8.0.3",
     "framer-motion": "^12.33.0",
     "geist": "^1.7.0",
+    "idb": "^8.0.3",
     "isomorphic-git": "^1.37.1",
     "js-tiktoken": "^1.0.21",
     "jszip": "^3.10.1",
     "lib0": "^0.2.117",
+    "liquidjs": "^10.24.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.563.0",
     "mermaid": "^11.12.2",
