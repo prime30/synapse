@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChatInterface } from '@/components/ai-sidebar/ChatInterface';
 import type { ContentBlock } from '@/components/ai-sidebar/ChatInterface';
 import type { ThinkingStep } from '@/components/ai-sidebar/ThinkingBlock';
@@ -45,6 +46,7 @@ import { useThemeHealth } from '@/hooks/useThemeHealth';
 import { HealthFindingBar } from '@/components/ai-sidebar/HealthFindingBar';
 import { BugReportModal } from '@/components/ai-sidebar/BugReportModal';
 import { useAgentEdits } from '@/hooks/useAgentEdits';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ── SSE event types ────────────────────────────────────────────────────────────
 
@@ -67,6 +69,25 @@ interface SSEContextStatsEvent {
   totalFiles: number;
 }
 
+interface SSEContextPressureEvent {
+  type: 'context_pressure';
+  percentage: number;
+  level: 'warning' | 'critical';
+  usedTokens: number;
+  maxTokens: number;
+}
+
+interface SSEContextFileLoadedEvent {
+  type: 'context_file_loaded';
+  path: string;
+  tokenCount: number;
+}
+
+interface SSEContentChunkEvent {
+  type: 'content_chunk';
+  chunk: string;
+}
+
 interface SSEThinkingEvent {
   type: 'thinking';
   phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'validating' | 'fixing' | 'change_ready' | 'clarification' | 'budget_warning' | 'reasoning' | 'complete';
@@ -83,6 +104,7 @@ interface SSEToolStartEvent {
   type: 'tool_start';
   name: string;
   id: string;
+  reasoning?: string;
 }
 
 interface SSEToolCallEvent {
@@ -104,6 +126,7 @@ interface SSEToolResultEvent {
   name: string;
   id: string;
   netZero?: boolean;
+  data?: Record<string, unknown>;
 }
 
 interface SSEToolProgressEvent {
@@ -192,6 +215,7 @@ interface SSEExecutionOutcomeEvent {
   outcome: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input';
   changedFiles?: number;
   needsClarification?: boolean;
+  changeSummary?: string;
 }
 
 interface SSEWorktreeStatusEvent {
@@ -200,7 +224,12 @@ interface SSEWorktreeStatusEvent {
   conflicts: Array<{ path: string }>;
 }
 
-type SSEEvent = SSEErrorEvent | SSEDoneEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSEToolResultEvent | SSEToolProgressEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent | SSEWorktreeStatusEvent;
+interface SSEShopifyPushEvent {
+  type: 'shopify_push';
+  status: string;
+}
+
+type SSEEvent = SSEShopifyPushEvent | SSEErrorEvent | SSEDoneEvent | SSEContentChunkEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEContextPressureEvent | SSEContextFileLoadedEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSEToolResultEvent | SSEToolProgressEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent | SSEWorktreeStatusEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -255,6 +284,49 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
   return null;
 }
 
+/**
+ * Split mixed stream input into parseable units while preserving chunk order.
+ * - Complete SSE JSON frames (`data: {...}\n\n`) are emitted as standalone parts.
+ * - Non-SSE text is emitted as raw parts.
+ * - Incomplete trailing SSE frames are buffered in `remainder`.
+ */
+function splitStreamParts(input: string, carry: string): { parts: string[]; remainder: string } {
+  const combined = carry + input;
+  const parts: string[] = [];
+  const eventRegex = /data:\s*\{[^\n]*\}\r?\n\r?\n/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = eventRegex.exec(combined)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (start > lastIndex) {
+      parts.push(combined.slice(lastIndex, start));
+    }
+    parts.push(match[0]);
+    lastIndex = end;
+  }
+
+  const tail = combined.slice(lastIndex);
+  if (!tail) return { parts, remainder: '' };
+
+  // Buffer a likely partial SSE frame at the end for the next read.
+  const lastDataIdx = tail.lastIndexOf('data:');
+  if (lastDataIdx >= 0) {
+    const maybeFrame = tail.slice(lastDataIdx);
+    const hasJsonStart = maybeFrame.includes('{');
+    const hasFrameEnd = /\r?\n\r?\n/.test(maybeFrame);
+    if (hasJsonStart && !hasFrameEnd) {
+      const prefix = tail.slice(0, lastDataIdx);
+      if (prefix) parts.push(prefix);
+      return { parts, remainder: maybeFrame };
+    }
+  }
+
+  parts.push(tail);
+  return { parts, remainder: '' };
+}
+
 /** Auto-retryable codes (frontend will automatically retry once). */
 const AUTO_RETRY_CODES = new Set<string>(['EMPTY_RESPONSE', 'RATE_LIMITED', 'CONTEXT_TOO_LARGE', 'TIMEOUT']);
 
@@ -288,6 +360,29 @@ function detectPromptAction(prompt: string): string {
   if (/\b(generate|create|build|add|make|write|implement)\b/.test(lower)) return 'generate';
   if (/\b(analyz)\b/.test(lower)) return 'analyze';
   return 'generate'; // default to generate for most prompts
+}
+
+/**
+ * Decide whether preview/DOM context should be fetched before send.
+ * This keeps normal code generation fast while still enabling preview-aware debugging.
+ */
+function shouldFetchPreviewContext(params: {
+  intentMode: IntentMode;
+  prompt: string;
+  selectedElement: SelectedElement | null | undefined;
+  hasAnnotation: boolean;
+}): boolean {
+  const { intentMode, prompt, selectedElement, hasAnnotation } = params;
+
+  // Explicit UI context always opts in.
+  if (selectedElement || hasAnnotation) return true;
+
+  // Debug mode often needs runtime DOM state.
+  if (intentMode === 'debug') return true;
+
+  // Heuristic for preview/runtime-oriented asks in other modes.
+  const lower = prompt.toLowerCase();
+  return /\b(preview|dom|selector|css|console|layout|render|visible|browser|screenshot)\b/.test(lower);
 }
 
 // ── Element hint extraction ───────────────────────────────────────────────────
@@ -505,6 +600,8 @@ interface AgentPromptPanelProps {
   isMemoryOpen?: boolean;
   /** External request to add a file as an attached chat context tag. */
   pendingAttachedFile?: { id: string; name: string; path: string; nonce: number } | null;
+  /** Portal target for the session sidebar — rendered outside the chat column on the far right edge. */
+  sessionSidebarPortalRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export function AgentPromptPanel({
@@ -543,6 +640,7 @@ export function AgentPromptPanel({
   onOpenMemory,
   isMemoryOpen = false,
   pendingAttachedFile = null,
+  sessionSidebarPortalRef,
 }: AgentPromptPanelProps) {
   const {
     messages,
@@ -573,9 +671,10 @@ export function AgentPromptPanel({
     truncateAt,
     forkSession,
     reviewSessionTranscript,
+    continueInNewChat,
   } = useAgentChat(projectId);
 
-  const { specialistMode, model, intentMode, maxAgents, verbose, setSpecialistMode, setModel, setIntentMode, setMaxAgents, setVerbose } = useAgentSettings();
+  const { specialistMode, model, intentMode, maxAgents, verbose, maxQuality, useFlatPipeline, setSpecialistMode, setModel, setIntentMode, setMaxAgents, setVerbose, setMaxQuality } = useAgentSettings();
   const pinnedPrefs = usePinnedPreferences(projectId);
   const { styleGuide } = useStyleProfile(projectId);
 
@@ -615,6 +714,26 @@ export function AgentPromptPanel({
   const lastPromptRef = useRef<string>('');
   const autoRetryCountRef = useRef(0);
 
+  // Image attachment: stores base64 + mimeType for the next stream request
+  const pendingImageRef = useRef<{ base64: string; mimeType: string } | null>(null);
+
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''),
+    );
+    pendingImageRef.current = { base64, mimeType: file.type };
+
+    // Also get a text analysis via the upload endpoint for the message history
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('prompt', 'Describe this image concisely for a Shopify theme developer. Focus on visual elements, layout, colors, and UI components.');
+    const res = await fetch('/api/agents/upload', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('Image analysis failed');
+    const json = await res.json();
+    return json.data?.analysis ?? 'Image attached';
+  }, []);
+
   useEffect(() => {
     if (!activeSessionId) return;
     const latestEdits =
@@ -642,6 +761,13 @@ export function AgentPromptPanel({
   const lastDecisionScanRef = useRef(0);
   const memoryWriteUnavailableRef = useRef(false);
   const workersRef = useRef<Array<{ workerId: string; label: string; status: string }>>([]);
+  const [contextPressure, setContextPressure] = useState<{
+    percentage: number;
+    level: 'warning' | 'critical';
+    usedTokens: number;
+    maxTokens: number;
+  } | null>(null);
+
   const [activeSpecialists, setActiveSpecialists] = useState<
     Map<
       string,
@@ -891,6 +1017,11 @@ export function AgentPromptPanel({
       get_shopify_asset: 'shopify_op',
       screenshot_preview: 'screenshot',
       compare_screenshots: 'screenshot_comparison',
+      grep_content: 'grep_results',
+      check_lint: 'lint_results',
+      run_command: 'terminal',
+      read_file: 'file_read',
+      search_files: 'grep_results',
     };
     return map[toolName] ?? undefined;
   }
@@ -929,7 +1060,7 @@ export function AgentPromptPanel({
   // ── Send handler ────────────────────────────────────────────────────────
 
   const onSend = useCallback(
-    async (content: string) => {
+    async (content: string, sendOptions?: { imageUrls?: string[] }) => {
       setError(null);
       setErrorCode(null);
 
@@ -943,7 +1074,7 @@ export function AgentPromptPanel({
       setLastResponseContent(null);
       setIsStopped(false);
       setShowRetryChip(false);
-      setCurrentAction(detectPromptAction(content));
+      setCurrentAction('preparing');
       lastPromptRef.current = content;
       thinkingStepsRef.current = [];
       workersRef.current = [];
@@ -1192,21 +1323,28 @@ export function AgentPromptPanel({
       }
 
       const displayContent = actualContent;
-      appendMessage('user', displayContent);
+      appendMessage('user', displayContent, sendOptions?.imageUrls?.length ? { imageUrls: sendOptions.imageUrls } : undefined);
       setIsLoading(true);
 
       const assistantMsgId = crypto.randomUUID();
       let streamedContent = '';
 
       try {
+        const previewContextEnabled = shouldFetchPreviewContext({
+          intentMode,
+          prompt: actualContent,
+          selectedElement,
+          hasAnnotation: Boolean(pendingAnnotation),
+        });
+
         // EPIC V3: Capture "before" DOM snapshot for preview verification
-        if (captureBeforeSnapshot) {
+        if (captureBeforeSnapshot && previewContextEnabled) {
           try { await captureBeforeSnapshot(); } catch { /* best-effort */ }
         }
 
-        // EPIC 1a: Get DOM context from preview panel before sending (3s timeout)
+        // EPIC 1a: Fetch DOM context only when preview context is relevant.
         let domContext: string | undefined;
-        if (getPreviewSnapshot) {
+        if (getPreviewSnapshot && previewContextEnabled) {
           try {
             domContext = await getPreviewSnapshot();
           } catch {
@@ -1222,6 +1360,10 @@ export function AgentPromptPanel({
         const useV2 = process.env.NEXT_PUBLIC_ENABLE_V2_AGENT !== 'false';
         const streamEndpoint = useV2 ? '/api/agents/stream/v2' : '/api/agents/stream';
 
+        // Capture and clear pending image for this request
+        const imageForRequest = pendingImageRef.current;
+        pendingImageRef.current = null;
+
         const res = await fetch(streamEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1230,6 +1372,7 @@ export function AgentPromptPanel({
             sessionId: activeSessionId ?? undefined,
             request: requestWithContext,
             history,
+            images: imageForRequest ? [imageForRequest] : undefined,
             isReferentialCodePrompt:
               intentMode === 'code' && isReferentialCodePrompt ? true : undefined,
             referentialArtifacts:
@@ -1247,10 +1390,13 @@ export function AgentPromptPanel({
             openTabs: openTabIds ?? undefined,
             domContext: domContext || undefined,
             elementHint: elementHint || undefined,
-            subagentCount: subagentCountForRequest, // Cursor-style subagent count (1x-4x)
-            specialistMode,           // Whether to use domain specialists
-            model,                    // User model preference
-            intentMode,               // Intent mode: ask/plan/code/debug
+            subagentCount: subagentCountForRequest,
+            specialistMode,
+            model,
+            intentMode,
+            maxQuality,
+            useFlatPipeline: useFlatPipeline || undefined,
+            cleanStart: isCleanStartSession.current || undefined,
             explicitFiles: attachedFilesRef.current.length > 0
               ? attachedFilesRef.current.map((f) => f.path)
               : undefined,
@@ -1281,6 +1427,7 @@ export function AgentPromptPanel({
         let receivedDone = false;
         let receivedError: SSEErrorEvent | null = null;
         let thinkingComplete = false;
+        let streamCarry = '';
 
         // Local accumulators for tool card data (avoids reading message state mid-stream)
         let accumulatedCodeEdits: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected'; confidence?: number }> = [];
@@ -1339,11 +1486,14 @@ export function AgentPromptPanel({
           const result = await reader.read();
           done = result.done;
           if (result.value) {
-            const chunk = decoder.decode(result.value, { stream: true });
+            const decoded = decoder.decode(result.value, { stream: true });
+            const split = splitStreamParts(decoded, streamCarry);
+            streamCarry = split.remainder;
 
-            // Check for SSE events (error, done, thinking) in the chunk
-            const sseEvent = parseSSEEvent(chunk);
-            if (sseEvent) {
+            for (const chunk of split.parts) {
+              // Check for SSE events (error, done, thinking) in this stream part
+              const sseEvent = parseSSEEvent(chunk);
+              if (sseEvent) {
               // Reset stall detection on any SSE event
               lastSSEEventTimeRef.current = Date.now();
               stallWarningEmittedRef.current = false;
@@ -1409,6 +1559,35 @@ export function AgentPromptPanel({
                 }
                 continue;
               }
+              if (sseEvent.type === 'content_chunk') {
+                const textChunk = sseEvent.chunk ?? '';
+                if (!textChunk) continue;
+                lastSSEEventTimeRef.current = Date.now();
+
+                if (!thinkingComplete && thinkingStepsRef.current.length > 0) {
+                  thinkingComplete = true;
+                  const steps = thinkingStepsRef.current.map(s => ({ ...s, done: true }));
+                  thinkingStepsRef.current = steps;
+                  const tb = blocksRef.current.find(b => b.type === 'thinking' && !b.done);
+                  if (tb && tb.type === 'thinking') {
+                    tb.done = true;
+                    tb.elapsedMs = Date.now() - tb.startedAt;
+                  }
+                }
+
+                streamedContent += textChunk;
+                contentBufferRef.current += textChunk;
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                debounceTimerRef.current = setTimeout(() => {
+                  flushContentBuffer();
+                  updateMessage(assistantMsgId, streamedContent, {
+                    thinkingSteps: thinkingStepsRef.current.length > 0 ? [...thinkingStepsRef.current] : undefined,
+                    thinkingComplete: thinkingComplete || undefined,
+                    blocks: [...blocksRef.current],
+                  });
+                }, 100);
+                continue;
+              }
               // Handle active_model SSE event — show which model is being used
               if (sseEvent.type === 'active_model') {
                 updateMessage(assistantMsgId, streamedContent, {
@@ -1430,40 +1609,79 @@ export function AgentPromptPanel({
                 continue;
               }
               if (sseEvent.type === 'execution_outcome') {
-                const normalizedOutcome =
-                  intentMode === 'code' && sseEvent.outcome === 'no-change'
-                    ? 'needs-input'
-                    : sseEvent.outcome;
+                const rawOutcome = sseEvent.outcome;
                 const reasonStr = (sseEvent as { failureReason?: string }).failureReason ?? '';
                 const referentialReplayFailed =
                   /referential|artifact/i.test(reasonStr) || undefined;
+                const sseValidationIssues = (sseEvent as { validationIssues?: { gate: string; errors: string[]; changesKept: boolean }[] }).validationIssues;
+
+                // Distinguish "applied cleanly" from "applied with validation warnings"
+                const outcome: typeof rawOutcome | 'applied-with-warnings' =
+                  rawOutcome === 'applied' && sseValidationIssues && sseValidationIssues.length > 0
+                    ? 'applied-with-warnings'
+                    : rawOutcome;
+
+                // Append change summary to the streamed content if present
+                const changeSummary = (sseEvent as { changeSummary?: string }).changeSummary;
+                if (changeSummary && (outcome === 'applied' || outcome === 'applied-with-warnings')) {
+                  const summaryBlock = `\n\n---\n**Changes applied:**\n${changeSummary}`;
+                  streamedContent += summaryBlock;
+                }
+
                 const failureMeta = {
                   failureReason: (sseEvent as { failureReason?: string }).failureReason ?? undefined,
                   suggestedAction: (sseEvent as { suggestedAction?: string }).suggestedAction ?? undefined,
                   failedTool: (sseEvent as { failedTool?: string }).failedTool ?? undefined,
                   failedFilePath: (sseEvent as { failedFilePath?: string }).failedFilePath ?? undefined,
-                  reviewFailedSection: (sseEvent as { reviewFailedSection?: string }).reviewFailedSection ?? undefined,
+                  reviewFailedSection: (sseEvent as { reviewFailedSection?: 'spec' | 'code_quality' | 'both' }).reviewFailedSection ?? undefined,
                   referentialReplayFailed,
-                  verificationEvidence: (sseEvent as { verificationEvidence?: unknown }).verificationEvidence ?? undefined,
+                  verificationEvidence: ((sseEvent as unknown as Record<string, unknown>).verificationEvidence) as { syntaxCheck: { passed: boolean; errorCount: number; warningCount: number }; themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number }; checkedFiles: string[]; totalCheckTimeMs: number } | undefined,
+                  validationIssues: sseValidationIssues,
                 };
-                if (normalizedOutcome === 'needs-input' && !hasClarificationCardForRun) {
+
+                // Only show clarification card when the agent explicitly asked
+                // (needsClarification from ask_clarification tool, not synthetic).
+                if (outcome === 'needs-input' && sseEvent.needsClarification && !hasClarificationCardForRun) {
                   hasClarificationCardForRun = true;
+                  const fr = failureMeta.failureReason;
+                  const fp = failureMeta.failedFilePath;
+                  const clarQuestion =
+                    fr === 'search_replace_failed' && fp
+                      ? `I couldn't match the text in \`${fp}\`. How would you like to proceed?`
+                      : fr === 'file_not_found' && fp
+                        ? `I couldn't find \`${fp}\`. Can you confirm the correct path?`
+                        : fr === 'validation_failed'
+                          ? 'The edit didn\'t pass validation. How should I adjust?'
+                          : 'I wasn\'t able to complete this change. What would help me proceed?';
+                  const clarOptions =
+                    fr === 'search_replace_failed'
+                      ? [
+                          { id: 'paste-content', label: 'I\'ll paste the current file content.' },
+                          { id: 'full-rewrite', label: 'Do a full file rewrite instead.' },
+                          { id: 'different-approach', label: 'Try a different approach.' },
+                        ]
+                      : fr === 'file_not_found'
+                        ? [
+                            { id: 'correct-path', label: 'I\'ll provide the correct path.' },
+                            { id: 'create-file', label: 'Create this file from scratch.' },
+                          ]
+                        : [
+                            { id: 'target-file', label: 'I\'ll specify the exact target file.' },
+                            { id: 'before-after', label: 'I\'ll paste exact before/after code.' },
+                            { id: 'replay-last-edits', label: 'Replay the suggested edits as-is.' },
+                          ];
                   updateMessage(assistantMsgId, streamedContent, {
-                    executionOutcome: normalizedOutcome,
+                    executionOutcome: outcome,
                     ...failureMeta,
                     clarification: {
-                      question: 'I need one detail to enact this directly. Which input can you provide?',
-                      options: [
-                        { id: 'target-file', label: 'I will specify the exact target file path.' },
-                        { id: 'before-after', label: 'I will paste exact before/after code snippet.' },
-                        { id: 'replay-last-edits', label: 'Replay the latest suggested edits as-is.' },
-                      ],
+                      question: clarQuestion,
+                      options: clarOptions,
                       allowFreeform: true,
                     },
                   });
                 } else {
                   updateMessage(assistantMsgId, streamedContent, {
-                    executionOutcome: normalizedOutcome,
+                    executionOutcome: outcome,
                     ...failureMeta,
                   });
                 }
@@ -1476,6 +1694,26 @@ export function AgentPromptPanel({
                     loadedFiles: sseEvent.loadedFiles,
                     loadedTokens: sseEvent.loadedTokens,
                     totalFiles: sseEvent.totalFiles,
+                  },
+                });
+                continue;
+              }
+              if (sseEvent.type === 'context_pressure') {
+                setContextPressure({
+                  percentage: sseEvent.percentage,
+                  level: sseEvent.level,
+                  usedTokens: sseEvent.usedTokens,
+                  maxTokens: sseEvent.maxTokens,
+                });
+                continue;
+              }
+              if (sseEvent.type === 'context_file_loaded') {
+                const currentMsg = messages.find(m => m.id === assistantMsgId);
+                updateMessage(assistantMsgId, streamedContent, {
+                  contextStats: {
+                    ...currentMsg?.contextStats,
+                    loadedFiles: (currentMsg?.contextStats?.loadedFiles ?? 0) + 1,
+                    loadedTokens: (currentMsg?.contextStats?.loadedTokens ?? 0) + sseEvent.tokenCount,
                   },
                 });
                 continue;
@@ -1495,6 +1733,7 @@ export function AgentPromptPanel({
                   toolName: sseEvent.name,
                   label: getToolLoadingLabel(sseEvent.name, {}),
                   status: 'loading',
+                  reasoning: (sseEvent as SSEToolStartEvent).reasoning,
                 });
                 updateMessage(assistantMsgId, streamedContent, {
                   activeToolCall: { name: sseEvent.name, id: sseEvent.id },
@@ -1853,9 +2092,31 @@ export function AgentPromptPanel({
                 }
                 continue;
               }
-              // Handle tool_result: update status when edit produced no net change
+              // Handle tool_result: carry result data into card + handle net-zero edits
               if (sseEvent.type === 'tool_result') {
                 const trEvent = sseEvent as SSEToolResultEvent;
+
+                // Enrich existing tool block with result data for rich cards
+                if (trEvent.data) {
+                  const matchIdx = blocksRef.current.findLastIndex(
+                    (b: ContentBlock) => b.type === 'tool_action' && (b.toolName === trEvent.name || b.toolId === trEvent.id)
+                  );
+                  if (matchIdx >= 0) {
+                    const b = blocksRef.current[matchIdx];
+                    if (b.type === 'tool_action') {
+                      const cardType = getToolCardType(trEvent.name);
+                      if (cardType && trEvent.data) {
+                        b.cardType = cardType;
+                        b.cardData = trEvent.data;
+                        b.status = 'done';
+                      }
+                    }
+                    updateMessage(assistantMsgId, streamedContent, {
+                      blocks: [...blocksRef.current],
+                    });
+                  }
+                }
+
                 if (trEvent.netZero) {
                   const matchIdx = blocksRef.current.findIndex(
                     (b) => b.type === 'tool_action' && b.toolId === trEvent.name && b.status === 'done'
@@ -1997,11 +2258,29 @@ export function AgentPromptPanel({
                 });
                 continue;
               }
+
+              // Handle checkpointed event — agent saved state and is continuing in background
+              if (sseEvent.type === 'checkpointed') {
+                const meta = sseEvent.metadata as { executionId?: string; iteration?: number } | undefined;
+                updateMessage(assistantMsgId, streamedContent, {
+                  backgroundTask: {
+                    executionId: meta?.executionId || '',
+                    iteration: meta?.iteration ?? 0,
+                    status: 'running' as const,
+                  },
+                });
+                continue;
+              }
+
               if (sseEvent.type === 'thinking') {
                 const metadata = sseEvent.metadata as Record<string, unknown> | undefined;
                 const rawTier = metadata?.routingTier as string | undefined;
                 const validTier = rawTier && ['TRIVIAL', 'SIMPLE', 'COMPLEX', 'ARCHITECTURAL'].includes(rawTier)
                   ? rawTier as 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL'
+                  : undefined;
+                const rawStrategy = metadata?.strategy as string | undefined;
+                const validStrategy = rawStrategy && ['SIMPLE', 'HYBRID', 'GOD_MODE'].includes(rawStrategy)
+                  ? rawStrategy as 'SIMPLE' | 'HYBRID' | 'GOD_MODE'
                   : undefined;
                 const incomingRail = mapCoordinatorPhase(sseEvent.phase);
 
@@ -2038,6 +2317,7 @@ export function AgentPromptPanel({
                     done: sseEvent.phase === 'complete',
                     startedAt: Date.now(),
                     routingTier: validTier,
+                    strategy: validStrategy,
                     model: metadata?.model as string | undefined,
                     railPhase: incomingRail,
                     subPhase: (sseEvent.subPhase ?? undefined) as ThinkingStep['subPhase'],
@@ -2046,6 +2326,7 @@ export function AgentPromptPanel({
                 }
 
                 thinkingStepsRef.current = steps;
+                if (sseEvent.label) setCurrentAction(sseEvent.label);
                 if (sseEvent.phase === 'complete') thinkingComplete = true;
 
                 // B2: Clarification event — append a clarification message to the chat
@@ -2270,7 +2551,14 @@ export function AgentPromptPanel({
                 blocks: [...blocksRef.current],
               });
             }, 100);
+            }
           }
+        }
+
+        // Flush any trailing non-event carry as text.
+        if (streamCarry.trim().length > 0 && !parseSSEEvent(streamCarry)) {
+          streamedContent += streamCarry;
+          contentBufferRef.current += streamCarry;
         }
 
         // Clean up timers (client timeout, stall detection) and flush debounce
@@ -2299,7 +2587,10 @@ export function AgentPromptPanel({
         // ── Handle SSE error events ─────────────────────────────────────
         if (receivedError) {
           const code = receivedError.code;
-          const userMsg = ERROR_CODE_MESSAGES[code] ?? receivedError.message ?? 'Something went wrong.';
+          const userMsg =
+            (code === 'UNKNOWN' && receivedError.message)
+              ? receivedError.message
+              : (ERROR_CODE_MESSAGES[code] ?? receivedError.message ?? 'Something went wrong.');
           setErrorCode(code);
           setError(userMsg);
 
@@ -2494,7 +2785,7 @@ export function AgentPromptPanel({
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, useFlatPipeline, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -2677,8 +2968,12 @@ export function AgentPromptPanel({
     clearMessages();
   }, [clearMessages]);
 
+  // Tracks if the current active session was created with cleanStart
+  const isCleanStartSession = useRef(false);
+
   // New Chat — create a new session and reset state
-  const handleNewChat = useCallback(async () => {
+  // Pass cleanStart: true for a fully clean slate (no cross-session memory)
+  const handleNewChat = useCallback(async (opts?: { cleanStart?: boolean }) => {
     setLastResponseContent(null);
     setShowRetryChip(false);
     setError(null);
@@ -2687,7 +2982,9 @@ export function AgentPromptPanel({
     autoRetryCountRef.current = 0;
     arcRef.current.reset();
     setOutputMode('chat');
-    await createNewSession();
+    setContextPressure(null);
+    isCleanStartSession.current = opts?.cleanStart ?? false;
+    await createNewSession(opts);
   }, [createNewSession]);
 
   // Switch session
@@ -2700,6 +2997,8 @@ export function AgentPromptPanel({
       setIsStopped(false);
       arcRef.current.reset();
       setOutputMode('chat');
+      setContextPressure(null);
+      isCleanStartSession.current = false;
       await switchSession(sessionId);
     },
     [switchSession],
@@ -2761,43 +3060,50 @@ export function AgentPromptPanel({
     return chips.map((c) => ({ ...c, category: 'fix' as const, score: 0 }));
   }, [errorCode, isRetrying, intentMode]);
 
+  const sessionSidebarElement = (
+    <SessionSidebar
+      sessions={sessions}
+      archivedSessions={archivedSessions}
+      activeSessionId={activeSessionId ?? null}
+      isLoading={isLoading}
+      onSwitch={handleSwitchSession}
+      onNew={handleNewChat}
+      onNewClean={() => handleNewChat({ cleanStart: true })}
+      onDelete={deleteSession}
+      onRename={renameSession}
+      onArchive={archiveSession}
+      onUnarchive={unarchiveSession}
+      onArchiveAll={() => archiveAllSessions()}
+      onArchiveOlderThan={(days) => archiveAllSessions(days)}
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onLoadMore={loadMore}
+      onLoadAllHistory={loadAllHistory}
+      isLoadingAllHistory={isLoadingAllHistory}
+      pushLog={pushLog}
+      onOpenTemplates={() => setTemplateLibraryOpen(true)}
+      onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
+      projectId={projectId}
+      onSelectMessage={(_messageId, sessionId) => {
+        handleSwitchSession(sessionId);
+      }}
+      activeSessionMessages={messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        created_at: m.timestamp?.toISOString?.(),
+      }))}
+    />
+  );
+
   return (
-    <div className={`flex flex-1 min-h-0 ${className}`}>
-      {/* Session sidebar (left edge of right panel) */}
-      <SessionSidebar
-        sessions={sessions}
-        archivedSessions={archivedSessions}
-        activeSessionId={activeSessionId ?? null}
-        isLoading={isLoading}
-        onSwitch={handleSwitchSession}
-        onNew={handleNewChat}
-        onDelete={deleteSession}
-        onRename={renameSession}
-        onArchive={archiveSession}
-        onUnarchive={unarchiveSession}
-        onArchiveAll={() => archiveAllSessions()}
-        onArchiveOlderThan={(days) => archiveAllSessions(days)}
-        hasMore={hasMore}
-        isLoadingMore={isLoadingMore}
-        onLoadMore={loadMore}
-        onLoadAllHistory={loadAllHistory}
-        isLoadingAllHistory={isLoadingAllHistory}
-        pushLog={pushLog}
-        onOpenTemplates={() => setTemplateLibraryOpen(true)}
-        onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
-        projectId={projectId}
-        onSelectMessage={(_messageId, sessionId) => {
-          handleSwitchSession(sessionId);
-        }}
-        activeSessionMessages={messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          created_at: m.timestamp?.toISOString?.(),
-        }))}
-      />
+    <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
+      {/* Portal session sidebar to far-right slot if available, otherwise render inline */}
+      {sessionSidebarPortalRef?.current
+        ? createPortal(sessionSidebarElement, sessionSidebarPortalRef.current)
+        : sessionSidebarElement}
 
       {/* Chat area */}
-      <div className="flex flex-col flex-1 min-h-0 min-w-0">
+      <div className="flex flex-col flex-1 min-h-0">
       <ContextPanel context={context} className="mb-2 flex-shrink-0 mx-2" />
       <TrainingReviewPanel
         open={trainingPanelOpen}
@@ -2833,10 +3139,7 @@ export function AgentPromptPanel({
         >
           <span className="flex items-center gap-1.5">
             {isRetrying && (
-              <svg className="h-3 w-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <LambdaDots size={12} className="shrink-0" />
             )}
             {error}
           </span>
@@ -2905,12 +3208,16 @@ export function AgentPromptPanel({
           isReviewingTranscript={isReviewingTranscript}
           onOpenMemory={onOpenMemory}
           isMemoryOpen={isMemoryOpen}
+          onImageUpload={handleImageUpload}
+          projectId={projectId}
           currentModel={model}
           onModelChange={setModel}
           specialistMode={specialistMode}
           onSpecialistModeChange={setSpecialistMode}
           maxAgents={maxAgents}
           onMaxAgentsChange={setMaxAgents}
+          maxQuality={maxQuality}
+          onMaxQualityChange={setMaxQuality}
           isStopped={isStopped}
           onApplyCode={onApplyCode}
           onSaveCode={onSaveCode}
@@ -2952,9 +3259,12 @@ export function AgentPromptPanel({
           verbose={verbose}
           onToggleVerbose={() => setVerbose(!verbose)}
           onForkAtMessage={(messageIndex) => forkSession(messageIndex)}
-          projectId={projectId}
           onPinAsPreference={(rule) => pinnedPrefs.addPin(rule)}
           onDraftChange={handleDraftWarmup}
+          onOpenTemplates={() => setTemplateLibraryOpen(true)}
+          onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
+          contextPressure={contextPressure}
+          onContinueInNewChat={continueInNewChat}
         />
       </div>
       {bugReportOpen && (

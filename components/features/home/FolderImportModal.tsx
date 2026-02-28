@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { X, FolderOpen, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, FolderOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
+import { ImportFolderButton } from '@/components/features/desktop/ImportFolderButton';
+import { isDesktop } from '@/lib/utils/environment';
 
 interface FolderImportModalProps {
   isOpen: boolean;
@@ -193,7 +196,20 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
         </div>
 
         <div className="p-4 space-y-4">
-          {!supportsDirectory ? (
+          {isDesktop() ? (
+            <div className="text-center py-8 space-y-4">
+              <FolderOpen size={48} className="mx-auto ide-text-3" />
+              <div className="space-y-1">
+                <p className="text-sm ide-text">Select a Shopify theme folder</p>
+                <p className="text-xs ide-text-muted">
+                  Opens a native folder picker and imports the theme into Synapse.
+                </p>
+              </div>
+              <div className="flex justify-center">
+                <ImportFolderButton />
+              </div>
+            </div>
+          ) : !supportsDirectory ? (
             <div className="text-center py-6 space-y-2">
               <AlertCircle size={32} className="mx-auto text-amber-400" />
               <p className="text-sm ide-text">
@@ -230,12 +246,12 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
             </div>
           ) : state === 'validating' ? (
             <div className="text-center py-8 space-y-3">
-              <Loader2 size={32} className="mx-auto text-sky-400 animate-spin" />
+              <LambdaDots size={32} className="mx-auto" />
               <p className="text-sm ide-text">Validating theme structure...</p>
             </div>
           ) : state === 'creating' ? (
             <div className="text-center py-8 space-y-3">
-              <Loader2 size={32} className="mx-auto text-sky-400 animate-spin" />
+              <LambdaDots size={32} className="mx-auto" />
               <p className="text-sm ide-text">
                 Creating project &quot;{folderName}&quot;...
               </p>
@@ -243,7 +259,7 @@ export function FolderImportModal({ isOpen, onClose, onImportSuccess }: FolderIm
           ) : state === 'uploading' ? (
             <div className="py-6 space-y-4">
               <div className="text-center space-y-2">
-                <Loader2 size={32} className="mx-auto text-sky-400 animate-spin" />
+                <LambdaDots size={32} className="mx-auto" />
                 <p className="text-sm ide-text">
                   Uploading files... {progress.uploaded} / {progress.total}
                 </p>

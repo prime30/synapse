@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { ChevronDown, Check, X, Loader2, FileText, Code, HelpCircle, FilePlus, Eye, Pencil, Trash2, ArrowRightLeft, Upload, Download, List, Image as ImageIcon, LayoutGrid, FileSearch, Search, ShieldCheck, GitBranch } from 'lucide-react';
+import { ChevronDown, Check, X, FileText, Code, HelpCircle, FilePlus, Eye, Pencil, Trash2, ArrowRightLeft, Upload, Download, List, Image as ImageIcon, LayoutGrid, FileSearch, Search, ShieldCheck, GitBranch, Lightbulb } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { AnimatePresence, motion } from 'framer-motion';
 import { safeTransition } from '@/lib/accessibility';
 import type { ContentBlock } from './ChatInterface';
@@ -20,6 +21,10 @@ import { ScreenshotCard } from './ScreenshotCard';
 import { CodeEditCard } from './CodeEditCard';
 import { ChangePreviewCard } from './ChangePreviewCard';
 import { ThemeArtifactCard } from './ThemeArtifactCard';
+import { GrepResultCard } from './GrepResultCard';
+import { LintResultCard } from './LintResultCard';
+import { RunCommandBlock } from './RunCommandBlock';
+import { FilePreviewCard } from './FilePreviewCard';
 
 type ToolActionBlock = Extract<ContentBlock, { type: 'tool_action' }>;
 
@@ -91,7 +96,7 @@ function StatusIcon({ status, toolName }: { status: string; toolName: string }) 
   if (status === 'loading') {
     return (
       <div className="shrink-0 h-4 w-4 flex items-center justify-center">
-        <Loader2 className="h-4 w-4 motion-safe:animate-spin text-sky-500 dark:text-sky-400" aria-hidden />
+        <LambdaDots size={14} />
       </div>
     );
   }
@@ -114,6 +119,8 @@ function shouldAutoExpand(block: ToolActionBlock): boolean {
   if (block.status === 'error') return true;
   if (block.cardType === 'clarification') return true;
   if (block.cardType === 'change_preview') return true;
+  if (block.cardType === 'terminal') return true;
+  if (block.cardType === 'lint_results') return true;
   return false;
 }
 
@@ -132,6 +139,7 @@ export function ToolActionItem({
 }: ToolActionItemProps) {
   const autoExpand = shouldAutoExpand(block);
   const [expanded, setExpanded] = useState(autoExpand);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
   const hasExpandableContent = block.cardType && block.cardData;
 
   const toggle = useCallback(() => {
@@ -149,10 +157,11 @@ export function ToolActionItem({
   return (
     <div className="group flex flex-col rounded-md border ide-border-subtle overflow-hidden my-1" role="group">
       {/* Compact header row */}
-      <button
-        type="button"
-        onClick={toggle}
+      <div
         role="button"
+        tabIndex={0}
+        onClick={toggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
         aria-expanded={hasExpandableContent ? expanded : undefined}
         className="flex items-center gap-2 px-2.5 py-1.5 text-left ide-hover cursor-pointer transition-colors"
       >
@@ -174,6 +183,22 @@ export function ToolActionItem({
           )}
         </div>
 
+        {/* Why? button */}
+        {block.reasoning && block.status === 'done' && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setReasoningOpen(prev => !prev); }}
+            className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
+              reasoningOpen
+                ? 'bg-stone-200 dark:bg-[#1e1e1e] ide-text-2'
+                : 'bg-stone-100 dark:bg-[#141414] text-stone-500 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-white/10'
+            }`}
+            aria-label="Show reasoning"
+          >
+            <Lightbulb className="h-3 w-3 inline-block -mt-px" aria-hidden />
+          </button>
+        )}
+
         {/* Chevron */}
         {(hasExpandableContent || block.status === 'error') && (
           <ChevronDown
@@ -181,7 +206,29 @@ export function ToolActionItem({
             aria-hidden
           />
         )}
-      </button>
+      </div>
+
+      {/* Reasoning trace */}
+      <AnimatePresence initial={false}>
+        {reasoningOpen && block.reasoning && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={safeTransition(0.15)}
+            className="overflow-hidden"
+          >
+            <div className="border-t ide-border-subtle px-2.5 py-2 bg-stone-50 dark:bg-white/[0.02]">
+              <p className="text-[10px] font-medium ide-text-3 mb-1 flex items-center gap-1">
+                <Lightbulb className="h-3 w-3" aria-hidden /> Agent reasoning
+              </p>
+              <p className="text-[11px] ide-text-2 leading-relaxed whitespace-pre-wrap break-words">
+                {block.reasoning}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Tool progress during loading */}
       {block.status === 'loading' && block.progress && (
@@ -355,6 +402,49 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
     case 'theme_artifact': {
       const artifact = data as { markdown: string };
       return <ThemeArtifactCard markdown={artifact.markdown} />;
+    }
+    case 'grep_results': {
+      const grep = data as { pattern: string; matches: Array<{ file: string; line: number; content: string }>; totalMatches: number };
+      return (
+        <GrepResultCard
+          pattern={grep.pattern}
+          matches={grep.matches}
+          totalMatches={grep.totalMatches}
+        />
+      );
+    }
+    case 'lint_results': {
+      const lint = data as { passed: boolean; summary: string; issues: Array<{ severity: 'error' | 'warning' | 'info'; category: string; file: string; line?: number; message: string; suggestion?: string }> };
+      return (
+        <LintResultCard
+          passed={lint.passed}
+          summary={lint.summary}
+          issues={lint.issues}
+        />
+      );
+    }
+    case 'terminal': {
+      const cmd = data as { command: string; stdout: string; stderr: string; exitCode: number; timedOut?: boolean };
+      return (
+        <RunCommandBlock
+          command={cmd.command}
+          stdout={cmd.stdout}
+          stderr={cmd.stderr}
+          exitCode={cmd.exitCode}
+          timedOut={cmd.timedOut}
+        />
+      );
+    }
+    case 'file_read': {
+      const fr = data as { fileName: string; content: string; language: string; lineCount: number };
+      return (
+        <FilePreviewCard
+          fileName={fr.fileName}
+          content={fr.content}
+          language={fr.language}
+          lineCount={fr.lineCount}
+        />
+      );
     }
     case 'preview_nav':
     default:

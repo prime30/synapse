@@ -48,7 +48,7 @@ export function ConversationExport({ messages, sessionTitle }: ConversationExpor
       trigger={
         <button
           type="button"
-          className="w-7 h-7 flex items-center justify-center rounded-md text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded-md text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1e1e1e] transition-colors"
           aria-label="Export conversation"
         >
           <Download className="w-3.5 h-3.5" />

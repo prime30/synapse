@@ -5,6 +5,7 @@ import { useDesignTokens, type DesignTokensResponse } from '@/hooks/useDesignTok
 import { TokenCard, type TokenType } from './TokenCard';
 import { DesignHealthScore } from './DesignHealthScore';
 import { ScanProgressIndicator } from './ScanProgressIndicator';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ---------------------------------------------------------------------------
 // Category config
@@ -127,7 +128,7 @@ export function DesignTokenBrowser({ projectId }: DesignTokenBrowserProps) {
   if (isLoading && !data) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-        <div className="w-5 h-5 border-2 ide-border border-t-sky-500 rounded-full animate-spin mb-3" />
+        <LambdaDots size={20} className="mb-3" />
         <p className="text-xs ide-text-muted">Analyzing theme tokens…</p>
       </div>
     );
@@ -215,7 +216,7 @@ export function DesignTokenBrowser({ projectId }: DesignTokenBrowserProps) {
               type="button"
               onClick={handleScan}
               disabled={isScanning || isLoading}
-              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-white/20 disabled:opacity-50 transition-colors"
+              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-[#333333] disabled:opacity-50 transition-colors"
             >
               Scan Theme
             </button>

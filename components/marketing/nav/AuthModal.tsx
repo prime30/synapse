@@ -80,7 +80,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
         }
 
         onClose();
-        router.push('/onboarding?signed_in=1');
+        router.push('/projects?signed_in=1');
         router.refresh();
       } catch (err) {
         setErrorMessage(
@@ -199,7 +199,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
         }
 
         onClose();
-        router.push('/onboarding?signed_in=1');
+        router.push('/projects?signed_in=1');
         router.refresh();
       } catch (err) {
         setErrorMessage(
@@ -292,7 +292,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                       callbackUrl={
                         pathname?.startsWith('/projects/')
                           ? `${pathname}?signed_in=1`
-                          : '/onboarding?signed_in=1'
+                          : '/projects?signed_in=1'
                       }
                       className="rounded-lg border-stone-200 bg-white text-stone-900 hover:bg-stone-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                     />

@@ -63,7 +63,7 @@ function FileEntryItem({
             ${
               isSelected
                 ? 'bg-sky-500/20 dark:bg-sky-500/20 border-sky-500/40 text-sky-600 dark:text-sky-400'
-                : 'ide-border hover:border-stone-300 dark:hover:border-white/20 text-transparent'
+                : 'ide-border hover:border-stone-300 dark:hover:border-[#333333] text-transparent'
             }
             flex items-center justify-center
           `}

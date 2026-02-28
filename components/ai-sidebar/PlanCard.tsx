@@ -92,7 +92,7 @@ export function PlanCard({
 
         {/* Progress bar */}
         <div className="mt-1.5 flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
+          <div className="flex-1 h-1.5 rounded-full bg-stone-200 dark:bg-[#1e1e1e] overflow-hidden">
             <div
               className="h-full rounded-full bg-[oklch(0.745_0.189_148)] transition-all duration-300"
               style={{ width: `${progress.pct}%` }}
@@ -115,7 +115,7 @@ export function PlanCard({
               type="checkbox"
               checked={checkedSteps.has(step.number)}
               onChange={() => toggleStep(step.number)}
-              className="mt-0.5 rounded border-stone-300 dark:border-white/20 text-sky-500 focus:ring-sky-500/50"
+              className="mt-0.5 rounded border-stone-300 dark:border-[#333333] text-sky-500 focus:ring-sky-500/50"
               aria-label={`Step ${step.number}: ${step.text ?? step.description}`}
             />
             <span className="flex-1 ide-text-2 group-hover:ide-text-1 transition-colors">

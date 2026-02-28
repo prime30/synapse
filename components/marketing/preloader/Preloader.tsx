@@ -7,12 +7,7 @@ import { useMarkPageReady } from '@/components/marketing/PreloaderContext';
 
 const DISPLAY_CHARS = ['S', 'Y', 'N', '\u039B', 'P', 'S', 'E'];
 const SCRAMBLE_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
-const PIXEL_FONTS = [
-  'font-pixel-circle',
-  'font-pixel-grid',
-  'font-pixel-triangle',
-  'font-pixel-line',
-];
+const PIXEL_FONTS = ['font-pixel-circle'];
 const LANDED_FONT = 'font-pixel-circle';
 const PRELOADER_KEY = 'synapse_preloader_done_v2';
 
@@ -185,8 +180,8 @@ export function Preloader() {
                   return (
                     <span
                       key={i}
-                      className={`${CELL} ${letter.font} pixel-stipple`}
-                      style={{ fontVariantNumeric: 'tabular-nums', opacity: letterOpacity }}
+                      className={`${CELL} ${letter.font}`}
+                      style={{ fontVariantNumeric: 'tabular-nums', opacity: letterOpacity, letterSpacing: 'inherit' }}
                     >
                       {letter.char}
                     </span>

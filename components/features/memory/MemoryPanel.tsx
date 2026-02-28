@@ -27,7 +27,7 @@ interface MemoryPanelProps {
   onClose?: () => void;
 }
 
-type TabId = 'conventions' | 'decisions' | 'preferences' | 'term-mappings';
+type TabId = 'conventions' | 'decisions' | 'preferences' | 'term-mappings' | 'role-insights';
 
 // ── Confidence badge ──────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
       ? 'text-green-400 bg-green-400/10'
       : pct >= 60
         ? 'text-yellow-400 bg-yellow-400/10'
-        : 'ide-text-muted bg-stone-200/50 dark:bg-white/10';
+        : 'ide-text-muted bg-stone-200/50 dark:bg-[#1e1e1e]';
 
   return (
     <span
@@ -283,7 +283,7 @@ function PreferenceItem({
 
 const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
   schema: { label: 'Schema', color: 'text-sky-400 bg-sky-400/10' },
-  filename: { label: 'Filename', color: 'ide-text-muted bg-stone-200/50 dark:bg-white/10' },
+  filename: { label: 'Filename', color: 'ide-text-muted bg-stone-200/50 dark:bg-[#1e1e1e]' },
   synonym: { label: 'Synonym', color: 'text-purple-400 bg-purple-400/10' },
   execution: { label: 'Learned', color: 'text-green-400 bg-green-400/10' },
 };
@@ -368,6 +368,11 @@ function EmptyState({ tab }: { tab: TabId }) {
       title: 'No term mappings yet',
       description: 'Import a theme or run some prompts to start learning. Synapse maps informal terms like "hero" to the actual files they refer to.',
     },
+    'role-insights': {
+      icon: Target,
+      title: 'No role insights yet',
+      description: 'As specialists complete tasks, their successful patterns and decisions are saved here for future reference.',
+    },
   };
 
   const msg = messages[tab];
@@ -410,7 +415,15 @@ const TABS: Array<{ id: TabId; label: string; type?: MemoryType }> = [
   { id: 'decisions', label: 'Decisions', type: 'decision' },
   { id: 'preferences', label: 'Preferences', type: 'preference' },
   { id: 'term-mappings', label: 'Terms' },
+  { id: 'role-insights', label: 'Roles' },
 ];
+
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  liquid: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
+  javascript: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+  css: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+  json: 'bg-stone-100 dark:bg-stone-900/30 text-stone-700 dark:text-stone-300',
+};
 
 export function MemoryPanel({
   memories,
@@ -424,10 +437,15 @@ export function MemoryPanel({
   const [activeTab, setActiveTab] = useState<TabId>('conventions');
 
   const filteredMemories = useMemo(() => {
-    if (activeTab === 'term-mappings') return [];
+    if (activeTab === 'term-mappings' || activeTab === 'role-insights') return [];
     const targetType = TABS.find((t) => t.id === activeTab)?.type;
     return memories.filter((m) => m.type === targetType);
   }, [memories, activeTab]);
+
+  const roleMemories = useMemo(
+    () => memories.filter(m => !!m.sourceRole),
+    [memories],
+  );
 
   const tabCounts = useMemo(() => {
     const counts: Record<TabId, number> = {
@@ -435,6 +453,7 @@ export function MemoryPanel({
       decisions: 0,
       preferences: 0,
       'term-mappings': termMappings.length,
+      'role-insights': roleMemories.length,
     };
     for (const m of memories) {
       if (m.type === 'convention') counts.conventions++;
@@ -442,7 +461,7 @@ export function MemoryPanel({
       else if (m.type === 'preference') counts.preferences++;
     }
     return counts;
-  }, [memories, termMappings.length]);
+  }, [memories, termMappings.length, roleMemories.length]);
 
   const handleFeedback = useCallback(
     (id: string, feedback: MemoryFeedback) => {
@@ -543,6 +562,44 @@ export function MemoryPanel({
                   mapping={mapping}
                   onForget={handleForget}
                 />
+              ))}
+            </div>
+          )
+        ) : activeTab === 'role-insights' ? (
+          roleMemories.length === 0 ? (
+            <EmptyState tab={activeTab} />
+          ) : (
+            <div className="divide-y ide-border">
+              {Object.entries(
+                roleMemories.reduce<Record<string, typeof roleMemories>>((acc, m) => {
+                  const role = m.sourceRole ?? 'unknown';
+                  (acc[role] ??= []).push(m);
+                  return acc;
+                }, {})
+              ).map(([role, items]) => (
+                <div key={role} className="px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${ROLE_BADGE_CLASS[role] ?? 'bg-stone-100 dark:bg-stone-900/30 text-stone-700 dark:text-stone-300'}`}>
+                      {role}
+                    </span>
+                    <span className="text-[10px] ide-text-quiet">{items.length} insight{items.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {items.map(entry => {
+                      const desc =
+                        entry.type === 'convention' ? (entry.content as Convention).pattern :
+                        entry.type === 'decision' ? (entry.content as Decision).choice :
+                        entry.type === 'preference' ? (entry.content as Preference).preference :
+                        JSON.stringify(entry.content).slice(0, 120);
+                      return (
+                        <div key={entry.id} className="flex items-start justify-between gap-2">
+                          <span className="text-xs ide-text-muted leading-relaxed">{desc}</span>
+                          <ConfidenceBadge confidence={entry.confidence} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           )

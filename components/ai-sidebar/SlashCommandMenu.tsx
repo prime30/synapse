@@ -132,7 +132,7 @@ export function SlashCommandMenu({
               aria-selected={isHighlighted}
               className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left ${
                 isHighlighted
-                  ? 'bg-stone-100 dark:bg-white/10'
+                  ? 'bg-stone-100 dark:bg-[#1e1e1e]'
                   : 'hover:bg-stone-50 dark:hover:bg-white/5'
               }`}
               onClick={() => handleSelect(cmd)}

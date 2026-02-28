@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, GitBranch, CheckCircle2, AlertCircle } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface GitImportModalProps {
   isOpen: boolean;
@@ -172,13 +173,13 @@ export function GitImportModal({ isOpen, onClose, onImportSuccess }: GitImportMo
             </>
           ) : state === 'cloning' ? (
             <div className="text-center py-8 space-y-3">
-              <Loader2 size={32} className="mx-auto text-sky-400 animate-spin" />
+              <LambdaDots size={32} className="mx-auto" />
               <p className="text-sm ide-text">Cloning repository...</p>
               <p className="text-xs ide-text-muted">This may take a minute for large repos.</p>
             </div>
           ) : state === 'processing' ? (
             <div className="text-center py-8 space-y-3">
-              <Loader2 size={32} className="mx-auto text-sky-400 animate-spin" />
+              <LambdaDots size={32} className="mx-auto" />
               <p className="text-sm ide-text">Importing files...</p>
             </div>
           ) : state === 'success' ? (

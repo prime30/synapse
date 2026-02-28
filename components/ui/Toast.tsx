@@ -140,7 +140,7 @@ export function Toast({ toast, onDismiss, onTogglePin }: ToastProps) {
                 <button
                   type="button"
                   onClick={() => onTogglePin(toast.id)}
-                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-stone-100 dark:hover:bg-[#1e1e1e] transition-colors"
                   aria-label="Pin notification"
                   aria-pressed={toast.pinned}
                 >

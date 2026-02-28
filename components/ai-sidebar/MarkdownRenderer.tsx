@@ -212,7 +212,7 @@ function MarkdownRendererInner({
 
     // ── Blockquote ──────────────────────────────────────────────────────
     blockquote: ({ children }) => (
-      <blockquote className="border-l-2 border-stone-300 dark:border-white/20 pl-4 py-1 my-2 ide-text-2 italic">
+      <blockquote className="border-l-2 border-stone-300 dark:border-[#333333] pl-4 py-1 my-2 ide-text-2 italic">
         {children}
       </blockquote>
     ),
@@ -264,7 +264,7 @@ function MarkdownRendererInner({
       const isInline = !langMatch && !codeString.includes('\n');
       if (isInline) {
         return (
-          <code className="rounded bg-stone-100 dark:bg-white/10 px-1 py-0.5 text-[0.8em] font-mono text-sky-600 dark:text-sky-300">
+          <code className="rounded bg-stone-100 dark:bg-[#1e1e1e] px-1 py-0.5 text-[0.8em] font-mono text-sky-600 dark:text-sky-300">
             {codeString}
           </code>
         );

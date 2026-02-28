@@ -21,7 +21,13 @@ const CARD_CONFIG: { type: PolicyType; icon: typeof RotateCcw; color: string; bg
 export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   const handleSelect = useCallback(
     (type: PolicyType) => {
-      onSelect(getTemplate(type));
+      onSelect({
+        type,
+        title: POLICY_LABELS[type],
+        html: getTemplate(type),
+        source: 'template',
+        generatedAt: new Date().toISOString(),
+      });
     },
     [onSelect],
   );
@@ -31,7 +37,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
       {CARD_CONFIG.map(({ type, icon: Icon, color, bg }) => (
         <div
           key={type}
-          className="rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-6 hover:border-stone-300 dark:hover:border-white/20 transition-colors"
+          className="rounded-xl border border-stone-200 dark:border-[#2a2a2a] bg-white dark:bg-[#1a1a1a] p-6 hover:border-stone-300 dark:hover:border-[#333333] transition-colors"
         >
           <div className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center mb-4`}>
             <Icon size={18} className={color} />
@@ -39,7 +45,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
           <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-1">
             {POLICY_LABELS[type]}
           </h3>
-          <p className="text-xs text-stone-500 dark:text-white/40 mb-4 leading-relaxed">
+          <p className="text-xs text-stone-500 dark:text-[#636059] mb-4 leading-relaxed">
             {POLICY_DESCRIPTIONS[type]}
           </p>
           <button

@@ -125,12 +125,12 @@ export function MemoryDashboard({ projectId }: MemoryDashboardProps) {
             placeholder="Search..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 rounded-md px-3 py-1.5 text-sm w-64 text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-stone-500"
+            className="bg-white dark:bg-[#141414] border border-stone-300 dark:border-white/10 rounded-md px-3 py-1.5 text-sm w-64 text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-stone-500"
           />
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 rounded-md px-3 py-1.5 text-sm text-stone-900 dark:text-white"
+            className="bg-white dark:bg-[#141414] border border-stone-300 dark:border-white/10 rounded-md px-3 py-1.5 text-sm text-stone-900 dark:text-white"
           >
             <option value="all">All</option>
             <option value="convention">Convention</option>
@@ -149,10 +149,10 @@ export function MemoryDashboard({ projectId }: MemoryDashboardProps) {
         )}
       </div>
 
-      <div className="bg-white dark:bg-white/5 border border-stone-200 dark:border-white/10 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-[#141414] border border-stone-200 dark:border-white/10 rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="bg-stone-50 dark:bg-white/5 text-stone-700 dark:text-stone-300 text-xs font-medium uppercase tracking-wider">
+            <tr className="bg-stone-50 dark:bg-[#141414] text-stone-700 dark:text-stone-300 text-xs font-medium uppercase tracking-wider">
               <th className="text-left px-4 py-3">Type</th>
               <th className="text-left px-4 py-3">Content</th>
               <th className="text-left px-4 py-3">Confidence</th>
@@ -177,7 +177,7 @@ export function MemoryDashboard({ projectId }: MemoryDashboardProps) {
                 <React.Fragment key={m.id}>
                   <tr
                     onClick={() => setExpandedId((id) => (id === m.id ? null : m.id))}
-                    className="border-t border-stone-100 dark:border-white/5 hover:bg-stone-50 dark:hover:bg-white/5 cursor-pointer transition-colors"
+                    className="border-t border-stone-100 dark:border-[#1f1f1f] hover:bg-stone-50 dark:hover:bg-white/5 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
                       <span
@@ -214,7 +214,7 @@ export function MemoryDashboard({ projectId }: MemoryDashboardProps) {
         </table>
 
         {hasMore && (
-          <div className="border-t border-stone-100 dark:border-white/5">
+          <div className="border-t border-stone-100 dark:border-[#1f1f1f]">
             <button
               type="button"
               onClick={loadMore}

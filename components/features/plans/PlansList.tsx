@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface PlansListProps {
   projectId: string;
@@ -277,27 +278,7 @@ export function PlansList({ projectId, onOpenPlan }: PlansListProps) {
                         {plan.name}
                       </span>
                       {isOpening && (
-                        <svg
-                          className="w-3.5 h-3.5 ide-text-muted animate-spin flex-shrink-0"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            className="opacity-25"
-                          />
-                          <path
-                            d="M4 12a8 8 0 018-8"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            className="opacity-75"
-                          />
-                        </svg>
+                        <LambdaDots size={14} className="ide-text-muted flex-shrink-0" />
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs">

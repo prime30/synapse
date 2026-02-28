@@ -110,7 +110,7 @@ export function KeyboardCheatsheet({ isOpen, onClose }: KeyboardCheatsheetProps)
                               +
                             </span>
                           )}
-                          <kbd className="px-1.5 py-0.5 bg-stone-100 dark:bg-white/10 border border-stone-200 dark:border-white/10 rounded text-[11px] font-mono text-stone-600 dark:text-stone-300 min-w-[24px] text-center">
+                          <kbd className="px-1.5 py-0.5 bg-stone-100 dark:bg-[#1e1e1e] border border-stone-200 dark:border-white/10 rounded text-[11px] font-mono text-stone-600 dark:text-stone-300 min-w-[24px] text-center">
                             {key}
                           </kbd>
                         </span>

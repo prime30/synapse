@@ -50,6 +50,13 @@ export class APIClient {
     async listProjects() {
         return this.request('GET', '/api/projects');
     }
+    /**
+     * Get the most recent agent chat session and its messages for a project
+     * (Synapse IDE chat transcript).
+     */
+    async getProjectAgentChat(projectId) {
+        return this.request('GET', `/api/projects/${projectId}/agent-chat`);
+    }
     // File endpoints
     async addFile(projectId, file) {
         return this.request('POST', '/api/files', {

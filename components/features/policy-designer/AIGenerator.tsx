@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import type { PolicyType, PolicyContent } from '@/lib/policy-designer/types';
 import { POLICY_LABELS } from '@/lib/policy-designer/types';
 
@@ -57,7 +57,7 @@ export function AIGenerator({ projectId, onGenerate }: AIGeneratorProps) {
   }, [storeName, email, industry, policyType, notes, projectId, onGenerate]);
 
   const inputClass =
-    'w-full rounded-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-accent/40';
+    'w-full rounded-lg border border-stone-300 dark:border-[#2a2a2a] bg-white dark:bg-[#141414] px-3 py-2 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-accent/40';
 
   return (
     <div className="max-w-xl space-y-5">
@@ -107,7 +107,7 @@ export function AIGenerator({ projectId, onGenerate }: AIGeneratorProps) {
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${
                 policyType === type
                   ? 'border-accent bg-accent/10 text-stone-900 dark:text-white'
-                  : 'border-stone-200 dark:border-white/10 text-stone-600 dark:text-white/50 hover:border-stone-300 dark:hover:border-white/20'
+                  : 'border-stone-200 dark:border-[#2a2a2a] text-stone-600 dark:text-[#807a74] hover:border-stone-300 dark:hover:border-[#333333]'
               }`}
             >
               <input
@@ -126,7 +126,7 @@ export function AIGenerator({ projectId, onGenerate }: AIGeneratorProps) {
 
       <div>
         <label className="block text-sm font-medium text-stone-700 dark:text-white/70 mb-1">
-          Special Notes <span className="text-stone-400 dark:text-white/30 font-normal">(optional)</span>
+          Special Notes <span className="text-stone-400 dark:text-[#4a4a4a] font-normal">(optional)</span>
         </label>
         <textarea
           value={notes}
@@ -135,7 +135,7 @@ export function AIGenerator({ projectId, onGenerate }: AIGeneratorProps) {
           rows={3}
           className={inputClass + ' resize-y'}
         />
-        <p className="mt-1 text-xs text-stone-400 dark:text-white/30">{notes.length}/500</p>
+        <p className="mt-1 text-xs text-stone-400 dark:text-[#4a4a4a]">{notes.length}/500</p>
       </div>
 
       {error && (
@@ -149,7 +149,7 @@ export function AIGenerator({ projectId, onGenerate }: AIGeneratorProps) {
         disabled={loading || !storeName.trim()}
         className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading && <Loader2 size={16} className="animate-spin" />}
+        {loading && <LambdaDots size={16} />}
         {loading ? 'Generating…' : 'Generate Policy'}
       </button>
     </div>

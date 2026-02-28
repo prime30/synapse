@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 type InteractionKind = 'user_input' | 'assistant_output' | 'button_click' | 'mode_change' | 'system';
 
@@ -101,7 +102,7 @@ export function TrainingReviewPanel({
             className="p-1 rounded ide-hover ide-text-muted hover:ide-text"
             title="Refresh events"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? <LambdaDots size={14} /> : <RefreshCw className="h-3.5 w-3.5" />}
           </button>
           <button
             type="button"

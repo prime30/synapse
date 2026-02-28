@@ -24,7 +24,7 @@ export function Skeleton({
   }, []);
 
   const baseClasses =
-    'bg-stone-200 dark:bg-white/10 rounded ' +
+    'bg-stone-200 dark:bg-[#1e1e1e] rounded ' +
     (prefersReducedMotion ? '' : 'animate-pulse');
 
   if (variant === 'avatar') {

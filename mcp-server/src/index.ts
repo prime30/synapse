@@ -8,6 +8,7 @@ import { registerProjectTools } from './tools/projects.js';
 import { registerFileTools } from './tools/files.js';
 import { registerAgentTools } from './tools/agents.js';
 import { registerApplyTools } from './tools/apply-changes.js';
+import { registerChatTools } from './tools/chat.js';
 import { registerPreferencesTools } from './tools/preferences.js';
 import { registerInspectPreviewTools } from './tools/inspect-preview.js';
 import { registerMediaTools } from './tools/media.js';
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
   registerFileTools(registry, apiClient, authManager);
   registerAgentTools(registry, apiClient, authManager);
   registerApplyTools(registry, apiClient, authManager);
+  registerChatTools(registry, apiClient, authManager);
   registerPreferencesTools(registry, apiClient, authManager);
   registerInspectPreviewTools(registry, apiClient, authManager);
   registerMediaTools(registry, apiClient, authManager);

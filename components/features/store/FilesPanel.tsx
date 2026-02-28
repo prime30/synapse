@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: string }) {
       ? 'text-green-400 bg-green-400/10'
       : status === 'PROCESSING' || status === 'UPLOADED'
         ? 'text-yellow-400 bg-yellow-400/10'
-        : 'ide-text-muted bg-stone-200/50 dark:bg-white/10';
+        : 'ide-text-muted bg-stone-200/50 dark:bg-[#1e1e1e]';
 
   return (
     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase ${color}`}>

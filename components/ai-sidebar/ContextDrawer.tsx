@@ -72,7 +72,7 @@ export function ContextDrawer({
             animate={{ translateX: 0 }}
             exit={{ translateX: '100%' }}
             transition={safeTransition(0.2)}
-            className="fixed right-0 top-0 h-full w-80 z-30 bg-white dark:bg-[oklch(0.185_0_0)] border-l border-stone-200 dark:border-white/10 shadow-xl flex flex-col"
+            className="fixed right-0 top-0 h-full w-80 z-30 bg-white dark:bg-[oklch(0.185_0_0)] border-l border-stone-200 dark:border-[#2a2a2a] shadow-xl flex flex-col"
             role="dialog"
             aria-label="Context panel"
           >
@@ -85,7 +85,7 @@ export function ContextDrawer({
             </div>
 
             {/* Header */}
-            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-white/10">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-[#2a2a2a]">
               <h2 className="text-sm font-medium text-stone-900 dark:text-white">
                 Context
               </h2>
@@ -111,7 +111,7 @@ export function ContextDrawer({
                 onClick={() => setViewMode('list')}
                 className={`text-xs rounded-md px-2 py-1 transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-stone-200 dark:bg-white/10 text-stone-900 dark:text-white'
+                    ? 'bg-stone-200 dark:bg-[#1e1e1e] text-stone-900 dark:text-white'
                     : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/5'
                 }`}
                 aria-pressed={viewMode === 'list'}
@@ -123,7 +123,7 @@ export function ContextDrawer({
                 onClick={() => setViewMode('dependencies')}
                 className={`text-xs rounded-md px-2 py-1 transition-colors ${
                   viewMode === 'dependencies'
-                    ? 'bg-stone-200 dark:bg-white/10 text-stone-900 dark:text-white'
+                    ? 'bg-stone-200 dark:bg-[#1e1e1e] text-stone-900 dark:text-white'
                     : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/5'
                 }`}
                 aria-pressed={viewMode === 'dependencies'}

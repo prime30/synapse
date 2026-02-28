@@ -59,10 +59,10 @@ function GateSkeleton() {
   return (
     <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex flex-col" role="presentation" aria-hidden="true">
       {/* Top bar skeleton */}
-      <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
+      <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-[#1f1f1f]">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-stone-200 dark:bg-white/10 animate-pulse" />
-          <div className="h-4 w-16 bg-stone-200 dark:bg-white/10 rounded animate-pulse" />
+          <div className="w-7 h-7 rounded-lg bg-stone-200 dark:bg-[#1e1e1e] animate-pulse" />
+          <div className="h-4 w-16 bg-stone-200 dark:bg-[#1e1e1e] rounded animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
           {[0, 1, 2, 3].map((i) => (
@@ -77,13 +77,13 @@ function GateSkeleton() {
       {/* Content skeleton */}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="max-w-2xl w-full space-y-6">
-          <div className="h-10 w-64 bg-stone-200 dark:bg-white/10 rounded animate-pulse mx-auto" />
+          <div className="h-10 w-64 bg-stone-200 dark:bg-[#1e1e1e] rounded animate-pulse mx-auto" />
           <div className="h-5 w-96 max-w-full bg-stone-100 dark:bg-white/5 rounded animate-pulse mx-auto" />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-36 rounded-2xl bg-stone-100/50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/5 animate-pulse"
+                className="h-36 rounded-2xl bg-stone-100/50 dark:bg-white/[0.03] border border-stone-200 dark:border-[#1f1f1f] animate-pulse"
                 style={{ animationDelay: `${i * 150}ms` }}
               />
             ))}
@@ -158,7 +158,7 @@ function ProgressIndicator({
             {i < steps.length - 1 && (
               <div
                 className={`w-8 h-px mx-2 transition-colors duration-300 ${
-                  isCompleted ? 'bg-emerald-500/40' : 'bg-stone-200 dark:bg-white/10'
+                  isCompleted ? 'bg-emerald-500/40' : 'bg-stone-200 dark:bg-[#1e1e1e]'
                 }`}
               />
             )}
@@ -338,7 +338,7 @@ function WizardInner({
   return (
     <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] flex flex-col">
       {/* Top bar with progress + skip */}
-      <header className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5">
+      <header className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-stone-200/60 dark:border-[#1f1f1f]">
         {/* Logo + theme toggle */}
         <div className="flex items-center gap-3">
           <SynapseLogo className="text-sm text-stone-900 dark:text-white" />
@@ -402,7 +402,7 @@ function WizardInner({
 
       {/* Bottom navigation (Back button for steps 2+) */}
       {currentIndex > 0 && currentIndex < STEPS.length - 1 && (
-        <footer className="shrink-0 px-6 py-3 border-t border-stone-200/60 dark:border-white/5 flex justify-start">
+        <footer className="shrink-0 px-6 py-3 border-t border-stone-200/60 dark:border-[#1f1f1f] flex justify-start">
           <button
             type="button"
             onClick={goBack}

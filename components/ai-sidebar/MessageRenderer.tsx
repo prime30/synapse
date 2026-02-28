@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { ThinkingBlock, type ThinkingStep } from './ThinkingBlock';
 import { ThinkingBlockV2 } from './ThinkingBlockV2';
 import { ToolActionItem } from './ToolActionItem';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import type { ContentBlock } from './ChatInterface';
 
 export interface MessageRendererMessage {
@@ -42,6 +43,7 @@ export interface MessageRendererMessage {
   }>;
   thinkingComplete?: boolean;
   workers?: Array<{ workerId: string; label: string; status: 'running' | 'complete' }>;
+  imageUrls?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -135,17 +137,23 @@ export function MessageRenderer({
   // ── User message: bubble style ────────────────────────────────────
   if (role === 'user') {
     const text = content ?? (blocks?.find(b => b.type === 'text')?.text ?? blocks?.find(b => b.type === 'text')?.content) ?? '';
-    if (!text.trim()) return null;
+    const imgUrls = message.imageUrls;
+    if (!text.trim() && (!imgUrls || imgUrls.length === 0)) return null;
     return (
-      <div className="bg-stone-100 dark:bg-white/5 rounded-lg px-4 py-3 text-sm text-stone-900 dark:text-white">
-        <MarkdownRenderer
-          content={text}
-          isStreaming={false}
-          onOpenFile={onOpenFile}
-          onApplyCode={onApplyCode}
-          onSaveCode={onSaveCode}
-          resolveFileId={resolveFileId}
-        />
+      <div className="bg-stone-100 dark:bg-[#141414] rounded-lg px-4 py-3 text-sm text-stone-900 dark:text-white">
+        {imgUrls && imgUrls.length > 0 && (
+          <UserMessageThumbnails imageUrls={imgUrls} />
+        )}
+        {text.trim() && (
+          <MarkdownRenderer
+            content={text}
+            isStreaming={false}
+            onOpenFile={onOpenFile}
+            onApplyCode={onApplyCode}
+            onSaveCode={onSaveCode}
+            resolveFileId={resolveFileId}
+          />
+        )}
       </div>
     );
   }
@@ -236,5 +244,35 @@ export function MessageRenderer({
         />
       )}
     </div>
+  );
+}
+
+function UserMessageThumbnails({ imageUrls }: { imageUrls: string[] }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const images = useMemo(() => imageUrls.map((src, i) => ({ src, alt: `Image ${i + 1}` })), [imageUrls]);
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {imageUrls.map((url, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setLightboxIndex(i)}
+            className="relative group/thumb rounded-lg overflow-hidden border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt={`Image ${i + 1}`} className="h-16 w-16 object-cover" />
+            <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors" />
+          </button>
+        ))}
+      </div>
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>
   );
 }

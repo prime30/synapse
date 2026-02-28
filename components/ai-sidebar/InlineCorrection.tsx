@@ -35,7 +35,7 @@ export function InlineCorrection({
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      className="mt-2 border border-stone-200 dark:border-white/10 rounded-lg overflow-hidden"
+      className="mt-2 border border-stone-200 dark:border-[#2a2a2a] rounded-lg overflow-hidden"
     >
       <form onSubmit={handleSubmit}>
         <label

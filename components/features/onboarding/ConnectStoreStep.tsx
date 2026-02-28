@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { GlassCard } from '@/components/marketing/glass/GlassCard';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ── Required Scopes ──────────────────────────────────────────────────────────
 
@@ -229,7 +230,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
                 font-medium text-sm transition-all
                 ${oauthUrl
                   ? 'bg-[oklch(0.587_0.12_135)] hover:bg-[oklch(0.517_0.115_137)] text-white shadow-[0_0_20px_oklch(0.587_0.12_135_/_0.25)] hover:shadow-[0_0_30px_oklch(0.587_0.12_135_/_0.4)]'
-                  : 'bg-stone-200 dark:bg-white/10 ide-text-muted cursor-not-allowed'
+                  : 'bg-stone-200 dark:bg-[#1e1e1e] ide-text-muted cursor-not-allowed'
                 }
               `}
               aria-label="Connect with Shopify"
@@ -372,10 +373,7 @@ export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreS
                       >
                         {isConnecting ? (
                           <>
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
+                            <LambdaDots size={16} />
                             Connecting…
                           </>
                         ) : (

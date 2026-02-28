@@ -286,65 +286,18 @@ export default function HeroSection() {
             transition={entryTransition(0.3)}
           >
             <Check size={14} />
-            Five AI agents. One workflow.
+            Built for Shopify theme developers
           </motion.span>
 
-          {/* Headline — single line, never wraps, scales down on small screens */}
+          {/* Headline */}
           <motion.h1
-            className="relative whitespace-normal sm:whitespace-nowrap font-medium leading-[1.05] tracking-[-0.03em] text-[clamp(1.75rem,5.5vw,4.5rem)] sm:h-[1.05em] overflow-hidden"
+            className="relative font-medium leading-[1.1] tracking-[-0.03em] text-[clamp(1.75rem,5vw,4rem)] text-stone-900 dark:text-white"
+            initial={{ opacity: 0, y: 24 }}
+            animate={ready ? show : hide}
+            transition={entryTransition(0.4)}
           >
-            {['Ship', 'Shopify'].map((word, i) => (
-              <span key={word} className="inline-block overflow-hidden">
-                <motion.span
-                  className="inline-block text-stone-900 dark:text-white"
-                  initial={{ opacity: 0, y: '100%' }}
-                  animate={ready ? show : hide}
-                  transition={{
-                    duration: 0.5,
-                    delay: 0.4 + i * 0.08,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                >
-                  {word}
-                </motion.span>
-                {'\u00A0'}
-              </span>
-            ))}
-            {/* Force accent word to line 2 on mobile */}
-            <br className="sm:hidden" />
-            {/* Rotating accent word — width follows current word naturally */}
-            <span
-              className="inline-block overflow-hidden align-baseline relative"
-              style={{ verticalAlign: 'baseline' }}
-            >
-              <AnimatePresence mode="popLayout">
-                <motion.span
-                  key={ROTATING_WORDS[wordIndex]}
-                  className="inline-block whitespace-normal sm:whitespace-nowrap"
-                  initial={{ opacity: 0, y: '110%' }}
-                  animate={ready ? show : hide}
-                  exit={{ opacity: 0, y: '-110%' }}
-                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <PixelAccent>{ROTATING_WORDS[wordIndex]}</PixelAccent>
-                </motion.span>
-              </AnimatePresence>
-            </span>
-            {'\u00A0'}
-            <span className="inline-block overflow-hidden">
-              <motion.span
-                className="inline-block text-stone-900 dark:text-white"
-                initial={{ opacity: 0, y: '100%' }}
-                animate={ready ? show : hide}
-                transition={{
-                  duration: 0.5,
-                  delay: 0.56,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-              >
-                faster.
-              </motion.span>
-            </span>
+            The only AI IDE that truly understands{' '}
+            <PixelAccent>Shopify</PixelAccent>.
           </motion.h1>
 
           {/* Subtitle */}
@@ -354,13 +307,14 @@ export default function HeroSection() {
             animate={ready ? show : hide}
             transition={entryTransition(0.8)}
           >
-            Five AI agents that learn your theme&apos;s design language — then write
-            code that matches it perfectly.
+            Multi-agent AI built for Liquid, sections, variants, schemas, and
+            the full Shopify ecosystem. Designed for developers who ship real
+            production themes.
           </motion.p>
 
-          {/* CTA */}
+          {/* CTAs */}
           <motion.div
-            className="mt-10"
+            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
             initial={{ opacity: 0, y: 12 }}
             animate={ready ? show : hide}
             transition={entryTransition(1.0)}
@@ -371,16 +325,34 @@ export default function HeroSection() {
                 onClick={() => openAuthModal('signup')}
                 className="h-12 px-6 sm:px-10 rounded-full bg-accent text-white font-medium text-[15px] hover:bg-accent-hover transition-colors w-full sm:w-auto"
               >
-                Start Free
+                Start Free — No credit card required
               </button>
             </MagneticElement>
+            <a
+              href="#demo"
+              className="inline-flex items-center gap-2 text-sm text-stone-500 dark:text-white/50 hover:text-stone-700 dark:hover:text-white/70 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+              Watch how it works (47 seconds)
+            </a>
           </motion.div>
+
+          {/* Trust line */}
+          <motion.p
+            className="mt-6 text-sm text-stone-400 dark:text-white/40"
+            initial={{ opacity: 0 }}
+            animate={ready ? { opacity: 1 } : hide}
+            transition={entryTransition(1.2)}
+          >
+            Used daily by Shopify developers and agencies building real production themes.
+          </motion.p>
 
         </div>
 
         {/* ── Product mockup — full width, parallax, scroll-animated ── */}
         <motion.div
-          className="relative mt-10 md:mt-14"
+          id="demo"
+          className="relative mt-10 md:mt-14 scroll-mt-20"
           initial={{ opacity: 0, y: 40, scale: 0.97 }}
           animate={ready ? { opacity: 1, y: 0, scale: 1 } : hide}
           transition={{

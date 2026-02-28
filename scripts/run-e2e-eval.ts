@@ -38,6 +38,38 @@ interface SSEEvent {
   [key: string]: unknown;
 }
 
+// ── Shared helpers for success checks ────────────────────────────────
+
+const EDIT_TOOL_NAMES = [
+  'search_replace', 'propose_code_edit', 'edit_lines',
+  'write_file', 'create_file', 'run_specialist',
+];
+
+function isEditTool(name: string): boolean {
+  return EDIT_TOOL_NAMES.some(t => name.includes(t));
+}
+
+function isDiagnosticTool(name: string): boolean {
+  return name.includes('trace_rendering_chain') ||
+    name.includes('diagnose_visibility') ||
+    name.includes('check_theme_setting');
+}
+
+function extractPipelineInfo(events: SSEEvent[]): { tier: string; strategy: string } {
+  const strategyEvent = events.find(
+    e => e.type === 'thinking' && (e as SSEEvent).phase === 'strategy',
+  );
+  const metaEvent = events.find(
+    e => e.type === 'thinking' && (e as SSEEvent).metadata &&
+      ((e.metadata as Record<string, unknown>).routingTier || (e.metadata as Record<string, unknown>).strategy),
+  );
+  const meta = (metaEvent?.metadata ?? strategyEvent?.metadata ?? {}) as Record<string, unknown>;
+  return {
+    tier: String(meta.routingTier ?? meta.tier ?? 'unknown'),
+    strategy: String(meta.strategy ?? 'unknown'),
+  };
+}
+
 const SCENARIOS: E2EScenario[] = [
   {
     id: 'debug-cart-css',
@@ -47,23 +79,15 @@ const SCENARIOS: E2EScenario[] = [
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
       const hasSearch = toolCalls.some(e => String(e.name).includes('grep') || String(e.name).includes('search'));
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit')
-      );
-      const hasDiagnostic = toolCalls.some(e =>
-        String(e.name).includes('trace_rendering_chain') ||
-        String(e.name).includes('diagnose_visibility') ||
-        String(e.name).includes('check_theme_setting')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
+      const hasDiagnostic = toolCalls.some(e => isDiagnosticTool(String(e.name)));
       const totalTools = toolCalls.length;
       const hasContent = events.some(e => e.type === 'done');
 
-      const hasSpecialist = toolCalls.some(e => String(e.name).includes('run_specialist'));
       if (!hasContent) return { passed: false, reason: 'No done event — stream may have errored' };
       if (totalTools > 30) return { passed: false, reason: `Too many tool calls (${totalTools}) — agent may be looping` };
       if (!hasSearch && !hasDiagnostic) return { passed: false, reason: 'No search or diagnostic tool used' };
-      if (hasEdit || hasSpecialist) return { passed: true, reason: `Made a code change in ${totalTools} tool calls` };
+      if (hasEdit) return { passed: true, reason: `Made a code change in ${totalTools} tool calls` };
       if (hasDiagnostic) return { passed: true, reason: `Used diagnostic tools, ${totalTools} tool calls total` };
       return { passed: false, reason: `Searched but no edit or diagnostic (${totalTools} tool calls)` };
     },
@@ -75,10 +99,7 @@ const SCENARIOS: E2EScenario[] = [
     intentMode: 'code',
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
       const totalTools = toolCalls.length;
       if (!hasEdit) return { passed: false, reason: 'No code change made' };
       if (totalTools > 15) return { passed: false, reason: `Too many tool calls (${totalTools})` };
@@ -92,10 +113,7 @@ const SCENARIOS: E2EScenario[] = [
     intentMode: 'debug',
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
       const hasContent = events.some(e => e.type === 'done');
       if (!hasContent) return { passed: false, reason: 'No done event' };
       if (hasEdit) return { passed: false, reason: 'Made code changes on an explanation request' };
@@ -109,11 +127,7 @@ const SCENARIOS: E2EScenario[] = [
     intentMode: 'code',
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit') ||
-        String(e.name).includes('run_specialist')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
       const totalTools = toolCalls.length;
       if (!hasEdit) return { passed: false, reason: 'No code change or specialist call made' };
       return { passed: true, reason: `Made changes in ${totalTools} tool calls` };
@@ -126,11 +140,7 @@ const SCENARIOS: E2EScenario[] = [
     intentMode: 'code',
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit') ||
-        String(e.name).includes('run_specialist')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
       const totalTools = toolCalls.length;
       if (!hasEdit) return { passed: false, reason: 'No code change made' };
       if (totalTools > 10) return { passed: false, reason: `Too many tool calls (${totalTools})` };
@@ -144,11 +154,7 @@ const SCENARIOS: E2EScenario[] = [
     intentMode: 'code',
     successCheck: (events) => {
       const toolCalls = events.filter(e => e.type === 'tool_call');
-      const hasEdit = toolCalls.some(e =>
-        String(e.name).includes('search_replace') ||
-        String(e.name).includes('propose_code_edit') ||
-        String(e.name).includes('run_specialist')
-      );
+      const hasEdit = toolCalls.some(e => isEditTool(String(e.name)));
       const hasContent = events.some(e => e.type === 'done');
       const totalTools = toolCalls.length;
       if (!hasContent) return { passed: false, reason: 'No done event — stream may have errored' };
@@ -233,11 +239,17 @@ async function parseSSEStream(response: Response): Promise<SSEEvent[]> {
 
 // ── Run a single scenario ───────────────────────────────────────────────
 
+interface ScenarioResult {
+  id: string; passed: boolean; reason: string;
+  toolCalls: number; elapsedMs: number;
+  tier?: string; strategy?: string; editToolCount?: number;
+}
+
 async function runScenario(
   scenario: E2EScenario,
   projectId: string,
   token: string,
-): Promise<{ id: string; passed: boolean; reason: string; toolCalls: number; elapsedMs: number }> {
+): Promise<ScenarioResult> {
   console.log(`\n--- ${scenario.id}: ${scenario.description} ---`);
 
   const start = Date.now();
@@ -266,11 +278,27 @@ async function runScenario(
     const events = await parseSSEStream(response);
     const elapsedMs = Date.now() - start;
     const toolCalls = events.filter(e => e.type === 'tool_call').length;
+    const toolCallNames = events
+      .filter(e => e.type === 'tool_call')
+      .map((e) => String(e.name ?? 'unknown'));
     const result = scenario.successCheck(events);
 
-    console.log(`  ${result.passed ? 'PASS' : 'FAIL'}: ${result.reason} (${Math.round(elapsedMs / 1000)}s, ${toolCalls} tool calls)`);
+    const pipeline = extractPipelineInfo(events);
+    const editTools = toolCallNames.filter(n => isEditTool(n));
+    const readTools = toolCallNames.filter(n => n.includes('read_') || n.includes('extract_region'));
+    const searchTools = toolCallNames.filter(n => n.includes('search') || n.includes('grep') || n.includes('semantic'));
 
-    return { id: scenario.id, passed: result.passed, reason: result.reason, toolCalls, elapsedMs };
+    console.log(`  ${result.passed ? 'PASS' : 'FAIL'}: ${result.reason} (${Math.round(elapsedMs / 1000)}s, ${toolCalls} tool calls)`);
+    console.log(`  Pipeline: tier=${pipeline.tier} strategy=${pipeline.strategy}`);
+    console.log(`  Tools: ${toolCallNames.join(', ') || '(none)'}`);
+    console.log(`  Breakdown: ${editTools.length} edits, ${readTools.length} reads, ${searchTools.length} searches`);
+
+    return {
+      id: scenario.id, passed: result.passed, reason: result.reason,
+      toolCalls, elapsedMs,
+      tier: pipeline.tier, strategy: pipeline.strategy,
+      editToolCount: editTools.length,
+    };
   } catch (err) {
     const elapsedMs = Date.now() - start;
     const reason = err instanceof Error ? err.message : String(err);
@@ -344,7 +372,9 @@ async function main() {
   const avgTime = Math.round(results.reduce((s, r) => s + r.elapsedMs, 0) / total / 1000);
 
   for (const r of results) {
-    console.log(`  ${r.passed ? 'PASS' : 'FAIL'}  ${r.id} — ${r.reason} (${r.toolCalls} calls, ${Math.round(r.elapsedMs / 1000)}s)`);
+    const pipeInfo = r.tier && r.tier !== 'unknown' ? ` [${r.tier}/${r.strategy}]` : '';
+    const editInfo = r.editToolCount != null ? ` (${r.editToolCount} edits)` : '';
+    console.log(`  ${r.passed ? 'PASS' : 'FAIL'}  ${r.id} — ${r.reason}${editInfo} (${r.toolCalls} calls, ${Math.round(r.elapsedMs / 1000)}s)${pipeInfo}`);
   }
 
   console.log(`\nScore: ${passed}/${total} (${Math.round(passed / total * 100)}%)`);

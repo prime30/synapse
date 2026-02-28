@@ -76,7 +76,7 @@ function Card({ card }: { card: FeatureCard }) {
 /*  Carousel component                                                 */
 /* ------------------------------------------------------------------ */
 
-export function TestimonialCarousel() {
+export function FeatureHighlightsCarousel() {
   const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const inView = useInView(sectionRef, { once: false, margin: '-60px' });

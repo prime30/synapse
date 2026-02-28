@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Eye, Globe, Link2 } from 'lucide-react';
 import { FileTab } from './FileTab';
 import { PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
@@ -9,6 +10,26 @@ import type { FileGroup } from '@/lib/shopify/theme-grouping';
 export interface FileMeta {
   id: string;
   name: string;
+}
+
+const EXT_BADGES: Record<string, { label: string; cls: string }> = {
+  liquid: { label: 'LIQ', cls: 'bg-amber-500/15 text-amber-500 dark:text-amber-400' },
+  js: { label: 'JS', cls: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' },
+  css: { label: 'CSS', cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400' },
+  json: { label: 'JSON', cls: 'bg-stone-500/15 ide-text-3' },
+  scss: { label: 'SCSS', cls: 'bg-pink-500/15 text-pink-500 dark:text-pink-400' },
+  ts: { label: 'TS', cls: 'bg-blue-500/15 text-blue-500 dark:text-blue-400' },
+};
+
+function FileTypeBadge({ fileName }: { fileName: string }) {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const badge = EXT_BADGES[ext];
+  if (!badge) return null;
+  return (
+    <span className={`ml-1 px-1 py-0 rounded text-[9px] font-bold leading-tight ${badge.cls}`}>
+      {badge.label}
+    </span>
+  );
 }
 
 interface FileTabsProps {
@@ -39,6 +60,8 @@ interface FileTabsProps {
   isActiveFileLocked?: boolean;
   /** Called when user clicks Save */
   onSaveClick?: () => void;
+  /** Called when user clicks Format */
+  onFormatClick?: () => void;
   /** Called when user toggles the lock */
   onLockToggle?: () => void;
   /** File IDs already linked to the active file (for "Unlink from group") */
@@ -47,6 +70,10 @@ interface FileTabsProps {
   onLinkWithFiles?: (fileIds: string[]) => void;
   /** Unlink the active file from its group */
   onUnlinkActiveFile?: () => void;
+  /** All project files (for suggesting sibling files like CSS/JS equivalents) */
+  allFiles?: Array<{ id: string; name: string; path: string }>;
+  /** Open a file by ID (for opening suggested sibling files) */
+  onOpenFile?: (fileId: string) => void;
 }
 
 export function FileTabs({
@@ -71,16 +98,20 @@ export function FileTabs({
   isActiveFileDirty = false,
   isActiveFileLocked = false,
   onSaveClick,
+  onFormatClick,
   onLockToggle,
   linkedToActiveFileIds = [],
   onLinkWithFiles,
   onUnlinkActiveFile,
+  allFiles,
+  onOpenFile,
 }: FileTabsProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
   const [linkSelectedIds, setLinkSelectedIds] = useState<Set<string>>(new Set());
   const linkMenuRef = useRef<HTMLDivElement>(null);
   const linkButtonRef = useRef<HTMLButtonElement>(null);
+  const [linkMenuRect, setLinkMenuRect] = useState<{ top: number; right: number } | null>(null);
 
   const hasLinkSupport = Boolean(
     activeFileId && activeFileId !== PREVIEW_TAB_ID && (onLinkWithFiles || onUnlinkActiveFile)
@@ -92,6 +123,21 @@ export function FileTabs({
     [openTabs]
   );
   const canLinkSelected = linkSelectedIds.size >= 2;
+
+  /** Sibling files sharing the same base name but different extension (e.g. .css, .js) */
+  const siblingFiles = useMemo(() => {
+    if (!activeFileId || !allFiles) return [];
+    const activeMeta = fileMetaMap.get(activeFileId);
+    if (!activeMeta) return [];
+    const baseName = activeMeta.name.replace(/\.[^.]+$/, '');
+    const openSet = new Set(openTabs);
+    return allFiles.filter(
+      (f) =>
+        f.id !== activeFileId &&
+        !openSet.has(f.id) &&
+        f.name.replace(/\.[^.]+$/, '') === baseName
+    );
+  }, [activeFileId, allFiles, fileMetaMap, openTabs]);
 
   useEffect(() => {
     if (!linkMenuOpen) return;
@@ -227,7 +273,7 @@ export function FileTabs({
           ))}
         </div>
       )}
-      <div className="flex items-center ide-tabbar border-b border-stone-200/50 dark:border-white/5 px-1.5 py-1.5 rounded-xl overflow-x-auto no-scrollbar">
+      <div className="flex items-center ide-tabbar border-b border-stone-200/50 dark:border-[#1f1f1f] px-1.5 py-1.5 rounded-xl overflow-x-auto no-scrollbar">
         <div className="flex flex-1 min-w-0 gap-1">
           {/* Pinned preview tab (always first) */}
           {previewTabOpen && (
@@ -287,6 +333,26 @@ export function FileTabs({
         {/* Save + Lock + Link controls (only for real files, not preview) */}
         {activeFileId && activeFileId !== PREVIEW_TAB_ID && (
           <div className="flex items-center gap-1 pr-2 shrink-0">
+            {onFormatClick && (
+              <button
+                type="button"
+                onClick={onFormatClick}
+                disabled={isActiveFileLocked}
+                className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                  isActiveFileLocked
+                    ? 'ide-text-muted opacity-50 cursor-default'
+                    : 'ide-text-muted hover:ide-text-2 ide-hover'
+                }`}
+                title="Format Document (Shift+Alt+F)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="21" y1="10" x2="7" y2="10" />
+                  <line x1="21" y1="6" x2="3" y2="6" />
+                  <line x1="21" y1="14" x2="3" y2="14" />
+                  <line x1="21" y1="18" x2="7" y2="18" />
+                </svg>
+              </button>
+            )}
             <button
               type="button"
               onClick={onSaveClick}
@@ -305,7 +371,13 @@ export function FileTabs({
                 <button
                   ref={linkButtonRef}
                   type="button"
-                  onClick={() => setLinkMenuOpen((o) => !o)}
+                  onClick={() => {
+                    if (!linkMenuOpen && linkButtonRef.current) {
+                      const r = linkButtonRef.current.getBoundingClientRect();
+                      setLinkMenuRect({ top: r.bottom + 4, right: window.innerWidth - r.right });
+                    }
+                    setLinkMenuOpen((o) => !o);
+                  }}
                   className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
                     hasLinkedFiles
                       ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/20'
@@ -315,62 +387,100 @@ export function FileTabs({
                 >
                   <Link2 className="h-3.5 w-3.5" />
                 </button>
-                {linkMenuOpen && (
-                  <div
-                    ref={linkMenuRef}
-                    className="absolute right-0 top-full mt-1 py-2 px-2 min-w-[200px] max-w-[320px] rounded-md border ide-border ide-surface-panel shadow-lg z-50"
-                  >
-                    <div className="px-1.5 pb-1.5 text-[11px] font-medium ide-text-muted uppercase tracking-wide">
-                      Link open tabs
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {openFileTabsForPills.map((fileId) => {
-                        const meta = fileMetaMap.get(fileId);
-                        const name = meta?.name ?? fileId;
-                        const selected = linkSelectedIds.has(fileId);
-                        return (
-                          <button
-                            key={fileId}
-                            type="button"
-                            onClick={() => toggleLinkSelect(fileId)}
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors ${
-                              selected
-                                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/40'
-                                : 'ide-surface-inset ide-border ide-text-2 hover:ide-hover'
-                            }`}
-                            title={name}
-                          >
-                            <span className="truncate max-w-[120px] block">{name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {openFileTabsForPills.length === 0 && (
-                      <p className="px-1.5 py-1 text-xs ide-text-muted">No open file tabs.</p>
-                    )}
-                    {onLinkWithFiles && openFileTabsForPills.length > 0 && (
-                      <div className="border-t ide-border mt-2 pt-2 px-1.5 flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={handleLinkConfirm}
-                          disabled={!canLinkSelected}
-                          className="px-2.5 py-1 text-xs font-medium rounded ide-surface-inset ide-text hover:ide-text-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Link selected
-                        </button>
-                        {hasLinkedFiles && onUnlinkActiveFile && (
-                          <button
-                            type="button"
-                            onClick={handleUnlink}
-                            className="px-2.5 py-1 text-xs ide-text-muted hover:ide-text"
-                          >
-                            Unlink from group
-                          </button>
+                {linkMenuOpen && typeof document !== 'undefined' && linkMenuRect &&
+                  createPortal(
+                    <>
+                      <div className="fixed inset-0 z-[9998]" aria-hidden onClick={() => setLinkMenuOpen(false)} />
+                      <div
+                        ref={linkMenuRef}
+                        className="fixed py-2 px-2 min-w-[220px] max-w-[340px] rounded-md border ide-border ide-surface-panel shadow-lg z-[9999]"
+                        style={{ top: linkMenuRect.top, right: linkMenuRect.right }}
+                      >
+                        <div className="px-1.5 pb-1.5 text-[11px] font-medium ide-text-muted uppercase tracking-wide">
+                          Link open tabs
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {openFileTabsForPills.map((fileId) => {
+                            const meta = fileMetaMap.get(fileId);
+                            const name = meta?.name ?? fileId;
+                            const selected = linkSelectedIds.has(fileId);
+                            return (
+                              <button
+                                key={fileId}
+                                type="button"
+                                onClick={() => toggleLinkSelect(fileId)}
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                                  selected
+                                    ? 'ide-surface-inset ide-text border ide-border'
+                                    : 'ide-surface-inset ide-border-subtle ide-text-2 hover:ide-hover'
+                                }`}
+                                title={name}
+                              >
+                                <span className="flex items-center">
+                                  <span className="truncate max-w-[120px]">{name}</span>
+                                  <FileTypeBadge fileName={name} />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Sibling file suggestions (same base name, different extension) */}
+                        {siblingFiles.length > 0 && (
+                          <div className="border-t ide-border-subtle mt-2 pt-2">
+                            <div className="px-1.5 pb-1.5 text-[11px] font-medium ide-text-muted uppercase tracking-wide">
+                              Related files
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {siblingFiles.map((f) => (
+                                <button
+                                  key={f.id}
+                                  type="button"
+                                  onClick={() => {
+                                    onOpenFile?.(f.id);
+                                    setLinkMenuOpen(false);
+                                  }}
+                                  className="rounded-full px-2.5 py-1 text-[11px] font-medium border ide-border-subtle ide-surface-inset ide-text-3 hover:ide-text-2 hover:ide-hover transition-colors"
+                                  title={`Open ${f.path}`}
+                                >
+                                  <span className="flex items-center">
+                                    <span className="truncate max-w-[140px]">{f.name}</span>
+                                    <FileTypeBadge fileName={f.name} />
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {openFileTabsForPills.length === 0 && siblingFiles.length === 0 && (
+                          <p className="px-1.5 py-1 text-xs ide-text-muted">No open file tabs.</p>
+                        )}
+                        {onLinkWithFiles && openFileTabsForPills.length > 0 && (
+                          <div className="border-t ide-border mt-2 pt-2 px-1.5 flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleLinkConfirm}
+                              disabled={!canLinkSelected}
+                              className="px-2.5 py-1 text-xs font-medium rounded ide-surface-inset ide-text hover:ide-text-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Link selected
+                            </button>
+                            {hasLinkedFiles && onUnlinkActiveFile && (
+                              <button
+                                type="button"
+                                onClick={handleUnlink}
+                                className="px-2.5 py-1 text-xs ide-text-muted hover:ide-text"
+                              >
+                                Unlink from group
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </>,
+                    document.body
+                  )}
               </div>
             )}
             <button

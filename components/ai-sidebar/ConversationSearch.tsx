@@ -141,7 +141,7 @@ export function ConversationSearch({
           aria-label="Search conversation messages"
           className="
             w-full pl-8 pr-3 py-1.5 text-sm
-            bg-white dark:bg-white/5
+            bg-white dark:bg-[#141414]
             border border-stone-200 dark:border-white/10
             rounded-md
             text-stone-900 dark:text-white
@@ -175,7 +175,7 @@ export function ConversationSearch({
                   className={`
                     px-3 py-2 cursor-pointer text-left
                     hover:bg-stone-50 dark:hover:bg-white/5
-                    ${i === focusedIndex ? 'bg-stone-50 dark:bg-white/5' : ''}
+                    ${i === focusedIndex ? 'bg-stone-50 dark:bg-[#141414]' : ''}
                   `}
                 >
                   <div className="text-[10px] text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-0.5">

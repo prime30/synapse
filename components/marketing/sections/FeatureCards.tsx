@@ -356,38 +356,31 @@ interface FeatureCardDef {
 
 const FEATURE_CARDS: FeatureCardDef[] = [
   {
-    label: 'AI ENGINE',
-    title: 'AI Code Generation',
+    label: 'INTELLIGENCE',
+    title: 'Deep Shopify Understanding',
     description:
-      'Watch five specialized agents write, validate, and review Liquid, JavaScript, and CSS. Context-aware, type-safe, with automated code review.',
+      'Agents are trained on real Shopify Liquid patterns, schema blocks, variant logic, and theme architecture.',
     Mockup: CodeMockup,
   },
   {
-    label: 'CONTEXT',
-    title: 'Context Intelligence',
+    label: 'ORCHESTRATION',
+    title: 'Multi-Agent Workflow',
     description:
-      'Automatic dependency detection across Liquid, CSS, and JavaScript. Every change is analyzed for cross-file impact.',
+      'A Project Manager coordinates specialized agents for Liquid, JavaScript, and CSS when needed.',
     Mockup: ContextMockup,
   },
   {
-    label: 'INTEGRATION',
-    title: 'Shopify Sync',
+    label: 'EDITING',
+    title: 'Structural Editing',
     description:
-      'One-click sync, preview, and deploy to your store.',
+      'Works with large theme files and makes precise changes without breaking existing code.',
     Mockup: SyncStatusMockup,
   },
   {
-    label: 'HISTORY',
-    title: 'Version Control',
+    label: 'QUALITY',
+    title: 'Built-in Validation',
     description:
-      'Full history with undo/redo. Track every change across your entire theme.',
-    Mockup: VersionTimelineMockup,
-  },
-  {
-    label: 'INTELLIGENCE',
-    title: 'Liquid Intelligence',
-    description:
-      'Real-time syntax validation and type checking for every template.',
+      'Catches common Liquid, performance, and accessibility issues during development.',
     Mockup: LiquidValidationMockup,
   },
 ];
@@ -553,7 +546,7 @@ function CardCell({
 /*  Section header — typewriter with cursor                            */
 /* ------------------------------------------------------------------ */
 
-const TYPEWRITER_TEXT = 'Built for speed. Designed for craft.';
+const TYPEWRITER_TEXT = 'How Synapse helps';
 const TYPEWRITER_SPEED = 40; // ms per character
 
 function FeatureSectionHeader({ inView }: { inView: boolean }) {
@@ -590,11 +583,11 @@ function FeatureSectionHeader({ inView }: { inView: boolean }) {
   const done = charCount >= TYPEWRITER_TEXT.length;
 
   // Split visible text to inject PixelAccent on "speed" and "craft"
-  function renderTyped() {
-    const speedStart = TYPEWRITER_TEXT.indexOf('speed');
-    const speedEnd = speedStart + 5;
-    const craftStart = TYPEWRITER_TEXT.indexOf('craft');
-    const craftEnd = craftStart + 5;
+    function renderTyped() {
+    const speedStart = TYPEWRITER_TEXT.indexOf('Synapse');
+    const speedEnd = speedStart + 7;
+    const craftStart = -1;
+    const craftEnd = -1;
 
     const parts: React.ReactNode[] = [];
     let i = 0;
@@ -666,7 +659,9 @@ function FeatureSectionHeader({ inView }: { inView: boolean }) {
         animate={showSubtext ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        Production-ready tools that understand Shopify at the code level.
+        <a href="/features" className="inline-flex items-center gap-1 text-accent hover:text-accent-hover transition-colors">
+          See the full feature list <ArrowRight size={14} />
+        </a>
       </motion.p>
     </div>
   );

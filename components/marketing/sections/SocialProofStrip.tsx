@@ -5,10 +5,10 @@ import { motion, useInView } from 'framer-motion';
 import { CounterStat } from '@/components/marketing/interactions/CounterStat';
 
 const STATS: { value: number; suffix: string; prefix?: string; label: string }[] = [
-  { value: 10, suffix: 'x', label: 'Faster theme edits' },
-  { value: 30, suffix: 's', prefix: '<\u2009', label: 'First code change' },
-  { value: 0, suffix: '', label: 'Manual deploys needed' },
+  { value: 5, suffix: '', label: 'Specialized agents' },
+  { value: 3, suffix: '', label: 'Languages supported' },
   { value: 100, suffix: '%', label: 'Liquid + CSS + JS' },
+  { value: 0, suffix: '', label: 'Manual deploys needed' },
 ];
 
 export function SocialProofStrip() {

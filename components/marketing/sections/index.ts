@@ -6,7 +6,7 @@ export { FeatureCards } from './FeatureCards';
 export { AgentHubDiagram } from './AgentHubDiagram';
 export { AgentScrollStory } from './AgentScrollStory';
 export { ScrollRevealSection } from './ScrollRevealSection';
-export { TestimonialCarousel } from './TestimonialCarousel';
+export { FeatureHighlightsCarousel } from './TestimonialCarousel';
 export { CaseStudySection } from './CaseStudySection';
 export { LogoSlider } from './LogoSlider';
 export { HowItWorksSection } from './HowItWorksSection';

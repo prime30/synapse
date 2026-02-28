@@ -58,7 +58,7 @@ function PreflightIndicator({
   if (passed === null || passed === undefined) {
     return (
       <span className="inline-flex items-center gap-1 text-xs ide-text-muted">
-        <span className="w-3 h-0.5 bg-stone-400 dark:bg-white/30 rounded" />
+        <span className="w-3 h-0.5 bg-stone-400 dark:bg-[#3a3a3a] rounded" />
         Not run
       </span>
     );

@@ -67,7 +67,7 @@ export function CTASection() {
               animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             >
-              Start <PixelAccent>shipping</PixelAccent>.
+              Start <PixelAccent>building</PixelAccent>.
             </motion.h2>
             <motion.p
               className="text-lg text-stone-500 dark:text-white/50 mt-6 leading-relaxed max-w-full sm:max-w-md"
@@ -75,8 +75,7 @@ export function CTASection() {
               animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
               transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
             >
-              No credit card. Free for solo projects. Your first theme deploys
-              today.
+              No credit card required. Free for personal projects.
             </motion.p>
 
             <motion.div

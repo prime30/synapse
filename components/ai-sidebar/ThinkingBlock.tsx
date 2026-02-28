@@ -41,6 +41,8 @@ export interface ThinkingStep {
   diagnostics?: { file: string; errorCount: number; warningCount: number };
   /** Routing tier assigned by the smart classifier. */
   routingTier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+  /** Execution strategy (SIMPLE, HYBRID, GOD_MODE). */
+  strategy?: 'SIMPLE' | 'HYBRID' | 'GOD_MODE';
   /** Model used for this step (e.g. Haiku, Sonnet, Opus). */
   model?: string;
   /** High-level rail phase (computed from phase via mapCoordinatorPhase). */
@@ -140,7 +142,7 @@ function PhaseIcon({ phase, done }: { phase: ThinkingStep['phase']; done?: boole
   // No circle loader: active step uses text shimmer in parent
   if (phase !== 'complete') {
     return (
-      <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-sky-500/50 dark:border-sky-400/50 bg-sky-500/10 dark:bg-sky-400/10 inline-block" aria-hidden />
+      <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-stone-400/50 dark:border-[#333333] bg-stone-500/10 dark:bg-white/5 inline-block" aria-hidden />
     );
   }
 
@@ -201,7 +203,7 @@ const phaseSvg: Record<ThinkingStep['phase'], React.ReactNode> = {
     </svg>
   ),
   reasoning: (
-    <svg className="w-2.5 h-2.5 text-purple-400 dark:text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg className="w-2.5 h-2.5 ide-text-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
       <line x1="9" y1="21" x2="15" y2="21" />
     </svg>
@@ -243,20 +245,34 @@ function getAgentBadgeClasses(agent: string): string {
 
 // ── Routing tier badge classes ──────────────────────────────────────────
 
+const NEUTRAL_BADGE = 'bg-stone-500/10 dark:bg-white/5 ide-text-2 ide-border-subtle';
+
 const TIER_BADGE_CLASSES: Record<string, string> = {
-  TRIVIAL: 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-  SIMPLE: 'bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/20',
-  COMPLEX: 'bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20',
-  ARCHITECTURAL: 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/20',
+  TRIVIAL: NEUTRAL_BADGE,
+  SIMPLE: NEUTRAL_BADGE,
+  COMPLEX: NEUTRAL_BADGE,
+  ARCHITECTURAL: NEUTRAL_BADGE,
 };
 
-function RoutingTierBadge({ tier, model }: { tier: string; model?: string }) {
+const STRATEGY_BADGE_CLASSES: Record<string, string> = {
+  SIMPLE: NEUTRAL_BADGE,
+  HYBRID: NEUTRAL_BADGE,
+  GOD_MODE: NEUTRAL_BADGE,
+};
+
+function RoutingTierBadge({ tier, model, strategy }: { tier: string; model?: string; strategy?: string }) {
   const tierClasses = TIER_BADGE_CLASSES[tier] ?? TIER_BADGE_CLASSES.SIMPLE;
+  const stratClasses = strategy ? (STRATEGY_BADGE_CLASSES[strategy] ?? STRATEGY_BADGE_CLASSES.HYBRID) : null;
   return (
     <span className="ml-1.5 inline-flex items-center gap-1">
       <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${tierClasses}`}>
         {tier}
       </span>
+      {strategy && stratClasses && (
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${stratClasses}`}>
+          {strategy === 'GOD_MODE' ? 'GOD' : strategy}
+        </span>
+      )}
       {model && (
         <span className="text-[10px] text-stone-500 dark:text-stone-500">
           {model}
@@ -276,7 +292,7 @@ function FileChip({ fileName, path, reason, onOpenFile }: {
     <button
       type="button"
       onClick={() => onOpenFile?.(path ?? fileName)}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono ide-text-2 ide-surface-input border ide-border-subtle hover:border-sky-500/40 hover:text-sky-500 dark:hover:text-sky-400 transition-colors cursor-pointer"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono ide-text-2 ide-surface-input border ide-border-subtle hover:ide-border hover:ide-text transition-colors cursor-pointer"
       title={path ?? fileName}
     >
       <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -340,7 +356,7 @@ function StepMetadata({ step, onOpenFile }: { step: ThinkingStep; onOpenFile?: (
               key={`${c.fileName}-${i}`}
               type="button"
               onClick={() => onOpenFile(c.fileName)}
-              className="flex items-center gap-1.5 text-[10px] py-0.5 rounded hover:bg-sky-500/5 dark:hover:bg-sky-500/10 transition-colors cursor-pointer text-left w-full"
+              className="flex items-center gap-1.5 text-[10px] py-0.5 rounded hover:ide-surface-inset transition-colors cursor-pointer text-left w-full"
             >
               <span className="font-mono ide-text-2">{c.fileName}</span>
               {c.confidence != null && (
@@ -413,7 +429,7 @@ function PhaseCheckbox({ checked, active }: { checked: boolean; active: boolean 
   }
   if (active) {
     return (
-      <div className="w-4 h-4 rounded border-2 border-sky-500 dark:border-sky-400 flex items-center justify-center shrink-0 bg-sky-500/10 dark:bg-sky-400/10" role="checkbox" aria-checked="mixed" />
+      <div className="w-4 h-4 rounded border-2 border-stone-400 dark:border-white/30 flex items-center justify-center shrink-0 bg-stone-500/10 dark:bg-white/5" role="checkbox" aria-checked="mixed" />
     );
   }
   return (
@@ -501,7 +517,7 @@ export function ThinkingBlock({
         className="flex w-full items-center gap-1.5 rounded-lg ide-surface-inset border ide-border-subtle px-3 py-1.5 text-left transition-colors ide-hover"
       >
         {!isComplete && (
-          <span className="h-3 w-3 shrink-0 rounded-full border-2 border-sky-500/50 dark:border-sky-400/50 bg-sky-500/10 dark:bg-sky-400/10 inline-block" aria-hidden />
+          <span className="h-3 w-3 shrink-0 rounded-full border-2 border-stone-400/50 dark:border-[#333333] bg-stone-500/10 dark:bg-white/5 inline-block" aria-hidden />
         )}
         {isComplete && (
           <svg className="h-3 w-3 text-accent shrink-0" viewBox="0 0 20 20" fill="currentColor">
@@ -535,7 +551,7 @@ export function ThinkingBlock({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleVerbose(); }}
-            className={'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ' + (verbose ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' : 'ide-text-muted hover:ide-text-3')}
+            className={'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ' + (verbose ? 'ide-surface-inset ide-text border ide-border-subtle' : 'ide-text-muted hover:ide-text-3')}
             title={verbose ? 'Switch to summary mode' : 'Show full inner monologue'}
             aria-label={verbose ? 'Verbose mode on' : 'Verbose mode off'}
           >
@@ -553,7 +569,7 @@ export function ThinkingBlock({
 
       {/* Inline progress bar (thin, below header, only when running) */}
       {!isComplete && progress != null && (
-        <div className="h-0.5 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden mx-1 mt-0.5" aria-live="polite">
+        <div className="h-0.5 rounded-full bg-stone-200 dark:bg-[#1e1e1e] overflow-hidden mx-1 mt-0.5" aria-live="polite">
           <div
             className="h-full rounded-full bg-accent/70 transition-all duration-150 ease-out"
             style={{ width: `${progress}%` }}
@@ -616,7 +632,7 @@ export function ThinkingBlock({
                           transition={safeTransition(0.15)}
                           className="overflow-hidden"
                         >
-                          <div className="px-3 pb-2 space-y-0.5 border-t border-stone-200/50 dark:border-white/5">
+                          <div className="px-3 pb-2 space-y-0.5 border-t border-stone-200/50 dark:border-[#1f1f1f]">
                             {group.steps.map((step, i) => (
                               <div key={`${step.phase}-${i}`} className="flex items-start gap-2 py-0.5 pl-6">
                                 <div className="mt-0.5">
@@ -634,7 +650,7 @@ export function ThinkingBlock({
                                       </span>
                                     )}
                                     {step.routingTier && (
-                                      <RoutingTierBadge tier={step.routingTier} model={step.model} />
+                                      <RoutingTierBadge tier={step.routingTier} model={step.model} strategy={step.strategy} />
                                     )}
                                     {(step.metadata?.styleProfileRules ?? step.metadata?.designTokenCount) != null && (
                                       <span
@@ -674,16 +690,16 @@ export function ThinkingBlock({
                                           <path d="M4.5 2.5l4 3.5-4 3.5" />
                                         </svg>
                                         {step.reasoningAgent ?? 'agent'} reasoning
-                                        {!step.done && <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse ml-1" />}
+                                        {!step.done && <span className="inline-block w-1.5 h-1.5 rounded-full bg-stone-400 dark:bg-[#4a4a4a] animate-pulse ml-1" />}
                                       </summary>
-                                      <pre className="mt-1 text-[11px] ide-text-3 leading-relaxed whitespace-pre-wrap break-words font-mono bg-black/5 dark:bg-white/5 rounded-md p-2 max-h-48 overflow-y-auto border border-stone-200/50 dark:border-white/5">
+                                      <pre className="mt-1 text-[11px] ide-text-3 leading-relaxed whitespace-pre-wrap break-words font-mono bg-black/5 dark:bg-white/5 rounded-md p-2 border border-stone-200/50 dark:border-[#1f1f1f]">
                                         {step.reasoning}
                                       </pre>
                                     </details>
                                   )}
                                   {/* Phase 4b: Analysis only in verbose mode */}
                                   {verbose && step.analysis && (
-                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed italic border-l-2 border-purple-500/30 pl-2">{stripIDEAndPreview(step.analysis)}</p>
+                                    <p className="text-[11px] ide-text-3 mt-0.5 leading-relaxed italic border-l-2 ide-border pl-2">{stripIDEAndPreview(step.analysis)}</p>
                                   )}
                                   {step.summary && (
                                     <p className="text-[11px] ide-text-2 mt-0.5 leading-relaxed">{stripIDEAndPreview(step.summary)}</p>
@@ -727,7 +743,7 @@ export function ThinkingBlock({
 
       {/* Phase 8b: Per-agent progress cards */}
       {workers && workers.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-stone-200 dark:border-white/5 space-y-1" aria-label="Parallel agent workers" role="region">
+        <div className="mt-2 pt-2 border-t border-stone-200 dark:border-[#1f1f1f] space-y-1" aria-label="Parallel agent workers" role="region">
           <p className="text-[10px] text-stone-500 dark:text-stone-500 uppercase tracking-wider mb-1" aria-live="polite">
             {'Parallel Agents (' + workers.filter(w => w.status === 'running').length + ' active, ' + workers.filter(w => w.status === 'complete').length + ' done)'}
           </p>

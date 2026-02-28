@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { FileText, Search, FileEdit, FilePlus, List, Loader2 } from 'lucide-react';
+import { FileText, Search, FileEdit, FilePlus, List, Wrench } from 'lucide-react';
 import type { ToolProgressState } from '@/hooks/useToolProgress';
 
 interface EnhancedTypingIndicatorProps {
@@ -49,7 +49,7 @@ export function EnhancedTypingIndicator({
 
   const tools = Array.from(activeTools.values());
   const mostRecent = tools[tools.length - 1];
-  const Icon = mostRecent ? TOOL_ICONS[mostRecent.name] ?? Loader2 : null;
+  const Icon = mostRecent ? TOOL_ICONS[mostRecent.name] ?? Wrench : null;
   const label = mostRecent ? getToolLabel(mostRecent) : thinkingLabel ?? 'Thinking...';
 
   return (

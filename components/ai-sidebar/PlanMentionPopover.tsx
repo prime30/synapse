@@ -18,6 +18,7 @@ interface PlanMentionPopoverProps {
   onDismiss: () => void;
 }
 
+export type PlanMention = PlanOption;
 export type { PlanOption, PlanMentionPopoverProps };
 
 export function PlanMentionPopover({

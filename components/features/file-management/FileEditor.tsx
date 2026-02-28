@@ -15,6 +15,8 @@ export interface FileEditorHandle {
   cancel: () => void;
   /** Scroll the editor to reveal a specific line (1-based). No-op if editor is not mounted. */
   revealLine: (lineNumber: number) => void;
+  /** Trigger the Format Document action in the editor. */
+  format: () => void;
 }
 
 interface FileEditorProps {
@@ -132,6 +134,16 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
     revealLine: (lineNumber: number) => {
       monacoEditorRef.current?.revealLineInCenter(lineNumber);
     },
+    format: () => {
+      const ed = monacoEditorRef.current;
+      if (!ed) return;
+      const action = ed.getAction('synapse.formatLiquid');
+      if (action) {
+        action.run();
+      } else {
+        ed.getAction('editor.action.formatDocument')?.run();
+      }
+    },
   }), [effectiveSave, effectiveCancel, onSave, locked]);
 
   useEffect(() => {
@@ -177,7 +189,7 @@ export const FileEditor = forwardRef<FileEditorHandle, FileEditorProps>(function
       {/* Loading overlay — fades out once content arrives */}
       {isLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center ide-surface/80 backdrop-blur-[1px] pointer-events-none">
-          <div className="animate-pulse ide-text-muted text-sm">Loading...</div>
+          <div className="animate-pulse ide-text-muted text-sm">Loading editor…</div>
         </div>
       )}
       {/* Editor */}

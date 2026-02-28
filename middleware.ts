@@ -71,7 +71,7 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from sign-in page
   if (isAuthenticated && pathname === '/auth/signin') {
     const callbackUrl =
-      request.nextUrl.searchParams.get('callbackUrl') ?? '/onboarding';
+      request.nextUrl.searchParams.get('callbackUrl') ?? '/projects';
     return NextResponse.redirect(new URL(callbackUrl, request.url));
   }
 

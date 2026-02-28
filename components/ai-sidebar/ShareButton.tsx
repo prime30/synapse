@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useCallback } from 'react';
-import { Share2, Check, Loader2 } from 'lucide-react';
+import { Share2, Check } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface ShareButtonProps {
   projectId: string;
@@ -65,7 +66,7 @@ export function ShareButton({ projectId, sessionId }: ShareButtonProps) {
       title={state === 'shared' ? 'Link copied!' : 'Share conversation'}
     >
       {state === 'loading' ? (
-        <Loader2 className="h-3 w-3 animate-spin" />
+        <LambdaDots size={12} />
       ) : state === 'shared' ? (
         <Check className="h-3 w-3" />
       ) : (

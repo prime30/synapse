@@ -59,7 +59,7 @@ export function OutputPanel({ content, styles }: OutputPanelProps) {
   if (!content) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-sm text-stone-500 dark:text-white/40">
+        <p className="text-sm text-stone-500 dark:text-[#636059]">
           No content to output. Select a template or generate with AI first.
         </p>
       </div>
@@ -77,7 +77,7 @@ export function OutputPanel({ content, styles }: OutputPanelProps) {
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               tab === id
                 ? 'bg-stone-200 dark:bg-white/10 text-stone-900 dark:text-white'
-                : 'text-stone-500 dark:text-white/40 hover:text-stone-700 dark:hover:text-white/60'
+                : 'text-stone-500 dark:text-[#636059] hover:text-stone-700 dark:hover:text-white/60'
             }`}
           >
             {label}
@@ -87,13 +87,13 @@ export function OutputPanel({ content, styles }: OutputPanelProps) {
 
       {/* Code block */}
       <div className="rounded-lg border border-stone-200 dark:border-white/10 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 bg-stone-100 dark:bg-white/5 border-b border-stone-200 dark:border-white/10">
-          <span className="text-xs text-stone-500 dark:text-white/40">
+        <div className="flex items-center justify-between px-4 py-2 bg-stone-100 dark:bg-[#141414] border-b border-stone-200 dark:border-white/10">
+          <span className="text-xs text-stone-500 dark:text-[#636059]">
             {tab === 'inline' ? 'Inline HTML' : 'CSS-Matched HTML'} — {POLICY_LABELS[content.type]}
           </span>
           <button
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 text-xs text-stone-500 dark:text-white/40 hover:text-stone-700 dark:hover:text-white/60 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#636059] hover:text-stone-700 dark:hover:text-white/60 transition-colors"
           >
             {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
             {copied ? 'Copied!' : 'Copy'}
@@ -116,14 +116,14 @@ export function OutputPanel({ content, styles }: OutputPanelProps) {
         <button
           disabled
           title="Coming soon — requires Shopify app review"
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-stone-100 dark:bg-white/5 text-stone-400 dark:text-white/25 cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-stone-100 dark:bg-[#141414] text-stone-400 dark:text-[#444444] cursor-not-allowed"
         >
           Push to Shopify
         </button>
       </div>
 
       {/* Instructions */}
-      <div className="rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3">
+      <div className="rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#141414] px-4 py-3">
         <p className="text-xs text-stone-600 dark:text-gray-400 leading-relaxed">
           <strong>How to use:</strong> Copy the HTML above, then go to{' '}
           <span className="font-medium">Shopify Admin → Settings → Policies → {POLICY_LABELS[content.type]}</span>.

@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useProjects, type Project } from '@/hooks/useProjects';
 import { GlassCard } from '@/components/marketing/glass/GlassCard';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,13 +76,13 @@ function SkeletonCard() {
     <div className="p-4 rounded-xl bg-stone-100/50 dark:bg-white/[0.03] border border-stone-200 dark:border-white/10 animate-pulse">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <div className="h-4 w-32 rounded bg-stone-200 dark:bg-white/10" />
+          <div className="h-4 w-32 rounded bg-stone-200 dark:bg-[#1e1e1e]" />
           <div className="flex items-center gap-2">
-            <div className="h-3 w-12 rounded bg-stone-200 dark:bg-white/10" />
-            <div className="h-3 w-16 rounded bg-stone-200 dark:bg-white/10" />
+            <div className="h-3 w-12 rounded bg-stone-200 dark:bg-[#1e1e1e]" />
+            <div className="h-3 w-16 rounded bg-stone-200 dark:bg-[#1e1e1e]" />
           </div>
         </div>
-        <div className="h-4 w-4 rounded bg-stone-200 dark:bg-white/10" />
+        <div className="h-4 w-4 rounded bg-stone-200 dark:bg-[#1e1e1e]" />
       </div>
     </div>
   );
@@ -189,9 +190,7 @@ function ArchivedRow({
       <span className="ide-text-muted font-medium truncate">{project.name}</span>
       <div className="flex items-center gap-1.5 shrink-0">
         {busy ? (
-          <svg className="w-4 h-4 animate-spin text-emerald-500" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-          </svg>
+          <LambdaDots size={16} />
         ) : (
           <>
             <button
@@ -453,14 +452,14 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
                 type="checkbox"
                 checked={syncToLocal}
                 onChange={(e) => setSyncToLocal(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-stone-300 dark:border-white/20 text-sky-500 focus:ring-sky-500/30 bg-white dark:bg-white/5"
+                className="mt-0.5 w-4 h-4 rounded border-stone-300 dark:border-[#333333] text-sky-500 focus:ring-sky-500/30 bg-white dark:bg-[#141414]"
               />
               <div>
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200 group-hover:text-stone-900 dark:group-hover:text-white transition-colors">
                   Sync to local filesystem
                 </span>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
-                  Pull theme files to <code className="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-white/5">.synapse-themes/</code> for local editing.
+                  Pull theme files to <code className="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-[#141414]">.synapse-themes/</code> for local editing.
                   Changes push back to the dev theme automatically.
                 </p>
               </div>
@@ -600,7 +599,7 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
       {/* Store badge */}
       {connection && (
         <motion.div
-          className="mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10"
+          className="mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 dark:bg-[#141414] border border-stone-200 dark:border-white/10"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
@@ -768,9 +767,9 @@ export function ImportThemeStep({ onImported, onSkip, onBack: _onBack, activePro
           transition={{ duration: 0.5, delay: 0.35 }}
         >
           <div className="flex items-center gap-2 mb-2">
-            <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
+            <div className="h-px flex-1 bg-stone-200 dark:bg-[#1e1e1e]" />
             <span className="text-[11px] ide-text-muted whitespace-nowrap">Archived Themes</span>
-            <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
+            <div className="h-px flex-1 bg-stone-200 dark:bg-[#1e1e1e]" />
           </div>
           <div className="space-y-1.5">
             {archivedProjects.map((project) => (

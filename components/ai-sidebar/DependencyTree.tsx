@@ -79,7 +79,7 @@ function TreeNode({ file, depth, fileMap, onFileClick }: TreeNodeProps) {
           {file.path}
         </span>
         {file.dependencies.length > 0 && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] bg-stone-200 dark:bg-white/10 text-stone-600 dark:text-stone-400">
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] bg-stone-200 dark:bg-[#1e1e1e] text-stone-600 dark:text-stone-400">
             {file.dependencies.length}
           </span>
         )}

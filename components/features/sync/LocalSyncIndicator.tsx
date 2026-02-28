@@ -108,8 +108,9 @@ function statusLabel(
 ): string {
   switch (status) {
     case 'idle':
-      if (lastPush && lastPush.pushed > 0) {
-        return `Pushed ${lastPush.pushed} files`;
+      if (lastPush) {
+        if (lastPush.pushed > 0) return `Pushed ${lastPush.pushed} files`;
+        if (lastPush.errors.length === 0) return 'Dev theme up to date';
       }
       return fileCount > 0 ? `Local (${fileCount})` : 'Local sync';
     case 'pulling':

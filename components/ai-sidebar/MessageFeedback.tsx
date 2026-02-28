@@ -88,7 +88,7 @@ export function MessageFeedback({
   const baseButton =
     'w-7 h-7 flex items-center justify-center rounded-md transition-colors active:scale-95 transition-transform';
   const defaultStyle =
-    'text-stone-400 dark:text-stone-500 hover:bg-stone-100 dark:hover:bg-white/10 hover:text-stone-600 dark:hover:text-stone-300';
+    'text-stone-400 dark:text-stone-500 hover:bg-stone-100 dark:hover:bg-[#1e1e1e] hover:text-stone-600 dark:hover:text-stone-300';
   const activePositive = 'bg-[oklch(0.745_0.189_148)]/10 text-[oklch(0.745_0.189_148)]';
   const activeNegative = 'bg-red-500/10 text-red-400';
 
@@ -125,7 +125,7 @@ export function MessageFeedback({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="What could be improved? (optional)"
-            className="w-full min-h-[60px] resize-none rounded-md border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-stone-500 outline-none focus:ring-1 focus:ring-sky-500 dark:focus:ring-sky-400"
+            className="w-full min-h-[60px] resize-none rounded-md border border-stone-200 dark:border-[#2a2a2a] bg-white dark:bg-[#141414] px-3 py-2 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-stone-500 outline-none focus:ring-1 focus:ring-sky-500 dark:focus:ring-sky-400"
             maxLength={2000}
             disabled={isSubmitting}
           />

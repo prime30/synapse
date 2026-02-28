@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import dynamic from 'next/dynamic';
 import type { editor, Range, languages, CancellationToken } from 'monaco-editor';
@@ -48,7 +48,7 @@ function loadProviders() {
 
 const MonacoEditorReact = dynamic(
   () => import('@monaco-editor/react').then((mod) => mod.Editor),
-  { ssr: false, loading: () => <div className="flex items-center justify-center h-64 ide-text-3">Loading editor…</div> }
+  { ssr: false, loading: () => <div className="h-64" aria-hidden /> }
 );
 
 export type EditorLanguage = 'liquid' | 'javascript' | 'css' | 'other';
@@ -258,6 +258,61 @@ export function MonacoEditor({
   const styleElRef = useRef<HTMLStyleElement | null>(null);
   const inlineCompletionDisposableRef = useRef<import('monaco-editor').IDisposable | null>(null);
 
+  /* ── Define themes BEFORE editor mounts (prevents white flash) ─────────── */
+  const SYNAPSE_DARK_THEME = useMemo(() => ({
+    base: 'vs-dark' as const,
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '6b7280' },
+      { token: 'comment.block', foreground: '6b7280' },
+      { token: 'comment.line', foreground: '6b7280' },
+      { token: 'comment.content.liquid', foreground: '6b7280' },
+    ],
+    colors: {
+      'editor.background': '#0a0a0a',
+      'editor.lineHighlightBackground': '#141414',
+      'editorLineNumber.foreground': '#4a4844',
+      'editorLineNumber.activeForeground': '#807a74',
+      'editorGutter.background': '#0a0a0a',
+      'editor.selectionBackground': '#264f78',
+      'editorWidget.background': '#1a1a1a',
+      'editorWidget.border': '#2a2a2a',
+      'input.background': '#111111',
+      'input.border': '#2a2a2a',
+      'dropdown.background': '#1a1a1a',
+      'dropdown.border': '#2a2a2a',
+      'list.hoverBackground': '#1a1a1a',
+      'list.activeSelectionBackground': '#1e1e1e',
+      'editorSuggestWidget.background': '#1a1a1a',
+      'editorSuggestWidget.border': '#2a2a2a',
+      'scrollbarSlider.background': '#2a2a2a80',
+      'scrollbarSlider.hoverBackground': '#3a3a3a80',
+      'scrollbarSlider.activeBackground': '#4a4a4a80',
+    },
+  }), []);
+
+  const SYNAPSE_LIGHT_THEME = useMemo(() => ({
+    base: 'vs' as const,
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: 'a8a29e' },
+      { token: 'comment.block', foreground: 'a8a29e' },
+      { token: 'comment.line', foreground: 'a8a29e' },
+      { token: 'comment.content.liquid', foreground: 'a8a29e' },
+    ],
+    colors: {
+      'editor.background': '#fafaf9',
+      'editor.lineHighlightBackground': '#00000005',
+      'editorLineNumber.foreground': '#a8a29e',
+      'editorLineNumber.activeForeground': '#57534e',
+    },
+  }), []);
+
+  const handleBeforeMount = useCallback((monaco: typeof import('monaco-editor')) => {
+    monaco.editor.defineTheme('synapse-dark', SYNAPSE_DARK_THEME);
+    monaco.editor.defineTheme('synapse-light', SYNAPSE_LIGHT_THEME);
+  }, [SYNAPSE_DARK_THEME, SYNAPSE_LIGHT_THEME]);
+
   /* ── Main mount handler ────────────────────────────────────────────────── */
   const handleEditorDidMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
@@ -298,9 +353,17 @@ export function MonacoEditor({
       }
 
       /* Selection change tracking (EPIC 1c: selection injection + line range for chat pill) */
-      editorInstance.onDidChangeCursorSelection(() => {
+      editorInstance.onDidChangeCursorSelection((e) => {
         const model = editorInstance.getModel();
         if (!model || !onSelectionChangeRef.current) return;
+
+        // CursorChangeReason.NotSet (0) = programmatic selection (find widget cycling,
+        // internal Monaco operations). CursorChangeReason.Explicit (3) = user-initiated.
+        // Suppress NotSet to prevent find widget matches from polluting chat context.
+        // All other reasons (Explicit=3, Paste=4, Undo=5, Redo=6) are user-driven and
+        // should pass through.
+        if (e.reason === 0) return;
+
         const selection = editorInstance.getSelection();
         if (!selection || selection.isEmpty()) {
           onSelectionChangeRef.current(null);
@@ -1030,6 +1093,14 @@ export function MonacoEditor({
     decs.set(decorations);
   }, [agentEdits]);
 
+  /* Re-apply theme when isDark toggles (covers race where theme prop is
+     set before defineTheme runs inside onMount) */
+  useEffect(() => {
+    const mon = monacoRef.current;
+    if (!mon) return;
+    mon.editor.setTheme(isDark ? 'synapse-dark' : 'synapse-light');
+  }, [isDark]);
+
   /* ═════════════════════════════════════════════════════════════════════
      Render
      ═════════════════════════════════════════════════════════════════════ */
@@ -1040,8 +1111,9 @@ export function MonacoEditor({
         language={MONACO_LANGUAGE_MAP[language]}
         value={value}
         onChange={(v) => onChange(v ?? '')}
+        beforeMount={handleBeforeMount}
         onMount={handleEditorDidMount}
-        theme={isDark ? 'vs-dark' : 'light'}
+        theme={isDark ? 'synapse-dark' : 'synapse-light'}
         options={{
           minimap: { enabled: settings.minimap },
           fontSize: settings.fontSize,

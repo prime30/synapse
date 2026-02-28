@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { X, GitCommit, Plus, Minus, File, Check, Loader2 } from 'lucide-react';
+import { X, GitCommit, Plus, Minus, File, Check } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface CommitDialogProps {
   open: boolean;
@@ -299,7 +300,7 @@ export default function CommitDialog({
                 : 'bg-stone-700 ide-text-3 cursor-not-allowed')
             }
           >
-            {isCommitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isCommitting && <LambdaDots size={16} />}
             <span>Commit</span>
           </button>
         </div>

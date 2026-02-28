@@ -20,10 +20,10 @@ export function GrepResultCard({ pattern, matches, totalMatches }: GrepResultCar
   const hasMore = matches.length > 5;
 
   return (
-    <div className="rounded-lg border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 p-3 text-sm">
+    <div className="rounded-lg border border-stone-200 dark:border-[#2a2a2a] bg-stone-50 dark:bg-white/5 p-3 text-sm">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-stone-400 dark:text-stone-500 font-mono text-xs">grep</span>
-        <code className="text-stone-900 dark:text-white font-mono text-xs bg-stone-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
+        <code className="text-stone-900 dark:text-white font-mono text-xs bg-stone-100 dark:bg-[#1e1e1e] px-1.5 py-0.5 rounded">
           {pattern}
         </code>
         <span className="text-stone-400 dark:text-stone-500 text-xs ml-auto">

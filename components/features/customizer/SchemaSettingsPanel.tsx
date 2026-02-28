@@ -38,7 +38,7 @@ function SettingControl({
             onClick={() => onChange(!value)}
             className={[
               'relative w-8 h-4 rounded-full transition-colors shrink-0',
-              value ? 'bg-sky-500' : 'bg-stone-300 dark:bg-white/10',
+              value ? 'bg-sky-500' : 'bg-stone-300 dark:bg-[#1e1e1e]',
             ].join(' ')}
           >
             <span

@@ -19,6 +19,26 @@ export declare class APIClient {
             fileCount?: number;
         }>;
     }>;
+    /**
+     * Get the most recent agent chat session and its messages for a project
+     * (Synapse IDE chat transcript).
+     */
+    getProjectAgentChat(projectId: string): Promise<{
+        data: {
+            session: {
+                id: string;
+                title: string;
+                created_at: string;
+                updated_at: string;
+            } | null;
+            messages: Array<{
+                id: string;
+                role: 'user' | 'assistant';
+                content: string;
+                timestamp: string;
+            }>;
+        };
+    }>;
     addFile(projectId: string, file: {
         name: string;
         path: string;

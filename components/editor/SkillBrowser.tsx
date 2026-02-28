@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface ModuleWithEffectiveness {
   id: string;
@@ -74,7 +75,7 @@ export function SkillBrowser({ projectId }: SkillBrowserProps) {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-        <div className="w-5 h-5 border-2 ide-border border-t-sky-500 rounded-full animate-spin mb-3" />
+        <LambdaDots size={20} className="mb-3" />
         <p className="text-xs ide-text-muted">Loading knowledge modules…</p>
       </div>
     );
@@ -103,7 +104,7 @@ export function SkillBrowser({ projectId }: SkillBrowserProps) {
             <button
               type="button"
               onClick={() => setShowGaps((p) => !p)}
-              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-white/20 transition-colors"
+              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-[#333333] transition-colors"
             >
               View Gaps ({unmatchedRequests.length})
             </button>

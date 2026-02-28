@@ -187,7 +187,7 @@ export function CodeEditCard({
               height={diffHeight}
             />
           ) : (
-            <pre className="max-h-[240px] overflow-auto rounded ide-surface-input p-2 text-[11px] font-mono ide-text-2 border ide-border-subtle">
+            <pre className="rounded ide-surface-input p-2 text-[11px] font-mono ide-text-2 border ide-border-subtle overflow-x-auto">
               <code>{newContent}</code>
             </pre>
           )}

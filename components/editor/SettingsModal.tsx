@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useEditorSettings, type Preset } from '@/hooks/useEditorSettings';
+import { useAgentSettings } from '@/hooks/useAgentSettings';
 import { useChromaticSettings } from '@/hooks/useChromaticSettings';
 import { loadKeybindings, saveKeybindings, resetKeybindings, getEffectiveKey, type KeyBinding } from '@/lib/editor/keyboard-config';
 import { SkillBrowser } from '@/components/editor/SkillBrowser';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -161,7 +163,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-[oklch(0.145_0_0)] ${
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
       } ${
-        checked ? 'bg-sky-500 dark:bg-sky-500' : 'bg-stone-300 dark:bg-white/20'
+        checked ? 'bg-sky-500 dark:bg-sky-500' : 'bg-stone-300 dark:bg-[#2a2a2a]'
       }`}
     >
       <span
@@ -234,6 +236,7 @@ function formatKeyCombo(e: KeyboardEvent): string {
 
 export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps) {
   const { settings, updateSetting, applyPreset, resetToDefaults } = useEditorSettings();
+  const { useFlatPipeline, setUseFlatPipeline } = useAgentSettings();
   const chromatic = useChromaticSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
   const [keybindings, setKeybindings] = useState<KeyBinding[]>(loadKeybindings);
@@ -448,7 +451,7 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
                           className={`relative flex flex-col items-center gap-1 rounded-lg border py-3 px-2 transition-all ${
                             isActive
                               ? 'border-sky-500 bg-sky-500/8 dark:bg-sky-500/10 ide-text'
-                              : 'ide-border ide-surface-inset ide-text-3 hover:ide-text-2 hover:border-stone-300 dark:hover:border-white/15'
+                              : 'ide-border ide-surface-inset ide-text-3 hover:ide-text-2 hover:border-stone-300 dark:hover:border-[#2e2e2e]'
                           }`}
                         >
                           {isActive && (
@@ -540,6 +543,10 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
                           {settings.autoSaveDelay}ms
                         </span>
                       </div>
+                    </SettingRow>
+
+                    <SettingRow label="Multi-Agent Mode" description="Use PM + specialists for large refactors (10+ files). Off = single fast agent.">
+                      <Toggle checked={!useFlatPipeline} onChange={(v) => setUseFlatPipeline(!v)} />
                     </SettingRow>
                   </div>
                 </div>
@@ -861,9 +868,7 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
                               title="Run health check"
                             >
                               {healthCheckingId === p.id ? (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                </svg>
+                                <LambdaDots size={14} />
                               ) : (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />

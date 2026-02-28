@@ -78,7 +78,7 @@ export function FileCreateCard({ fileName, content, reasoning, status, confidenc
           {expanded ? 'Hide preview' : 'Show file preview'}
         </button>
         {expanded && (
-          <pre className="mt-1.5 max-h-[200px] overflow-auto rounded ide-surface-input p-2 text-[11px] font-mono ide-text-2 border ide-border-subtle">
+          <pre className="mt-1.5 rounded ide-surface-input p-2 text-[11px] font-mono ide-text-2 border ide-border-subtle overflow-x-auto">
             <code>{content}</code>
           </pre>
         )}

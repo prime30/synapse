@@ -52,7 +52,7 @@ export function HealthFindingBar({
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2 border-t border-stone-200 dark:border-white/10 text-xs"
+      className="flex items-center gap-3 px-4 py-2 border-t border-stone-200 dark:border-[#2a2a2a] text-xs"
       role="status"
       aria-live="polite"
     >

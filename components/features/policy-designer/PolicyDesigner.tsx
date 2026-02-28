@@ -39,7 +39,7 @@ export function PolicyDesignerPage() {
 
   return (
     <div className="min-h-screen bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)]">
-      <header className="border-b border-stone-200 dark:border-white/5 bg-white dark:bg-white/5 px-6 py-4">
+      <header className="border-b border-stone-200 dark:border-[#1f1f1f] bg-white dark:bg-white/5 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center gap-4">
           <button
             onClick={() => router.push(`/projects/${projectId}`)}
@@ -50,14 +50,14 @@ export function PolicyDesignerPage() {
           </button>
           <div>
             <h1 className="text-lg font-semibold text-stone-900 dark:text-white">Policy Designer</h1>
-            <p className="text-xs text-stone-500 dark:text-white/40">
+            <p className="text-xs text-stone-500 dark:text-[#636059]">
               Generate Shopify policy pages styled to your theme
             </p>
           </div>
         </div>
       </header>
 
-      <nav className="border-b border-stone-200 dark:border-white/5 bg-white dark:bg-white/5">
+      <nav className="border-b border-stone-200 dark:border-[#1f1f1f] bg-white dark:bg-white/5">
         <div className="max-w-6xl mx-auto px-6 flex gap-0" role="tablist">
           {TABS.map((tab) => (
             <button
@@ -68,7 +68,7 @@ export function PolicyDesignerPage() {
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'border-accent text-stone-900 dark:text-white'
-                  : 'border-transparent text-stone-500 dark:text-white/40 hover:text-stone-700 dark:hover:text-white/60'
+                  : 'border-transparent text-stone-500 dark:text-[#636059] hover:text-stone-700 dark:hover:text-white/60'
               }`}
             >
               {tab.label}

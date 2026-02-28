@@ -8,7 +8,7 @@ interface ToolProgressBarProps {
 export function ToolProgressBar({ percentage, indeterminate }: ToolProgressBarProps) {
   return (
     <div
-      className="h-0.5 w-full rounded-full overflow-hidden bg-stone-200 dark:bg-white/10"
+      className="h-0.5 w-full rounded-full overflow-hidden bg-stone-200 dark:bg-[#1e1e1e]"
       role="progressbar"
       aria-valuenow={indeterminate ? undefined : percentage}
       aria-valuemin={indeterminate ? undefined : 0}

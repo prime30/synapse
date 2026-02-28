@@ -90,9 +90,9 @@ export function NextStepChips({
                     shrink-0 inline-flex items-center gap-1.5
                     text-xs px-2.5 py-1 rounded-full border cursor-pointer transition-colors whitespace-nowrap
                     bg-stone-100 dark:bg-white/5
-                    border-stone-200 dark:border-white/10
+                    border-stone-200 dark:border-[#2a2a2a]
                     text-stone-500 dark:text-stone-400
-                    hover:bg-stone-200 dark:hover:bg-white/10 hover:text-stone-700 dark:hover:text-stone-300
+                    hover:bg-stone-200 dark:hover:bg-[#1e1e1e] hover:text-stone-700 dark:hover:text-stone-300
                   `}
                 >
                   <span

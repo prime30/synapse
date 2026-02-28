@@ -10,6 +10,7 @@ import { THEME_DIRECTORIES } from '@/lib/shopify/theme-structure';
 import type { WorkspacePresence } from '@/hooks/useWorkspacePresence';
 import type { FileType } from '@/lib/types/files';
 import { ExplorerContextSections } from './ExplorerContextSections';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface FileListProps {
   projectId: string | null;
@@ -339,10 +340,15 @@ export function FileList({
       <div className="flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
           <div className="p-4 space-y-2">
-            {[1, 2, 3, 4].map((i) => (
+            <p className="text-xs ide-text-muted mb-2 flex items-center gap-2">
+              <LambdaDots size={14} />
+              Loading theme files...
+            </p>
+            {[75, 60, 90, 70, 85, 65].map((w, i) => (
               <div
                 key={i}
-                className="h-12 ide-surface-inset rounded animate-pulse"
+                className="h-7 ide-surface-inset rounded animate-pulse"
+                style={{ width: `${w}%`, animationDelay: `${i * 100}ms` }}
               />
             ))}
           </div>

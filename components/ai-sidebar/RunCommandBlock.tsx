@@ -82,13 +82,13 @@ export function RunCommandBlock({
       {expanded && (
         <div className="border-t border-sky-200/50 dark:border-sky-500/20 px-3 py-2 space-y-2">
           {stdout && (
-            <pre className="overflow-auto max-h-[300px] rounded bg-black/20 dark:bg-black/30 p-2 text-xs font-mono leading-relaxed ide-text whitespace-pre-wrap break-all">
+            <pre className="rounded bg-black/20 dark:bg-black/30 p-2 text-xs font-mono leading-relaxed ide-text whitespace-pre-wrap break-all overflow-x-auto">
               {stdout}
             </pre>
           )}
 
           {stderr && (
-            <pre className="overflow-auto max-h-[200px] rounded bg-red-500/5 dark:bg-red-500/10 border border-red-500/10 dark:border-red-500/20 p-2 text-xs font-mono leading-relaxed text-red-400 whitespace-pre-wrap break-all">
+            <pre className="rounded bg-red-500/5 dark:bg-red-500/10 border border-red-500/10 dark:border-red-500/20 p-2 text-xs font-mono leading-relaxed text-red-400 whitespace-pre-wrap break-all overflow-x-auto">
               {stderr}
             </pre>
           )}

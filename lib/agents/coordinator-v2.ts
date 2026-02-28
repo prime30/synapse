@@ -707,6 +707,7 @@ async function buildV2Context(
   tier: RoutingTier = 'SIMPLE',
   strategy: ExecutionStrategy = 'HYBRID',
   slim = false,
+  onProgress?: (event: { type: string; [key: string]: unknown }) => void,
 ): Promise<V2Context> {
   // Phase 2: Extract files mentioned in the user prompt
   const promptMentionedFiles = extractPromptMentionedFiles(userRequest, files);
@@ -720,6 +721,15 @@ async function buildV2Context(
         const hydrated = await options.loadContent(idsToHydrate);
         const hydratedMap = new Map(hydrated.map((f: FileContext) => [f.fileId, f]));
         preloaded = preloaded.map(f => hydratedMap.get(f.fileId) ?? f);
+      }
+    }
+    for (const f of preloaded) {
+      if (f.content && !f.content.startsWith('[')) {
+        onProgress?.({
+          type: 'context_file_loaded',
+          path: f.fileName || f.path || f.fileId,
+          tokenCount: Math.ceil((f.content?.length ?? 0) / 4),
+        });
       }
     }
     const manifest = files.length + ' files in project (trivial edit — context skipped)';
@@ -793,6 +803,15 @@ async function buildV2Context(
       }
     }
 
+    for (const f of preloaded) {
+      if (f.content && !f.content.startsWith('[')) {
+        onProgress?.({
+          type: 'context_file_loaded',
+          path: f.fileName || f.path || f.fileId,
+          tokenCount: Math.ceil((f.content?.length ?? 0) / 4),
+        });
+      }
+    }
     const activeLabel = options.activeFilePath?.split('/').pop() ?? 'unknown';
     const manifest = `${files.length} files in project (slim context — active: ${activeLabel})`;
     console.log(`[SlimCtx] Built in ${Date.now() - slimStart}ms: ${preloaded.length} files (active + ${preloaded.length - 1} deps)`);
@@ -946,6 +965,16 @@ async function buildV2Context(
     mentionedFiles: promptMentionedFiles.map(f => f.fileName),
     maxTokens: repoMapTokenBudget,
   });
+
+  for (const f of preloaded) {
+    if (f.content && !f.content.startsWith('[')) {
+      onProgress?.({
+        type: 'context_file_loaded',
+        path: f.fileName || f.path || f.fileId,
+        tokenCount: Math.ceil((f.content?.length ?? 0) / 4),
+      });
+    }
+  }
 
   return { preloaded, allFiles: files, manifest, graph, symbolMatchedFiles: symbolMatchedFileNames };
 }
@@ -1595,7 +1624,7 @@ export async function streamV2(
 
     // ── Build file context ──────────────────────────────────────────────
     onProgress?.({ type: 'thinking', phase: 'analyzing', label: isSlimEligible ? 'Preparing edit...' : 'Preparing file context...' });
-    const v2ctx = await buildV2Context(projectId, files, userRequest, options, tier, initialStrategy, !!isSlimEligible);
+    const v2ctx = await buildV2Context(projectId, files, userRequest, options, tier, initialStrategy, !!isSlimEligible, onProgress);
     let preloaded = v2ctx.preloaded;
     const { allFiles, manifest, graph: depGraph, symbolMatchedFiles } = v2ctx;
 

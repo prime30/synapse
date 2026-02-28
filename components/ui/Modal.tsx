@@ -156,7 +156,7 @@ export function Modal({
             className={`
               relative z-40 mx-4 max-h-[85vh] w-full overflow-auto
               rounded-xl border border-stone-200 bg-white shadow-2xl
-              dark:border-white/10 dark:bg-[oklch(0.21_0_0)]
+              dark:border-[#2a2a2a] dark:bg-[oklch(0.21_0_0)]
               ${SIZE_CLASSES[size]}
               ${className}
             `}
@@ -167,7 +167,7 @@ export function Modal({
             transition={contentTransition}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 dark:border-white/10">
+            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 dark:border-[#2a2a2a]">
               {title != null && title !== '' ? (
                 <h2 className="font-semibold text-stone-900 dark:text-white">
                   {title}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface CheckpointPanelProps {
   projectId: string;
@@ -30,30 +31,7 @@ function relativeTime(iso: string): string {
 }
 
 function Spinner({ className = '' }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin ${className}`}
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        opacity="0.25"
-      />
-      <path
-        d="M12 2a10 10 0 0 1 10 10"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return <LambdaDots size={14} className={className} />;
 }
 
 // -- Confirm dialog -----------------------------------------------------------
@@ -292,7 +270,7 @@ export function CheckpointPanel({
             onKeyDown={handleInputKeyDown}
             placeholder="Checkpoint name..."
             disabled={isCreating}
-            className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 ide-text placeholder:ide-text-muted focus:outline-none focus:ring-1 focus:ring-[oklch(0.745_0.189_148)]/50 disabled:opacity-50"
+            className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] ide-text placeholder:ide-text-muted focus:outline-none focus:ring-1 focus:ring-[oklch(0.745_0.189_148)]/50 disabled:opacity-50"
           />
           <button
             type="button"

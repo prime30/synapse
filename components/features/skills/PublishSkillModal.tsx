@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { Loader2 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 const CATEGORIES = [
   { value: 'theme-type', label: 'Theme Type' },
@@ -116,7 +116,7 @@ export function PublishSkillModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. liquid-schema-helper"
             required
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder:text-stone-400"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white placeholder:text-stone-400"
           />
         </div>
 
@@ -130,7 +130,7 @@ export function PublishSkillModal({
             placeholder="Brief description of what this skill does"
             required
             rows={2}
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder:text-stone-400 resize-none"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white placeholder:text-stone-400 resize-none"
           />
         </div>
 
@@ -144,7 +144,7 @@ export function PublishSkillModal({
             placeholder="# Skill Name\n\n## Keywords\n- liquid, schema, ...\n\n## Content\n..."
             required
             rows={10}
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder:text-stone-400 font-mono text-sm resize-y"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white placeholder:text-stone-400 font-mono text-sm resize-y"
           />
           <p className="mt-1 text-xs text-stone-500 dark:text-gray-500">
             {content.length} / 10000 characters (min 100)
@@ -160,7 +160,7 @@ export function PublishSkillModal({
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             placeholder="liquid, schema, section, shopify"
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder:text-stone-400"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white placeholder:text-stone-400"
           />
         </div>
 
@@ -171,7 +171,7 @@ export function PublishSkillModal({
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white"
           >
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -194,7 +194,7 @@ export function PublishSkillModal({
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                   themeCompatibility.includes(t.value)
                     ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
-                    : 'bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-white/10'
+                    : 'bg-stone-100 dark:bg-[#141414] text-stone-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-[#1e1e1e]'
                 }`}
               >
                 {t.label}
@@ -212,7 +212,7 @@ export function PublishSkillModal({
             value={version}
             onChange={(e) => setVersion(e.target.value)}
             placeholder="1.0.0"
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder:text-stone-400"
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-[#141414] border border-stone-300 dark:border-[#2a2a2a] text-stone-900 dark:text-white placeholder:text-stone-400"
           />
         </div>
 
@@ -220,7 +220,7 @@ export function PublishSkillModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-md border border-stone-300 dark:border-white/10 text-stone-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-white/5"
+            className="px-4 py-2 rounded-md border border-stone-300 dark:border-[#2a2a2a] text-stone-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-white/5"
           >
             Cancel
           </button>
@@ -230,7 +230,7 @@ export function PublishSkillModal({
             className="px-4 py-2 rounded-md bg-[#28CD56] hover:bg-[#1FB849] text-white disabled:opacity-50 flex items-center gap-2"
           >
             {submitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <LambdaDots size={16} />
             ) : null}
             Publish
           </button>

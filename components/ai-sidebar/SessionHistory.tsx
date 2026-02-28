@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Clock, Trash2, Pencil, Check, X, MessageSquare } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,7 +165,7 @@ export function SessionHistory({
                   }}
                 >
                   {isActive && isLoadingHistory ? (
-                    <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                    <LambdaDots size={14} />
                   ) : (
                     <MessageSquare className="h-3.5 w-3.5 shrink-0 ide-text-quiet" />
                   )}
@@ -182,7 +183,7 @@ export function SessionHistory({
                             if (e.key === 'Escape') handleCancelRename();
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="flex-1 min-w-0 ide-surface-input border border-stone-300 dark:border-white/20 rounded px-1.5 py-0.5 text-[11px] ide-text outline-none focus:border-accent/50"
+                          className="flex-1 min-w-0 ide-surface-input border border-stone-300 dark:border-[#333333] rounded px-1.5 py-0.5 text-[11px] ide-text outline-none focus:border-accent/50"
                         />
                         <button
                           type="button"

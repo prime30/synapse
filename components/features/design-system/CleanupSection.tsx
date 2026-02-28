@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useDriftBatch } from '@/hooks/useDriftBatch';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import type { DriftResult, TokenizationSuggestion } from '@/lib/design-tokens/drift/types';
 import type { TokenChange } from '@/lib/design-tokens/application/types';
 
@@ -594,7 +595,7 @@ export function CleanupSection({ projectId }: CleanupSectionProps) {
   if (isAnalyzing) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-8 h-8 border-2 ide-border border-t-accent rounded-full animate-spin mb-4" />
+        <LambdaDots size={32} className="mb-4" />
         <p className="text-sm ide-text-2">Analyzing theme files…</p>
         <p className="text-xs ide-text-muted mt-1">This may take a moment</p>
       </div>

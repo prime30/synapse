@@ -11,17 +11,7 @@ export function ContextPanel({ context, className = '' }: ContextPanelProps) {
   const hasContext =
     context.filePath || context.fileLanguage || context.selection;
 
-  if (!hasContext) {
-    return (
-      <div
-        className={`rounded border ide-border-subtle ide-surface-inset px-2 py-1.5 text-xs ide-text-3 ${className}`}
-        role="region"
-        aria-label="Context"
-      >
-        No file or selection
-      </div>
-    );
-  }
+  if (!hasContext) return null;
 
   return (
     <div

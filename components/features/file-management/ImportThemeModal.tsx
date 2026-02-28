@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useQuery } from '@tanstack/react-query';
+import { useToast } from '@/components/ui/use-toast';
 
 function generateUUID(): string {
   return crypto.randomUUID();
@@ -49,6 +50,7 @@ export function ImportThemeModal({
 }: ImportThemeModalProps) {
   const router = useRouter();
   const { connection, importTheme, isImporting } = useActiveStore();
+  const { toast, dismiss } = useToast();
 
   // ── Tab state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>(connection ? 'store' : 'zip');
@@ -146,6 +148,12 @@ export function ImportThemeModal({
     setZipError(null);
     setIsUploading(true);
 
+    const uploadingToastId = toast({
+      message: `Uploading ${zipFile.name}...`,
+      type: 'info',
+      duration: 60_000,
+    });
+
     try {
       const formData = new FormData();
       formData.append('file', zipFile);
@@ -162,11 +170,16 @@ export function ImportThemeModal({
 
       const result = await res.json();
       const count = result.data?.imported ?? 0;
+      dismiss(uploadingToastId);
+      toast({ message: `Imported ${count} file${count !== 1 ? 's' : ''} from ${zipFile.name}`, type: 'success' });
       setImportSuccess(`Imported ${count} file${count !== 1 ? 's' : ''} from ${zipFile.name}`);
       onImportSuccess?.();
       setTimeout(() => onClose(), 1500);
     } catch (err) {
-      setZipError(err instanceof Error ? err.message : 'Upload failed');
+      dismiss(uploadingToastId);
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      toast({ message: msg, type: 'error' });
+      setZipError(msg);
     } finally {
       setIsUploading(false);
     }
@@ -184,12 +197,24 @@ export function ImportThemeModal({
   useEffect(() => stopPolling, [stopPolling]);
 
   // ── Store theme import (auto-creates project) ───────────────────────────
+  const importingToastRef = useRef<string | null>(null);
+
   const handleStoreImport = async () => {
     if (!selectedThemeId || !connection) return;
     setStoreError(null);
     setImportProgress('importing');
     setImportedCount(0);
     setTotalAssets(0);
+
+    const selectedTheme = themesQuery.data?.find((t) => t.id === selectedThemeId);
+    const themeName = selectedTheme?.name ?? 'theme';
+
+    // Show persistent toast so user knows import is in progress even if modal is obscured
+    importingToastRef.current = toast({
+      message: `Importing "${themeName}" from Shopify — this may take a minute...`,
+      type: 'info',
+      duration: 120_000,
+    });
 
     // 1. Pre-flight: fetch asset count; use text count so bar reaches 100% when text import is done
     let total = 0;
@@ -225,7 +250,6 @@ export function ImportThemeModal({
 
     // 4. Start the import (blocks until done)
     try {
-      const selectedTheme = themesQuery.data?.find((t) => t.id === selectedThemeId);
       const result = await importTheme({
         connectionId: connection.id,
         themeId: selectedThemeId,
@@ -236,19 +260,25 @@ export function ImportThemeModal({
         projectId: clientProjectId,
       });
 
-      // 5. Import done — stop polling, show final count
+      // 5. Import done — stop polling, dismiss loading toast, show success toast
       stopPolling();
       setImportedCount(result.pulled);
 
-      if (result.errors.length > 0) {
-        setImportSuccess(
-          `Imported ${result.pulled} files into "${result.projectName}". Some files had errors.`
-        );
-      } else {
-        setImportSuccess(
-          `Imported ${result.pulled} file${result.pulled !== 1 ? 's' : ''} into "${result.projectName}".${createDevThemeForPreview ? ' Preview theme is ready.' : ''}`
-        );
+      if (importingToastRef.current) {
+        dismiss(importingToastRef.current);
+        importingToastRef.current = null;
       }
+
+      const successMsg = result.errors.length > 0
+        ? `Imported ${result.pulled} files into "${result.projectName}". Some files had errors.`
+        : `Imported ${result.pulled} file${result.pulled !== 1 ? 's' : ''} into "${result.projectName}".${createDevThemeForPreview ? ' Preview theme is ready.' : ''}`;
+
+      toast({
+        message: successMsg,
+        type: result.errors.length > 0 ? 'warning' : 'success',
+        duration: 8_000,
+      });
+      setImportSuccess(successMsg);
 
       setImportProgress('idle');
       setSuccessProjectId(result.projectId);
@@ -257,6 +287,17 @@ export function ImportThemeModal({
       // Fire-and-forget thumbnail generation for the new project
       fetch(`/api/projects/${result.projectId}/thumbnail`, { method: 'POST' }).catch(() => {});
 
+      // Auto-push files to the dev theme so preview works immediately.
+      // Delay 8s to give the background ensureDevTheme task time to create
+      // the dev theme and mark theme_files as pending.  The sync-dev-theme
+      // route is self-healing and will create the dev theme itself if the
+      // background task still hasn't finished.
+      if (createDevThemeForPreview) {
+        setTimeout(() => {
+          fetch(`/api/projects/${result.projectId}/sync-dev-theme`, { method: 'POST' }).catch(() => {});
+        }, 8_000);
+      }
+
       // Navigate to the new project (extended delay so user sees success + design system note)
       setTimeout(() => {
         onClose();
@@ -264,7 +305,13 @@ export function ImportThemeModal({
       }, 2500);
     } catch (err) {
       stopPolling();
-      setStoreError(err instanceof Error ? err.message : 'Import failed');
+      if (importingToastRef.current) {
+        dismiss(importingToastRef.current);
+        importingToastRef.current = null;
+      }
+      const msg = err instanceof Error ? err.message : 'Import failed';
+      toast({ message: `Import failed: ${msg}`, type: 'error' });
+      setStoreError(msg);
       setImportProgress('idle');
     }
   };

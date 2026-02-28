@@ -9,10 +9,10 @@ import {
   Search,
   Tag,
   ChevronRight,
-  Loader2,
   AlertCircle,
   X,
 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import {
   useMetafields,
   METAFIELD_TYPE_LABELS,
@@ -275,7 +275,7 @@ export function MetafieldExplorer({ connectionId }: MetafieldExplorerProps) {
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin ide-text-muted" />
+            <LambdaDots size={24} className="ide-text-muted" />
             <span className="ml-2 text-sm ide-text-muted">
               Loading metafields…
             </span>

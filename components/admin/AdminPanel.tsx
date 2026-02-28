@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface AdminUser {
   id: string;
@@ -122,25 +123,25 @@ export function AdminPanel() {
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="mt-4 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-6">
+            <div className="mt-4 rounded-xl border border-stone-200 dark:border-[#2a2a2a] bg-white dark:bg-[#141414] p-6">
               {/* Current Admins */}
               <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">
                 Current Admins
               </h3>
 
               {isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-stone-400 dark:text-white/40">
-                  <div className="w-4 h-4 border-2 border-stone-300 dark:border-white/20 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center gap-2 text-sm text-stone-400 dark:text-[#636059]">
+                  <LambdaDots size={16} />
                   Loading...
                 </div>
               ) : admins.length === 0 ? (
-                <p className="text-sm text-stone-400 dark:text-white/40">No admins found.</p>
+                <p className="text-sm text-stone-400 dark:text-[#636059]">No admins found.</p>
               ) : (
                 <div className="space-y-2 mb-6">
                   {admins.map((admin) => (
                     <div
                       key={admin.id}
-                      className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 dark:bg-white/5 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 dark:bg-[#141414] px-4 py-3"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {admin.avatar_url ? (
@@ -150,7 +151,7 @@ export function AdminPanel() {
                             className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-white/10 flex items-center justify-center text-xs font-medium text-stone-500 dark:text-white/50 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-[#1e1e1e] flex items-center justify-center text-xs font-medium text-stone-500 dark:text-white/50 flex-shrink-0">
                             {(admin.full_name ?? admin.email)[0]?.toUpperCase()}
                           </div>
                         )}
@@ -158,7 +159,7 @@ export function AdminPanel() {
                           <p className="text-sm font-medium text-stone-900 dark:text-white truncate">
                             {admin.full_name ?? admin.email}
                           </p>
-                          <p className="text-xs text-stone-400 dark:text-white/40 truncate">
+                          <p className="text-xs text-stone-400 dark:text-[#636059] truncate">
                             {admin.email}
                           </p>
                         </div>
@@ -176,7 +177,7 @@ export function AdminPanel() {
               )}
 
               {/* Invite Form */}
-              <div className="border-t border-stone-200 dark:border-white/10 pt-5">
+              <div className="border-t border-stone-200 dark:border-[#2a2a2a] pt-5">
                 <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3">
                   Invite Admin
                 </h3>
@@ -186,7 +187,7 @@ export function AdminPanel() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="flex-1 rounded-lg border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 px-4 py-2.5 text-sm text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 dark:focus:ring-sky-400/30 dark:focus:border-sky-400 transition-all"
+                    className="flex-1 rounded-lg border border-stone-200 dark:border-[#2a2a2a] bg-stone-50 dark:bg-[#141414] px-4 py-2.5 text-sm text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 dark:focus:ring-sky-400/30 dark:focus:border-sky-400 transition-all"
                     disabled={isInviting}
                     required
                   />

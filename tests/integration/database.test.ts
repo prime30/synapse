@@ -83,6 +83,7 @@ describe('Database Types', () => {
       session_id: 'session-uuid',
       role: 'assistant',
       content: 'Hello!',
+      metadata: null,
       input_tokens: null,
       output_tokens: 50,
       created_at: new Date().toISOString(),

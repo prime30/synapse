@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AuthProvider } from '@/components/features/auth/AuthProvider';
 import { GorgiasProvider } from '@/components/support/CrispProvider';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { UpdateToast } from '@/components/features/desktop/UpdateToast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,6 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <ToastProvider>
           <GorgiasProvider>{children}</GorgiasProvider>
+          <UpdateToast />
         </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>

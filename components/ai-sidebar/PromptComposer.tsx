@@ -266,7 +266,7 @@ export function PromptComposer({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="w-full resize-none overflow-y-auto rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-stone-500"
+        className="w-full resize-none overflow-y-auto rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-white dark:placeholder-stone-500"
         style={{ minHeight: LINE_HEIGHT }}
       />
       <SlashHistoryGhost text={ghostText} visible={showGhost} />

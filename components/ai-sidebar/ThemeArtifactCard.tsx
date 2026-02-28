@@ -182,7 +182,7 @@ export function ThemeArtifactCard({ markdown }: ThemeArtifactCardProps) {
 
         {showRaw ? (
           <div className="p-2">
-            <pre className="max-h-[360px] overflow-auto rounded-md border ide-border-subtle p-2 text-[11px] ide-text-2 whitespace-pre-wrap">
+            <pre className="rounded-md border ide-border-subtle p-2 text-[11px] ide-text-2 whitespace-pre-wrap overflow-x-hidden">
               {markdown}
             </pre>
           </div>
@@ -218,7 +218,7 @@ export function ThemeArtifactCard({ markdown }: ThemeArtifactCardProps) {
                   <FileText className="h-3.5 w-3.5" aria-hidden />
                   Touched Files
                 </div>
-                <div className="max-h-48 overflow-auto rounded border ide-border-subtle">
+                <div className="rounded border ide-border-subtle">
                   <table className="w-full text-[11px]">
                     <thead className="ide-surface-inset">
                       <tr className="ide-text-3">
@@ -250,7 +250,7 @@ export function ThemeArtifactCard({ markdown }: ThemeArtifactCardProps) {
                 {dependencyEdges.length > 0 && (
                   <div>
                     <div className="text-[11px] font-medium ide-text-1 mb-1.5">Dependency Edges</div>
-                    <div className="text-[11px] ide-text-2 space-y-1 max-h-24 overflow-auto">
+                    <div className="text-[11px] ide-text-2 space-y-1">
                       {dependencyEdges.slice(0, 12).map(edge => (
                         <div key={edge} className="truncate">{edge}</div>
                       ))}

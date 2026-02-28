@@ -28,10 +28,10 @@ function getIndicatorClasses(status: RailPhaseStatus): string {
     case 'error':
       return `${base} bg-red-500 dark:bg-red-400 border-red-500 dark:border-red-400 text-white`;
     case 'skipped':
-      return `${base} bg-stone-200 dark:bg-white/10 border-stone-300 dark:border-white/20 text-stone-500 dark:text-white/40`;
+      return `${base} bg-stone-200 dark:bg-[#1e1e1e] border-stone-300 dark:border-white/20 text-stone-500 dark:text-[#636059]`;
     case 'pending':
     default:
-      return `${base} bg-stone-100 dark:bg-white/5 border-stone-300 dark:border-white/10 text-stone-400 dark:text-white/30`;
+      return `${base} bg-stone-100 dark:bg-white/5 border-stone-300 dark:border-white/10 text-stone-400 dark:text-[#4a4a4a]`;
   }
 }
 
@@ -75,7 +75,7 @@ function getLabelClasses(status: RailPhaseStatus): string {
     case 'skipped':
     case 'pending':
     default:
-      return `${base} text-stone-400 dark:text-white/40`;
+      return `${base} text-stone-400 dark:text-[#636059]`;
   }
 }
 
@@ -89,7 +89,7 @@ function getLineClasses(leftStatus: RailPhaseStatus, rightStatus: RailPhaseStatu
   if (leftStatus === 'completed') {
     return 'bg-[oklch(0.745_0.189_148)]';
   }
-  return 'bg-stone-200 dark:bg-white/10';
+  return 'bg-stone-200 dark:bg-[#1e1e1e]';
 }
 
 // -- 500ms minimum phase display hook --

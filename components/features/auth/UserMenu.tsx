@@ -133,7 +133,7 @@ export function UserMenu() {
             <p className="text-[11px] ide-text-muted tabular-nums">
               12 / 50 requests used
             </p>
-            <div className="mt-1 h-1 w-full rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
+            <div className="mt-1 h-1 w-full rounded-full bg-stone-200 dark:bg-[#1e1e1e] overflow-hidden">
               <div
                 className="h-full rounded-full bg-sky-500 transition-all"
                 style={{ width: '24%' }}

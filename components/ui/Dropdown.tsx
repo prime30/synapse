@@ -155,7 +155,7 @@ export function Dropdown({
     setIsOpen((prev) => !prev);
   }, []);
 
-  const containerClasses = `absolute z-10 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-white/10 shadow-lg rounded-md overflow-hidden min-w-[180px] max-h-64 overflow-y-auto ${className}`;
+  const containerClasses = `absolute z-10 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-[#2a2a2a] shadow-lg rounded-md overflow-hidden min-w-[180px] max-h-64 overflow-y-auto ${className}`;
 
   const content = (
     <AnimatePresence>
@@ -180,7 +180,7 @@ export function Dropdown({
           transition={{ duration: 0.1 }}
         >
           {searchable && (
-            <div className="border-b border-stone-200 px-3 py-2 dark:border-white/10">
+            <div className="border-b border-stone-200 px-3 py-2 dark:border-[#2a2a2a]">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -208,7 +208,7 @@ export function Dropdown({
                   role="menuitem"
                   aria-disabled={item.disabled}
                   className={`px-3 py-2 text-sm text-stone-700 dark:text-stone-300 cursor-pointer flex items-center gap-2 ${
-                    isHighlighted ? 'bg-stone-100 dark:bg-white/10' : ''
+                    isHighlighted ? 'bg-stone-100 dark:bg-[#1e1e1e]' : ''
                   } ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   onClick={() => handleSelect(item.id)}
                   onMouseEnter={() =>

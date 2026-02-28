@@ -211,7 +211,7 @@ export function CodeBlock({
       </div>
 
       {/* ── Syntax-highlighted code ─────────────────────────────────────── */}
-      <div ref={codeScrollRef} onScroll={handleCodeScroll} className={`relative overflow-y-auto overflow-x-hidden ${streaming ? 'max-h-[200px]' : 'max-h-[400px]'}`}>
+      <div ref={codeScrollRef} onScroll={handleCodeScroll} className="relative overflow-x-hidden min-h-0">
         <SyntaxHighlighter
           language={highlightLanguage}
           style={isDark ? vscDarkPlus : oneLight}
@@ -231,6 +231,8 @@ export function CodeBlock({
             lineHeight: '1.5',
             wordBreak: 'break-word',
             overflowWrap: 'break-word',
+            maxHeight: 'none',
+            overflow: 'visible',
           }}
           codeTagProps={{
             style: {
@@ -274,7 +276,7 @@ export function CodeBlock({
               </div>
 
               {/* Unified diff view — all lines shown as additions */}
-              <div className="rounded border ide-border-subtle ide-surface-panel overflow-y-auto overflow-x-hidden max-h-[300px] font-mono text-xs leading-[1.6]">
+              <div className="rounded border ide-border-subtle ide-surface-panel overflow-x-hidden font-mono text-xs leading-[1.6]">
                 {lines.map((line, i) => (
                   <div
                     key={i}

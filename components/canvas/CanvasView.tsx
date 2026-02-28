@@ -34,6 +34,7 @@ import {
   type CanvasFileData,
 } from '@/lib/ai/canvas-data-provider';
 import type { Node, Edge } from '@xyflow/react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 /* ------------------------------------------------------------------ */
 /*  Lazy-loaded React Flow core + controls + minimap                   */
@@ -335,7 +336,7 @@ function CanvasLoading() {
   return (
     <div className="flex-1 flex items-center justify-center ide-surface">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-sky-500 dark:border-sky-400 border-t-transparent rounded-full animate-spin" />
+        <LambdaDots size={32} />
         <span className="text-xs ide-text-3">Loading canvas…</span>
       </div>
     </div>

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Pin, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Pin, Plus, Trash2 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { usePinnedPreferences } from '@/hooks/usePinnedPreferences';
 
 interface PinnedPreferencesProps {
@@ -70,7 +71,7 @@ export function PinnedPreferences({ projectId }: PinnedPreferencesProps) {
           <Pin className="h-4 w-4 ide-text-muted" />
           <h3 className="text-sm font-medium ide-text">Pinned Preferences</h3>
           {!isLoading && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ide-text-muted bg-stone-200/50 dark:bg-white/10">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ide-text-muted bg-stone-200/50 dark:bg-[#1e1e1e]">
               {pins.length}
             </span>
           )}
@@ -80,7 +81,7 @@ export function PinnedPreferences({ projectId }: PinnedPreferencesProps) {
       {/* Loading state */}
       {isLoading && (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-4 w-4 animate-spin ide-text-muted" />
+          <LambdaDots size={14} />
         </div>
       )}
 

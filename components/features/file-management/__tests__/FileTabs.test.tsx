@@ -24,8 +24,8 @@ describe('FileTabs', () => {
 
   it('renders open tabs', () => {
     render(<FileTabs {...defaultProps} />);
-    expect(screen.getByText(/product/)).toBeDefined();
-    expect(screen.getByText(/theme/)).toBeDefined();
+    expect(screen.getAllByText(/product/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/theme/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders save button when file is active', () => {

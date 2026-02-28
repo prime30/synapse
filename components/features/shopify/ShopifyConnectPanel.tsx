@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useShopifyConnection } from '@/hooks/useShopifyConnection';
 import { setAutoSyncEnabled } from '@/hooks/useFileEditor';
+import { useDevStorePreview, type DevStoreConflict } from '@/hooks/useDevStorePreview';
 import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
 import type { QuickScanResult, QuickScanIssue } from '@/lib/ai/theme-reviewer';
 
@@ -140,6 +141,30 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     if (typeof window === 'undefined') return false;
     try { return localStorage.getItem(`synapse-auto-sync-${projectId}`) === '1'; } catch { return false; }
   });
+
+  const [devStoreExpanded, setDevStoreExpanded] = useState(false);
+  const [devDomain, setDevDomain] = useState('');
+  const [devAdminToken, setDevAdminToken] = useState('');
+  const [devTkaPassword, setDevTkaPassword] = useState('');
+  const [devConflicts, setDevConflicts] = useState<DevStoreConflict[]>([]);
+  const [devConflictsExpanded, setDevConflictsExpanded] = useState(false);
+
+  const {
+    status: devStoreStatus,
+    connectStore: connectDevStore,
+    isConnecting: isConnectingDevStore,
+    connectError: devStoreConnectError,
+    disconnectStore,
+    isDisconnecting,
+    pushToDevStore,
+    isPushing: isDevPushing,
+    pushProgress,
+    syncCheck,
+    isSyncChecking,
+    syncCheckResult,
+    resolveConflict,
+    isResolvingConflict,
+  } = useDevStorePreview(projectId);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -320,6 +345,287 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
     }
   };
 
+  const handleDevStoreConnect = async () => {
+    const domain = devDomain.trim();
+    const token = devAdminToken.trim();
+    if (!domain || !token) return;
+    const fullDomain = domain.includes('.myshopify.com') ? domain : `${domain}.myshopify.com`;
+    try {
+      await connectDevStore({
+        storeDomain: fullDomain,
+        adminApiToken: token,
+        tkaPassword: devTkaPassword.trim() || undefined,
+      });
+      setDevDomain('');
+      setDevAdminToken('');
+      setDevTkaPassword('');
+    } catch {
+      // error tracked by mutation
+    }
+  };
+
+  const handleDevStorePush = async () => {
+    try {
+      const result = await pushToDevStore();
+      if (result?.conflicts) {
+        setDevConflicts(result.conflicts);
+        setDevConflictsExpanded(true);
+      }
+    } catch {
+      // error tracked by push progress
+    }
+  };
+
+  const handleDevStoreSyncCheck = async () => {
+    try {
+      const result = await syncCheck();
+      if (result.conflicts.length > 0) {
+        setDevConflicts(result.conflicts);
+        setDevConflictsExpanded(true);
+      } else {
+        setDevConflicts([]);
+      }
+    } catch {
+      // error tracked by mutation
+    }
+  };
+
+  const handleResolveConflict = async (filePath: string, resolution: 'local' | 'remote', remoteContent?: string) => {
+    await resolveConflict({ filePath, resolution, remoteContent });
+    setDevConflicts((prev) => prev.filter((c) => c.path !== filePath));
+  };
+
+  const renderDevStorePreview = () => {
+    const devConnected = devStoreStatus.connected;
+
+    return (
+      <div className="border-t border-stone-200 dark:border-white/5 pt-4 space-y-3">
+        {!devConnected ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setDevStoreExpanded(!devStoreExpanded)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className={`w-4 h-4 text-stone-400 dark:text-gray-500 transition-transform ${devStoreExpanded ? 'rotate-90' : ''}`}
+              >
+                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
+                Embedded Preview (Advanced)
+              </h3>
+              <span className="relative group/tip">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 ide-text-muted">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                </svg>
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-[10px] rounded bg-stone-800 dark:bg-white/10 text-white dark:text-gray-200 opacity-0 group-hover/tip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                  Push edits to a Shopify dev store for live preview
+                </span>
+              </span>
+            </button>
+
+            {devStoreExpanded && (
+              <div className="space-y-3 pl-6">
+                <ol className="space-y-3 text-xs text-stone-600 dark:text-gray-400">
+                  <li className="flex gap-2">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-sky-500/10 text-sky-500 text-[10px] font-bold flex items-center justify-center">1</span>
+                    <a href="https://partners.shopify.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:text-sky-400 underline underline-offset-2">
+                      Create a free dev store
+                    </a>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-sky-500/10 text-sky-500 text-[10px] font-bold flex items-center justify-center">2</span>
+                    <a href="https://apps.shopify.com/theme-access" target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:text-sky-400 underline underline-offset-2">
+                      Install Theme Access app
+                    </a>
+                  </li>
+                  <li className="space-y-1.5">
+                    <div className="flex gap-2 items-center">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-sky-500/10 text-sky-500 text-[10px] font-bold flex items-center justify-center">3</span>
+                      <span>Enter dev store domain</span>
+                    </div>
+                    <div className="flex gap-0 ml-7">
+                      <input
+                        type="text"
+                        value={devDomain}
+                        onChange={(e) => setDevDomain(e.target.value.replace(/\.myshopify\.com$/i, ''))}
+                        placeholder="your-dev-store"
+                        className="flex-1 min-w-0 px-3 py-2 text-sm rounded-l bg-white dark:bg-white/5 border border-r-0 border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-gray-500 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors"
+                      />
+                      <span className="inline-flex items-center px-3 py-2 text-sm ide-text-muted ide-surface-inset border border-l-0 ide-border rounded-r select-none whitespace-nowrap">
+                        .myshopify.com
+                      </span>
+                    </div>
+                  </li>
+                  <li className="space-y-1.5">
+                    <div className="flex gap-2 items-center">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-sky-500/10 text-sky-500 text-[10px] font-bold flex items-center justify-center">4</span>
+                      <span>Enter admin API token</span>
+                    </div>
+                    <input
+                      type="password"
+                      value={devAdminToken}
+                      onChange={(e) => setDevAdminToken(e.target.value)}
+                      placeholder="shpat_..."
+                      className="ml-7 w-[calc(100%-1.75rem)] px-3 py-2 text-sm rounded bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-gray-500 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors"
+                    />
+                  </li>
+                  <li className="space-y-1.5">
+                    <div className="flex gap-2 items-center">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-stone-200 dark:bg-white/5 text-stone-400 dark:text-gray-500 text-[10px] font-bold flex items-center justify-center">5</span>
+                      <span><span className="ide-text-muted">Optional:</span> Enter TKA password</span>
+                    </div>
+                    <input
+                      type="password"
+                      value={devTkaPassword}
+                      onChange={(e) => setDevTkaPassword(e.target.value)}
+                      placeholder="Storefront password (if enabled)"
+                      className="ml-7 w-[calc(100%-1.75rem)] px-3 py-2 text-sm rounded bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-gray-500 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 transition-colors"
+                    />
+                  </li>
+                </ol>
+
+                <button
+                  type="button"
+                  onClick={handleDevStoreConnect}
+                  disabled={!devDomain.trim() || !devAdminToken.trim() || isConnectingDevStore}
+                  className="ml-7 px-4 py-2 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isConnectingDevStore ? 'Connecting...' : 'Connect'}
+                </button>
+
+                {devStoreConnectError && (
+                  <p className="ml-7 text-xs text-red-400">{devStoreConnectError.message}</p>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Dev Store Preview</h3>
+              <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-500/10 text-emerald-500 font-medium">
+                {devStoreStatus.storeDomain}
+              </span>
+              {devStoreStatus.themeName && (
+                <span className="text-xs ide-text-muted">{devStoreStatus.themeName}</span>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleDevStorePush}
+                disabled={isDevPushing}
+                className="flex-1 px-3 py-2 text-sm font-medium rounded bg-[#28CD56] hover:bg-[#22b84a] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isDevPushing ? 'Pushing...' : `Push ${devStoreStatus.pendingFileCount ?? 0} changed files`}
+              </button>
+              <button
+                type="button"
+                onClick={handleDevStoreSyncCheck}
+                disabled={isSyncChecking}
+                className="px-3 py-2 text-sm rounded ide-surface-input border ide-border ide-text-2 hover:ide-text ide-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSyncChecking ? 'Checking...' : 'Check for Changes'}
+              </button>
+            </div>
+
+            {pushProgress && pushProgress.type !== 'complete' && (
+              <div className="space-y-1.5">
+                <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full bg-sky-500 rounded-full transition-all duration-300 animate-pulse"
+                    style={{ width: `${pushProgress.total ? ((pushProgress.pushed ?? 0) / pushProgress.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs ide-text-muted">
+                  Pushing {pushProgress.pushed ?? 0}/{pushProgress.total ?? 0} files{pushProgress.current ? `... ${pushProgress.current}` : ''}
+                </p>
+              </div>
+            )}
+
+            {pushProgress && pushProgress.type === 'complete' && (
+              <p className="text-xs text-emerald-500">
+                Pushed {pushProgress.pushed}/{pushProgress.total} files
+                {pushProgress.duration_ms ? ` in ${(pushProgress.duration_ms / 1000).toFixed(1)}s` : ''}
+                {pushProgress.errors?.length ? ` (${pushProgress.errors.length} errors)` : ''}
+              </p>
+            )}
+
+            {devConflicts.length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setDevConflictsExpanded(!devConflictsExpanded)}
+                  className="flex items-center gap-2"
+                >
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500/10 text-amber-400 font-medium">
+                    {devConflicts.length} files changed on Shopify
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-3.5 h-3.5 text-amber-400 transition-transform ${devConflictsExpanded ? 'rotate-180' : ''}`}>
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </button>
+
+                {devConflictsExpanded && (
+                  <ul className="space-y-2">
+                    {devConflicts.map((conflict) => (
+                      <li key={conflict.path} className="flex items-center gap-2 p-2 rounded ide-surface-panel border ide-border text-xs">
+                        <span className="flex-1 min-w-0 truncate ide-text-muted font-mono">{conflict.path}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveConflict(conflict.path, 'local')}
+                          disabled={isResolvingConflict}
+                          className="shrink-0 px-2 py-1 rounded border border-stone-300 dark:border-white/10 text-stone-600 dark:text-gray-400 hover:border-sky-500 hover:text-sky-500 disabled:opacity-50 transition-colors"
+                        >
+                          Keep Local
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveConflict(conflict.path, 'remote', conflict.remoteContent)}
+                          disabled={isResolvingConflict}
+                          className="shrink-0 px-2 py-1 rounded border border-stone-300 dark:border-white/10 text-stone-600 dark:text-gray-400 hover:border-amber-500 hover:text-amber-500 disabled:opacity-50 transition-colors"
+                        >
+                          Take Remote
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {syncCheckResult && devConflicts.length === 0 && syncCheckResult.pulled > 0 && (
+              <p className="text-xs text-emerald-500">
+                Pulled {syncCheckResult.pulled} updates, {syncCheckResult.unchanged} unchanged
+              </p>
+            )}
+
+            {devStoreStatus.lastPushAt && (
+              <p className="text-xs ide-text-muted">
+                Last pushed: {relativeTime(devStoreStatus.lastPushAt)}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => disconnectStore()}
+              disabled={isDisconnecting}
+              className="text-xs ide-text-muted hover:text-red-400 transition-colors"
+            >
+              {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Loading skeleton
   if (storeLoading) {
     return (
@@ -381,6 +687,8 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
             <p className="text-xs text-red-400">{connectError.message}</p>
           )}
         </div>
+
+        {renderDevStorePreview()}
       </div>
     );
   }
@@ -769,6 +1077,8 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
           </div>
         </div>
       )}
+
+      {renderDevStorePreview()}
     </div>
   );
 }

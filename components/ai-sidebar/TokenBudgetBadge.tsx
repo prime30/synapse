@@ -22,7 +22,7 @@ export function TokenBudgetBadge({ usedTokens, modelLimit, className = '' }: Tok
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium tabular-nums border border-stone-200 dark:border-white/10 ${colorClass} ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium tabular-nums border border-stone-200 dark:border-[#2a2a2a] ${colorClass} ${className}`}
       title={`~${turnsLeft} turns left (${remaining.toLocaleString()} tokens remaining)`}
     >
       ~{turnsLeft} turns left

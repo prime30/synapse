@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { Layout, Loader2, FileWarning } from 'lucide-react';
+import { Layout, FileWarning } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { useTemplateLayout } from '@/hooks/useTemplateLayout';
 import { SectionSlot } from './SectionSlot';
 
@@ -115,7 +116,7 @@ export function TemplateComposer({ projectId }: TemplateComposerProps) {
 
         {isSaving && (
           <span className="ml-auto flex items-center gap-1 text-xs text-sky-500 dark:text-sky-400">
-            <Loader2 className="w-3 h-3 animate-spin" />
+            <LambdaDots size={12} />
             Saving…
           </span>
         )}

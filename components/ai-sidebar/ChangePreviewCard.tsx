@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { ChevronDown, FileCode, Loader2, Camera } from 'lucide-react';
+import { ChevronDown, FileCode, Camera } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { InlineDiffViewer } from '@/components/features/suggestions/InlineDiffViewer';
 import { ScreenshotCompareCard } from './ScreenshotCompareCard';
 
@@ -217,7 +218,7 @@ export function ChangePreviewCard({
       {/* Screenshot loading indicator during approval */}
       {status === 'approving' && (
         <div className="px-3 py-2 border-t ide-border-subtle flex items-center gap-2 text-[11px] ide-text-muted">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <LambdaDots size={12} />
           Applying changes and capturing screenshots...
         </div>
       )}
@@ -243,7 +244,7 @@ export function ChangePreviewCard({
               disabled={status === 'approving'}
               className="rounded px-3 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:outline-none disabled:opacity-50 flex items-center gap-1.5"
             >
-              {status === 'approving' && <Loader2 className="h-3 w-3 animate-spin" />}
+              {status === 'approving' && <LambdaDots size={12} />}
               Approve All
             </button>
           </div>

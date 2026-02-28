@@ -43,6 +43,9 @@ yarn-error.log*
 !.env.example
 !.env.test.example
 
+# Desktop app secrets bundle (generated at CI time, never commit)
+server.env.json
+
 # vercel
 .vercel
 

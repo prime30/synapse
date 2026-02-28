@@ -12,19 +12,20 @@ import {
   PanelLeftOpen,
   ChevronDown,
   ChevronRight,
-  Loader2,
   Archive,
   ArchiveRestore,
   BookOpen,
   Brain,
   Copy,
   MoreHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import type { ChatSession } from './SessionHistory';
 import { ConversationSearch } from './ConversationSearch';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SessionSummary } from './SessionSummary';
 import { ConversationExport } from './ConversationExport';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,6 +70,7 @@ interface SessionSidebarProps {
   isLoading?: boolean;
   onSwitch: (sessionId: string) => void;
   onNew: () => void;
+  onNewClean?: () => void;
   onDelete?: (sessionId: string) => void;
   onRename?: (sessionId: string, title: string) => void;
   onArchive?: (sessionId: string) => void;
@@ -116,6 +118,7 @@ export function SessionSidebar({
   isLoading = false,
   onSwitch,
   onNew,
+  onNewClean,
   onDelete,
   onRename,
   onArchive,
@@ -165,6 +168,12 @@ export function SessionSidebar({
     setIsCreatingNew(true);
     Promise.resolve(onNew()).finally(() => setIsCreatingNew(false));
   }, [onNew, isCreatingNew]);
+
+  const handleNewCleanClick = useCallback(() => {
+    if (isCreatingNew || !onNewClean) return;
+    setIsCreatingNew(true);
+    Promise.resolve(onNewClean()).finally(() => setIsCreatingNew(false));
+  }, [onNewClean, isCreatingNew]);
 
   useEffect(() => {
     try {
@@ -266,7 +275,7 @@ export function SessionSidebar({
           aria-label={session.title || 'Untitled agent'}
         >
           {isInProgress ? (
-            <Loader2 className="h-3.5 w-3.5 text-accent animate-spin" />
+            <LambdaDots size={12} />
           ) : (
             <Check
               className={`h-3.5 w-3.5 ${isActive ? 'text-accent' : 'ide-text-quiet'}`}
@@ -291,7 +300,7 @@ export function SessionSidebar({
       >
         <div className="shrink-0 mt-0.5">
           {isInProgress ? (
-            <Loader2 className="h-3.5 w-3.5 text-accent animate-spin" />
+            <LambdaDots size={14} />
           ) : (
             <Check className="h-3.5 w-3.5 text-accent" />
           )}
@@ -476,7 +485,7 @@ export function SessionSidebar({
 
   return (
     <div
-      className="flex flex-col border-r ide-border-subtle ide-surface-panel shrink-0 h-full overflow-hidden transition-[width] duration-200"
+      className="flex flex-col border-l ide-border-subtle ide-surface-panel shrink-0 h-full overflow-hidden transition-[width] duration-200"
       style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
     >
       {/* ── Expanded header ─────────────────────────────────────────── */}
@@ -486,28 +495,6 @@ export function SessionSidebar({
             <span className="text-[11px] font-semibold ide-text-2 truncate min-w-0">
               Agents
             </span>
-            {onOpenTemplates && (
-              <button
-                type="button"
-                onClick={onOpenTemplates}
-                className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
-                title="Prompt templates"
-                aria-label="Open prompt templates"
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {onOpenTraining && (
-              <button
-                type="button"
-                onClick={onOpenTraining}
-                className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors shrink-0"
-                title="Training review"
-                aria-label="Open training review"
-              >
-                <Brain className="h-3.5 w-3.5" />
-              </button>
-            )}
             <button
               type="button"
               onClick={toggleCollapsed}
@@ -530,16 +517,30 @@ export function SessionSidebar({
                 className="w-full ide-input pl-6 pr-2 py-1 text-[11px] rounded"
               />
             </div>
-            <button
-              type="button"
-              onClick={handleNewClick}
-              disabled={isCreatingNew}
-              aria-label="New agent"
-              className="w-full flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-70 disabled:pointer-events-none"
-            >
-              {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-              New Agent
-            </button>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={handleNewClick}
+                disabled={isCreatingNew}
+                aria-label="New agent"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white rounded px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-70 disabled:pointer-events-none"
+              >
+                {isCreatingNew ? <LambdaDots size={14} /> : <Plus className="h-3.5 w-3.5" />}
+                New Agent
+              </button>
+              {onNewClean && (
+                <button
+                  type="button"
+                  onClick={handleNewCleanClick}
+                  disabled={isCreatingNew}
+                  aria-label="Fresh start — new session with no memory recall"
+                  title="Fresh Start (no cross-session memory)"
+                  className="flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-medium border border-stone-300 dark:border-[#2a2a2a] text-stone-600 dark:text-gray-400 hover:bg-stone-100 dark:hover:bg-white/5 transition-colors disabled:opacity-70 disabled:pointer-events-none"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             {projectId && onSelectMessage && (
               <ConversationSearch
                 projectId={projectId}
@@ -557,7 +558,7 @@ export function SessionSidebar({
               >
                 {(isLoadingAllHistory || isLoadingMore) ? (
                   <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <LambdaDots size={12} />
                     Loading history...
                   </>
                 ) : (
@@ -589,28 +590,18 @@ export function SessionSidebar({
             title="New agent"
             aria-label="New agent"
           >
-            {isCreatingNew ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            {isCreatingNew ? <LambdaDots size={14} /> : <Plus className="h-3.5 w-3.5" />}
           </button>
-          {onOpenTemplates && (
+          {onNewClean && (
             <button
               type="button"
-              onClick={onOpenTemplates}
-              className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors"
-              title="Prompt templates"
-              aria-label="Open prompt templates"
+              onClick={handleNewCleanClick}
+              disabled={isCreatingNew}
+              className="p-1.5 rounded ide-text-muted hover:text-amber-500 dark:hover:text-amber-400 ide-hover transition-colors disabled:opacity-70 disabled:pointer-events-none"
+              title="Fresh Start (no memory recall)"
+              aria-label="Fresh start — new session with no memory recall"
             >
-              <BookOpen className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {onOpenTraining && (
-            <button
-              type="button"
-              onClick={onOpenTraining}
-              className="p-1.5 rounded ide-text-muted hover:ide-text ide-hover transition-colors"
-              title="Training review"
-              aria-label="Open training review"
-            >
-              <Brain className="h-3.5 w-3.5" />
+              <Sparkles className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -695,7 +686,7 @@ export function SessionSidebar({
           >
             {isLoadingMore ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <LambdaDots size={12} />
                 Loading...
               </>
             ) : (

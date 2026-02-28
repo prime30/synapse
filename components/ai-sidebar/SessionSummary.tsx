@@ -9,6 +9,7 @@ export interface SessionSummaryProps {
   linesRemoved: number;
   patternsLearned: string[];
   duration: string;
+  roleMemoriesSaved?: number;
   isExpanded?: boolean;
   onToggle?: () => void;
 }
@@ -19,6 +20,7 @@ export function SessionSummary({
   linesRemoved,
   patternsLearned,
   duration,
+  roleMemoriesSaved,
   isExpanded = true,
   onToggle,
 }: SessionSummaryProps) {
@@ -32,7 +34,7 @@ export function SessionSummary({
     <div
       className="
         bg-stone-50 dark:bg-white/5
-        border border-stone-200 dark:border-white/10
+        border border-stone-200 dark:border-[#2a2a2a]
         rounded-lg overflow-hidden
       "
     >
@@ -63,7 +65,7 @@ export function SessionSummary({
           {/* Stats row as compact badges */}
           <div className="flex flex-wrap gap-1.5">
             <span
-              className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200/60 dark:bg-white/10 text-stone-600 dark:text-stone-400"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200/60 dark:bg-[#1e1e1e] text-stone-600 dark:text-stone-400"
               title="Files changed"
             >
               {filesChanged} file{filesChanged !== 1 ? 's' : ''}
@@ -81,11 +83,19 @@ export function SessionSummary({
               −{linesRemoved}
             </span>
             <span
-              className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200/60 dark:bg-white/10 text-stone-600 dark:text-stone-400"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200/60 dark:bg-[#1e1e1e] text-stone-600 dark:text-stone-400"
               title="Duration"
             >
               {duration}
             </span>
+            {roleMemoriesSaved != null && roleMemoriesSaved > 0 && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                title="Role patterns learned"
+              >
+                {roleMemoriesSaved} pattern{roleMemoriesSaved !== 1 ? 's' : ''} learned
+              </span>
+            )}
           </div>
 
           {/* Patterns learned */}
@@ -94,7 +104,7 @@ export function SessionSummary({
               {patternsLearned.map((pattern) => (
                 <span
                   key={pattern}
-                  className="text-[10px] px-1.5 py-0.5 rounded border border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400"
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-stone-200 dark:border-[#2a2a2a] text-stone-500 dark:text-stone-400"
                 >
                   {pattern}
                 </span>

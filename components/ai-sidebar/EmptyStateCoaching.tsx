@@ -41,10 +41,10 @@ export function EmptyStateCoaching({
             onClick={() => handleClick(suggestion.prompt)}
             className="
               w-full px-4 py-3
-              bg-stone-50 dark:bg-white/5
-              border border-stone-200 dark:border-white/10
+              bg-stone-50 dark:bg-[#141414]
+              border border-stone-200 dark:border-[#2a2a2a]
               rounded-lg cursor-pointer
-              hover:bg-stone-100 dark:hover:bg-white/10
+              hover:bg-stone-100 dark:hover:bg-[#1e1e1e]
               transition-colors text-left
               flex items-center gap-3
             "

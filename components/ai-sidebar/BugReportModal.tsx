@@ -63,7 +63,7 @@ export function BugReportModal({ projectId, onClose, onSubmitted }: BugReportMod
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-md mx-4 bg-[#fafaf9] dark:bg-[#0a0a0a] border border-stone-200 dark:border-white/10 rounded-xl shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-white/5">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-[#1f1f1f]">
           <div className="flex items-center gap-2">
             <Bug className="h-4 w-4 text-red-500" />
             <h2 className="text-sm font-semibold text-stone-900 dark:text-white">Report a Bug</h2>
@@ -96,7 +96,7 @@ export function BugReportModal({ projectId, onClose, onSubmitted }: BugReportMod
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="What went wrong?"
                   maxLength={200}
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                  className="w-full px-3 py-2 text-sm bg-white dark:bg-[#141414] border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                 />
               </div>
 
@@ -110,7 +110,7 @@ export function BugReportModal({ projectId, onClose, onSubmitted }: BugReportMod
                   placeholder="Steps to reproduce, expected behavior, what actually happened..."
                   rows={4}
                   maxLength={5000}
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 resize-none"
+                  className="w-full px-3 py-2 text-sm bg-white dark:bg-[#141414] border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 resize-none"
                 />
               </div>
 
@@ -122,7 +122,7 @@ export function BugReportModal({ projectId, onClose, onSubmitted }: BugReportMod
                   <select
                     value={severity}
                     onChange={(e) => setSeverity(e.target.value as BugSeverity)}
-                    className="w-full appearance-none px-3 py-2 pr-8 text-sm bg-white dark:bg-white/5 border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    className="w-full appearance-none px-3 py-2 pr-8 text-sm bg-white dark:bg-[#141414] border border-stone-300 dark:border-white/10 rounded-lg text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                   >
                     {SEVERITY_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -143,7 +143,7 @@ export function BugReportModal({ projectId, onClose, onSubmitted }: BugReportMod
         </div>
 
         {!success && (
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-200 dark:border-white/5">
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-200 dark:border-[#1f1f1f]">
             <button
               onClick={onClose}
               className="px-3 py-1.5 text-sm text-stone-600 dark:text-gray-400 hover:bg-stone-100 dark:hover:bg-white/5 rounded-lg transition-colors"

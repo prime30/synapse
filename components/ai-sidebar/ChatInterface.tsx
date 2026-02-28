@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ElementRefChip } from '@/components/ui/ElementRefChip';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { SuggestionChips } from './SuggestionChips';
 import { SynapseIconAnim } from './SynapseIconAnim';
 import type { SelectedElement } from '@/components/preview/PreviewPanel';
@@ -12,6 +13,8 @@ import type { OutputMode } from '@/lib/ai/signal-detector';
 import { ThinkingBlock, type ThinkingStep } from './ThinkingBlock';
 import { ThinkingBlockV2 } from './ThinkingBlockV2';
 import { ToolActionItem } from './ToolActionItem';
+import { SpecialistStreamPanel, useSpecialistPanelState } from './SpecialistStreamPanel';
+import { StrategyBadge } from './StrategyBadge';
 import { ProgressRail } from './ProgressRail';
 import { deriveRailSteps } from '@/lib/agents/phase-mapping';
 import type { ExecutionMode } from '@/lib/agents/phase-mapping';
@@ -26,7 +29,8 @@ import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
 import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, Send, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain, Bug } from 'lucide-react';
+import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, ArrowUp, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain, Bug, ListOrdered } from 'lucide-react';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { PromptTemplateLibrary } from './PromptTemplateLibrary';
 import { ShareButton } from './ShareButton';
 import { ConflictResolver } from './ConflictResolver';
@@ -40,6 +44,7 @@ import { logInteractionEvent } from '@/lib/ai/interaction-client';
 import { PlanMentionPopover, type PlanMention } from './PlanMentionPopover';
 import { MessageFeedback } from './MessageFeedback';
 import { StreamingIndicator } from './StreamingIndicator';
+import { EnhancedTypingIndicator } from './EnhancedTypingIndicator';
 import { AgentCard } from './AgentCard';
 import { NextStepChips, type NextStepChip } from './NextStepChips';
 import { EmptyStateCoaching } from './EmptyStateCoaching';
@@ -49,6 +54,7 @@ import { useToolProgress } from '@/hooks/useToolProgress';
 import { useChatScroll } from '@/hooks/useChatScroll';
 import { useChatAttachments } from '@/hooks/useChatAttachments';
 import { WorktreeStatus } from './WorktreeStatus';
+import { BackgroundTaskBanner } from './BackgroundTaskBanner';
 
 /** Sanitize user message content for the sticky prompt banner. */
 function sanitizeForStickyPrompt(content: string): string {
@@ -98,18 +104,53 @@ function SelectedCodePill({
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono text-sky-500 dark:text-sky-400 hover:ide-hover self-start max-w-full"
+        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono ide-text-2 hover:ide-hover self-start max-w-full"
         title={expanded ? 'Collapse' : 'Expand code'}
       >
         <span className="truncate">{label}</span>
         <span className="ml-1 opacity-70">{expanded ? '▼' : '▶'}</span>
       </button>
       {expanded && (
-        <pre className="mt-1 p-2 rounded border ide-border ide-surface-inset text-[11px] max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words">
+        <pre className="mt-1 p-2 rounded border ide-border ide-surface-inset text-[11px] overflow-x-hidden whitespace-pre-wrap break-words">
           <code>{code}</code>
         </pre>
       )}
     </span>
+  );
+}
+
+/** Renders image thumbnails in user messages. Clicking opens a lightbox. */
+function UserMessageImages({ imageUrls }: { imageUrls: string[] }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const images = useMemo(() => imageUrls.map((src, i) => ({ src, alt: `Attached image ${i + 1}` })), [imageUrls]);
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {imageUrls.map((url, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setLightboxIndex(i)}
+            className="relative group/thumb rounded-lg overflow-hidden border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`Attached image ${i + 1}`}
+              className="h-16 w-16 object-cover"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors" />
+          </button>
+        ))}
+      </div>
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -118,7 +159,7 @@ function SelectedCodePill({
  * element-selector references and selected-code blocks as compact token pills.
  * Selected code is shown as a line-number pill (collapsed by default), expandable to show code.
  */
-function UserMessageContent({ content }: { content: string }) {
+function UserMessageContent({ content, imageUrls }: { content: string; imageUrls?: string[] }) {
   // Strip any residual IDE context metadata (for backward compat with stored messages)
   let cleaned = content.replace(IDE_CONTEXT_PATTERN, '').trim();
 
@@ -130,7 +171,7 @@ function UserMessageContent({ content }: { content: string }) {
     const label = selector.length > 40 ? selector.slice(0, 37) + '...' : selector;
     selectorChip = (
       <span
-        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono text-sky-500 dark:text-sky-400 self-start truncate max-w-full"
+        className="inline-flex items-center rounded-md border ide-border ide-surface-panel px-2 py-1 text-[11px] font-mono ide-text-2 self-start truncate max-w-full"
         title={selector}
       >
         {label}
@@ -160,11 +201,15 @@ function UserMessageContent({ content }: { content: string }) {
     parts.push({ type: 'text', text: cleaned.slice(lastEnd) });
   }
 
-  if (parts.length === 0 && !selectorChip) return null;
+  const hasImages = imageUrls && imageUrls.length > 0;
+  if (parts.length === 0 && !selectorChip && !hasImages) return null;
 
   return (
     <div className="flex flex-col gap-2">
       {selectorChip}
+      {hasImages && (
+        <UserMessageImages imageUrls={imageUrls} />
+      )}
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {parts.map((part, i) =>
           part.type === 'text' ? (
@@ -195,9 +240,11 @@ export type ContentBlock =
       status: 'loading' | 'done' | 'error';
       cardType?: 'plan' | 'code_edit' | 'clarification' | 'file_create' |
                  'preview_nav' | 'file_op' | 'shopify_op' | 'screenshot' |
-                 'screenshot_comparison' | 'change_preview' | 'theme_artifact';
+                 'screenshot_comparison' | 'change_preview' | 'theme_artifact' |
+                 'grep_results' | 'lint_results' | 'terminal' | 'file_read';
       cardData?: unknown; error?: string; validationSuggestions?: string[];
-      progress?: { phase: string; detail: string; percentage?: number } }
+      progress?: { phase: string; detail: string; percentage?: number };
+      reasoning?: string }
   | { type: 'thinking'; id: string; startedAt: number;
       reasoningText: string; done: boolean; elapsedMs: number };
 
@@ -256,7 +303,9 @@ export interface ChatMessage {
   /** Whether a rate limit was hit during this response, triggering model fallback. */
   rateLimitHit?: boolean;
   /** Final execution outcome for this assistant run. */
-  executionOutcome?: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input';
+  executionOutcome?: 'applied' | 'applied-with-warnings' | 'no-change' | 'blocked-policy' | 'needs-input';
+  /** Validation issues from post-loop gates (changes may still be applied). */
+  validationIssues?: { gate: string; errors: string[]; changesKept: boolean }[];
   /** Structured failure metadata from coordinator (source-of-truth). */
   failureReason?: string;
   suggestedAction?: string;
@@ -274,6 +323,9 @@ export interface ChatMessage {
     totalCheckTimeMs: number;
   };
 
+  /** Attached image data URLs (base64) displayed as thumbnails in user messages. */
+  imageUrls?: string[];
+
   // ── Cursor-style content blocks (ephemeral, not persisted) ─────────
   /** Ordered content blocks for interleaved rendering. If present, drives Cursor-style rendering. */
   blocks?: ContentBlock[];
@@ -282,6 +334,13 @@ export interface ChatMessage {
   worktreeStatus?: {
     worktrees: Array<{ id: string; agentId: string; modifiedCount: number; createdCount: number }>;
     conflicts: Array<{ path: string }>;
+  };
+
+  /** Background task state when the agent checkpoints and continues in the background. */
+  backgroundTask?: {
+    executionId: string;
+    iteration: number;
+    status: 'running' | 'completed' | 'failed';
   };
 }
 
@@ -294,6 +353,13 @@ function outcomeBadgeConfig(outcome: NonNullable<ChatMessage['executionOutcome']
       label: 'applied',
       className:
         'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    };
+  }
+  if (outcome === 'applied-with-warnings') {
+    return {
+      label: 'applied (has warnings)',
+      className:
+        'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10',
     };
   }
   if (outcome === 'blocked-policy') {
@@ -332,7 +398,7 @@ interface ChatInterfaceProps {
   isLoading?: boolean;
   /** Live parallel specialist progress (from worker_progress SSE). Shown when size > 1. */
   activeSpecialists?: Map<string, ActiveSpecialist>;
-  onSend: (content: string) => void;
+  onSend: (content: string, options?: { imageUrls?: string[] }) => void;
   placeholder?: string;
   className?: string;
   /** When set, displays an element reference chip above the input. */
@@ -387,6 +453,8 @@ interface ChatInterfaceProps {
   showRetryChip?: boolean;
   /** EPIC 5: Output rendering mode based on signal detection */
   outputMode?: OutputMode;
+  /** Agent execution strategy (SIMPLE / HYBRID / GOD_MODE) */
+  agentStrategy?: { strategy: string; tier?: string } | null;
   /** EPIC 8: Called when user pastes/drops an image — uploads and returns AI analysis */
   onImageUpload?: (file: File) => Promise<string>;
   /** EPIC 8: Project ID for image upload context */
@@ -413,6 +481,10 @@ interface ChatInterfaceProps {
   maxAgents?: MaxAgents;
   /** Called when the user changes the max agent count */
   onMaxAgentsChange?: (count: MaxAgents) => void;
+  /** Max Quality mode — force Opus for all agents */
+  maxQuality?: boolean;
+  /** Called when max quality toggle is changed */
+  onMaxQualityChange?: (enabled: boolean) => void;
   /** Called when user edits a message — resends from that point (index, new content) */
   onEditMessage?: (index: number, content: string) => void;
   /** Truncate messages from a given index (used by edit-and-resend to remove before sending) */
@@ -467,6 +539,14 @@ interface ChatInterfaceProps {
   templateLibraryOpen?: boolean;
   /** Called when template library should close (e.g. after selection). */
   onTemplateLibraryClose?: () => void;
+  /** Open prompt template library. */
+  onOpenTemplates?: () => void;
+  /** Open/toggle training review panel. */
+  onOpenTraining?: () => void;
+  /** Context pressure from server-side token tracking (80%+ of model context). */
+  contextPressure?: { percentage: number; level: 'warning' | 'critical'; usedTokens: number; maxTokens: number } | null;
+  /** Called when user clicks "Continue in new chat" — generates summary and starts fresh session. */
+  onContinueInNewChat?: () => Promise<boolean>;
 }
 
 function HistorySummaryBlock({ count, summary }: { count: number; summary?: string }) {
@@ -502,6 +582,74 @@ function HistorySummaryBlock({ count, summary }: { count: number; summary?: stri
   );
 }
 
+// ── Context pressure banner ──────────────────────────────────────────────────
+
+function ContextPressureBanner({
+  pressure,
+  onContinueInNewChat,
+  onNewChat,
+}: {
+  pressure: { percentage: number; level: 'warning' | 'critical'; usedTokens: number; maxTokens: number };
+  onContinueInNewChat?: () => Promise<boolean>;
+  onNewChat?: () => void;
+}) {
+  const [loading, setLoading] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false);
+
+  if (dismissed) return null;
+
+  const isCritical = pressure.level === 'critical';
+  const borderColor = isCritical ? 'border-red-500/30' : 'border-amber-500/30';
+  const bgColor = isCritical ? 'bg-red-500/5' : 'bg-amber-500/5';
+  const textColor = isCritical ? 'text-red-400' : 'text-amber-400';
+  const btnBg = isCritical ? 'bg-red-500/15 hover:bg-red-500/25' : 'bg-amber-500/15 hover:bg-amber-500/25';
+  const btnText = isCritical ? 'text-red-300' : 'text-amber-300';
+
+  const handleContinue = async () => {
+    if (!onContinueInNewChat) {
+      onNewChat?.();
+      return;
+    }
+    setLoading(true);
+    try {
+      const ok = await onContinueInNewChat();
+      if (!ok) onNewChat?.();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={`mx-3 mb-2 rounded-lg border ${borderColor} ${bgColor} px-3 py-2.5 flex items-center gap-3`}>
+      <div className="flex-1 min-w-0">
+        <p className={`text-xs font-medium ${textColor}`}>
+          {isCritical
+            ? `Context is ${pressure.percentage}% full. Start a new chat to avoid losing context.`
+            : `Context is filling up (${pressure.percentage}%). Consider starting a new chat with a summary.`}
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={loading}
+          className={`rounded px-2.5 py-1 text-[11px] font-medium ${btnText} ${btnBg} transition-colors disabled:opacity-50`}
+        >
+          {loading ? 'Generating summary...' : 'Continue in new chat'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="inline-flex items-center justify-center h-5 w-5 rounded ide-text-muted hover:ide-text-2 transition-colors"
+          title="Dismiss"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Content rendering is handled by MarkdownRenderer component.
 
 // ── Model options ──────────────────────────────────────────────────────────────
@@ -526,6 +674,7 @@ const MODEL_LABELS: Record<string, string> = {
 // ── Action-specific loading labels ────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
+  preparing: 'Preparing',
   analyze: 'Analyzing',
   generate: 'Generating code',
   review: 'Reviewing files',
@@ -547,6 +696,7 @@ const INTENT_LABELS: Record<string, string> = {
 function getThinkingLabel(action?: string, _reviewFileCount?: number, intent?: string): string {
   if (action && action in ACTION_LABELS) return ACTION_LABELS[action];
   if (intent && intent in INTENT_LABELS) return INTENT_LABELS[intent];
+  if (action) return action;
   return 'Thinking';
 }
 
@@ -662,7 +812,7 @@ function ModeSwitchButton({
       className={`mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
         clicked
           ? 'border-accent/30 bg-accent/10 text-accent cursor-default'
-          : 'border-sky-400/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 hover:border-sky-400/60 cursor-pointer'
+          : 'ide-border-subtle bg-stone-500/10 dark:bg-[#141414] ide-text-2 hover:bg-stone-500/15 dark:hover:bg-[#1e1e1e] cursor-pointer'
       }`}
     >
       <ArrowRightCircle className="h-3.5 w-3.5" />
@@ -720,9 +870,7 @@ function CollapsedToolGroup({
         {/* Status icon */}
         <div className="shrink-0 h-4 w-4 flex items-center justify-center">
           {status === 'loading' ? (
-            <svg className="h-4 w-4 animate-spin text-sky-500 dark:text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
-            </svg>
+            <LambdaDots size={14} />
           ) : (
             <svg className="h-4 w-4 text-[oklch(0.745_0.189_148)]" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
@@ -825,6 +973,8 @@ export function ChatInterface({
   onModeSwitchAndSend,
   maxAgents = 1,
   onMaxAgentsChange,
+  maxQuality = false,
+  onMaxQualityChange,
   onEditMessage,
   onTruncateMessages,
   onRegenerateMessage,
@@ -853,6 +1003,10 @@ export function ChatInterface({
   onPinAsPreference,
   templateLibraryOpen = false,
   onTemplateLibraryClose,
+  onOpenTemplates,
+  onOpenTraining,
+  contextPressure,
+  onContinueInNewChat,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -861,6 +1015,7 @@ export function ChatInterface({
   const [editAnimatingId, setEditAnimatingId] = useState<string | null>(null);
   const [inputHasText, setInputHasText] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const specialistPanelState = useSpecialistPanelState();
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
@@ -880,13 +1035,13 @@ export function ChatInterface({
   );
 
   // TODO: Replace inline attachment state below with useChatAttachments()
-  // The hook provides: attachedImage, attachedFiles, isUploadingImage, isDraggingOver, fileInputRef,
+  // The hook provides: attachedImages, attachedFiles, isUploadingImage, isDraggingOver, fileInputRef,
   // addImage, removeImage, removeAttachedFile, addAttachedFile, handlePaste, handleDragOver, handleDragLeave, handleDrop, handleFileSelect
   // Keeping inline logic for now to avoid breaking existing behavior.
   void useChatAttachments;
 
   // EPIC 8: Image attachment state
-  const [attachedImage, setAttachedImage] = useState<{ file: File; preview: string } | null>(null);
+  const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string }>>([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -904,12 +1059,85 @@ export function ChatInterface({
   // Phase 3b: Attached files (dragged from file tree)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; path: string }>>([]);
 
+  // ── Draft persistence + prompt queue ──────────────────────────────────────
+  const [promptQueue, setPromptQueue] = useState<string[]>([]);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevLoadingRef = useRef(isLoading);
+  const draftKeyRef = useRef('');
+
+  // Build stable storage key from projectId + session
+  useEffect(() => {
+    const sid = activeSessionId || 'default';
+    draftKeyRef.current = projectId ? `synapse-draft-${projectId}-${sid}` : '';
+  }, [projectId, activeSessionId]);
+
+  // Restore draft on mount or session change
+  useEffect(() => {
+    if (!draftKeyRef.current) return;
+    try {
+      const stored = localStorage.getItem(draftKeyRef.current);
+      if (stored && inputRef.current) {
+        inputRef.current.value = stored;
+        setInputHasText(stored.trim().length > 0);
+      }
+    } catch { /* ignore */ }
+  }, [activeSessionId]);
+
+  // Restore queued prompts on mount
+  useEffect(() => {
+    if (!projectId) return;
+    try {
+      const qk = `synapse-queue-${projectId}`;
+      const stored = localStorage.getItem(qk);
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) setPromptQueue(parsed);
+      }
+    } catch { /* ignore */ }
+  }, [projectId]);
+
+  // Persist queue changes
+  useEffect(() => {
+    if (!projectId) return;
+    const qk = `synapse-queue-${projectId}`;
+    try {
+      if (promptQueue.length > 0) {
+        localStorage.setItem(qk, JSON.stringify(promptQueue));
+      } else {
+        localStorage.removeItem(qk);
+      }
+    } catch { /* ignore */ }
+  }, [projectId, promptQueue]);
+
+  // Debounced draft save on keystroke
+  const saveDraft = useCallback((text: string) => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      if (!draftKeyRef.current) return;
+      try {
+        if (text.trim()) {
+          localStorage.setItem(draftKeyRef.current, text);
+        } else {
+          localStorage.removeItem(draftKeyRef.current);
+        }
+      } catch { /* ignore */ }
+    }, 400);
+  }, []);
+
+  const clearDraft = useCallback(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    try { if (draftKeyRef.current) localStorage.removeItem(draftKeyRef.current); } catch { /* ignore */ }
+  }, []);
+
   const [showIntentDropdown, setShowIntentDropdown] = useState(false);
   const [intentDropdownRect, setIntentDropdownRect] = useState<{ bottom: number; left: number } | null>(null);
   const intentDropdownAnchorRef = useRef<HTMLDivElement>(null);
   const intentDropdownOpenTimeRef = useRef<number>(0);
   const [modelPickerRect, setModelPickerRect] = useState<{ bottom: number; left: number } | null>(null);
   const modelPickerAnchorRef = useRef<HTMLButtonElement>(null);
+  const [showAgentPopover, setShowAgentPopover] = useState(false);
+  const [agentPopoverRect, setAgentPopoverRect] = useState<{ bottom: number; left: number } | null>(null);
+  const agentPopoverAnchorRef = useRef<HTMLButtonElement>(null);
   const emitInteraction = useCallback(
     (
       kind: 'button_click' | 'mode_change' | 'system',
@@ -961,6 +1189,14 @@ export function ChatInterface({
     setModelPickerRect({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
     return () => setModelPickerRect(null);
   }, [showModelPicker]);
+
+  useEffect(() => {
+    if (!showAgentPopover || !agentPopoverAnchorRef.current) return;
+    const el = agentPopoverAnchorRef.current;
+    const rect = el.getBoundingClientRect();
+    setAgentPopoverRect({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
+    return () => setAgentPopoverRect(null);
+  }, [showAgentPopover]);
 
   useEffect(() => { onAttachedFilesChange?.(attachedFiles); }, [attachedFiles, onAttachedFilesChange]);
 
@@ -1157,10 +1393,11 @@ export function ChatInterface({
     const summary = generateSessionSummary(messages);
     setSessionSummary(summary);
     onSessionSummary?.(summary);
-    // Auto-dismiss summary after 5 seconds
     setTimeout(() => setSessionSummary(null), 5000);
     onClearChat();
     setPinnedMessageIds(new Set());
+    setPromptQueue([]);
+    clearDraft();
   };
 
   // ── EPIC 8: Image handling ────────────────────────────────────────────────
@@ -1168,14 +1405,27 @@ export function ChatInterface({
   const handleImageAttach = useCallback((file: File) => {
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) return;
     if (file.size > MAX_IMAGE_SIZE) return;
-    const preview = URL.createObjectURL(file);
-    setAttachedImage({ file, preview });
+    setAttachedImages(prev => {
+      if (prev.length >= 10) return prev;
+      const preview = URL.createObjectURL(file);
+      return [...prev, { file, preview }];
+    });
   }, []);
 
-  const handleRemoveImage = useCallback(() => {
-    if (attachedImage?.preview) URL.revokeObjectURL(attachedImage.preview);
-    setAttachedImage(null);
-  }, [attachedImage]);
+  const handleRemoveImage = useCallback((index?: number) => {
+    if (index !== undefined) {
+      setAttachedImages(prev => {
+        const removed = prev[index];
+        if (removed?.preview) URL.revokeObjectURL(removed.preview);
+        return prev.filter((_, i) => i !== index);
+      });
+    } else {
+      setAttachedImages(prev => {
+        prev.forEach(img => { if (img.preview) URL.revokeObjectURL(img.preview); });
+        return [];
+      });
+    }
+  }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     if (!onImageUpload) return;
@@ -1186,7 +1436,6 @@ export function ChatInterface({
         if (file) {
           e.preventDefault();
           handleImageAttach(file);
-          return;
         }
       }
     }
@@ -1219,13 +1468,12 @@ export function ChatInterface({
       } catch { /* ignore parse errors */ }
     }
 
-    // Existing: Handle image drops
+    // Handle image drops (multiple)
     if (!onImageUpload) return;
     const files = e.dataTransfer.files;
     for (let i = 0; i < files.length; i++) {
       if (files[i].type.startsWith('image/')) {
         handleImageAttach(files[i]);
-        return;
       }
     }
   }, [onImageUpload, handleImageAttach]);
@@ -1235,9 +1483,12 @@ export function ChatInterface({
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleImageAttach(file);
-    // Reset so same file can be re-selected
+    const files = e.target.files;
+    if (files) {
+      for (let i = 0; i < files.length; i++) {
+        handleImageAttach(files[i]);
+      }
+    }
     if (e.target) e.target.value = '';
   }, [handleImageAttach]);
 
@@ -1265,18 +1516,36 @@ export function ChatInterface({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const raw = inputRef.current?.value?.trim();
-    if ((!raw && !attachedImage) || isLoading) return;
+    if (!raw && attachedImages.length === 0) return;
+
+    // If agent is busy, queue the message instead of dropping it
+    if (isLoading && raw) {
+      setPromptQueue(prev => [...prev, raw]);
+      if (inputRef.current) inputRef.current.value = '';
+      setInputHasText(false);
+      clearDraft();
+      return;
+    }
 
     let messageText = raw || '';
 
-    // If image is attached, upload first and include analysis
-    if (attachedImage && onImageUpload) {
+    // If images are attached, upload each and include analysis
+    if (attachedImages.length > 0 && onImageUpload) {
       setIsUploadingImage(true);
       try {
-        const analysis = await onImageUpload(attachedImage.file);
-        messageText = raw ? `${raw}\n\n[Image analysis]: ${analysis}` : `[Image analysis]: ${analysis}`;
+        const analyses: string[] = [];
+        for (const img of attachedImages) {
+          try {
+            const analysis = await onImageUpload(img.file);
+            analyses.push(analysis);
+          } catch {
+            analyses.push('[Analysis failed]');
+          }
+        }
+        const analysisBlock = analyses.map((a, i) => `[Image ${i + 1} analysis]: ${a}`).join('\n\n');
+        messageText = raw ? `${raw}\n\n${analysisBlock}` : analysisBlock;
       } catch {
-        messageText = raw || '[Image attached but analysis failed]';
+        messageText = raw || '[Images attached but analysis failed]';
       } finally {
         setIsUploadingImage(false);
         handleRemoveImage();
@@ -1306,18 +1575,36 @@ export function ChatInterface({
       }
     }
 
+    // Convert attached images to data URLs for display in message history
+    let imageDataUrls: string[] | undefined;
+    if (attachedImages.length > 0) {
+      imageDataUrls = await Promise.all(
+        attachedImages.map(img => new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(img.file);
+        }))
+      ).then(urls => urls.filter(Boolean));
+    }
+
     // If we're editing a previous message, use edit-and-resend instead of appending
     if (editPendingRef.current !== null && onEditMessage) {
       const editIdx = editPendingRef.current;
       editPendingRef.current = null;
       onEditMessage(editIdx, messageText);
     } else if (messageText) {
-      onSend(messageText);
+      onSend(messageText, imageDataUrls?.length ? { imageUrls: imageDataUrls } : undefined);
     }
     if (inputRef.current) inputRef.current.value = '';
     setInputHasText(false);
     setMentionState(null);
     setAttachedFiles([]);
+    setAttachedImages(prev => {
+      prev.forEach(img => { if (img.preview) URL.revokeObjectURL(img.preview); });
+      return [];
+    });
+    clearDraft();
     onDismissElement?.();
   };
 
@@ -1347,6 +1634,23 @@ export function ChatInterface({
     }
   }, [isLoading]);
 
+  // Auto-send next queued prompt when agent finishes
+  useEffect(() => {
+    const wasLoading = prevLoadingRef.current;
+    prevLoadingRef.current = isLoading;
+    if (wasLoading && !isLoading && promptQueue.length > 0) {
+      const timer = setTimeout(() => {
+        setPromptQueue(prev => {
+          if (prev.length === 0) return prev;
+          const [next, ...rest] = prev;
+          onSend(next);
+          return rest;
+        });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, promptQueue.length, onSend]);
+
   // Determine which suggestions to show
   const showPreSuggestions = !inputHasText && messages.length === 0 && !isLoading && contextSuggestions.length > 0;
   const showPostSuggestions = !isLoading && responseSuggestions.length > 0 && messages.length > 0;
@@ -1372,21 +1676,23 @@ export function ChatInterface({
     <div className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-x-hidden ${className}`}>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 space-y-3 p-2"
+        className="chat-conversation-scroll flex-1 overflow-y-auto overflow-x-hidden min-w-0 space-y-3 p-2"
         role="log"
         aria-label="Conversation"
         aria-busy={isLoading || false}
       >
-        {/* Global undo button (wired with empty stack; useUndoStack not yet available) */}
-        <div data-testid="global-undo-slot" className="flex justify-end px-2 py-1">
-          <GlobalUndo undoStack={[]} onUndo={() => {}} />
-        </div>
+        {/* Global undo button — hidden on empty state */}
+        {messages.length > 0 && (
+          <div data-testid="global-undo-slot" className="flex justify-end px-2 py-1">
+            <GlobalUndo undoStack={[]} onUndo={() => {}} />
+          </div>
+        )}
 
         {/* Session summary banner (shown briefly on clear) */}
         {sessionSummary && (
-          <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/30 rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
+          <div className="ide-surface-inset border ide-border-subtle rounded-lg p-3 text-xs ide-text-2 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-sky-500 dark:text-sky-400 uppercase tracking-wider font-medium">Session Summary</span>
+              <span className="text-[10px] ide-text-3 uppercase tracking-wider font-medium">Session Summary</span>
               <button
                 type="button"
                 onClick={() => setSessionSummary(null)}
@@ -1401,7 +1707,7 @@ export function ChatInterface({
 
         {/* Pinned messages */}
         {pinnedMessageIds.size > 0 && messages.some(m => pinnedMessageIds.has(m.id)) && (
-          <div className="sticky top-0 z-20 ide-surface-pop backdrop-blur-sm border-b ide-border-subtle rounded-lg p-2 space-y-1.5">
+          <div className="sticky top-0 z-20 ide-surface-pop border-b ide-border-subtle rounded-lg p-2 space-y-1.5">
             <p className="text-[10px] text-amber-400/80 uppercase tracking-wider px-1 font-medium flex items-center gap-1">
               <Pin className="h-3 w-3" />
               Pinned
@@ -1423,6 +1729,15 @@ export function ChatInterface({
               </div>
             ))}
           </div>
+        )}
+
+        {/* Context pressure banner */}
+        {contextPressure && (
+          <ContextPressureBanner
+            pressure={contextPressure}
+            onContinueInNewChat={onContinueInNewChat}
+            onNewChat={onNewChat}
+          />
         )}
 
         {/* Skeleton state while loading history */}
@@ -1454,7 +1769,7 @@ export function ChatInterface({
 
         {/* Empty state with mode explanations + suggestions */}
         {messages.length === 0 && !isLoading && !isLoadingHistory && (
-          <div className="py-8 flex flex-col items-center">
+          <div className="flex-1 flex flex-col items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <SynapseIconAnim size={56} />
               <p className="text-base ide-text-2 font-semibold">Synapse AI</p>
@@ -1476,7 +1791,7 @@ export function ChatInterface({
                   }}
                   className={`rounded-lg px-3 py-2.5 text-center text-sm transition-colors border ${
                     intentMode === item.key
-                      ? 'border-sky-400/40 bg-sky-500/10 ide-text'
+                      ? 'ide-border bg-stone-500/10 dark:bg-[#141414] ide-text'
                       : 'ide-border-subtle ide-surface hover:ide-hover ide-text-muted'
                   }`}
                   aria-label={`Switch to ${item.label} mode: ${item.desc}`}
@@ -1489,21 +1804,6 @@ export function ChatInterface({
                 </button>
               ))}
             </div>
-            {/* Empty-state coaching suggestions */}
-            <EmptyStateCoaching
-              suggestions={contextSuggestions.slice(0, 3).map((s) => ({
-                label: s.label,
-                prompt: s.prompt ?? s.label,
-              }))}
-              onSelect={(prompt) => {
-                const el = inputRef.current;
-                if (el) {
-                  el.value = prompt;
-                  setInputHasText(true);
-                  el.focus();
-                }
-              }}
-            />
           </div>
         )}
 
@@ -1524,9 +1824,9 @@ export function ChatInterface({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -8, opacity: 0 }}
               transition={safeTransition(0.15)}
-              className="sticky top-0 z-10 ide-surface-pop backdrop-blur-sm border-b ide-border-subtle px-3 py-1.5 flex items-start justify-between gap-2"
+              className="sticky top-0 z-10 ide-surface-pop border-b ide-border-subtle px-3 py-1.5 flex items-start justify-between gap-2"
             >
-              <p className="text-xs ide-text-2 line-clamp-2 border-l-2 border-sky-500/30 pl-2 flex-1 min-w-0">
+              <p className="text-xs ide-text-2 line-clamp-2 border-l-2 ide-border pl-2 flex-1 min-w-0">
                 {sanitizeForStickyPrompt(lastUserMessage.content)}
               </p>
               <button
@@ -1546,7 +1846,7 @@ export function ChatInterface({
         {messages.map((m, idx) => (
           <div
             key={m.id}
-            className={`group/msg relative transition-all duration-250 min-w-0 overflow-x-hidden ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}
+            className={`group/msg relative transition-all duration-250 min-w-0 overflow-x-hidden shrink-0 ${m.role === 'assistant' ? 'rounded-md group-hover/msg:bg-stone-50/50 dark:group-hover/msg:bg-white/[0.02]' : ''}`}
             style={
               editAnimatingId === m.id || (editAnimatingId && idx > messages.findIndex((msg) => msg.id === editAnimatingId))
                 ? { opacity: 0, transform: 'translateY(40px) scale(0.95)', pointerEvents: 'none' as const }
@@ -1790,6 +2090,44 @@ export function ChatInterface({
                             );
                           }
                           const lastBlock = groupBlocks[groupBlocks.length - 1];
+
+                          // Specialist-specific rendering
+                          const isSpecialistGroup = groupBlocks.some(b => b.toolName === 'run_specialist');
+                          if (isSpecialistGroup) {
+                            const specialistBlocks = groupBlocks.filter(b => b.toolName === 'run_specialist');
+                            return (
+                              <div key={`specialist-group-${gi}`} className="space-y-1.5 my-1">
+                                {specialistBlocks.map((sb) => {
+                                  const agentName = (sb.cardData as Record<string, unknown>)?.agent as string
+                                    ?? sb.subtitle?.match(/(\w+) specialist/)?.[1]
+                                    ?? 'specialist';
+                                  const toolCalls = groupBlocks
+                                    .filter(b => b.toolName !== 'run_specialist' && b.subtitle?.includes(agentName))
+                                    .map(b => ({
+                                      name: b.toolName,
+                                      detail: b.subtitle ?? '',
+                                      status: (b.status === 'done' ? 'done' : b.status === 'error' ? 'error' : 'pending') as 'pending' | 'done' | 'error',
+                                    }));
+                                  const editedFiles = groupBlocks
+                                    .filter(b => (b.toolName === 'search_replace' || b.toolName === 'edit_lines') && b.status === 'done')
+                                    .map(b => b.subtitle ?? '')
+                                    .filter(Boolean);
+                                  return (
+                                    <SpecialistStreamPanel
+                                      key={sb.id}
+                                      agentName={agentName}
+                                      status={sb.status === 'done' ? 'complete' : sb.status === 'error' ? 'failed' : 'running'}
+                                      toolCalls={toolCalls}
+                                      editedFiles={editedFiles}
+                                      isExpanded={specialistPanelState.isExpanded(agentName)}
+                                      onToggle={() => specialistPanelState.toggle(agentName)}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+
                           return (
                             <CollapsedToolGroup
                               key={`group-${gi}-${groupBlocks[0].id}`}
@@ -1985,7 +2323,7 @@ export function ChatInterface({
                       )}
                       {isLoading && idx === messages.length - 1 && (m.content?.trim().length ?? 0) > 0 && (
                         <span
-                          className="inline-block w-[2px] h-[1.1em] bg-sky-400 ml-0.5 align-middle rounded-sm ai-streaming-caret"
+                          className="inline-block w-[2px] h-[1.1em] bg-stone-400 dark:bg-[#141414]0 ml-0.5 align-middle rounded-sm ai-streaming-caret"
                           style={{ animation: 'ai-caret-blink 0.8s ease-in-out infinite' }}
                           aria-hidden="true"
                         />
@@ -1994,7 +2332,7 @@ export function ChatInterface({
                   )}
                 </>
               ) : (
-                <UserMessageContent content={m.content} />
+                <UserMessageContent content={m.content} imageUrls={m.imageUrls} />
               )}
             </div>
 
@@ -2060,7 +2398,7 @@ export function ChatInterface({
                 {m.suggestedAction && (
                   <button
                     type="button"
-                    className="text-left text-[10px] text-sky-600 dark:text-sky-400 cursor-pointer hover:underline"
+                    className="text-left text-[10px] ide-text-2 cursor-pointer hover:underline"
                     onClick={() => {
                       const el = inputRef.current;
                       if (el) {
@@ -2082,7 +2420,7 @@ export function ChatInterface({
 
             {/* Verification evidence card */}
             {m.role === 'assistant' && m.verificationEvidence && (
-              <div className="mt-1 mx-3 rounded-md border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-2">
+              <div className="mt-1 mx-3 rounded-md border border-stone-200 dark:border-[#2a2a2a] bg-white dark:bg-[#141414] p-2">
                 <div className="flex items-center gap-1 mb-1">
                   <span className="text-[10px] font-medium text-stone-600 dark:text-gray-400">Verification</span>
                   <span className="text-[9px] text-stone-400 dark:text-stone-500">({m.verificationEvidence.totalCheckTimeMs}ms)</span>
@@ -2125,21 +2463,29 @@ export function ChatInterface({
         {/* EPIC 5: Output mode badge */}
         {isLoading && outputMode && outputMode !== 'chat' && (
           <div className="px-3 py-1">
-            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 dark:bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-400">
+            <span className="inline-flex items-center gap-1 rounded-full ide-surface-inset border ide-border-subtle px-2 py-0.5 text-[10px] ide-text-2">
               {outputMode === 'plan' ? 'Plan mode' : outputMode === 'review' ? 'Review mode' : outputMode === 'fix' ? 'Fix mode' : outputMode}
             </span>
           </div>
         )}
 
-        {/* Single loading indicator — shows only before content arrives */}
-        <StreamingIndicator
-          state={
-            !isLoading ? 'idle' :
-            (lastMessage?.role === 'assistant' && (lastMessage?.thinkingSteps?.length || lastMessage?.blocks?.length || lastMessage?.content)) ? 'streaming' :
-            'waiting'
-          }
-          label={getThinkingLabel(currentAction, reviewFileCount, intentMode)}
-        />
+        {/* Loading indicator — phase labels before content, tool labels during streaming */}
+        {isLoading && activeTools.size > 0 ? (
+          <EnhancedTypingIndicator
+            activeTools={activeTools}
+            thinkingLabel={getThinkingLabel(currentAction, reviewFileCount, intentMode)}
+            isStreaming={!!isLoading}
+          />
+        ) : (
+          <StreamingIndicator
+            state={
+              !isLoading ? 'idle' :
+              (lastMessage?.role === 'assistant' && (lastMessage?.thinkingSteps?.length || lastMessage?.blocks?.length || lastMessage?.content)) ? 'streaming' :
+              'waiting'
+            }
+            label={getThinkingLabel(currentAction, reviewFileCount, intentMode)}
+          />
+        )}
 
         {/* Parallel specialist progress — shown when 2+ specialists are active */}
         {activeSpecialists.size > 1 && (
@@ -2166,7 +2512,7 @@ export function ChatInterface({
                 emitInteraction('button_click', 'plan.review_open', { stepCount: planSteps.length });
                 setManualPlanOpen(true);
               }}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/5 text-accent text-xs font-medium hover:bg-sky-500/10 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border ide-border-subtle ide-surface-inset ide-text-2 text-xs font-medium hover:ide-hover transition-colors"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
@@ -2214,52 +2560,30 @@ export function ChatInterface({
         return show ? <WorktreeStatus worktrees={ws!.worktrees} conflicts={ws!.conflicts} /> : null;
       })()}
 
+      {/* Background task banner: shown when the agent checkpointed and is continuing in background */}
+      {(() => {
+        const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+        const bg = lastAssistant?.backgroundTask;
+        if (!bg || bg.status === 'completed') return null;
+        return (
+          <BackgroundTaskBanner
+            executionId={bg.executionId}
+            projectId={projectId ?? ''}
+            iteration={bg.iteration}
+          />
+        );
+      })()}
+
       {/* Input area */}
       <div className="flex-shrink-0">
-        {/* Consolidated context row: element chip + image + attached files + inline suggestions (file count pill removed) */}
-        {(editorSelection || selectedElement || attachedImage || attachedFiles.length > 0 || (!showPreSuggestions && !inputHasText && !isLoading && contextSuggestions.length > 0 && messages.length > 0)) && (
-          <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap border-b ide-border-subtle">
-            {/* Phase 3b: Attached file chips from drag-and-drop */}
-            {attachedFiles.map((af) => (
-              <span key={af.id} className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-400">
-                <Paperclip className="h-2.5 w-2.5" />
-                <span className="truncate max-w-[100px]">{af.name}</span>
-                <button type="button" onClick={() => handleRemoveAttachedFile(af.id)} className="text-sky-400 hover:text-sky-300">
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            ))}
-            {editorSelection && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[10px] text-accent truncate max-w-[160px]">
-                {editorSelection.slice(0, 30)}{editorSelection.length > 30 ? '...' : ''}
-              </span>
-            )}
-            {selectedElement && (
-              <ElementRefChip element={selectedElement} onDismiss={onDismissElement} />
-            )}
-            {attachedImage && (
-              <span className="inline-flex items-center gap-1.5 rounded-full ide-surface-inset px-2 py-0.5 text-[10px] ide-text-3">
-                {/* eslint-disable-next-line @next/next/no-img-element -- blob URL */}
-                <img src={attachedImage.preview} alt="" className="h-4 w-4 rounded object-cover" />
-                <span className="truncate max-w-[80px]">{attachedImage.file.name}</span>
-                <button type="button" onClick={handleRemoveImage} className="ide-text-muted hover:ide-text-2">
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            )}
-            {/* Inline suggestion chips: only context-driven response suggestions,
-                shown when the main suggestion strip above is not visible. */}
-            {!inputHasText &&
-              !isLoading &&
-              messages.length > 0 &&
-              !showPostAfterAssistant &&
-              responseSuggestions.length > 0 && (
-              <SuggestionChips
-                suggestions={responseSuggestions.slice(0, 3)}
-                onSelect={handleSuggestionSelect}
-                variant="post"
-              />
-            )}
+        {/* Inline suggestion chips above form (when no input text, after assistant response) */}
+        {!inputHasText && !isLoading && messages.length > 0 && !showPostAfterAssistant && responseSuggestions.length > 0 && (
+          <div className="px-3 py-1">
+            <SuggestionChips
+              suggestions={responseSuggestions.slice(0, 3)}
+              onSelect={handleSuggestionSelect}
+              variant="post"
+            />
           </div>
         )}
 
@@ -2287,29 +2611,65 @@ export function ChatInterface({
             />
           )}
 
-          {/* Hidden file input for image attachment */}
+          {/* Prompt queue */}
+          {promptQueue.length > 0 && (
+            <div className="mb-1.5 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] ide-text-3 font-medium px-0.5">
+                <ListOrdered className="h-3 w-3" aria-hidden />
+                <span>Queued ({promptQueue.length})</span>
+                <button
+                  type="button"
+                  onClick={() => setPromptQueue([])}
+                  className="ml-auto text-[10px] ide-text-muted hover:text-red-400 transition-colors"
+                >
+                  Clear all
+                </button>
+              </div>
+              {promptQueue.map((msg, i) => (
+                <div
+                  key={`q-${i}`}
+                  className="group flex items-start gap-1.5 rounded-md border ide-border-subtle bg-stone-50 dark:bg-white/[0.03] px-2 py-1.5"
+                >
+                  <span className="shrink-0 text-[10px] font-medium tabular-nums ide-text-3 mt-px">{i + 1}</span>
+                  <p className="flex-1 min-w-0 text-xs ide-text-2 line-clamp-2 break-words">{msg}</p>
+                  <button
+                    type="button"
+                    onClick={() => setPromptQueue(prev => prev.filter((_, j) => j !== i))}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 ide-text-muted hover:text-red-400 transition-all mt-px"
+                    aria-label="Remove from queue"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Hidden file input for image attachment (multiple) */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
+            multiple
             className="hidden"
             onChange={handleFileSelect}
           />
 
           {/* Input bento: one bordered box containing textarea + footer row */}
-          <div className={`rounded-lg border ide-border ide-surface-input overflow-hidden ${isDraggingOver ? 'ring-2 ring-sky-500/50 dark:ring-sky-400/50' : ''}`}>
+          <div className={`rounded-lg border ide-border ide-surface-input overflow-hidden ${isDraggingOver ? 'ring-2 ring-stone-400/50 dark:ring-white/20' : ''}`}>
             <div className="relative">
               <textarea
                 ref={inputRef}
                 name="message"
                 rows={3}
-                placeholder={attachedImage ? 'Describe what you want to do with this image...' : placeholder}
-                disabled={isLoading || isUploadingImage}
+                placeholder={attachedImages.length > 0 ? `Describe what you want to do with ${attachedImages.length === 1 ? 'this image' : 'these images'}...` : isLoading ? 'Type to queue next message...' : placeholder}
+                disabled={isUploadingImage}
                 className="w-full border-0 bg-transparent px-2.5 pt-2.5 pb-1 text-sm ide-text placeholder-stone-400 dark:placeholder-white/40 focus:outline-none focus:ring-0 disabled:opacity-50 resize-none"
                 onChange={(e) => {
                   const draft = e.target.value;
                   setInputHasText(draft.trim().length > 0);
                   onDraftChange?.(draft);
+                  saveDraft(draft);
                 }}
                 onKeyDown={(e) => {
                   if (mentionState?.visible) {
@@ -2359,20 +2719,20 @@ export function ChatInterface({
               />
 
               {mentionState?.visible && (
-                <PlanMentionPopover
+                <PlanMentionPopover visible={true}
                   plans={projectPlans}
                   query={mentionState.query}
                   selectedIndex={mentionState.selectedIndex}
                   onSelect={handlePlanSelect}
-                  anchorRect={mentionState.anchorRect ?? undefined}
+                  anchorRect={mentionState.anchorRect ?? null}
                   onDismiss={() => setMentionState(null)}
                 />
               )}
 
               {/* Drag-drop overlay */}
               {isDraggingOver && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-sky-500/10 dark:bg-sky-500/10 border-2 border-dashed border-sky-500/40 pointer-events-none">
-                  <div className="flex items-center gap-2 text-sm text-sky-600 dark:text-sky-400">
+                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-stone-500/5 dark:bg-[#141414] border-2 border-dashed border-stone-400/40 dark:border-[#333333] pointer-events-none">
+                  <div className="flex items-center gap-2 text-sm ide-text-2">
                     <Upload className="h-4 w-4" />
                     Drop files or images here
                   </div>
@@ -2380,62 +2740,46 @@ export function ChatInterface({
               )}
             </div>
 
-            {/* Progress rail removed — single loading indicator is sufficient */}
-
-            {/* Compact bento controls above footer (right-aligned) */}
-            <div className="flex justify-end px-2 pt-1">
-              <div className="inline-flex items-center gap-1 rounded-lg border ide-border-subtle ide-surface-inset px-1.5 py-1">
-                {onOpenMemory && (
-                  <button
-                    type="button"
-                    onClick={onOpenMemory}
-                    className={`inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md border transition-colors ${
-                      isMemoryOpen
-                        ? 'text-purple-500 dark:text-purple-300 bg-purple-500/10 border-purple-500/30'
-                        : 'ide-text-3 ide-surface-input ide-border hover:border-stone-300 dark:hover:border-white/20'
-                    }`}
-                    title="Open Developer Memory"
-                    aria-label="Open Developer Memory"
-                  >
-                    <Brain className="h-[11px] w-[11px]" />
-                  </button>
+            {/* Context badges — inside input box so user sees what's included */}
+            {(attachedFiles.length > 0 || editorSelection || selectedElement || attachedImages.length > 0) && (
+              <div className="flex items-center gap-1 px-2 pt-0.5 pb-0.5 flex-wrap">
+                {attachedFiles.map((af) => (
+                  <span key={af.id} className="inline-flex items-center gap-1 rounded-full ide-surface-inset border ide-border-subtle px-1.5 py-0.5 text-[10px] ide-text-2">
+                    <Paperclip className="h-2.5 w-2.5" />
+                    <span className="truncate max-w-[100px]">{af.name}</span>
+                    <button type="button" onClick={() => handleRemoveAttachedFile(af.id)} className="ide-text-muted hover:ide-text-2">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {editorSelection && (
+                  <span className="inline-flex items-center gap-1 rounded-full ide-surface-inset border ide-border-subtle px-1.5 py-0.5 text-[10px] ide-text-2 truncate max-w-[160px]">
+                    {editorSelection.slice(0, 30)}{editorSelection.length > 30 ? '...' : ''}
+                  </span>
                 )}
-                {onReviewTranscript && (
-                  <button
-                    type="button"
-                    onClick={onReviewTranscript}
-                    disabled={isLoading || isReviewingTranscript}
-                    className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md ide-text-3 ide-surface-input border ide-border hover:border-stone-300 dark:hover:border-white/20 disabled:opacity-50 transition-colors"
-                    title={isReviewingTranscript ? 'Reviewing transcript…' : 'Review this chat transcript'}
-                    aria-label={isReviewingTranscript ? 'Reviewing transcript' : 'Review this chat transcript'}
-                  >
-                    <BookOpen className={`h-[11px] w-[11px] ${isReviewingTranscript ? 'animate-pulse' : ''}`} />
-                  </button>
+                {selectedElement && (
+                  <ElementRefChip element={selectedElement} onDismiss={onDismissElement} />
                 )}
-                {onReportBug && (
-                  <button
-                    type="button"
-                    onClick={onReportBug}
-                    className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md ide-text-3 ide-surface-input border ide-border hover:text-red-500 dark:hover:text-red-400 hover:border-stone-300 dark:hover:border-white/20 transition-colors"
-                    title="Report a bug"
-                    aria-label="Report a bug"
-                  >
-                    <Bug className="h-[11px] w-[11px]" />
-                  </button>
-                )}
-                <div className="h-4 w-px ide-border-subtle" />
-                <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} />
+                {attachedImages.map((img, idx) => (
+                  <span key={`img-${idx}`} className="inline-flex items-center gap-1 rounded-full ide-surface-inset border ide-border-subtle px-1.5 py-0.5 text-[10px] ide-text-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- blob URL */}
+                    <img src={img.preview} alt="" className="h-3.5 w-3.5 rounded object-cover" />
+                    <span className="truncate max-w-[60px]">{img.file.name}</span>
+                    <button type="button" onClick={() => handleRemoveImage(idx)} className="ide-text-muted hover:ide-text-2">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
               </div>
-            </div>
+            )}
 
-            {/* Footer row: controls + context % + send — all items h-9, single/team leftmost */}
-            <div className="flex items-center justify-between gap-1.5 px-2 py-1 mb-1.5 h-8">
-              <div className="flex items-center gap-1.5 min-w-0 h-8">
-              {/* Solo/Team toggle removed — replaced by maxAgents cycle + specialist switch */}
+            {/* Footer row: controls + send — tight, ghost */}
+            <div className="flex items-center justify-between gap-1 px-1.5 py-0.5 mb-1 h-7">
+              <div className="flex items-center gap-0.5 min-w-0 h-7">
 
-              {/* Intent mode dropdown — Ask / Plan / Code / Debug (always visible) */}
+              {/* Intent mode — ghost */}
               {onIntentModeChange && (
-                <div className="relative h-8 flex items-center shrink-0 min-w-[4.25rem]" ref={intentDropdownAnchorRef}>
+                <div className="relative h-7 flex items-center shrink-0" ref={intentDropdownAnchorRef}>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -2443,13 +2787,13 @@ export function ChatInterface({
                       intentDropdownOpenTimeRef.current = Date.now();
                       setShowIntentDropdown((p) => !p);
                     }}
-                    className="inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ide-surface-input ide-border-subtle hover:ide-hover ide-text-2 whitespace-nowrap"
+                    className="inline-flex items-center gap-0.5 h-7 rounded-md px-1.5 text-[11px] font-medium ide-text-muted hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none whitespace-nowrap"
                     aria-expanded={showIntentDropdown}
                     aria-haspopup="listbox"
                     aria-label="Intent mode"
                   >
                     <span className="capitalize">{intentMode}</span>
-                    <ChevronDown className={`h-3 w-3 transition-transform ${showIntentDropdown ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-2.5 w-2.5 transition-transform ${showIntentDropdown ? 'rotate-180' : ''}`} />
                   </button>
                   {showIntentDropdown && typeof document !== 'undefined' && intentDropdownRect &&
                     createPortal(
@@ -2463,7 +2807,7 @@ export function ChatInterface({
                         />
                         <ul
                           role="listbox"
-                          className="fixed z-[9999] min-w-[140px] rounded-lg border ide-border ide-surface-pop shadow-lg py-1"
+                          className="fixed z-[9999] min-w-[130px] rounded-lg border ide-border ide-surface-pop shadow-lg py-1"
                           style={{ bottom: intentDropdownRect.bottom, left: intentDropdownRect.left }}
                           aria-label="Intent mode"
                         >
@@ -2481,8 +2825,8 @@ export function ChatInterface({
                                   onIntentModeChange(mode);
                                   setShowIntentDropdown(false);
                                 }}
-                                className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                                  intentMode === mode ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400' : 'ide-text-2 hover:ide-surface-inset'
+                                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                                  intentMode === mode ? 'ide-surface-inset ide-text' : 'ide-text-2 hover:ide-surface-inset'
                                 }`}
                                 title={tip}
                               >
@@ -2497,17 +2841,17 @@ export function ChatInterface({
                 </div>
               )}
 
-              {/* Model picker — ghost (no fill/border), portaled */}
+              {/* Model picker — ghost */}
               {onModelChange && (
-                <div className="relative h-8 flex items-center">
+                <div className="relative h-7 flex items-center">
                   <button
                     ref={modelPickerAnchorRef}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowModelPicker(p => !p); }}
-                    className="inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] ide-text-muted hover:ide-text-2 bg-transparent border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    className="inline-flex items-center gap-0.5 h-7 rounded-md px-1.5 text-[11px] ide-text-muted hover:ide-text-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
                   >
-                    <span className="truncate max-w-[82px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
-                    <ChevronDown className="h-3 w-3" />
+                    <span className="truncate max-w-[80px]">{currentModel?.split('-').slice(0, 2).join(' ') || 'Model'}</span>
+                    <ChevronDown className="h-2.5 w-2.5" />
                   </button>
                   {showModelPicker && typeof document !== 'undefined' && modelPickerRect &&
                     createPortal(
@@ -2522,12 +2866,12 @@ export function ChatInterface({
                               key={opt.value}
                               type="button"
                               onClick={() => { onModelChange(opt.value); setShowModelPicker(false); }}
-                              className={`w-full text-left px-3 py-2 text-sm ide-hover transition-colors ${
+                              className={`w-full text-left px-3 py-1.5 text-sm ide-hover transition-colors ${
                                 currentModel === opt.value ? 'text-accent' : 'ide-text-2'
                               }`}
                             >
-                              <div className="font-medium">{opt.label}</div>
-                              <div className="text-xs ide-text-muted">{opt.description}</div>
+                              <div className="font-medium text-xs">{opt.label}</div>
+                              <div className="text-[10px] ide-text-muted">{opt.description}</div>
                             </button>
                           ))}
                         </div>
@@ -2537,78 +2881,135 @@ export function ChatInterface({
                 </div>
               )}
 
-              {/* Subagent count control (1x-4x) — primary mode selector */}
+              {/* Agents dropdown — count + max quality */}
               {onMaxAgentsChange && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = (maxAgents % 4) + 1;
-                    onMaxAgentsChange(next as MaxAgents);
-                  }}
-                  className={`inline-flex items-center gap-1 h-8 rounded-lg px-2 text-[11px] border transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
-                    maxAgents > 1
-                      ? 'text-sky-500 dark:text-sky-400 bg-sky-500/10 border-sky-500/30'
-                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
-                  }`}
-                  title={`Subagents: ${maxAgents}x (click to cycle 1x-4x)`}
-                  aria-label={`Subagent count: ${maxAgents}x`}
-                >
-                  <svg className="h-[11px] w-[11px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" />
-                  </svg>
-                  <span className="tabular-nums font-medium">{maxAgents}x</span>
-                </button>
+                <div className="relative h-7 flex items-center">
+                  <button
+                    ref={agentPopoverAnchorRef}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowAgentPopover(p => !p); }}
+                    className={`inline-flex items-center gap-0.5 h-7 rounded-md px-1.5 text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                      maxAgents > 1 || maxQuality
+                        ? 'ide-text'
+                        : 'ide-text-muted hover:ide-text-2'
+                    }`}
+                    title={`Agents: ${maxAgents}x${maxQuality ? ' · Max' : ''}`}
+                    aria-label={`Agent settings: ${maxAgents}x`}
+                  >
+                    <svg className="h-[10px] w-[10px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" />
+                    </svg>
+                    <span className="tabular-nums font-medium">{maxAgents}x</span>
+                    {maxQuality && <span className="text-amber-500 dark:text-amber-400">*</span>}
+                    <ChevronDown className={`h-2.5 w-2.5 transition-transform ${showAgentPopover ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showAgentPopover && typeof document !== 'undefined' && agentPopoverRect &&
+                    createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[99]" aria-hidden onClick={() => setShowAgentPopover(false)} />
+                        <div
+                          className="fixed z-[100] w-44 rounded-lg border ide-border ide-surface-pop shadow-xl py-1"
+                          style={{ bottom: agentPopoverRect.bottom, left: agentPopoverRect.left }}
+                        >
+                          {([1, 2, 3, 4] as const).map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => { onMaxAgentsChange(n as MaxAgents); setShowAgentPopover(false); }}
+                              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                                maxAgents === n ? 'ide-surface-inset ide-text' : 'ide-text-2 hover:ide-surface-inset'
+                              }`}
+                            >
+                              {n}x agent{n > 1 ? 's' : ''}
+                            </button>
+                          ))}
+                          {onMaxQualityChange && (
+                            <>
+                              <div className="my-1 border-t ide-border-subtle" />
+                              <button
+                                type="button"
+                                onClick={() => onMaxQualityChange(!maxQuality)}
+                                className="w-full text-left px-3 py-1.5 text-xs ide-text-2 hover:ide-surface-inset transition-colors flex items-center gap-2"
+                              >
+                                <span className={`inline-flex items-center justify-center h-3.5 w-3.5 rounded border text-[8px] ${
+                                  maxQuality
+                                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-500'
+                                    : 'ide-border'
+                                }`}>
+                                  {maxQuality ? '✓' : ''}
+                                </span>
+                                Max Quality
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </>,
+                      document.body
+                    )}
+                </div>
               )}
 
-              {/* Specialist mode is now auto-derived from maxAgents > 1 — no toggle needed */}
-
-              {/* File/image upload — icon only */}
+              {/* Image attach — ghost */}
               {onImageUpload && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingImage}
-                  className={`inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg border transition-colors ${
-                    attachedImage
-                      ? 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30'
-                      : 'ide-text-3 ide-surface-inset ide-border hover:border-stone-300 dark:hover:border-white/20'
+                  className={`inline-flex items-center justify-center h-7 shrink-0 rounded-md transition-colors gap-0.5 px-1 ${
+                    attachedImages.length > 0
+                      ? 'ide-text'
+                      : 'ide-text-muted hover:ide-text-2'
                   }`}
-                  title={isUploadingImage ? 'Uploading…' : attachedImage ? '1 image attached' : 'Attach image or file'}
-                  aria-label={attachedImage ? 'Image attached' : 'Attach image'}
+                  title={isUploadingImage ? 'Uploading…' : attachedImages.length > 0 ? `${attachedImages.length} image(s) attached` : 'Attach images'}
+                  aria-label={attachedImages.length > 0 ? `${attachedImages.length} images attached` : 'Attach images'}
                 >
                   {isUploadingImage ? (
-                    <Upload className="h-[11px] w-[11px] animate-pulse" />
+                    <Upload className="h-[10px] w-[10px] animate-pulse" />
                   ) : (
-                    <ImageIcon className="h-[11px] w-[11px]" />
+                    <Paperclip className="h-[10px] w-[10px]" />
+                  )}
+                  {attachedImages.length > 1 && (
+                    <span className="text-[9px] font-medium">{attachedImages.length}</span>
                   )}
                 </button>
               )}
 
               </div>
 
-              {/* Send / Stop (right side, same h-9 as left controls) */}
-              <div className="flex items-center gap-1.5 shrink-0 h-8 items-center">
-                {isLoading && onStop ? (
+              {/* Send / Stop / Queue */}
+              <div className="flex items-center gap-0.5 shrink-0 h-7">
+                {isLoading && onStop && (
                   <button
                     type="button"
                     onClick={onStop}
-                    className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg text-red-400 bg-red-500/15 hover:bg-red-500/25 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:outline-none"
+                    className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md text-red-400 bg-red-500/15 hover:bg-red-500/25 hover:text-red-300 transition-colors"
                     title="Stop"
                     aria-label="Stop generation"
                   >
-                    <Square className="h-3.5 w-3.5 fill-current" aria-hidden />
+                    <Square className="h-3 w-3 fill-current" aria-hidden />
                   </button>
-                ) : (
+                )}
+                {isLoading && inputHasText ? (
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center h-6 shrink-0 rounded-md px-1.5 gap-0.5 text-[10px] font-medium ide-surface-inset ide-text-2 hover:ide-hover transition-colors"
+                    title="Queue message (will send after current response)"
+                    aria-label="Queue message"
+                  >
+                    <ListOrdered className="h-2.5 w-2.5" aria-hidden />
+                    Queue
+                  </button>
+                ) : !isLoading ? (
                   <button
                     type="submit"
                     disabled={isUploadingImage}
-                    className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors"
                     title={isUploadingImage ? 'Uploading…' : 'Send'}
                     aria-label={isUploadingImage ? 'Uploading' : 'Send'}
                   >
-                    <Send className={`h-3.5 w-3.5 ${isUploadingImage ? 'animate-pulse' : ''}`} aria-hidden />
+                    <ArrowUp className={`h-3.5 w-3.5 ${isUploadingImage ? 'animate-pulse' : ''}`} aria-hidden />
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -2616,12 +3017,81 @@ export function ChatInterface({
           {/* Resend button (only after a stopped response) */}
           {!isLoading && isStopped && onRegenerateMessage && (
             <div className="flex justify-end mt-1">
-              <button type="button" onClick={onRegenerateMessage} className="rounded px-1.5 py-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:bg-sky-500/10">
+              <button type="button" onClick={onRegenerateMessage} className="rounded px-1.5 py-0.5 text-[10px] ide-text-2 hover:ide-surface-inset">
                 Resend
               </button>
             </div>
           )}
         </form>
+
+        {/* Utility row below input: templates/training (left) + memory/transcript/bug (right) */}
+        <div className="flex items-center justify-between px-2.5 py-0.5">
+          <div className="flex items-center gap-0.5">
+            {onOpenTemplates && (
+              <button
+                type="button"
+                onClick={onOpenTemplates}
+                className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md ide-text-muted hover:ide-text-2 transition-colors"
+                title="Prompt templates"
+                aria-label="Prompt templates"
+              >
+                <ClipboardList className="h-[10px] w-[10px]" />
+              </button>
+            )}
+            {onOpenTraining && (
+              <button
+                type="button"
+                onClick={onOpenTraining}
+                className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md ide-text-muted hover:ide-text-2 transition-colors"
+                title="Training review"
+                aria-label="Training review"
+              >
+                <BookOpen className="h-[10px] w-[10px]" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-0.5">
+            {onOpenMemory && (
+              <button
+                type="button"
+                onClick={onOpenMemory}
+                className={`inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md transition-colors ${
+                  isMemoryOpen
+                    ? 'ide-text'
+                    : 'ide-text-muted hover:ide-text-2'
+                }`}
+                title="Developer Memory"
+                aria-label="Developer Memory"
+              >
+                <Brain className="h-[10px] w-[10px]" />
+              </button>
+            )}
+            {onReviewTranscript && (
+              <button
+                type="button"
+                onClick={onReviewTranscript}
+                disabled={isLoading || isReviewingTranscript}
+                className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md ide-text-muted hover:ide-text-2 disabled:opacity-50 transition-colors"
+                title={isReviewingTranscript ? 'Reviewing transcript…' : 'Review transcript'}
+                aria-label={isReviewingTranscript ? 'Reviewing transcript' : 'Review transcript'}
+              >
+                <GitBranch className={`h-[10px] w-[10px] ${isReviewingTranscript ? 'animate-pulse' : ''}`} />
+              </button>
+            )}
+            {onReportBug && (
+              <button
+                type="button"
+                onClick={onReportBug}
+                className="inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md ide-text-muted hover:ide-text-2 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                title="Report a bug"
+                aria-label="Report a bug"
+              >
+                <Bug className="h-[10px] w-[10px]" />
+              </button>
+            )}
+            <ContextMeter meter={contextMeter} modelLabel={currentModelOption?.label} onNewChat={onNewChat} compact />
+          </div>
+        </div>
       </div>
 
       {/* EPIC 5: Plan approval modal */}

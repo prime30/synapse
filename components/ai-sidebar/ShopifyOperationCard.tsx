@@ -1,6 +1,7 @@
 'use client';
 
-import { Store, UploadCloud, DownloadCloud, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Store, UploadCloud, DownloadCloud, CheckCircle2, XCircle } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 export interface ShopifyOperation {
   type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset';
@@ -49,7 +50,7 @@ export function ShopifyOperationCard({ operations }: ShopifyOperationCardProps) 
               ? 'text-accent'
               : op.status === 'error'
                 ? 'text-red-500 dark:text-red-400'
-                : 'ide-text-muted animate-spin';
+                : 'ide-text-muted';
 
           return (
             <div key={i} className="flex items-start gap-2">
@@ -60,7 +61,7 @@ export function ShopifyOperationCard({ operations }: ShopifyOperationCardProps) 
                     {OP_LABELS[op.type] ?? op.type}
                   </span>
                   {op.status === 'pending' ? (
-                    <Loader2 className={`w-3 h-3 ${statusColor}`} />
+                    <LambdaDots size={12} />
                   ) : op.status === 'success' ? (
                     <CheckCircle2 className={`w-3 h-3 ${statusColor}`} />
                   ) : (

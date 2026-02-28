@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { GitBranch, GitCommit, Cloud, CloudOff, RefreshCw, Loader2, ArrowUp, ArrowDown, AlertCircle, Check, Users } from 'lucide-react';
+import { GitBranch, GitCommit, Cloud, CloudOff, RefreshCw, ArrowUp, ArrowDown, AlertCircle, Check, Users } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 interface GitStatusBarProps {
   currentBranch: string | null;
@@ -39,7 +40,7 @@ export function GitStatusBar({
       return <AlertCircle className="w-4 h-4 text-red-500" />;
     }
     if (isActive) {
-      return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+      return <LambdaDots size={16} />;
     }
     return <Check className="w-4 h-4 text-green-500" />;
   };

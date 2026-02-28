@@ -64,6 +64,19 @@ export class APIClient {
     return this.request('GET', '/api/projects');
   }
 
+  /**
+   * Get the most recent agent chat session and its messages for a project
+   * (Synapse IDE chat transcript).
+   */
+  async getProjectAgentChat(projectId: string): Promise<{
+    data: {
+      session: { id: string; title: string; created_at: string; updated_at: string } | null;
+      messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: string }>;
+    };
+  }> {
+    return this.request('GET', `/api/projects/${projectId}/agent-chat`);
+  }
+
   // File endpoints
   async addFile(projectId: string, file: { name: string; path: string; file_type: string; content: string }): Promise<{ data: { id: string; name: string } }> {
     return this.request('POST', '/api/files', {

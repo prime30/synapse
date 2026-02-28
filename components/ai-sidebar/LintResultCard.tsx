@@ -47,7 +47,7 @@ export function LintResultCard({ passed, summary, issues }: LintResultCardProps)
   };
 
   return (
-    <div className="rounded-lg border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 p-3 text-sm">
+    <div className="rounded-lg border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-[#141414] p-3 text-sm">
       <div className="flex items-center gap-2 mb-2">
         <span
           className={`text-xs font-medium px-2 py-0.5 rounded ${

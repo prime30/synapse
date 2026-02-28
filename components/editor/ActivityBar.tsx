@@ -211,7 +211,7 @@ export function ActivityBar({
       <div className="flex-1" />
 
       {/* ── Divider ────────────────────────────────────────────────── */}
-      <div className="w-6 h-px bg-stone-200 dark:bg-white/5 mb-1" />
+      <div className="w-6 h-px bg-stone-200 dark:bg-[#141414] mb-1" />
 
       {/* ── Utility icons ──────────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-0.5 pb-2">

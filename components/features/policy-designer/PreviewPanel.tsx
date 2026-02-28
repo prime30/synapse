@@ -23,7 +23,7 @@ export function PreviewPanel({ content, styles }: PreviewPanelProps) {
   if (!content) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-sm text-stone-500 dark:text-white/40">
+        <p className="text-sm text-stone-500 dark:text-[#636059]">
           No content to preview. Select a template or generate with AI first.
         </p>
       </div>
@@ -42,7 +42,7 @@ export function PreviewPanel({ content, styles }: PreviewPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-center gap-1 rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-1 w-fit mx-auto">
+      <div className="flex items-center justify-center gap-1 rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#141414] p-1 w-fit mx-auto">
         {VIEWPORTS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -50,8 +50,8 @@ export function PreviewPanel({ content, styles }: PreviewPanelProps) {
             title={label}
             className={`p-2 rounded-md transition-colors ${
               viewport === id
-                ? 'bg-stone-100 dark:bg-white/10 text-stone-900 dark:text-white'
-                : 'text-stone-400 dark:text-white/30 hover:text-stone-600 dark:hover:text-white/50'
+                ? 'bg-stone-100 dark:bg-[#1e1e1e] text-stone-900 dark:text-white'
+                : 'text-stone-400 dark:text-[#4a4a4a] hover:text-stone-600 dark:hover:text-white/50'
             }`}
           >
             <Icon size={16} />
@@ -61,7 +61,7 @@ export function PreviewPanel({ content, styles }: PreviewPanelProps) {
 
       <div className="flex justify-center">
         <div
-          className={`${activeViewport.maxW} w-full border border-stone-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5 p-8 transition-all`}
+          className={`${activeViewport.maxW} w-full border border-stone-200 dark:border-white/10 rounded-lg bg-white dark:bg-[#141414] p-8 transition-all`}
           style={inlineStyles}
         >
           <div

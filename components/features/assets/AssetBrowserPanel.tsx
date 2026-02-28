@@ -9,10 +9,10 @@ import {
   Trash2,
   Search,
   GripVertical,
-  Loader2,
   AlertCircle,
   FolderOpen,
 } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { useShopifyAssets, ShopifyAssetInfo } from '@/hooks/useShopifyAssets';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ export default function AssetBrowserPanel({
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center ide-surface-panel">
-        <Loader2 className="h-6 w-6 animate-spin ide-text-muted" />
+        <LambdaDots size={24} />
         <span className="ml-2 text-sm ide-text-muted">Loading assets…</span>
       </div>
     );
@@ -251,7 +251,7 @@ export default function AssetBrowserPanel({
           className="flex items-center gap-1.5 rounded-md bg-accent hover:bg-accent-hover px-3 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
         >
           {isUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <LambdaDots size={16} />
           ) : (
             <Upload className="h-4 w-4" />
           )}

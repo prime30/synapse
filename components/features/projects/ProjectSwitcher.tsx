@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useProjects, type Project } from '@/hooks/useProjects';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 
 export interface ProjectSwitcherProps {
   currentProjectId: string;
@@ -441,23 +442,7 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 function Spinner() {
-  return (
-    <svg
-      className="w-4 h-4 animate-spin text-sky-500 dark:text-sky-400"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeDasharray="31.4 31.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return <LambdaDots size={16} />;
 }
 
 function LoadingSkeleton() {

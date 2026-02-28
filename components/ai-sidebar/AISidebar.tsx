@@ -18,7 +18,7 @@ interface AISidebarProps {
   context: AISidebarContextValue;
   messages: ChatMessage[];
   isLoading: boolean;
-  onSend: (content: string) => void;
+  onSend: (content: string, options?: { imageUrls?: string[] }) => void;
   className?: string;
   /** Highest-confidence ambient nudge to display. */
   topNudge?: AmbientNudge | null;

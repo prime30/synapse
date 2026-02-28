@@ -174,6 +174,7 @@ async function buildFlatContext(
   files: FileContext[],
   userRequest: string,
   options: V2CoordinatorOptions,
+  onProgress?: (event: { type: string; [key: string]: unknown }) => void,
 ): Promise<{
   preloaded: FileContext[];
   allFiles: FileContext[];
@@ -206,6 +207,16 @@ async function buildFlatContext(
       } catch {
         // Fall back to whatever content we have
       }
+    }
+  }
+
+  for (const f of preloaded) {
+    if (f.content && !f.content.startsWith('[')) {
+      onProgress?.({
+        type: 'context_file_loaded',
+        path: f.fileName || f.path || f.fileId,
+        tokenCount: Math.ceil((f.content?.length ?? 0) / 4),
+      });
     }
   }
 
@@ -392,6 +403,7 @@ export async function streamFlat(
     files,
     userRequest,
     options,
+    onProgress,
   );
 
   onProgress?.({

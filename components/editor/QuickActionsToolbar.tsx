@@ -151,7 +151,7 @@ export function QuickActionsToolbar({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 4 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className="absolute z-50 flex flex-wrap items-center rounded-md border ide-border ide-surface-pop shadow-lg backdrop-blur-md"
+          className="absolute z-50 flex flex-wrap items-center rounded-md border ide-border ide-surface-pop shadow-lg"
           style={{
             top: position.top - TOOLBAR_OFFSET_Y,
             left: position.left,

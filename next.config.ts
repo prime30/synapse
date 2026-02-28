@@ -85,7 +85,6 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  turbopack: {},
   async rewrites() {
     return [
       {

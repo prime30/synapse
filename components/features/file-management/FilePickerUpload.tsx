@@ -103,7 +103,7 @@ export function FilePickerUpload({
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded p-6 text-center cursor-pointer transition-colors ${
-          isDragActive ? 'border-sky-500 ide-active' : 'ide-border hover:border-stone-400 dark:hover:border-white/20'
+          isDragActive ? 'border-sky-500 ide-active' : 'ide-border hover:border-stone-400 dark:hover:border-[#333333]'
         }`}
       >
         <input {...getInputProps()} />

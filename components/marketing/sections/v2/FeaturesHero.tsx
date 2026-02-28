@@ -51,9 +51,7 @@ export default function FeaturesHero() {
           animate={inView ? show : hide}
           transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
-          AI-Powered Shopify Theme IDE
-          <br className="hidden md:block" />
-          {' '}for Liquid Developers
+          Features
         </motion.h1>
 
         {/* Subtitle */}
@@ -63,9 +61,8 @@ export default function FeaturesHero() {
           animate={inView ? show : hide}
           transition={{ duration: 0.5, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
-          Liquid completions, live preview, AI code generation, performance
-          scoring, and one-click deploy — everything you need to ship Shopify
-          themes faster.
+          Fewer context switches. Faster deployments. Production-ready code.
+          See what developers actually experience with Synapse.
         </motion.p>
 
         {/* CTA row */}
@@ -99,8 +96,7 @@ export default function FeaturesHero() {
           animate={inView ? show : hide}
           transition={{ duration: 0.5, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          Runs in the browser. No local install. Works with your existing
-          Shopify themes.
+          Works with your existing Shopify themes. No migration required.
         </motion.p>
       </div>
     </section>

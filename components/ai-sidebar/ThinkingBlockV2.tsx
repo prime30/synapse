@@ -134,7 +134,7 @@ export function ThinkingBlockV2({
             >
               <div
                 ref={bodyRef}
-                className="text-xs ide-text-3 leading-relaxed whitespace-pre-wrap px-3 py-2 border-t ide-border-subtle max-h-[200px] overflow-y-auto"
+                className="text-xs ide-text-3 leading-relaxed whitespace-pre-wrap px-3 py-2 border-t ide-border-subtle"
               >
                 {reasoningText}
               </div>

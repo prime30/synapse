@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FolderOpen, Loader2, Check, AlertCircle } from 'lucide-react';
+import { FolderOpen, Check, AlertCircle } from 'lucide-react';
+import { LambdaDots } from '@/components/ui/LambdaDots';
 import { useDesktopImport } from '@/hooks/useDesktopImport';
 
 /**
@@ -45,7 +46,7 @@ export function ImportFolderButton({ className }: { className?: string }) {
         <button
           type="button"
           onClick={reset}
-          className="text-sm text-stone-500 hover:text-stone-700 dark:text-white/40 dark:hover:text-white/60 transition-colors"
+          className="text-sm text-stone-500 hover:text-stone-700 dark:text-[#636059] dark:hover:text-white/60 transition-colors"
         >
           Dismiss
         </button>
@@ -58,11 +59,11 @@ export function ImportFolderButton({ className }: { className?: string }) {
       type="button"
       onClick={importFolder}
       disabled={isWorking}
-      className={`inline-flex items-center gap-2 rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2 text-sm font-medium text-stone-700 dark:text-white/70 hover:bg-stone-50 dark:hover:bg-white/10 transition-colors disabled:opacity-50 ${className ?? ''}`}
+      className={`inline-flex items-center gap-2 rounded-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#141414] px-4 py-2 text-sm font-medium text-stone-700 dark:text-white/70 hover:bg-stone-50 dark:hover:bg-[#1e1e1e] transition-colors disabled:opacity-50 ${className ?? ''}`}
     >
       {isWorking ? (
         <>
-          <Loader2 size={16} className="animate-spin" />
+          <LambdaDots size={16} />
           {progress}
         </>
       ) : (

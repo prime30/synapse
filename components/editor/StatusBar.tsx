@@ -2,6 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import { BatchJobIndicator } from '@/components/features/batch/BatchJobIndicator';
+import { SyncQueueIndicator } from '@/components/features/sync/SyncQueueIndicator';
 import type { BatchJobStatus } from '@/hooks/useBatchJobs';
 
 export interface TokenUsageDisplay {
@@ -30,12 +31,22 @@ interface StatusBarProps {
   lastCostCents?: number | null;
   /** Total session cost in cents */
   sessionCostCents?: number | null;
+  /** Per-phase cost breakdown from the last execution */
+  costBreakdown?: {
+    pm?: Array<{ modelId: string; costCents: number }>;
+    specialist?: Array<{ modelId: string; costCents: number }>;
+    review?: Array<{ modelId: string; costCents: number }>;
+  } | null;
   /** Batch processing jobs to display */
   batchJobs?: BatchJobStatus[];
   /** Handler for canceling a batch job */
   onCancelBatch?: (batchId: string) => void;
   /** EPIC D: Cache backend status */
   cacheBackend?: 'redis' | 'memory' | null;
+  /** Collapsed loading indicator: items done / total */
+  loadingProgress?: { done: number; total: number } | null;
+  /** Project ID for sync queue status indicator */
+  syncQueueProjectId?: string | null;
   /** Optional slot for extra indicators (e.g. binary sync progress) */
   children?: ReactNode;
 }
@@ -62,7 +73,7 @@ function formatSize(bytes: number): string {
 /* ------------------------------------------------------------------ */
 
 function Divider() {
-  return <span className="w-px h-3 bg-stone-200 dark:bg-white/10 shrink-0" />;
+  return <span className="w-px h-3 bg-stone-200 dark:bg-[#1e1e1e] shrink-0" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,7 +85,7 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, cursorPosition, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, termMappingCount = 0, lastCostCents, sessionCostCents, batchJobs, onCancelBatch, cacheBackend, children }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, cursorPosition, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, termMappingCount = 0, lastCostCents, sessionCostCents, costBreakdown, batchJobs, onCancelBatch, cacheBackend, loadingProgress, syncQueueProjectId, children }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -105,6 +116,17 @@ export function StatusBar({ fileName, content, language, filePath, cursorPositio
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Collapsed loading indicator */}
+      {loadingProgress && loadingProgress.done < loadingProgress.total && (
+        <>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-sky-500 dark:text-sky-400">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-sky-400 motion-safe:animate-pulse" />
+            Loading {loadingProgress.done}/{loadingProgress.total}
+          </span>
+          <Divider />
+        </>
+      )}
+
       {/* Batch processing indicator */}
       {batchJobs && batchJobs.length > 0 && (
         <>
@@ -115,6 +137,14 @@ export function StatusBar({ fileName, content, language, filePath, cursorPositio
 
       {/* Extra indicators slot (e.g. binary sync progress) */}
       {children}
+
+      {/* Sync queue status */}
+      {syncQueueProjectId && (
+        <>
+          <SyncQueueIndicator projectId={syncQueueProjectId} />
+          <Divider />
+        </>
+      )}
 
       {/* EPIC 7: Offline indicator */}
       {!isOnline && (
@@ -155,12 +185,30 @@ export function StatusBar({ fileName, content, language, filePath, cursorPositio
         </>
       )}
 
-      {/* Cost indicator */}
+      {/* Cost indicator with per-phase breakdown */}
       {(lastCostCents != null && lastCostCents > 0) && (
         <>
           <span
             className="inline-flex items-center gap-0.5 whitespace-nowrap text-emerald-400"
-            title={`Last request: $${(lastCostCents / 100).toFixed(4)}${sessionCostCents ? ` | Session total: $${((sessionCostCents ?? 0) / 100).toFixed(2)}` : ''}`}
+            title={(() => {
+              const parts = [`Last request: $${(lastCostCents / 100).toFixed(4)}`];
+              if (costBreakdown) {
+                const fmt = (items: Array<{ modelId: string; costCents: number }> | undefined, label: string) => {
+                  if (!items || items.length === 0) return null;
+                  const total = items.reduce((s, i) => s + i.costCents, 0);
+                  const modelName = items[0].modelId.split('-').slice(0, 2).join('-');
+                  return `${label}: $${(total / 100).toFixed(4)} (${modelName}${items.length > 1 ? ` x${items.length}` : ''})`;
+                };
+                const pmLine = fmt(costBreakdown.pm, 'PM');
+                const specLine = fmt(costBreakdown.specialist, 'Specialists');
+                const revLine = fmt(costBreakdown.review, 'Review');
+                if (pmLine || specLine || revLine) {
+                  parts.push([pmLine, specLine, revLine].filter(Boolean).join(' | '));
+                }
+              }
+              if (sessionCostCents) parts.push(`Session total: $${((sessionCostCents ?? 0) / 100).toFixed(2)}`);
+              return parts.join('\n');
+            })()}
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />

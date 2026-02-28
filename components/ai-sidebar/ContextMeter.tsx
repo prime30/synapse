@@ -15,13 +15,13 @@ function formatTokens(n: number): string {
 }
 
 const STATUS_COLORS: Record<ContextStatus, { ring: string; text: string; bg: string }> = {
-  ok: { ring: 'stroke-sky-500 dark:stroke-sky-400', text: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-500/20' },
+  ok: { ring: 'stroke-stone-400 dark:stroke-white/60', text: 'ide-text-muted', bg: 'bg-stone-500/20' },
   warning: { ring: 'stroke-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/20' },
   critical: { ring: 'stroke-red-400', text: 'text-red-400', bg: 'bg-red-500/20' },
 };
 
 const STATUS_BAR_COLORS: Record<ContextStatus, string> = {
-  ok: 'bg-sky-500 dark:bg-sky-500',
+  ok: 'bg-stone-400 dark:bg-[#6a6a6a]',
   warning: 'bg-amber-500',
   critical: 'bg-red-500',
 };
@@ -125,9 +125,11 @@ interface ContextMeterProps {
   modelLabel?: string;
   /** Callback to start a new chat (for freeing context). */
   onNewChat?: () => void;
+  /** Show only the ring icon with no percentage text, fitting in a small icon row. */
+  compact?: boolean;
 }
 
-export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps) {
+export function ContextMeter({ meter, modelLabel, onNewChat, compact }: ContextMeterProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -139,7 +141,6 @@ export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps
         setOpen(false);
       }
     };
-    // Delay to avoid closing on the same click that opened it
     const timer = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => {
       clearTimeout(timer);
@@ -152,16 +153,18 @@ export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Compact pill */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center justify-center gap-1.5 h-9 min-h-9 min-w-[2.5rem] rounded-lg px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none bg-transparent ${colors.text} hover:brightness-125`}
-        title="Context window usage"
+        className={compact
+          ? `inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-md transition-colors ide-text-muted hover:ide-text-2 focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none`
+          : `inline-flex items-center justify-center gap-1.5 h-9 min-h-9 min-w-[2.5rem] rounded-lg px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none bg-transparent ${colors.text} hover:brightness-125`
+        }
+        title={`Context window ${Math.round(meter.percentage)}% used`}
         aria-label={`Context window ${Math.round(meter.percentage)}% used`}
       >
         <MiniRing percentage={meter.percentage} status={meter.status} />
-        <span className="tabular-nums">{Math.round(meter.percentage)}%</span>
+        {!compact && <span className="tabular-nums">{Math.round(meter.percentage)}%</span>}
       </button>
 
       {/* Expanded popover */}
@@ -177,7 +180,7 @@ export function ContextMeter({ meter, modelLabel, onNewChat }: ContextMeterProps
 
           {/* Large bar */}
           <div>
-            <div className="h-2 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
+            <div className="h-2 rounded-full bg-stone-200 dark:bg-[#1e1e1e] overflow-hidden">
               <div
                 className={`h-full rounded-full ${barColor} transition-all duration-300`}
                 style={{ width: `${Math.min(meter.percentage, 100)}%` }}
