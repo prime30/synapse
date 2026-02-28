@@ -7,7 +7,7 @@ import { getExecution, getScreenshots, persistExecution, updateExecutionStatus }
 import type { CodeChange } from '@/lib/types/agent';
 import { updateFile } from '@/lib/services/files';
 import { invalidateFileContent } from '@/lib/supabase/file-loader';
-import { runPushForProject } from '@/lib/shopify/push-queue';
+import { schedulePushForProject } from '@/lib/shopify/push-queue';
 import { createClient } from '@/lib/supabase/server';
 
 const bodySchema = z.object({
@@ -16,45 +16,6 @@ const bodySchema = z.object({
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-async function captureAfterScreenshot(executionId: string, projectId: string): Promise<string | undefined> {
-  try {
-    const supabase = await createClient();
-    const { data: project } = await supabase
-      .from('projects')
-      .select('shopify_connection_id, dev_theme_id')
-      .eq('id', projectId)
-      .maybeSingle();
-    if (!project?.shopify_connection_id) return undefined;
-
-    const { data: connection } = await supabase
-      .from('shopify_connections')
-      .select('id, theme_id, store_domain')
-      .eq('id', project.shopify_connection_id)
-      .maybeSingle();
-    if (!connection?.store_domain || !connection.theme_id) return undefined;
-
-    const themeId = String(project.dev_theme_id ?? connection.theme_id);
-    const { generateThumbnail } = await import('@/lib/thumbnail/generator');
-    const buffer = await generateThumbnail(connection.store_domain, themeId);
-    if (!buffer) return undefined;
-
-    const { createClient: createStorageClient } = await import('@supabase/supabase-js');
-    const storage = createStorageClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-    const path = `screenshots/${executionId}-after.jpg`;
-    await storage.storage.from('project-files').upload(path, buffer, {
-      contentType: 'image/jpeg',
-      upsert: true,
-    });
-    const { data: urlData } = storage.storage.from('project-files').getPublicUrl(path);
-    return urlData?.publicUrl ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -67,12 +28,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { projectId } = parsed.data;
 
     const state = await getExecution(executionId);
-    if (!state) throw APIError.notFound('Execution not found or expired');
-    if (state.projectId !== projectId) throw APIError.forbidden('Project mismatch');
+    let allChanges: CodeChange[] = [];
 
-    const allChanges: CodeChange[] = [];
-    for (const changes of state.proposedChanges.values()) {
-      allChanges.push(...changes);
+    if (state) {
+      if (state.projectId !== projectId) throw APIError.forbidden('Project mismatch');
+      for (const changes of state.proposedChanges.values()) {
+        allChanges.push(...changes);
+      }
+    } else {
+      // Fallback for persisted executions (Redis state already flushed).
+      const supabase = await createClient();
+      const { data: row } = await supabase
+        .from('agent_executions')
+        .select('project_id, user_id, proposed_changes')
+        .eq('id', executionId)
+        .maybeSingle();
+      if (!row) throw APIError.notFound('Execution not found');
+      if (row.project_id !== projectId) throw APIError.forbidden('Project mismatch');
+      if (row.user_id !== userId) throw APIError.forbidden('Execution ownership mismatch');
+      allChanges = (row.proposed_changes as CodeChange[] | null) ?? [];
     }
 
     if (allChanges.length === 0) {
@@ -117,24 +91,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Await the push directly so the after screenshot captures the new state
-    await runPushForProject(projectId);
+    // Queue push asynchronously to keep approve fast and avoid UI hangs.
+    schedulePushForProject(projectId);
 
-    // Capture after screenshot (best-effort, add ~2s delay for CDN propagation)
-    await new Promise((r) => setTimeout(r, 2000));
-    const afterScreenshotUrl = await captureAfterScreenshot(executionId, projectId);
+    // Retrieve before screenshot from Redis (best-effort).
+    const screenshots = await getScreenshots(executionId).catch(() => ({} as { beforeUrl?: string }));
 
-    // Retrieve before screenshot from Redis
-    const screenshots = await getScreenshots(executionId);
-
-    updateExecutionStatus(executionId, 'completed');
-    await persistExecution(executionId);
+    if (state) {
+      updateExecutionStatus(executionId, 'completed');
+      await persistExecution(executionId);
+    }
 
     return successResponse({
       appliedCount,
       total: allChanges.length,
       beforeScreenshotUrl: screenshots.beforeUrl ?? null,
-      afterScreenshotUrl: afterScreenshotUrl ?? null,
+      afterScreenshotUrl: null,
+      pushScheduled: appliedCount > 0,
     });
   } catch (error) {
     return handleAPIError(error);

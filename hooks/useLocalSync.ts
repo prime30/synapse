@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+// IndexedDB cache integration is available via @/lib/cache/indexeddb-file-cache
+// for future use when sync-to-disk returns file content for browser caching.
 
 /**
  * useLocalSync — Manages the local disk sync lifecycle for a project.
@@ -122,7 +124,14 @@ export function useLocalSync(projectId: string | null): UseLocalSyncReturn {
       }
 
       const { data } = await res.json();
-      setLastPush({ pushed: data.pushed ?? 0, errors: data.errors ?? [] });
+      const pushed = data.pushed ?? 0;
+      const errors = data.errors ?? [];
+      setLastPush({ pushed, errors });
+
+      if (errors.length > 0 && pushed === 0) {
+        throw new Error(errors[0]);
+      }
+
       setStatus('idle');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Push to dev theme failed');

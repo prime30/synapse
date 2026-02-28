@@ -65,7 +65,7 @@ export function analyzeGaps(logs: ModuleLoadLog[]): GapAnalysisResult {
   for (const log of logs) {
     if (
       log.modulesLoaded.length <= 1 &&
-      log.modulesLoaded[0] === 'theme-architecture'
+      log.modulesLoaded[0] === 'liquid-core'
     ) {
       if (log.toolCallsUsed > 10 || log.hadClarification) {
         const keywords = extractKeywords(log.userMessage);

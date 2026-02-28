@@ -6,7 +6,7 @@ import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
 import { checkUsageAllowance } from '@/lib/billing/usage-guard';
 import { recordUsageBatch } from '@/lib/billing/usage-recorder';
-import { AIProviderError, formatSSEError, formatSSEDone } from '@/lib/ai/errors';
+import { AIProviderError, formatSSEError, formatSSEDone, classifyNetworkError } from '@/lib/ai/errors';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { loadProjectFiles } from '@/lib/supabase/file-loader';
@@ -14,9 +14,10 @@ import { formatMemoryForPrompt, filterActiveMemories, rowToMemoryEntry, type Mem
 import { buildDiagnosticContext } from '@/lib/agents/diagnostic-context';
 import type { UserPreference } from '@/lib/types/agent';
 import { streamV2 } from '@/lib/agents/coordinator-v2';
+import { streamFlat } from '@/lib/agents/coordinator-flat';
 import type { V2CoordinatorOptions } from '@/lib/agents/coordinator-v2';
 import { trimHistory } from '@/lib/ai/history-window';
-import { loadHistoryForCoordinator } from '@/lib/ai/message-persistence';
+import { loadHistoryForCoordinator, recallFromPastSessions } from '@/lib/ai/message-persistence';
 import { compressHistoryForBudget } from '@/lib/ai/message-compression';
 import type { MessageMetadata } from '@/lib/types/database';
 import { updateFile } from '@/lib/services/files';
@@ -24,8 +25,6 @@ import { invalidateFileContent } from '@/lib/supabase/file-loader';
 import { schedulePushForProject } from '@/lib/shopify/push-queue';
 import { isCircuitOpen } from '@/lib/ai/circuit-breaker';
 import { MODELS, getProviderForModel } from '@/lib/agents/model-router';
-import { AgentCoordinator } from '@/lib/agents/coordinator';
-import type { ThinkingEvent, AgentToolEvent } from '@/lib/agents/coordinator';
 import { startTrace } from '@/lib/observability/tracer';
 import { incrementCounter, recordHistogram } from '@/lib/observability/metrics';
 import { createModuleLogger } from '@/lib/observability/logger';
@@ -50,6 +49,10 @@ const streamSchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).optional().default([]),
+  images: z.array(z.object({
+    base64: z.string(),
+    mimeType: z.string(),
+  })).optional(),
   model: z.string().optional(),
   domContext: z.string().optional(),
   intentMode: z.enum(['code', 'ask', 'plan', 'debug']).optional(),
@@ -74,6 +77,9 @@ const streamSchema = z.object({
     selector: z.string().optional(),
   }).optional(),
   subagentCount: z.number().int().min(1).max(4).optional(),
+  maxQuality: z.boolean().optional(),
+  cleanStart: z.boolean().optional(),
+  useFlatPipeline: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -175,7 +181,7 @@ export async function POST(req: NextRequest) {
             const type = event.type as string;
             if (type === 'thinking' || type === 'reasoning') return;
           }
-          emit(`data: ${JSON.stringify(event)}\n\n`);
+          emit(`event: synapse\ndata: ${JSON.stringify(event)}\n\n`);
         };
 
         // ── Heartbeat keepalive (EPIC 3c) ────────────────────────────
@@ -192,7 +198,21 @@ export async function POST(req: NextRequest) {
           const contextLoadStart = Date.now();
           emitEvent({ type: 'thinking', phase: 'analyzing', label: 'Loading context...' });
 
-          const [fileResult, prefResult, memoryContext] = await Promise.all([
+          // Check if this session has clean_start enabled (suppresses cross-session recall)
+          // Checked via request body flag OR database column (either is sufficient)
+          let isCleanStart = Boolean(body.cleanStart);
+          if (!isCleanStart && body.sessionId) {
+            try {
+              const { data: sessionRow } = await serviceClient
+                .from('ai_sessions')
+                .select('clean_start')
+                .eq('id', body.sessionId)
+                .maybeSingle();
+              isCleanStart = Boolean(sessionRow?.clean_start);
+            } catch { /* column may not exist yet */ }
+          }
+
+          const [fileResult, prefResult, memoryContext, crossSessionContext, shopifyInfo] = await Promise.all([
             (async () => {
               const t0 = Date.now();
               const result = await loadProjectFiles(body.projectId, serviceClient);
@@ -212,6 +232,7 @@ export async function POST(req: NextRequest) {
               return prefs;
             })(),
             (async () => {
+              if (isCleanStart) return '';
               const t0 = Date.now();
               const mem = await getCachedMemoryContext(userId, body.projectId, async () => {
                 try {
@@ -230,6 +251,30 @@ export async function POST(req: NextRequest) {
               recordHistogram('agent.memory_load_ms', Date.now() - t0).catch(() => {});
               return mem;
             })(),
+            (async () => {
+              if (isCleanStart) return '';
+              try {
+                return await recallFromPastSessions(
+                  body.projectId,
+                  body.sessionId,
+                  body.request,
+                  5,
+                );
+              } catch { return ''; }
+            })(),
+            (async () => {
+              try {
+                const { data: project } = await serviceClient
+                  .from('projects')
+                  .select('shopify_connection_id, dev_theme_id, shopify_theme_id')
+                  .eq('id', body.projectId)
+                  .maybeSingle();
+                return {
+                  connectionId: project?.shopify_connection_id as string | undefined,
+                  themeId: (project?.dev_theme_id ?? project?.shopify_theme_id) as string | undefined,
+                };
+              } catch { return { connectionId: undefined, themeId: undefined }; }
+            })(),
           ]);
 
           recordHistogram('agent.context_load_total_ms', Date.now() - contextLoadStart).catch(() => {});
@@ -247,13 +292,21 @@ export async function POST(req: NextRequest) {
             detail: `${fileContexts.length} files, ${prefResult.length} prefs`,
           });
 
+          const requestTrimmed = body.request.trim();
           const referentialCodePrompt =
             (body.intentMode ?? 'code') === 'code' &&
             (
               body.isReferentialCodePrompt === true ||
-              /^(yes|ok|do it|go ahead|apply|implement|implement the code changes you just suggested|make those changes now|make those code changes now)[\s.!]*$/i.test(body.request.trim()) ||
-              /\b(apply|implement|create|make|write|use|do)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before)\b/i.test(body.request) ||
-              /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet)\b/i.test(body.request)
+              // Direct approval patterns
+              /^(yes|ok|do it|go ahead|apply|implement|make those changes|ship it|proceed|continue|build it|execute)[\s.!]*$/i.test(requestTrimmed) ||
+              // "apply/implement/do that/those/the changes"
+              /\b(apply|implement|create|make|write|use|do|try|fix|build)\b.*\b(that|the|those|this|previous|earlier|before|above|suggested|from before|again)\b/i.test(requestTrimmed) ||
+              // "that/those/the code/changes/suggestions"
+              /\b(that|the|those|this|previous|earlier|before|above)\b.*\b(code|changes?|suggestions?|edits?|snippet|approach|fix|plan)\b/i.test(requestTrimmed) ||
+              // "same thing" / "like before" / "what you said"
+              /\b(same|like|what you)\b.*\b(thing|before|said|suggested|showed|described|proposed)\b/i.test(requestTrimmed) ||
+              // Short follow-ups that reference prior context
+              requestTrimmed.length < 30 && /\b(again|too|also|and|but|still|yet)\b/i.test(requestTrimmed)
             );
           // Load structured history from DB if sessionId available; fall back to flat strings
           const historyBudget = referentialCodePrompt ? 60_000 : 30_000;
@@ -267,10 +320,10 @@ export async function POST(req: NextRequest) {
                   structuredHistory.map((m) => ({
                     role: m.role,
                     content: m.content,
-                    metadata: (m as Record<string, unknown>).__toolCalls
-                      ? { toolCalls: (m as Record<string, unknown>).__toolCalls as MessageMetadata['toolCalls'] }
-                      : (m as Record<string, unknown>).__toolResults
-                        ? { toolResults: (m as Record<string, unknown>).__toolResults as MessageMetadata['toolResults'] }
+                    metadata: (m as unknown as Record<string, unknown>).__toolCalls
+                      ? { toolCalls: (m as unknown as Record<string, unknown>).__toolCalls as MessageMetadata['toolCalls'] }
+                      : (m as unknown as Record<string, unknown>).__toolResults
+                        ? { toolResults: (m as unknown as Record<string, unknown>).__toolResults as MessageMetadata['toolResults'] }
                         : null,
                     created_at: new Date().toISOString(),
                   })),
@@ -280,7 +333,7 @@ export async function POST(req: NextRequest) {
                   const msg: Record<string, unknown> = { role: c.role, content: c.content };
                   if (c.metadata?.toolCalls) msg.__toolCalls = c.metadata.toolCalls;
                   if (c.metadata?.toolResults) msg.__toolResults = c.metadata.toolResults;
-                  return msg as (typeof structuredHistory)[number];
+                  return msg as unknown as (typeof structuredHistory)[number];
                 });
               }
             }
@@ -290,7 +343,7 @@ export async function POST(req: NextRequest) {
           if (!recentHistory) {
             const trimmed = trimHistory(
               body.history.map((h) => ({ role: h.role, content: h.content })),
-              { budget: historyBudget, keepRecent: referentialCodePrompt ? 24 : 10 },
+              { budget: historyBudget, keepRecent: referentialCodePrompt ? 30 : 20 },
             );
             recentMessages = trimmed.messages.map((m) => m.content);
           }
@@ -318,11 +371,12 @@ export async function POST(req: NextRequest) {
             sessionId: body.sessionId,
             intentMode: body.intentMode ?? 'code',
             maxParallelSpecialists,
+            maxQuality: body.maxQuality ?? false,
             isReferentialCodePrompt: referentialCodePrompt,
             referentialArtifacts: resolvedArtifacts,
             model: fallbackChain[0],
             domContext: body.domContext,
-            memoryContext,
+            memoryContext: [memoryContext, crossSessionContext].filter(Boolean).join('\n\n') || undefined,
             diagnosticContext,
             activeFilePath: body.activeFilePath,
             openTabs: body.openTabs,
@@ -330,21 +384,31 @@ export async function POST(req: NextRequest) {
             recentHistory,
             loadContent,
             elementHint: body.elementHint,
+            images: body.images,
             onProgress: (event) => emitEvent(event),
             onContentChunk: (chunk) => {
               if (!firstTokenRecorded) {
                 firstTokenRecorded = true;
                 recordHistogram('agent.first_token_ms', Date.now() - requestStart).catch(() => {});
               }
-              emit(chunk);
+              emitEvent({ type: 'content_chunk', chunk });
             },
             onToolEvent: (event) => emitEvent(event),
             onReasoningChunk: (agent, chunk) => {
               emitEvent({ type: 'reasoning', agent, text: chunk });
             },
+            shopifyConnectionId: shopifyInfo.connectionId,
+            themeId: shopifyInfo.themeId,
+            deadlineMs: requestStart,
           };
 
-          let result = await streamV2(
+          const coordinatorFn = body.useFlatPipeline ? streamFlat : streamV2;
+
+          if (!body.useFlatPipeline) {
+            coordinatorOptions.strategy = 'GOD_MODE';
+          }
+
+          let result = await coordinatorFn(
             executionId,
             body.projectId,
             userId,
@@ -370,7 +434,7 @@ export async function POST(req: NextRequest) {
                   : `Model unavailable — trying ${fallbackModel}`,
               });
               const retryOpts = { ...coordinatorOptions, model: fallbackModel };
-              result = await streamV2(
+              result = await coordinatorFn(
                 executionId + `-fb${fi}`,
                 body.projectId,
                 userId,
@@ -394,7 +458,7 @@ export async function POST(req: NextRequest) {
               ...coordinatorOptions,
               openTabs: (body.openTabs ?? []).slice(0, 3),
             };
-            result = await streamV2(
+            result = await coordinatorFn(
               executionId + '-retry',
               body.projectId,
               userId,
@@ -405,50 +469,35 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          // ── Graceful degradation to v1 (EPIC 3f) ───────────────────
-          if (
-            !result.success &&
-            result.error?.code !== 'MODEL_UNAVAILABLE' &&
-            result.error?.code !== 'CONTEXT_TOO_LARGE'
-          ) {
-            try {
-              emitEvent({
-                type: 'thinking',
-                phase: 'analyzing',
-                label: 'Falling back to standard pipeline...',
-              });
-              const v1Coordinator = new AgentCoordinator();
-              result = await v1Coordinator.streamAgentLoop(
-                executionId + '-v1fb',
-                body.projectId,
-                userId,
-                body.request,
-                fileContexts,
-                prefResult,
-                {
-                  sessionId: body.sessionId,
-                  intentMode: body.intentMode ?? 'code',
-                  model: body.model,
-                  domContext: body.domContext,
-                  memoryContext,
-                  diagnosticContext,
-                  activeFilePath: body.activeFilePath,
-                  openTabs: body.openTabs,
-                  recentMessages,
-                  recentHistory,
-                  loadContent,
-                  elementHint: body.elementHint,
-                  onProgress: (event: ThinkingEvent) => emitEvent(event as unknown as Record<string, unknown>),
-                  onContentChunk: (chunk: string) => emit(chunk),
-                  onToolEvent: (event: AgentToolEvent) => emitEvent(event as unknown as Record<string, unknown>),
-                  onReasoningChunk: (agent: string, chunk: string) => {
-                    emitEvent({ type: 'reasoning', agent, text: chunk });
-                  },
-                },
-              );
-            } catch (v1Err) {
-              console.error('[V2 Stream] v1 fallback also failed:', v1Err);
-            }
+          // Incomplete execution contract: checkpointed runs are continuing in background.
+          // Do not emit terminal `done` for this stream.
+          if (result.success && result.checkpointed) {
+            emitEvent({
+              type: 'checkpointed',
+              phase: 'background',
+              label: 'Continuing in background...',
+              metadata: { executionId },
+            });
+            emitEvent({
+              type: 'context_stats',
+              loadedFiles: fileContexts.filter((f) => !f.content.startsWith('[')).length,
+              loadedTokens: Math.ceil(
+                fileContexts
+                  .filter((f) => !f.content.startsWith('['))
+                  .reduce((sum, f) => sum + (f.content?.length ?? 0), 0) / 4,
+              ),
+              totalFiles: fileContexts.length,
+            });
+            return;
+          }
+
+          // Surface V2 errors directly — no silent fallback to a weaker pipeline.
+          if (!result.success && result.error) {
+            const code = (result.error.code ?? 'UNKNOWN') as import('@/lib/ai/errors').AIErrorCode;
+            const msg = result.error.message ?? 'Agent execution failed';
+            console.error(`[V2 Stream] Failed (${code}): ${msg}`);
+            emit(formatSSEError(new AIProviderError(code, msg, 'server')));
+            return;
           }
 
           // ── Token usage recording (EPIC 1c) ────────────────────────
@@ -476,24 +525,34 @@ export async function POST(req: NextRequest) {
           const blockedByPolicy =
             Boolean(result.needsClarification) &&
             /plan-first policy requires plan approval/i.test(result.analysis ?? '');
-          const codeModeNoChangeFailure =
-            (body.intentMode ?? 'code') === 'code' &&
-            changedFiles === 0 &&
-            !blockedByPolicy;
-          const needsInput =
-            !result.success ||
-            codeModeNoChangeFailure ||
-            (Boolean(result.needsClarification) && !blockedByPolicy);
+          // Only emit 'needs-input' when the agent explicitly asked for
+          // clarification (via ask_clarification tool). All other no-change
+          // code runs should surface as 'no-change' with the completion
+          // summary already streamed in the content.
           const outcome: 'applied' | 'no-change' | 'blocked-policy' | 'needs-input' =
-            changedFiles > 0
-              ? 'applied'
-              : blockedByPolicy
-                ? 'blocked-policy'
-                : needsInput
+            blockedByPolicy
+              ? 'blocked-policy'
+              : changedFiles > 0
+                ? 'applied'
+                : (Boolean(result.needsClarification) && !blockedByPolicy)
                   ? 'needs-input'
                   : 'no-change';
           // Auto-apply changes to file records and push to Shopify
           if (outcome === 'applied' && result.changes && result.changes.length > 0) {
+            emitEvent({
+              type: 'change_preview',
+              executionId,
+              sessionId: body.sessionId ?? null,
+              projectId: body.projectId,
+              changes: result.changes.map((c) => ({
+                fileId: c.fileId ?? '',
+                fileName: c.fileName,
+                originalContent: c.originalContent ?? '',
+                proposedContent: c.proposedContent ?? '',
+                reasoning: c.reasoning ?? '',
+              })),
+            });
+
             let appliedCount = 0;
             const skippedDestructive: string[] = [];
             for (const change of result.changes) {
@@ -571,7 +630,7 @@ export async function POST(req: NextRequest) {
 
               try {
                 await updateFile(resolvedFileId, { content: change.proposedContent, userId });
-                invalidateFileContent(resolvedFileId);
+                try { invalidateFileContent(resolvedFileId); } catch { /* non-blocking */ }
                 appliedCount++;
                 console.log(`[V2 Stream] Auto-applied ${change.fileName} (fileId=${resolvedFileId}, ${change.proposedContent.length} chars)`);
               } catch (err) {
@@ -609,6 +668,19 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          // Build a concise change summary for the UI
+          const changeSummaryLines: string[] = [];
+          if (result.changes && result.changes.length > 0) {
+            const fileNames = [...new Set(result.changes.map(c => c.fileName))];
+            for (const name of fileNames.slice(0, 8)) {
+              const change = result.changes.find(c => c.fileName === name);
+              changeSummaryLines.push(change?.reasoning
+                ? `${name}: ${change.reasoning}`
+                : `Updated ${name}`);
+            }
+            if (fileNames.length > 8) changeSummaryLines.push(`...and ${fileNames.length - 8} more file(s)`);
+          }
+
           emitEvent({
             type: 'execution_outcome',
             executionId,
@@ -616,11 +688,22 @@ export async function POST(req: NextRequest) {
             outcome,
             changedFiles,
             needsClarification: Boolean(result.needsClarification),
+            changeSummary: changeSummaryLines.length > 0 ? changeSummaryLines.join('\n') : undefined,
+            failureReason: result.failureReason ?? undefined,
+            suggestedAction: result.suggestedAction ?? undefined,
+            failedTool: result.failedTool ?? undefined,
+            failedFilePath: result.failedFilePath ?? undefined,
+            validationIssues: result.validationIssues ?? undefined,
           });
 
           emitEvent({
             type: 'context_stats',
             loadedFiles: fileContexts.filter((f) => !f.content.startsWith('[')).length,
+            loadedTokens: Math.ceil(
+              fileContexts
+                .filter((f) => !f.content.startsWith('['))
+                .reduce((sum, f) => sum + (f.content?.length ?? 0), 0) / 4,
+            ),
             totalFiles: fileContexts.length,
           });
 
@@ -630,9 +713,24 @@ export async function POST(req: NextRequest) {
           if (error instanceof AIProviderError) {
             emit(formatSSEError(error));
           } else {
-            emit(formatSSEError(
-              new AIProviderError('UNKNOWN', String(error), 'v2-coordinator'),
-            ));
+            const message = error instanceof Error ? error.message : String(error);
+            const lower = message.toLowerCase();
+            const isTimeoutOrNetwork =
+              lower.includes('abort') ||
+              lower.includes('timeout') ||
+              lower.includes('timed out') ||
+              lower.includes('network') ||
+              lower.includes('fetch');
+            const classified = isTimeoutOrNetwork
+              ? classifyNetworkError(error, 'v2-coordinator')
+              : new AIProviderError(
+                  'UNKNOWN',
+                  message,
+                  'v2-coordinator',
+                  undefined,
+                  message.length > 280 ? message.slice(0, 277) + '...' : message
+                );
+            emit(formatSSEError(classified));
           }
         } finally {
           clearInterval(heartbeatId);

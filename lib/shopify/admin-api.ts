@@ -771,13 +771,158 @@ export class ShopifyAdminAPI {
     await this.request<void>('DELETE', `price_rules/${priceRuleId}/discount_codes/${codeId}`);
   }
 
-  // ── Inventory (REST + GraphQL) ──────────────────────────────────────
+  // ── Products (GraphQL + REST) ───────────────────────────────────────
 
-  /** List products. */
+  /** List products via REST (legacy — use listProductsGraphQL for variant counts). */
   async listProducts(limit = 50): Promise<ShopifyProduct[]> {
     const res = await this.request<{ products: ShopifyProduct[] }>('GET', `products?limit=${limit}`);
     return res.products;
   }
+
+  /** List products via GraphQL with totalVariants and option names. */
+  async listProductsGraphQL(first = 50, after?: string): Promise<{
+    products: Array<{
+      id: string;
+      title: string;
+      handle: string;
+      status: string;
+      totalVariants: number;
+      options: Array<{ name: string; values: string[] }>;
+    }>;
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  }> {
+    const data = await this.graphql<{
+      products: {
+        edges: Array<{
+          node: {
+            id: string;
+            title: string;
+            handle: string;
+            status: string;
+            totalVariants: number;
+            options: Array<{ name: string; values: string[] }>;
+          };
+        }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    }>(`query($first: Int!, $after: String) {
+      products(first: $first, after: $after) {
+        edges {
+          node {
+            id title handle status totalVariants
+            options { name values }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`, { first, after });
+
+    return {
+      products: data.products.edges.map(e => e.node),
+      pageInfo: data.products.pageInfo,
+    };
+  }
+
+  /**
+   * Get a single product by ID or handle via GraphQL.
+   * Returns full option structure and first page of variants with cursor pagination.
+   */
+  async getProductGraphQL(idOrHandle: string, variantFirst = 100, variantAfter?: string): Promise<{
+    id: string;
+    title: string;
+    handle: string;
+    status: string;
+    totalVariants: number;
+    options: Array<{ name: string; values: string[] }>;
+    variants: {
+      edges: Array<{
+        node: {
+          id: string;
+          title: string;
+          sku: string;
+          price: string;
+          availableForSale: boolean;
+          selectedOptions: Array<{ name: string; value: string }>;
+          image: { url: string; altText: string | null } | null;
+        };
+      }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+    images: { edges: Array<{ node: { url: string; altText: string | null } }> };
+  }> {
+    const isGid = idOrHandle.startsWith('gid://');
+    const isNumeric = /^\d+$/.test(idOrHandle);
+
+    let queryFilter: string;
+    let variables: Record<string, unknown>;
+
+    if (isGid || isNumeric) {
+      const gid = isGid ? idOrHandle : `gid://shopify/Product/${idOrHandle}`;
+      queryFilter = 'product(id: $id)';
+      variables = { id: gid, variantFirst, variantAfter };
+    } else {
+      queryFilter = 'productByHandle(handle: $handle)';
+      variables = { handle: idOrHandle, variantFirst, variantAfter };
+    }
+
+    const paramDecl = isGid || isNumeric
+      ? '$id: ID!, $variantFirst: Int!, $variantAfter: String'
+      : '$handle: String!, $variantFirst: Int!, $variantAfter: String';
+
+    const data = await this.graphql<Record<string, {
+      id: string;
+      title: string;
+      handle: string;
+      status: string;
+      totalVariants: number;
+      options: Array<{ name: string; values: string[] }>;
+      variants: {
+        edges: Array<{
+          node: {
+            id: string;
+            title: string;
+            sku: string;
+            price: string;
+            availableForSale: boolean;
+            selectedOptions: Array<{ name: string; value: string }>;
+            image: { url: string; altText: string | null } | null;
+          };
+        }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+      images: { edges: Array<{ node: { url: string; altText: string | null } }> };
+    }>>(
+      `query(${paramDecl}) {
+        ${queryFilter} {
+          id title handle status totalVariants
+          options { name values }
+          variants(first: $variantFirst, after: $variantAfter) {
+            edges {
+              node {
+                id title sku price availableForSale
+                selectedOptions { name value }
+                image { url altText }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+          images(first: 20) {
+            edges { node { url altText } }
+          }
+        }
+      }`,
+      variables,
+    );
+
+    const key = isGid || isNumeric ? 'product' : 'productByHandle';
+    const product = data[key];
+    if (!product) {
+      throw new APIError(`Product not found: ${idOrHandle}`, 'NOT_FOUND', 404);
+    }
+    return product;
+  }
+
+  // ── Inventory (REST + GraphQL) ──────────────────────────────────────
 
   /** List locations. */
   async listLocations(): Promise<ShopifyLocation[]> {

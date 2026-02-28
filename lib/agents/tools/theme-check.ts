@@ -642,7 +642,7 @@ export function runThemeCheck(
  * Format theme check results for LLM consumption.
  * Groups by severity and truncates to token budget.
  */
-export function formatThemeCheckResult(result: ThemeCheckResult, maxChars: number = 8_000): string {
+export function formatThemeCheckResult(result: ThemeCheckResult, maxChars: number = 24_000): string {
   const lines: string[] = [
     `## Theme Check Results`,
     `Status: ${result.passed ? 'PASSED' : 'FAILED'}`,

@@ -67,7 +67,7 @@ export async function callPreviewAPI(
  * Format preview DOM data for LLM consumption.
  * Truncates to stay within token budget.
  */
-export function formatPreviewResult(data: unknown, maxChars: number = 2000): string {
+export function formatPreviewResult(data: unknown, maxChars: number = 8000): string {
   const str = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   if (str.length <= maxChars) return str;
   return str.slice(0, maxChars) + '\n... (truncated)';

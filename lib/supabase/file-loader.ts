@@ -8,6 +8,38 @@ async function getLocalFileCache() {
   const { hasLocalCache, readCachedFilesByIds } = await import('@/lib/cache/local-file-cache');
   return { hasLocalCache, readCachedFilesByIds };
 }
+
+/** Lazy load .synapse-themes/ reader as a fallback when .cache/themes/ misses. */
+async function readFromSynapseThemes(
+  projectId: string,
+  fileIds: string[],
+  idToPath: Map<string, string>,
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  try {
+    const { isLocalSyncEnabled, resolveProjectSlug, getLocalThemePath } = await import('@/lib/sync/disk-sync');
+    if (!isLocalSyncEnabled()) return result;
+    const slug = await resolveProjectSlug(projectId);
+    const themeDir = getLocalThemePath(slug);
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    if (!fs.existsSync(themeDir)) return result;
+    for (const fid of fileIds) {
+      const rel = idToPath.get(fid);
+      if (!rel) continue;
+      const fullPath = path.join(themeDir, rel.replace(/\\/g, '/'));
+      try {
+        if (fs.existsSync(fullPath)) {
+          result.set(fid, fs.readFileSync(fullPath, 'utf-8'));
+        }
+      } catch { /* skip unreadable files */ }
+    }
+    if (result.size > 0) {
+      console.log(`[file-loader] .synapse-themes/ fallback hit: ${result.size} files from disk`);
+    }
+  } catch { /* non-fatal */ }
+  return result;
+}
 import type { FileContext } from '@/lib/types/agent';
 
 // ── Lazy per-file content cache ─────────────────────────────────────
@@ -19,7 +51,7 @@ import type { FileContext } from '@/lib/types/agent';
 //   Invalidated only for the specific file that changed.
 //   Loaded on-demand via async loadContent().
 
-const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;  // 5 minutes
+const METADATA_CACHE_TTL_MS = 30 * 60 * 1000;  // 30 minutes — metadata rarely changes mid-session
 const CONTENT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes (extended for cross-turn reuse)
 
 interface FileContentEntry {
@@ -322,7 +354,31 @@ function buildAsyncLoadContent(
     }
     }
 
-    // Batch-fetch uncached files from DB
+    // Fallback: check .synapse-themes/ directory (local sync mirror)
+    if (uncachedIds.length > 0) {
+      const idToPath = new Map<string, string>();
+      for (const stub of stubs) {
+        if (stub.path) idToPath.set(stub.fileId, stub.path);
+        else if (stub.fileName) idToPath.set(stub.fileId, stub.fileName);
+      }
+      const diskContent = await readFromSynapseThemes(projectId, uncachedIds, idToPath);
+      if (diskContent.size > 0) {
+        const stillUncached: string[] = [];
+        for (const id of uncachedIds) {
+          const val = diskContent.get(id);
+          if (val !== undefined) {
+            cached.set(id, val);
+            fileContentCache.set(id, { content: val, cachedAt: now });
+          } else {
+            stillUncached.push(id);
+          }
+        }
+        uncachedIds.length = 0;
+        uncachedIds.push(...stillUncached);
+      }
+    }
+
+    // Batch-fetch uncached files from DB (last resort)
     if (uncachedIds.length > 0) {
       try {
         const fetched = await loadFileContent(uncachedIds, supabaseClient);

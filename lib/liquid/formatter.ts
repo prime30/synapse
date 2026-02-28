@@ -239,6 +239,94 @@ function isSchemaClose(line: string): boolean {
   return getTagsOnLine(line).includes('endschema');
 }
 
+// ── Embedded JS/CSS block detection ───────────────────────────────────────
+
+function isEmbeddedJSOpen(line: string): boolean {
+  const tags = getTagsOnLine(line);
+  if (tags.includes('javascript')) return true;
+  return /<script[\s>]/i.test(line);
+}
+
+function isEmbeddedJSClose(line: string): boolean {
+  const tags = getTagsOnLine(line);
+  if (tags.includes('endjavascript')) return true;
+  return /<\/script\s*>/i.test(line);
+}
+
+function isEmbeddedCSSOpen(line: string): boolean {
+  const tags = getTagsOnLine(line);
+  if (tags.includes('style') || tags.includes('stylesheet')) return true;
+  return /<style[\s>]/i.test(line);
+}
+
+function isEmbeddedCSSClose(line: string): boolean {
+  const tags = getTagsOnLine(line);
+  if (tags.includes('endstyle') || tags.includes('endstylesheet')) return true;
+  return /<\/style\s*>/i.test(line);
+}
+
+// ── Embedded sub-formatters ──────────────────────────────────────────────
+
+function formatEmbeddedJS(
+  lines: string[],
+  indentStr: string,
+  baseLevel: number,
+): string[] {
+  const result: string[] = [];
+  let depth = 0;
+  const base = indentStr.repeat(baseLevel);
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      result.push('');
+      continue;
+    }
+
+    if (/^[}\])]/.test(trimmed)) {
+      depth = Math.max(0, depth - 1);
+    }
+
+    result.push(base + indentStr.repeat(depth) + trimmed);
+
+    if (/[{[(]\s*(\/\/.*)?$/.test(trimmed) && !/^\/\//.test(trimmed)) {
+      depth++;
+    }
+  }
+
+  return result;
+}
+
+function formatEmbeddedCSS(
+  lines: string[],
+  indentStr: string,
+  baseLevel: number,
+): string[] {
+  const result: string[] = [];
+  let depth = 0;
+  const base = indentStr.repeat(baseLevel);
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      result.push('');
+      continue;
+    }
+
+    if (trimmed.startsWith('}')) {
+      depth = Math.max(0, depth - 1);
+    }
+
+    result.push(base + indentStr.repeat(depth) + trimmed);
+
+    if (/\{\s*(?:\/\*.*\*\/\s*)?$/.test(trimmed)) {
+      depth++;
+    }
+  }
+
+  return result;
+}
+
 /**
  * Format JSON string with 2-space indent.
  * Returns original string if parsing fails.
@@ -265,9 +353,47 @@ export function formatLiquid(source: string, options?: FormatOptions): string {
   let inRawOrComment = false;
   let inSchema = false;
   let schemaBuffer: string[] = [];
+  let embeddedMode: 'javascript' | 'css' | null = null;
+  let embeddedBuffer: string[] = [];
+  let embeddedBaseLevel = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
+
+    // ── Embedded JS/CSS block: buffer content, format on close ──
+    if (embeddedMode) {
+      const isClose = embeddedMode === 'javascript'
+        ? isEmbeddedJSClose(rawLine)
+        : isEmbeddedCSSClose(rawLine);
+      if (isClose) {
+        const formatted = embeddedMode === 'javascript'
+          ? formatEmbeddedJS(embeddedBuffer, indentStr, embeddedBaseLevel + 1)
+          : formatEmbeddedCSS(embeddedBuffer, indentStr, embeddedBaseLevel + 1);
+        output.push(...formatted);
+        output.push(indentStr.repeat(embeddedBaseLevel) + rawLine.trim());
+        embeddedBuffer = [];
+        embeddedMode = null;
+      } else {
+        embeddedBuffer.push(rawLine);
+      }
+      continue;
+    }
+
+    if (isEmbeddedJSOpen(rawLine) && !isEmbeddedJSClose(rawLine)) {
+      output.push(indentStr.repeat(indentLevel) + rawLine.trim());
+      embeddedMode = 'javascript';
+      embeddedBaseLevel = indentLevel;
+      embeddedBuffer = [];
+      continue;
+    }
+
+    if (isEmbeddedCSSOpen(rawLine) && !isEmbeddedCSSClose(rawLine)) {
+      output.push(indentStr.repeat(indentLevel) + rawLine.trim());
+      embeddedMode = 'css';
+      embeddedBaseLevel = indentLevel;
+      embeddedBuffer = [];
+      continue;
+    }
 
     // Collect schema content
     if (inSchema) {

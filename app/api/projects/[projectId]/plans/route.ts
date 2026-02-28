@@ -34,18 +34,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const userId = await requireAuth(request);
     const { projectId } = await params;
     const userId = await requireProjectAccess(request, projectId);
     const body = await request.json();
-    const { name, content, todos, sessionId } = body;
 
     const plan = await createPlan(
       projectId,
       userId,
       body.name,
       body.content,
-      body.todos?.map((t) => ({ content: t.content, status: t.status })),
+      body.todos?.map((t: { content: string; status?: string }) => ({ content: t.content, status: t.status })),
     );
 
     return successResponse({ plan }, 201);

@@ -13,6 +13,7 @@ interface RouteParams {
 /**
  * POST /api/projects/[projectId]/thumbnail
  * Generate and store a thumbnail for this project.
+ * Returns 200 with url: string | null; null when generation is unavailable (e.g. no Chromium in env).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     if (!project.dev_theme_id || !project.shopify_connection_id) {
-      throw APIError.badRequest('Project has no Shopify connection or dev theme');
+      return successResponse({ url: null });
     }
 
     const { data: connection } = await supabase
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (!connection?.store_domain) {
-      throw APIError.badRequest('Store connection not found');
+      return successResponse({ url: null });
     }
 
     const { generateThumbnail, uploadThumbnail } = await import(
@@ -58,22 +59,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
 
     if (!buffer) {
-      throw APIError.internal(
-        'Thumbnail generation failed (Chromium may not be available)'
-      );
+      return successResponse({ url: null });
     }
 
-    const storagePath = await uploadThumbnail(projectId, buffer);
-    void storagePath; // Used for storage reference
+    try {
+      const storagePath = await uploadThumbnail(projectId, buffer);
+      void storagePath;
 
-    const thumbnailUrl = `/api/projects/${projectId}/thumbnail`;
+      const thumbnailUrl = `/api/projects/${projectId}/thumbnail`;
 
-    await supabase
-      .from('projects')
-      .update({ thumbnail_url: thumbnailUrl })
-      .eq('id', projectId);
+      await supabase
+        .from('projects')
+        .update({ thumbnail_url: thumbnailUrl })
+        .eq('id', projectId);
 
-    return successResponse({ url: thumbnailUrl });
+      return successResponse({ url: thumbnailUrl });
+    } catch {
+      return successResponse({ url: null });
+    }
   } catch (error) {
     return handleAPIError(error);
   }

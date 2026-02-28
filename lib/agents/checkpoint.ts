@@ -10,7 +10,10 @@ import type { AgentResult, CodeChange } from '@/lib/types/agent';
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes (longer than execution TTL for recovery)
 
+const CHECKPOINT_SCHEMA_VERSION = 2;
+
 interface CheckpointData {
+  schemaVersion: number;
   executionId: string;
   phase: 'pm_complete' | 'specialist_complete' | 'review_complete';
   timestamp: number;
@@ -26,6 +29,24 @@ interface CheckpointData {
   }>;
   /** Review result if review phase completed */
   reviewCompleted?: boolean;
+  /** File IDs modified during this execution (for FileStore reconstruction) */
+  dirtyFileIds: string[];
+  /** Accumulated changes for cross-phase continuity */
+  accumulatedChanges?: CodeChange[];
+}
+
+/** Track wall-clock time remaining for the current function invocation */
+export function createDeadlineTracker(startTimeMs: number, maxDurationMs: number) {
+  return {
+    remainingMs: () => Math.max(0, maxDurationMs - (Date.now() - startTimeMs)),
+    shouldCheckpoint: (safetyMarginMs = 60_000) =>
+      maxDurationMs - (Date.now() - startTimeMs) < safetyMarginMs,
+  };
+}
+
+/** Whether the background resume feature is enabled */
+export function isBackgroundResumeEnabled(): boolean {
+  return process.env.ENABLE_BACKGROUND_RESUME === 'true';
 }
 
 let _cache: CacheAdapter | null = null;
@@ -45,15 +66,20 @@ function checkpointKey(executionId: string): string {
 export async function saveAfterPM(
   executionId: string,
   delegations: Array<{ agent: string; task: string; affectedFiles: string[] }>,
-  directChanges?: CodeChange[]
+  directChanges?: CodeChange[],
+  dirtyFileIds: string[] = [],
+  accumulatedChanges?: CodeChange[],
 ): Promise<void> {
   const cache = getCache();
   const data: CheckpointData = {
+    schemaVersion: CHECKPOINT_SCHEMA_VERSION,
     executionId,
     phase: 'pm_complete',
     timestamp: Date.now(),
     pmResult: { delegations, directChanges },
     completedSpecialists: [],
+    dirtyFileIds,
+    accumulatedChanges,
   };
   await cache.set(checkpointKey(executionId), data, TTL_MS);
 }
@@ -62,7 +88,9 @@ export async function saveAfterPM(
 export async function saveAfterSpecialist(
   executionId: string,
   agent: string,
-  result: AgentResult
+  result: AgentResult,
+  dirtyFileIds?: string[],
+  accumulatedChanges?: CodeChange[],
 ): Promise<void> {
   const cache = getCache();
   const existing = await cache.get<CheckpointData>(checkpointKey(executionId));
@@ -71,6 +99,8 @@ export async function saveAfterSpecialist(
   existing.phase = 'specialist_complete';
   existing.timestamp = Date.now();
   existing.completedSpecialists.push({ agent, result });
+  if (dirtyFileIds) existing.dirtyFileIds = dirtyFileIds;
+  if (accumulatedChanges) existing.accumulatedChanges = accumulatedChanges;
   await cache.set(checkpointKey(executionId), existing, TTL_MS);
 }
 
@@ -86,10 +116,18 @@ export async function saveAfterReview(executionId: string): Promise<void> {
   await cache.set(checkpointKey(executionId), existing, TTL_MS);
 }
 
-/** Get checkpoint for an execution (for resume logic) */
+/** Get checkpoint for an execution (for resume logic).
+ *  Returns null if the schema version is outdated (safe degradation). */
 export async function getCheckpoint(executionId: string): Promise<CheckpointData | null> {
   const cache = getCache();
-  return cache.get<CheckpointData>(checkpointKey(executionId));
+  const data = await cache.get<CheckpointData>(checkpointKey(executionId));
+  if (!data) return null;
+  if (data.schemaVersion !== CHECKPOINT_SCHEMA_VERSION) {
+    console.warn(`[checkpoint] Discarding stale checkpoint for ${executionId} (schema v${data.schemaVersion} != v${CHECKPOINT_SCHEMA_VERSION})`);
+    await cache.delete(checkpointKey(executionId));
+    return null;
+  }
+  return data;
 }
 
 /** Clear checkpoint after successful completion */

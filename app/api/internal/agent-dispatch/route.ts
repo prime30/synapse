@@ -9,19 +9,19 @@
  * Protected by CRON_SECRET Bearer token.
  *
  * Picks up pending agent_execution jobs from background_tasks,
- * runs the coordinator, and updates job status.
+ * runs the V2 coordinator (with checkpoint resume), and updates job status.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { claimNextAgentJob, completeAgentJob, failAgentJob } from '@/lib/tasks/agent-job-queue';
-import { AgentCoordinator } from '@/lib/agents/coordinator';
+import { streamV2 } from '@/lib/agents/coordinator-v2';
+import { streamFlat } from '@/lib/agents/coordinator-flat';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { loadProjectFiles } from '@/lib/supabase/file-loader';
 
 export const maxDuration = 300; // 5 minutes max for Vercel Pro
 
 export async function POST(request: NextRequest) {
-  // Verify CRON_SECRET
   const authHeader = request.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
   const cronSecret = process.env.CRON_SECRET;
@@ -30,29 +30,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const maxJobs = 3; // Process up to 3 jobs per invocation
+  const maxJobs = 3;
   const results: Array<{ jobId: string; executionId: string; status: string }> = [];
 
   for (let i = 0; i < maxJobs; i++) {
     const job = await claimNextAgentJob();
-    if (!job) break; // No more pending jobs
+    if (!job) break;
 
     try {
       const { executionId, projectId, userId, userRequest, options } = job.payload;
 
-      // Load project files
       const serviceClient = createServiceClient();
       const { allFiles: fileContexts } = await loadProjectFiles(projectId, serviceClient);
 
-      // Load user preferences
       const { data: preferences } = await serviceClient
         .from('user_preferences')
         .select('id, user_id, category, key, value, file_type, confidence, first_observed, last_reinforced, observation_count, metadata, created_at, updated_at')
         .eq('user_id', userId);
 
-      // Run coordinator
-      const coordinator = new AgentCoordinator();
-      const result = await coordinator.execute(
+      const useFlatPipeline = !!(options?.useFlatPipeline);
+      const coordinatorFn = useFlatPipeline ? streamFlat : streamV2;
+      const result = await coordinatorFn(
         executionId,
         projectId,
         userId,
@@ -60,8 +58,18 @@ export async function POST(request: NextRequest) {
         fileContexts,
         (preferences ?? []) as import('@/lib/types/agent').UserPreference[],
         {
-          action: (options?.action as 'analyze' | 'generate' | 'review' | 'fix') ?? 'generate',
+          intentMode: (options?.intentMode as 'code' | 'ask' | 'plan' | 'debug') ?? 'code',
           model: options?.model as string | undefined,
+          strategy: useFlatPipeline ? undefined : ('GOD_MODE' as import('@/lib/types/agent').ExecutionStrategy),
+          deadlineMs: Date.now(),
+          loadContent: async (fileId: string) => {
+            const { data } = await serviceClient
+              .from('project_files')
+              .select('content')
+              .eq('id', fileId)
+              .single();
+            return data?.content ?? null;
+          },
         },
       );
 
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
         await completeAgentJob(job.id);
         results.push({ jobId: job.id, executionId, status: 'completed' });
       } else {
-        await failAgentJob(job.id, result.error?.message ?? 'Agent execution failed');
+        await failAgentJob(job.id, result.analysis ?? 'Agent execution failed');
         results.push({ jobId: job.id, executionId, status: 'failed' });
       }
     } catch (err) {

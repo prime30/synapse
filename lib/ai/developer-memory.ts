@@ -68,6 +68,7 @@ export interface MemoryEntry {
   content: MemoryContent;
   confidence: number;
   feedback: MemoryFeedback;
+  sourceRole?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -127,6 +128,7 @@ export interface MemoryRow {
   content: MemoryContent;
   confidence: number;
   feedback: MemoryFeedback;
+  source_role?: string;
   created_at: string;
   updated_at: string;
 }
@@ -141,9 +143,37 @@ export function rowToMemoryEntry(row: MemoryRow): MemoryEntry {
     content: row.content,
     confidence: row.confidence,
     feedback: row.feedback,
+    sourceRole: row.source_role ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// ── Role-scoped memory loading ────────────────────────────────────────
+
+/**
+ * Load developer memories tagged with a specific specialist role.
+ * Returns up to 10 most recent entries for the given role.
+ */
+export async function loadMemoriesByRole(
+  supabase: { from: (table: string) => unknown },
+  projectId: string,
+  userId: string,
+  role: string,
+): Promise<MemoryEntry[]> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase.from('developer_memory') as any)
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('user_id', userId)
+      .eq('source_role', role)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    return (data ?? []).map((row: MemoryRow) => rowToMemoryEntry(row));
+  } catch {
+    return [];
+  }
 }
 
 // ── Context injection helpers ─────────────────────────────────────────

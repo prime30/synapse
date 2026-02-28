@@ -86,18 +86,20 @@ function detectPlan(response: string): DetectedSignal | null {
 
   const stepCount = Math.max(numberedStepCount, stepNCount);
 
-  if (stepCount >= 3 || (hasPlanHeader && stepCount >= 1)) {
+  // Require a plan header + steps, or a high step count, to avoid false
+  // positives from agent narration ("1. Read file 2. Try edit 3. ...").
+  if (hasPlanHeader && stepCount >= 3) {
     return {
       type: 'plan',
-      confidence: stepCount >= 3 ? 0.85 : 0.7,
+      confidence: stepCount >= 5 ? 0.9 : 0.75,
       metadata: { stepCount },
     };
   }
 
-  if (stepCount === 2) {
+  if (stepCount >= 5) {
     return {
       type: 'plan',
-      confidence: 0.7,
+      confidence: 0.75,
       metadata: { stepCount },
     };
   }

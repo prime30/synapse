@@ -17,11 +17,11 @@ interface UseAgentChatReturn {
   /** Non-blocking history load warning shown in UI. */
   historyLoadError: string | null;
   /** Add a message to local state and persist it to the DB (fire-and-forget). */
-  appendMessage: (role: 'user' | 'assistant', content: string) => ChatMessage;
+  appendMessage: (role: 'user' | 'assistant', content: string, options?: { imageUrls?: string[] }) => ChatMessage;
   /** Add a message to local state only -- no DB persist. For streaming placeholders. */
   addLocalMessage: (msg: ChatMessage) => void;
   /** Update a message's content in local state only (for streaming chunks). */
-  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus'>>) => void;
+  updateMessage: (id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus' | 'backgroundTask'>>) => void;
   /** Persist the final content of a streamed message to the DB. */
   finalizeMessage: (id: string) => void;
 
@@ -32,8 +32,8 @@ interface UseAgentChatReturn {
   archivedSessions: ChatSession[];
   /** ID of the currently active session (null if none yet). */
   activeSessionId: string | null;
-  /** Create a new empty session and switch to it. */
-  createNewSession: () => Promise<void>;
+  /** Create a new empty session and switch to it. Pass cleanStart to suppress cross-session recall. */
+  createNewSession: (opts?: { cleanStart?: boolean }) => Promise<void>;
   /** Switch to an existing session by ID. */
   switchSession: (sessionId: string) => Promise<void>;
   /** Delete a session. Switches to the next session or empty state. */
@@ -73,6 +73,8 @@ interface UseAgentChatReturn {
     findings: Array<{ severity: 'info' | 'warning' | 'error'; message: string }>;
     stats?: Record<string, unknown>;
   } | null>;
+  /** Generate a summary of the current session and start a new chat with it pre-populated. */
+  continueInNewChat: () => Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +138,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
   const messagesRef = useRef<ChatMessage[]>([]);
   const activeSessionRef = useRef<string | null>(null);
   const isFirstUserMessageRef = useRef(true);
+  const cleanStartSessionIds = useRef(new Set<string>());
 
   // Keep refs in sync
   useEffect(() => {
@@ -305,12 +308,13 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
   // ── appendMessage ────────────────────────────────────────────────────────
 
   const appendMessage = useCallback(
-    (role: 'user' | 'assistant', content: string): ChatMessage => {
+    (role: 'user' | 'assistant', content: string, options?: { imageUrls?: string[] }): ChatMessage => {
       const msg: ChatMessage = {
         id: crypto.randomUUID(),
         role,
         content,
         timestamp: new Date(),
+        ...(options?.imageUrls?.length ? { imageUrls: options.imageUrls } : {}),
       };
 
       setMessages((prev) => [...prev, msg]);
@@ -335,15 +339,17 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
         });
       }
 
-      // Persist in background, targeting the active session
+      // Persist in background, targeting the active session (skip if content empty — API requires min length)
       const sid = activeSessionRef.current;
-      fetch(`/api/projects/${projectId}/agent-chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, content, ...(sid ? { sessionId: sid } : {}) }),
-      }).catch(() => {
-        // Persistence failure is non-blocking
-      });
+      if (content && String(content).trim().length > 0) {
+        fetch(`/api/projects/${projectId}/agent-chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, content, ...(sid ? { sessionId: sid } : {}) }),
+        }).catch(() => {
+          // Persistence failure is non-blocking
+        });
+      }
 
       return msg;
     },
@@ -352,7 +358,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── updateMessage (local only) ──────────────────────────────────────────
 
-  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus'>>) => {
+  const updateMessage = useCallback((id: string, content: string, meta?: Partial<Pick<ChatMessage, 'thinkingSteps' | 'thinkingComplete' | 'contextStats' | 'budgetTruncated' | 'planData' | 'codeEdits' | 'clarification' | 'previewNav' | 'fileCreates' | 'activeToolCall' | 'citations' | 'fileOps' | 'shopifyOps' | 'screenshots' | 'screenshotComparison' | 'workers' | 'blocks' | 'activeModel' | 'rateLimitHit' | 'executionOutcome' | 'failureReason' | 'suggestedAction' | 'failedTool' | 'failedFilePath' | 'reviewFailedSection' | 'referentialReplayFailed' | 'verificationEvidence' | 'worktreeStatus' | 'backgroundTask'>>) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content, ...meta } : m)),
     );
@@ -363,7 +369,8 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
   const finalizeMessage = useCallback(
     (id: string) => {
       const msg = messagesRef.current.find((m) => m.id === id);
-      if (!msg || !msg.content) return;
+      const text = msg?.content && String(msg.content).trim();
+      if (!msg || !text) return;
 
       logInteractionEvent(projectId, {
         kind: 'assistant_output',
@@ -378,7 +385,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           role: 'assistant',
-          content: msg.content,
+          content: text,
           ...(sid ? { sessionId: sid } : {}),
         }),
       }).catch(() => {
@@ -396,13 +403,27 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
 
   // ── createNewSession ────────────────────────────────────────────────────
 
-  const createNewSession = useCallback(async () => {
+  const createNewSession = useCallback(async (opts?: { cleanStart?: boolean }) => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/agent-chat/sessions`, {
+      const cleanStart = opts?.cleanStart ?? false;
+      let res = await fetch(`/api/projects/${projectId}/agent-chat/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reuseEmpty: true }),
+        body: JSON.stringify({
+          reuseEmpty: !cleanStart,
+          cleanStart,
+        }),
       });
+
+      // If cleanStart request failed, retry without it so session creation still works
+      if (!res.ok && cleanStart) {
+        console.warn('[useAgentChat] cleanStart session failed, retrying without cleanStart flag');
+        res = await fetch(`/api/projects/${projectId}/agent-chat/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reuseEmpty: false }),
+        });
+      }
       if (!res.ok) return;
 
       const json = await res.json();
@@ -417,6 +438,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
       setActiveSessionId(newSession.id);
       setMessages([]);
       isFirstUserMessageRef.current = true;
+      if (cleanStart) cleanStartSessionIds.current.add(newSession.id);
     } catch {
       // Silently fail
     }
@@ -817,6 +839,65 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     }
   }, [activeSessionId, projectId, switchSession]);
 
+  // ── continueInNewChat ──────────────────────────────────────────────────
+  // Generates a summary of the current session and starts a new chat with
+  // that summary pre-populated as the first message.
+
+  const continueInNewChat = useCallback(async (): Promise<boolean> => {
+    const sid = activeSessionRef.current;
+    if (!sid) return false;
+    try {
+      const summaryRes = await fetch(
+        `/api/projects/${projectId}/agent-chat/sessions/${sid}/summary`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      );
+      if (!summaryRes.ok) return false;
+      const summaryJson = await summaryRes.json();
+      const summary: string = summaryJson?.data?.summary ?? summaryJson?.summary ?? '';
+      if (!summary) return false;
+
+      const sessionRes = await fetch(`/api/projects/${projectId}/agent-chat/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reuseEmpty: false }),
+      });
+      if (!sessionRes.ok) return false;
+      const sessionJson = await sessionRes.json();
+      const newSession: ChatSession = {
+        id: sessionJson.data.id,
+        title: sessionJson.data.title ?? 'Continued conversation',
+        updatedAt: sessionJson.data.updatedAt ?? new Date().toISOString(),
+        messageCount: 0,
+      };
+
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(newSession.id);
+      isFirstUserMessageRef.current = true;
+
+      const contextMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: `**Continuing from previous conversation:**\n\n${summary}`,
+        timestamp: new Date(),
+      };
+      setMessages([contextMsg]);
+
+      fetch(`/api/projects/${projectId}/agent-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: newSession.id,
+          role: 'user',
+          content: contextMsg.content,
+        }),
+      }).catch(() => {});
+
+      return true;
+    } catch {
+      return false;
+    }
+  }, [projectId]);
+
   // ── reviewSessionTranscript ───────────────────────────────────────────────
 
   const reviewSessionTranscript = useCallback(async (sessionId?: string) => {
@@ -898,6 +979,7 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     truncateAt,
     forkSession,
     reviewSessionTranscript,
+    continueInNewChat,
   }), [
     messages, isLoadingHistory, historyLoadError,
     appendMessage, addLocalMessage, updateMessage, finalizeMessage,
@@ -907,6 +989,6 @@ export function useAgentChat(projectId: string): UseAgentChatReturn {
     loadMore, hasMore, isLoadingMore,
     loadAllHistory, isLoadingAllHistory,
     recordApplyStats, clearMessages, removeLastTurn, truncateAt,
-    forkSession, reviewSessionTranscript,
+    forkSession, reviewSessionTranscript, continueInNewChat,
   ]);
 }

@@ -100,6 +100,7 @@ export function isVertexConfigured(): boolean {
 interface GeminiPart {
   text?: string;
   thought?: boolean;
+  inlineData?: { data: string; mimeType: string };
   functionCall?: { id?: string; name?: string; args?: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
 }
@@ -179,9 +180,16 @@ function convertMessages(messages: AIMessage[]): {
       continue;
     }
 
-    // Standard text message
+    // Standard text message (with optional images for user messages)
     const role = m.role === 'assistant' ? 'model' : 'user';
-    contents.push({ role, parts: [{ text: m.content }] });
+    const parts: GeminiPart[] = [];
+    if (m.images?.length) {
+      for (const img of m.images) {
+        parts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } });
+      }
+    }
+    parts.push({ text: m.content });
+    contents.push({ role, parts });
   }
 
   return {

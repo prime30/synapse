@@ -12,7 +12,7 @@ type SignInState = 'idle' | 'submitting' | 'error';
 function SignInContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/onboarding';
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/projects';
   const errorParam = searchParams.get('error');
 
   const [email, setEmail] = useState('');
@@ -155,8 +155,8 @@ function SignInContent() {
         <div className="rounded-xl border ide-border ide-surface-panel p-6">
           <GoogleSignInButton
             callbackUrl={
-              callbackUrl === '/onboarding'
-                ? '/onboarding?signed_in=1'
+              callbackUrl === '/projects'
+                ? '/projects?signed_in=1'
                 : callbackUrl.includes('?')
                   ? callbackUrl + '&signed_in=1'
                   : callbackUrl + '?signed_in=1'

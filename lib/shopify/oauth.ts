@@ -1,7 +1,23 @@
 import crypto from 'crypto';
 
-import type { ShopifyOAuthParams } from '@/lib/types/shopify';
 import { APIError } from '@/lib/errors/handler';
+
+export interface OnlineTokenResponse {
+  access_token: string;
+  scope?: string;
+  expires_in?: number;
+  associated_user_scope?: string;
+  associated_user?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    email_verified: boolean;
+    account_owner: boolean;
+    locale: string;
+    collaborator: boolean;
+  };
+}
 
 export interface ShopifyOAuthConfig {
   apiKey: string;
@@ -50,10 +66,13 @@ export class ShopifyOAuthService {
   }
 
   /**
-   * Exchange the temporary authorization code for a permanent access token.
+   * Exchange the temporary authorization code for an access token.
    * POST https://{shop}/admin/oauth/access_token
+   *
+   * For online tokens (grant_options[]=per-user), the response includes
+   * `associated_user` and `expires_in` in addition to `access_token`.
    */
-  async exchangeCodeForToken(shop: string, code: string): Promise<string> {
+  async exchangeCodeForToken(shop: string, code: string): Promise<OnlineTokenResponse> {
     const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,19 +92,23 @@ export class ShopifyOAuthService {
       );
     }
 
-    const data = (await response.json()) as { access_token: string };
-    return data.access_token;
+    const data = await response.json() as OnlineTokenResponse;
+    return data;
   }
 
   /**
    * Verify the HMAC signature from a Shopify OAuth callback.
-   * Uses crypto.timingSafeEqual for constant-time comparison.
+   * Shopify signs ALL query params except `hmac`, so we must include every
+   * parameter (e.g. `host`) — not just a typed subset.
    */
-  validateHmac(params: ShopifyOAuthParams): boolean {
-    const { hmac, ...rest } = params;
-    const message = Object.keys(rest)
+  validateHmac(params: Record<string, string>): boolean {
+    const hmac = params.hmac;
+    if (!hmac) return false;
+
+    const message = Object.keys(params)
+      .filter((k) => k !== 'hmac')
       .sort()
-      .map((key) => `${key}=${rest[key as keyof typeof rest]}`)
+      .map((key) => `${key}=${params[key]}`)
       .join('&');
 
     const generatedHmac = crypto
@@ -99,7 +122,6 @@ export class ShopifyOAuthService {
         Buffer.from(generatedHmac)
       );
     } catch {
-      // Buffers with different lengths throw — treat as invalid
       return false;
     }
   }

@@ -150,9 +150,9 @@ export default function AdminBugsPage() {
                     )}
                     <div className="flex items-center gap-3 mt-2 ml-5.5">
                       <span className="text-xs text-stone-500 dark:text-gray-500">
-                        {(report as Record<string, unknown>).profiles
-                          ? ((report as Record<string, unknown>).profiles as { full_name?: string; email?: string })?.full_name
-                            ?? ((report as Record<string, unknown>).profiles as { email?: string })?.email
+                        {(report as unknown as Record<string, unknown>).profiles
+                          ? ((report as unknown as Record<string, unknown>).profiles as { full_name?: string; email?: string })?.full_name
+                            ?? ((report as unknown as Record<string, unknown>).profiles as { email?: string })?.email
                           : 'Unknown'}
                       </span>
                       <TimeAgo date={report.created_at} />

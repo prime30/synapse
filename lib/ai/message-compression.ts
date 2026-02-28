@@ -28,7 +28,6 @@ function compressMetadata(metadata: MessageMetadata): MessageMetadata {
     toolResults: metadata.toolResults?.map((tr) => ({
       ...tr,
       content: truncateToolResult(tr.content, COMPRESSED_RESULT_MAX_CHARS),
-      compressed: true,
     })),
   };
 }

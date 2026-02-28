@@ -48,6 +48,9 @@ import { FileBreadcrumb } from '@/components/editor/FileBreadcrumb';
 import { StatusBar } from '@/components/editor/StatusBar';
 import { BinarySyncIndicator } from '@/components/features/sync/BinarySyncIndicator';
 import { LocalSyncIndicator } from '@/components/features/sync/LocalSyncIndicator';
+import { ProjectLoadingOverlay } from '@/components/editor/ProjectLoadingOverlay';
+import { useProjectLoadingState } from '@/hooks/useProjectLoadingState';
+import { useLocalSync } from '@/hooks/useLocalSync';
 import { UndoToast } from '@/components/ui/UndoToast';
 import { HomeModal } from '@/components/features/home/HomeModal';
 import { CommandPalette } from '@/components/editor/CommandPalette';
@@ -76,6 +79,7 @@ import { useDesignTokens } from '@/hooks/useDesignTokens';
 import { useMemory } from '@/hooks/useMemory';
 import { resolveFileId } from '@/lib/ai/file-path-detector';
 import { usePreviewVerification } from '@/hooks/usePreviewVerification';
+import { useToast } from '@/components/ui/use-toast';
 import { detectConventions, type ThemeFile } from '@/lib/ai/convention-detector';
 import { analyzeDiff } from '@/lib/ai/diff-analyzer';
 import { useGitSync } from '@/hooks/useGitSync';
@@ -176,6 +180,20 @@ function previewPathFromFile(filePath: string | null | undefined): string {
   return entry.needsResource ? '/' : entry.previewBasePath;
 }
 
+function EmptyEditorAutoPreview({ openPreviewTab, hasFiles, projectId }: { openPreviewTab: () => void; hasFiles: boolean; projectId: string }) {
+  useEffect(() => {
+    openPreviewTab();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fire once on mount
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 relative">
+      <p className="text-sm ide-text-3">
+        {hasFiles ? 'Select a file from the explorer to start editing' : 'Import a theme or upload files to begin'}
+      </p>
+    </div>
+  );
+}
+
 export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
@@ -244,6 +262,9 @@ export default function ProjectPage() {
   // EPIC 5: Ref to send messages to agent chat (QuickActions, Fix with AI)
   const sendMessageRef = useRef<((content: string) => void) | null>(null);
 
+  // Portal target for session sidebar — placed on the far right edge of the window
+  const sessionSidebarPortalRef = useRef<HTMLDivElement>(null);
+
   // Ref for AgentPromptPanel to expose recordApplyStats callback
   const onApplyStatsRef = useRef<((stats: { linesAdded: number; linesDeleted: number; filesAffected: number }) => void) | null>(null);
 
@@ -267,11 +288,23 @@ export default function ProjectPage() {
   const [pushLogReloadKey, setPushLogReloadKey] = useState(0);
 
   const tabs = useFileTabs({ projectId });
-  const { rawFiles } = useProjectFiles(projectId);
+  const { rawFiles, isLoading: isLoadingFiles } = useProjectFiles(projectId);
 
   // Preload Monaco editor bundle on project page mount (before any file is opened).
   // This eliminates the ~500-800ms cold-start delay when the user first clicks a file.
   useEffect(() => { monacoLoader.init(); }, []);
+
+  // Pre-warm agent context engine so the first chat message is fast
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/agents/warmup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, draft: 'warmup', intentMode: 'code' }),
+      signal: controller.signal,
+    }).catch(() => { /* warmup is best-effort */ });
+    return () => controller.abort();
+  }, [projectId]);
   const {
     projects,
     activeProjects,
@@ -286,11 +319,29 @@ export default function ProjectPage() {
   // useShopifyConnection provides sync/theme operations (project-scoped).
   const activeStore = useActiveStore(projectId);
   const shopify = useShopifyConnection(projectId);
-  const { data: tokenData } = useDesignTokens(projectId);
+  const { toast: showToast } = useToast();
+  const { data: tokenData, isLoading: isLoadingDesignTokens } = useDesignTokens(projectId);
   const devReport = useDevReport(projectId);
   const gitSync = useGitSync(projectId);
   const connected = !!activeStore.connection || shopify.connected;
   const storeStatusReady = !activeStore.isLoading && !shopify.isLoading;
+
+  // Loading overlay: local sync + editor/preview readiness
+  const localSync = useLocalSync(projectId);
+  const monacoReadyRef = useRef(false);
+  const [monacoReady, setMonacoReady] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+
+  const projectLoading = useProjectLoadingState({
+    isLoadingProjects,
+    isLoadingFiles,
+    storeStatusReady,
+    designTokensLoading: isLoadingDesignTokens,
+    previewReady,
+    monacoReady,
+    localSyncStatus: localSync.status,
+  });
+
   const connection = activeStore.connection
     ? {
         id: activeStore.connection.id,
@@ -326,7 +377,7 @@ export default function ProjectPage() {
   const rightResize = useResizablePanel({
     storageKey: 'synapse-right-sidebar-width',
     defaultWidth: 360,
-    minWidth: 280,
+    minWidth: 350,
     maxWidth: 700,
   });
 
@@ -541,6 +592,19 @@ export default function ProjectPage() {
     }
   }, [projectId, isCurrentProjectAccessible, setLastProjectId]);
 
+  // Warn once per session if the Shopify dev theme has been deleted
+  const devThemeMissingToastedRef = useRef(false);
+  useEffect(() => {
+    if (shopify.devThemeMissing && !devThemeMissingToastedRef.current) {
+      devThemeMissingToastedRef.current = true;
+      showToast({
+        type: 'warning',
+        message: 'Dev theme not found in Shopify — click "Push to Dev" to recreate it.',
+        duration: 8000,
+      });
+    }
+  }, [shopify.devThemeMissing, showToast]);
+
   // Clean up ?home=1 from URL after opening the modal
   useEffect(() => {
     if (typeof window !== 'undefined' && searchParams.get('home') === '1') {
@@ -616,7 +680,9 @@ export default function ProjectPage() {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
       if (msg?.type === 'synapse-bridge-response' && msg?.data) {
-        if (msg.action === 'element-selected') {
+        if (msg.action === 'ready') {
+          setPreviewReady(true);
+        } else if (msg.action === 'element-selected') {
           setSelectedElement(msg.data as SelectedElement);
           agentChatRef.current?.querySelector('textarea')?.focus();
         } else if (msg.action === 'open-file' && msg.data.filePath) {
@@ -995,6 +1061,10 @@ export default function ProjectPage() {
   // ── EPIC 3: Active file content change handler ─────────────────────────────
   const handleContentChange = useCallback((content: string) => {
     setActiveFileContent(content);
+    if (!monacoReadyRef.current) {
+      monacoReadyRef.current = true;
+      setMonacoReady(true);
+    }
   }, []);
 
   // ── Derived state for Save + Lock in FileTabs ──────────────────────────────
@@ -1002,6 +1072,9 @@ export default function ProjectPage() {
   const isActiveFileLocked = tabs.activeFileId ? tabs.isLocked(tabs.activeFileId) : false;
   const handleSaveActiveFile = useCallback(() => {
     editorRef.current?.save();
+  }, []);
+  const handleFormatActiveFile = useCallback(() => {
+    editorRef.current?.format();
   }, []);
   const handleLockToggle = useCallback(() => {
     if (tabs.activeFileId) tabs.toggleLock(tabs.activeFileId);
@@ -1553,7 +1626,7 @@ export default function ProjectPage() {
                             activeFileType={(activeFile?.file_type ?? null) as string | null}
                           />
                         ) : (
-                          <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 text-center">
+                          <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
                             <div className="w-12 h-12 mb-3 rounded-lg ide-surface-input border ide-border-subtle flex items-center justify-center">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 ide-text-3">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
@@ -1647,6 +1720,19 @@ export default function ProjectPage() {
                       className="px-4 py-2 text-sm font-medium bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors"
                     >
                       Open Design System
+                    </button>
+                    <div className="w-full border-t ide-border-subtle my-2" />
+                    <div className="space-y-1">
+                      <p className="text-xs ide-text-muted">
+                        Design packing slip templates for print
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/projects/${projectId}/packing-slip-designer`)}
+                      className="px-4 py-2 text-sm font-medium border border-stone-200 dark:border-white/10 text-stone-700 dark:text-white/70 hover:bg-stone-50 dark:hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      Packing Slip Designer
                     </button>
                   </div>
                 </>
@@ -1834,10 +1920,13 @@ export default function ProjectPage() {
                   isActiveFileDirty={isActiveFileDirty}
                   isActiveFileLocked={isActiveFileLocked}
                   onSaveClick={handleSaveActiveFile}
+                  onFormatClick={handleFormatActiveFile}
                   onLockToggle={handleLockToggle}
                   linkedToActiveFileIds={linkedToActiveFileIds}
                   onLinkWithFiles={handleLinkWithFiles}
                   onUnlinkActiveFile={handleUnlinkActiveFile}
+                  allFiles={rawFiles.map((f) => ({ id: f.id, name: f.name, path: f.path }))}
+                  onOpenFile={tabs.openTab}
                 />
               </div>
             </div>
@@ -2074,50 +2163,9 @@ export default function ProjectPage() {
                       }}
                     />
 
-                  {/* EPIC 3: Status bar */}
-                  <StatusBar
-                    fileName={activeFile?.name ?? null}
-                    content={activeFileContent}
-                    language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
-                    filePath={activeFile?.path ?? null}
-                    tokenUsage={tokenUsage}
-                    cursorPosition={cursorPosition}
-                    activeMemoryCount={memory.activeConventionCount}
-                    cacheBackend={process.env.NEXT_PUBLIC_CACHE_BACKEND as 'redis' | 'memory' | undefined ?? undefined}
-                  >
-                    <LocalSyncIndicator projectId={projectId} />
-                    <BinarySyncIndicator projectId={projectId} />
-                  </StatusBar>
                 </>
               ) : tabs.activeFileId !== PREVIEW_TAB_ID ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-6 relative">
-                  <h2 className="text-lg font-medium ide-text-2 mb-1">
-                    No file selected
-                  </h2>
-                  <p className="text-sm ide-text-3 mb-4">
-                    {hasFiles
-                      ? 'Select a file from the explorer to start editing'
-                      : 'Import a theme or upload files to begin'}
-                  </p>
-                  {!tabs.previewTabOpen && (
-                    <button
-                      type="button"
-                      onClick={() => tabs.openPreviewTab()}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                      </svg>
-                      Start Preview
-                    </button>
-                  )}
-                  {/* Sync indicators when no file is open */}
-                  <div className="absolute bottom-3 right-3 flex items-center gap-3">
-                    <LocalSyncIndicator projectId={projectId} />
-                    <BinarySyncIndicator projectId={projectId} />
-                  </div>
-                </div>
+                <EmptyEditorAutoPreview openPreviewTab={tabs.openPreviewTab} hasFiles={hasFiles} projectId={projectId} />
               ) : null}
             </>
           )}
@@ -2324,10 +2372,45 @@ export default function ProjectPage() {
               onOpenMemory={() => setMemoryOpen(true)}
               isMemoryOpen={memoryOpen}
               pendingAttachedFile={pendingAttachedFile}
+              sessionSidebarPortalRef={sessionSidebarPortalRef}
             />
           </div>
         </aside>
+
+        {/* ── Col 5: Session sidebar — far right edge ──────────────────────── */}
+        <div ref={sessionSidebarPortalRef} className="flex shrink-0 min-h-0" />
       </div>
+
+      {/* ── Full-width status bar — spans all columns ─────────────────────── */}
+      <StatusBar
+        fileName={activeFile?.name ?? null}
+        content={activeFileContent}
+        language={(activeFile?.file_type ?? 'other') as 'liquid' | 'javascript' | 'css' | 'other'}
+        filePath={activeFile?.path ?? null}
+        tokenUsage={tokenUsage}
+        cursorPosition={cursorPosition}
+        activeMemoryCount={memory.activeConventionCount}
+        cacheBackend={process.env.NEXT_PUBLIC_CACHE_BACKEND as 'redis' | 'memory' | undefined ?? undefined}
+        loadingProgress={projectLoading.allDone ? null : { done: projectLoading.items.filter(i => i.status === 'done').length, total: projectLoading.items.length }}
+      >
+        {rawFiles.length > 0 && (
+          <span
+            className="inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400"
+            title={`Theme index: ${rawFiles.length} files tracked`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-500 dark:bg-green-400" />
+            {rawFiles.length} indexed
+          </span>
+        )}
+        <LocalSyncIndicator projectId={projectId} />
+        <BinarySyncIndicator projectId={projectId} />
+      </StatusBar>
+
+      {/* ── Loading overlay ─────────────────────────────────────────────────── */}
+      <ProjectLoadingOverlay
+        projectId={projectId}
+        state={projectLoading}
+      />
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
       <FileUploadModal

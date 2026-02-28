@@ -76,6 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const typeFilter = url.searchParams.get('type') as MemoryType | null;
     const feedbackFilter = url.searchParams.get('feedback');
     const searchParam = url.searchParams.get('search')?.trim() ?? '';
+    const roleFilter = url.searchParams.get('role')?.trim() ?? '';
     const minConfidence = parseFloat(url.searchParams.get('minConfidence') ?? '0');
     const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200);
     const offset = parseInt(url.searchParams.get('offset') ?? '0', 10);
@@ -98,6 +99,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (typeFilter && VALID_TYPES.has(typeFilter)) {
       query = query.eq('type', typeFilter);
+    }
+
+    if (roleFilter) {
+      query = query.eq('source_role', roleFilter);
     }
 
     if (feedbackFilter === 'null') {
@@ -173,6 +178,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = adminClient();
 
+    const sourceRole = typeof body.sourceRole === 'string' ? body.sourceRole : null;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('developer_memory') as any)
       .insert({
@@ -181,6 +188,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         type,
         content,
         confidence,
+        source_role: sourceRole,
       })
       .select()
       .single();

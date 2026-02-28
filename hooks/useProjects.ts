@@ -21,6 +21,12 @@ export interface Project {
   status?: 'active' | 'archived' | null;
   /** Thumbnail URL for home modal project cards */
   thumbnail_url?: string | null;
+  /** Dev store connection ID for embedded preview */
+  preview_connection_id?: string | null;
+  /** Published theme ID on the dev store */
+  preview_store_theme_id?: string | null;
+  /** Timestamp of last push to dev store */
+  last_dev_store_push_at?: string | null;
 }
 
 export interface ReconcileResult {

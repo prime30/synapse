@@ -34,7 +34,8 @@ export const RUN_SPECIALIST_TOOL: ToolDefinition = {
     'Delegate a scoped coding task to a specialist agent. Use this for domain-specific edits. ' +
     'For feature additions, call run_specialist MULTIPLE TIMES in the SAME response — once for each file type needed ' +
     '(liquid for markup, css for styling, javascript for behavior). All specialists run in parallel. ' +
-    'Each specialist reads the target file and makes search_replace edits directly.',
+    'Each specialist reads the target file and makes edits using edit_lines (for files >300 lines) or search_replace (for smaller files). ' +
+    'Include line ranges from the STRUCTURAL BRIEF in your task description so the specialist can skip discovery and edit precisely.',
   input_schema: {
     type: 'object',
     properties: {
@@ -109,6 +110,103 @@ export const GET_SECOND_OPINION_TOOL: ToolDefinition = {
   },
 };
 
+/**
+ * Refresh the agent's memory of what files were read, edited, and what
+ * the current goal is. Call this when you feel uncertain about the state
+ * of the session, or after long tool sequences where earlier context may
+ * have been compacted. Returns a structured summary (not the file contents).
+ */
+export const REFRESH_MEMORY_ANCHOR_TOOL: ToolDefinition = {
+  name: 'refresh_memory_anchor',
+  description:
+    'Retrieve a structured summary of your current session state: files read, files edited, ' +
+    'recent tool sequence, and current goal. Call this when you are uncertain about what you ' +
+    'have already done, rather than re-reading files. Zero cost, instant response.',
+  input_schema: {
+    type: 'object',
+    properties: {},
+    additionalProperties: false,
+  },
+};
+
+/**
+ * Recall past successful patterns and decisions for a specific specialist role.
+ * Enables the PM to check for reusable approaches before dispatching work.
+ */
+export const RECALL_ROLE_MEMORY_TOOL: ToolDefinition = {
+  name: 'recall_role_memory',
+  description:
+    'Recall past successful patterns and decisions for a specific specialist role. ' +
+    'Use before starting work to check if a similar task was solved before.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      role: {
+        type: 'string',
+        enum: ['liquid', 'javascript', 'css', 'json'],
+        description: 'Which specialist role to recall memories for.',
+      },
+      query: {
+        type: 'string',
+        description: 'What pattern or task to search for in past outcomes.',
+      },
+    },
+    required: ['role', 'query'],
+    additionalProperties: false,
+  },
+};
+
+// -- Specialist tool selection -------------------------------------------
+
+type SpecialistType = 'liquid' | 'javascript' | 'css' | 'json' | 'schema' | 'general' | string;
+
+const SPECIALIST_BASE_TOOL_NAMES = new Set([
+  // Reading
+  'read_file',
+  'read_lines',
+  'read_chunk',
+  'extract_region',
+  'list_files',
+  'glob_files',
+  // Search
+  'search_files',
+  'grep_content',
+  'semantic_search',
+  // Editing (search_replace & check_lint are pushed separately as standalone exports)
+  'edit_lines',
+  'write_file',
+  'undo_edit',
+  // Validation
+  'validate_syntax',
+  // Structural queries
+  'get_dependency_graph',
+  'find_references',
+  'get_schema_settings',
+]);
+
+const SPECIALIST_TYPE_EXTRAS: Record<string, string[]> = {
+  liquid: ['trace_rendering_chain', 'check_theme_setting', 'diagnose_visibility', 'analyze_variants'],
+  css: ['inject_css'],
+  javascript: ['read_console_logs'],
+  json: [],
+  schema: [],
+  general: [],
+};
+
+/**
+ * Select tools available to a specialist agent.
+ * Returns a filtered subset of AGENT_TOOLS appropriate for the specialist's domain.
+ */
+export function selectSpecialistTools(specialistType: SpecialistType): ToolDefinition[] {
+  const extras = new Set(SPECIALIST_TYPE_EXTRAS[specialistType] ?? []);
+  const allowed = new Set([...SPECIALIST_BASE_TOOL_NAMES, ...extras]);
+
+  const tools = AGENT_TOOLS.filter((t) => allowed.has(t.name));
+  tools.push(CHECK_LINT_TOOL);
+  tools.push(SEARCH_REPLACE_TOOL);
+  return tools;
+}
+
 // -- PTC (Programmatic Tool Calling) -------------------------------------
 
 /** PTC code execution tool type identifier. */
@@ -117,6 +215,7 @@ const CODE_EXEC_TYPE = 'code_execution_20250825';
 /** Tools that can be called programmatically from code execution sandbox. */
 const PTC_ELIGIBLE_TOOLS = new Set([
   'read_file',
+  'read_lines',
   'search_files',
   'grep_content',
   'glob_files',
@@ -127,6 +226,7 @@ const PTC_ELIGIBLE_TOOLS = new Set([
   'check_lint',
   'validate_syntax',
   'semantic_search',
+  'edit_lines',
 ]);
 
 /** Tools with large input params that benefit from eager (non-buffered) streaming. */
@@ -135,6 +235,7 @@ const EAGER_STREAMING_TOOLS = new Set([
   'search_replace',
   'create_file',
   'write_file',
+  'edit_lines',
 ]);
 
 // -- V2 tool selection --------------------------------------------------
@@ -144,24 +245,68 @@ const EAGER_STREAMING_TOOLS = new Set([
  * When PTC is enabled (default), read-only tools get allowed_callers
  * for code execution and the code_execution server tool is added.
  */
+const BASE_TOOL_NAMES = new Set([
+  // Reading
+  'read_file',
+  'search_files',
+  'grep_content',
+  'glob_files',
+  'semantic_search',
+  'extract_region',
+  'list_files',
+  // Structural reading
+  'read_lines',
+  'read_chunk',
+  'parallel_batch_read',
+  // Structural queries
+  'get_dependency_graph',
+  'find_references',
+  'get_schema_settings',
+  // Diagnostics (always available, not debug-only)
+  'run_diagnostics',
+  'analyze_variants',
+  'check_performance',
+  'retrieve_similar_tasks',
+  'theme_check',
+  'trace_rendering_chain',
+  'check_theme_setting',
+  'diagnose_visibility',
+  // Web access
+  'web_search',
+  'fetch_url',
+  // Shopify analysis
+  'analyze_variants',
+]);
+
+const CODE_MODE_TOOL_NAMES = new Set([
+  // Structural editing
+  'edit_lines',
+  // File management
+  'write_file',
+  'delete_file',
+  'rename_file',
+  // Recovery
+  'undo_edit',
+]);
+
+const PREVIEW_TOOL_NAMES = new Set([
+  'inspect_element',
+  'get_page_snapshot',
+  'query_selector',
+  'inject_css',
+  'inject_html',
+  'read_console_logs',
+  'screenshot_preview',
+  'compare_screenshots',
+]);
+
 export function selectV2Tools(
   intentMode: string,
   hasPreview: boolean,
   enablePTC = true,
 ): ToolDefinition[] {
   const tools: ToolDefinition[] = [
-    ...AGENT_TOOLS.filter(
-      (t) =>
-        t.name === 'read_file' ||
-        t.name === 'search_files' ||
-        t.name === 'grep_content' ||
-        t.name === 'glob_files' ||
-        t.name === 'semantic_search' ||
-        t.name === 'extract_region' ||
-        t.name === 'list_files' ||
-        t.name === 'get_dependency_graph' ||
-        t.name === 'run_diagnostics',
-    ),
+    ...AGENT_TOOLS.filter((t) => BASE_TOOL_NAMES.has(t.name)),
     CHECK_LINT_TOOL,
     READ_PLAN_TOOL,
   ];
@@ -170,6 +315,10 @@ export function selectV2Tools(
     return enablePTC ? annotatePTC(tools) : annotateEagerStreaming(tools);
   }
 
+  // Code/debug mode: add editing + mutation tools
+  for (const t of AGENT_TOOLS) {
+    if (CODE_MODE_TOOL_NAMES.has(t.name)) tools.push(t);
+  }
   tools.push(PROPOSE_CODE_EDIT_TOOL);
   tools.push(SEARCH_REPLACE_TOOL);
   tools.push(CREATE_FILE_TOOL);
@@ -177,28 +326,21 @@ export function selectV2Tools(
   tools.push(RUN_SPECIALIST_TOOL);
   tools.push(RUN_REVIEW_TOOL);
   tools.push(GET_SECOND_OPINION_TOOL);
+  tools.push(REFRESH_MEMORY_ANCHOR_TOOL);
+  tools.push(RECALL_ROLE_MEMORY_TOOL);
 
-  // Keep planning explicit: only expose propose_plan and plan mutation tools in plan mode.
-  // This prevents code/debug turns from looping back into planning.
   if (intentMode === 'plan' || intentMode === 'summary') {
     tools.push(PROPOSE_PLAN_TOOL);
     tools.push(CREATE_PLAN_TOOL);
     tools.push(UPDATE_PLAN_TOOL);
   }
 
+  // Preview tools (DOM inspection, CSS injection, screenshots)
   if (hasPreview) {
     tools.push(NAVIGATE_PREVIEW_TOOL);
-  }
-
-  if (intentMode === 'debug') {
-    const themeCheck = AGENT_TOOLS.find((t) => t.name === 'theme_check');
-    if (themeCheck) tools.push(themeCheck);
-    const traceChain = AGENT_TOOLS.find((t) => t.name === 'trace_rendering_chain');
-    if (traceChain) tools.push(traceChain);
-    const checkSetting = AGENT_TOOLS.find((t) => t.name === 'check_theme_setting');
-    if (checkSetting) tools.push(checkSetting);
-    const diagVis = AGENT_TOOLS.find((t) => t.name === 'diagnose_visibility');
-    if (diagVis) tools.push(diagVis);
+    for (const t of AGENT_TOOLS) {
+      if (PREVIEW_TOOL_NAMES.has(t.name)) tools.push(t);
+    }
   }
 
   return enablePTC ? annotatePTC(tools) : annotateEagerStreaming(tools);
@@ -238,4 +380,24 @@ function annotateEagerStreaming(tools: ToolDefinition[]): ToolDefinition[] {
   return tools.map((t) =>
     EAGER_STREAMING_TOOLS.has(t.name) ? { ...t, eager_input_streaming: true } : t,
   );
+}
+
+const ORCHESTRATION_TOOL_NAMES = new Set([
+  'run_specialist',
+  'run_review',
+  'get_second_opinion',
+  'refresh_memory_anchor',
+  'recall_role_memory',
+]);
+
+/**
+ * Select tools for the flat coordinator (no orchestration tools).
+ * Returns ~15 essential tools + mode-specific extensions.
+ */
+export function selectFlatTools(
+  intentMode: string,
+  opts: { hasPreview?: boolean; hasShopify?: boolean } = {},
+): ToolDefinition[] {
+  const base = selectV2Tools(intentMode, !!opts.hasPreview, false);
+  return base.filter(t => !ORCHESTRATION_TOOL_NAMES.has(t.name));
 }

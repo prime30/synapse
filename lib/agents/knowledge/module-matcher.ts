@@ -15,32 +15,48 @@ export interface KnowledgeModule {
   alwaysLoad?: boolean;
 }
 
-import { LIQUID_REFERENCE, LIQUID_REFERENCE_KEYWORDS, LIQUID_REFERENCE_TOKENS } from './liquid-reference';
-import { SCHEMA_REFERENCE, SCHEMA_REFERENCE_KEYWORDS, SCHEMA_REFERENCE_TOKENS } from './schema-reference';
-import { THEME_ARCHITECTURE, THEME_ARCHITECTURE_KEYWORDS, THEME_ARCHITECTURE_TOKENS } from './theme-architecture';
+import { LIQUID_CORE, LIQUID_CORE_KEYWORDS, LIQUID_CORE_TOKENS } from './liquid-core';
+import { LIQUID_FILTERS, LIQUID_FILTERS_KEYWORDS, LIQUID_FILTERS_TOKENS } from './liquid-filters';
+import { LIQUID_OBJECTS, LIQUID_OBJECTS_KEYWORDS, LIQUID_OBJECTS_TOKENS } from './liquid-objects';
+import { A11Y_PATTERNS, A11Y_PATTERNS_KEYWORDS, A11Y_PATTERNS_TOKENS } from './a11y-patterns';
+import { CSS_JS_STANDARDS, CSS_JS_STANDARDS_KEYWORDS, CSS_JS_STANDARDS_TOKENS } from './css-js-standards';
+import { PACKING_SLIP_REFERENCE, PACKING_SLIP_REFERENCE_KEYWORDS, PACKING_SLIP_REFERENCE_TOKENS } from './liquid-reference';
 import { DIAGNOSTIC_STRATEGY, DIAGNOSTIC_STRATEGY_KEYWORDS, DIAGNOSTIC_STRATEGY_TOKENS } from './diagnostic-strategy';
 import { CX_PATTERNS_SUMMARY, CX_PATTERNS_SUMMARY_KEYWORDS, CX_PATTERNS_SUMMARY_TOKENS } from './cx-patterns-summary';
 import { PERFORMANCE_PATTERNS, PERFORMANCE_PATTERNS_KEYWORDS, PERFORMANCE_PATTERNS_TOKENS } from './performance-patterns';
+import { VARIANT_PATTERNS, VARIANT_PATTERNS_KEYWORDS, VARIANT_PATTERNS_TOKENS } from './variant-patterns';
 
 const MODULES: KnowledgeModule[] = [
   {
-    id: 'theme-architecture',
-    keywords: THEME_ARCHITECTURE_KEYWORDS,
-    content: THEME_ARCHITECTURE,
-    tokenEstimate: THEME_ARCHITECTURE_TOKENS,
+    id: 'liquid-core',
+    keywords: LIQUID_CORE_KEYWORDS,
+    content: LIQUID_CORE,
+    tokenEstimate: LIQUID_CORE_TOKENS,
     alwaysLoad: true,
   },
   {
-    id: 'liquid-reference',
-    keywords: LIQUID_REFERENCE_KEYWORDS,
-    content: LIQUID_REFERENCE,
-    tokenEstimate: LIQUID_REFERENCE_TOKENS,
+    id: 'liquid-filters',
+    keywords: LIQUID_FILTERS_KEYWORDS,
+    content: LIQUID_FILTERS,
+    tokenEstimate: LIQUID_FILTERS_TOKENS,
   },
   {
-    id: 'schema-reference',
-    keywords: SCHEMA_REFERENCE_KEYWORDS,
-    content: SCHEMA_REFERENCE,
-    tokenEstimate: SCHEMA_REFERENCE_TOKENS,
+    id: 'liquid-objects',
+    keywords: LIQUID_OBJECTS_KEYWORDS,
+    content: LIQUID_OBJECTS,
+    tokenEstimate: LIQUID_OBJECTS_TOKENS,
+  },
+  {
+    id: 'a11y-patterns',
+    keywords: A11Y_PATTERNS_KEYWORDS,
+    content: A11Y_PATTERNS,
+    tokenEstimate: A11Y_PATTERNS_TOKENS,
+  },
+  {
+    id: 'css-js-standards',
+    keywords: CSS_JS_STANDARDS_KEYWORDS,
+    content: CSS_JS_STANDARDS,
+    tokenEstimate: CSS_JS_STANDARDS_TOKENS,
   },
   {
     id: 'diagnostic-strategy',
@@ -59,6 +75,18 @@ const MODULES: KnowledgeModule[] = [
     keywords: PERFORMANCE_PATTERNS_KEYWORDS,
     content: PERFORMANCE_PATTERNS,
     tokenEstimate: PERFORMANCE_PATTERNS_TOKENS,
+  },
+  {
+    id: 'variant-patterns',
+    keywords: VARIANT_PATTERNS_KEYWORDS,
+    content: VARIANT_PATTERNS,
+    tokenEstimate: VARIANT_PATTERNS_TOKENS,
+  },
+  {
+    id: 'packing-slip-reference',
+    keywords: PACKING_SLIP_REFERENCE_KEYWORDS,
+    content: PACKING_SLIP_REFERENCE,
+    tokenEstimate: PACKING_SLIP_REFERENCE_TOKENS,
   },
 ];
 

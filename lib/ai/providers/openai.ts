@@ -34,7 +34,15 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
           },
           body: JSON.stringify({
             model,
-            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: messages.map((m) => ({
+              role: m.role,
+              content: m.images?.length
+                ? [
+                    ...m.images.map((img) => ({ type: 'image_url' as const, image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
+                    { type: 'text' as const, text: m.content },
+                  ]
+                : m.content,
+            })),
             max_tokens: options?.maxTokens ?? 1024,
             temperature: options?.temperature ?? 0.7,
           }),
@@ -83,7 +91,15 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
         },
         body: JSON.stringify({
           model,
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.images?.length
+              ? [
+                  ...m.images.map((img) => ({ type: 'image_url' as const, image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
+                  { type: 'text' as const, text: m.content },
+                ]
+              : m.content,
+          })),
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
           stream: true,

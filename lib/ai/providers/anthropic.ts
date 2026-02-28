@@ -140,6 +140,38 @@ function buildSystemField(systemMessage: AIMessage | undefined): unknown {
 }
 
 /**
+ * Build Anthropic content block(s) for a user message, including images if present.
+ */
+function buildUserContent(m: AIMessage): unknown {
+  const hasImages = m.images && m.images.length > 0;
+  const hasCacheControl = m.cacheControl && AI_FEATURES.promptCaching;
+
+  if (!hasImages && !hasCacheControl) return m.content;
+
+  const parts: unknown[] = [];
+
+  if (hasImages) {
+    for (const img of m.images!) {
+      parts.push({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mimeType, data: img.base64 },
+      });
+    }
+  }
+
+  const textBlock: Record<string, unknown> = { type: 'text', text: m.content };
+  if (hasCacheControl) {
+    textBlock.cache_control = {
+      type: m.cacheControl!.type,
+      ...(m.cacheControl!.ttl ? { ttl: m.cacheControl!.ttl } : {}),
+    };
+  }
+  parts.push(textBlock);
+
+  return parts;
+}
+
+/**
  * Normalize continuation content blocks before sending back to Anthropic.
  * Anthropic accepts `tool_result` only when there is a matching prior `tool_use`.
  * For PTC loops we may capture `server_tool_use`; convert those to `tool_use`
@@ -183,6 +215,27 @@ function normalizeContinuationBlocks(blocks: unknown[]): unknown[] {
   return normalized;
 }
 
+/**
+ * Sanitize persisted tool_result blocks before sending back to Anthropic.
+ * Anthropic rejects unknown properties (e.g. `compressed`) on tool_result.
+ */
+function sanitizeToolResults(blocks: unknown[]): unknown[] {
+  const sanitized: unknown[] = [];
+  for (const raw of blocks) {
+    const block = raw as Record<string, unknown>;
+    if (block?.type !== 'tool_result') continue;
+    const toolUseId = typeof block.tool_use_id === 'string' ? block.tool_use_id : '';
+    if (!toolUseId) continue;
+    sanitized.push({
+      type: 'tool_result',
+      tool_use_id: toolUseId,
+      content: typeof block.content === 'string' ? block.content : String(block.content ?? ''),
+      ...(block.is_error === true ? { is_error: true } : {}),
+    });
+  }
+  return sanitized;
+}
+
 /** PTC (Programmatic Tool Calling) is only supported by Sonnet and Opus, not Haiku. */
 function modelSupportsPTC(model: string): boolean {
   return !model.includes('haiku');
@@ -220,7 +273,10 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
         model,
         max_tokens: options?.maxTokens ?? 1024,
         temperature,
-        messages: chatMessages.map((m) => ({ role: m.role, content: m.content })),
+        messages: chatMessages.map((m) => ({
+          role: m.role,
+          content: m.role === 'user' ? buildUserContent(m) : m.content,
+        })),
       };
       const systemField = buildSystemField(systemMessage);
       if (systemField !== undefined) body.system = systemField;
@@ -306,7 +362,10 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
         max_tokens: options?.maxTokens ?? 1024,
         temperature,
         stream: true,
-        messages: chatMessages.map((m) => ({ role: m.role, content: m.content })),
+        messages: chatMessages.map((m) => ({
+          role: m.role,
+          content: m.role === 'user' ? buildUserContent(m) : m.content,
+        })),
       };
       const systemField = buildSystemField(systemMessage);
       if (systemField !== undefined) body.system = systemField;
@@ -442,38 +501,23 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
       const anthropicMessages = chatMessages.map((m) => {
         const msg = m as unknown as Record<string, unknown>;
         if (m.role === 'assistant' && msg.__toolCalls) {
-          // Assistant message with tool use content blocks
           return {
             role: 'assistant',
             content: normalizeContinuationBlocks(msg.__toolCalls as unknown[]),
           };
         }
         if (msg.__toolResults) {
-          return {
-            role: 'user',
-            content: msg.__toolResults as unknown[],
-          };
+          return { role: 'user', content: sanitizeToolResults(msg.__toolResults as unknown[]) };
         }
-        // Propagate cache_control for prompt caching
-        if (m.cacheControl && AI_FEATURES.promptCaching) {
-          return {
-            role: m.role,
-            content: [{
-              type: 'text',
-              text: m.content,
-              cache_control: {
-                type: m.cacheControl.type,
-                ...(m.cacheControl.ttl ? { ttl: m.cacheControl.ttl } : {}),
-              },
-            }],
-          };
+        if (m.role === 'user') {
+          return { role: m.role, content: buildUserContent(m) };
         }
         return { role: m.role, content: m.content };
       });
 
       const ptcEnabled = modelSupportsPTC(model);
       const serializedTools = tools
-        .filter((t) => !t.type || ptcEnabled) // Drop server tools (code_execution) for non-PTC models
+        .filter((t) => !t.type || ptcEnabled)
         .map((t) => {
           if (t.type && ptcEnabled) {
             return { type: t.type, name: t.name } as Record<string, unknown>;
@@ -611,21 +655,10 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
           };
         }
         if (msg.__toolResults) {
-          return { role: 'user', content: msg.__toolResults as unknown[] };
+          return { role: 'user', content: sanitizeToolResults(msg.__toolResults as unknown[]) };
         }
-        // Propagate cache_control for prompt caching
-        if (m.cacheControl && AI_FEATURES.promptCaching) {
-          return {
-            role: m.role,
-            content: [{
-              type: 'text',
-              text: m.content,
-              cache_control: {
-                type: m.cacheControl.type,
-                ...(m.cacheControl.ttl ? { ttl: m.cacheControl.ttl } : {}),
-              },
-            }],
-          };
+        if (m.role === 'user') {
+          return { role: m.role, content: buildUserContent(m) };
         }
         return { role: m.role, content: m.content };
       });
@@ -745,9 +778,15 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
       const contextEditsPromise = new Promise<ContextEditResultLocal[]>(
         (resolve) => { contextEditsResolve = resolve; }
       );
+      let terminalError: AIProviderError | null = null;
+      let terminalErrorResolve: (value: AIProviderError | null) => void;
+      const terminalErrorPromise = new Promise<AIProviderError | null>(
+        (resolve) => { terminalErrorResolve = resolve; }
+      );
 
       // Tool accumulation buffer: Map<block_index, { id, name, jsonChunks }>
       const toolBuffers = new Map<number, { id: string; name: string; jsonChunks: string[] }>();
+      let sseBuffer = '';
 
       // 30s inactivity timeout for tool blocks
       let lastActivity = Date.now();
@@ -782,6 +821,7 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
             rawBlocksResolve!(rawContentBlocks);
             containerResolve!(containerInfo);
             contextEditsResolve!(contextEdits);
+            terminalErrorResolve!(terminalError);
           };
 
           (async () => {
@@ -805,12 +845,26 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
                 if (done) break;
 
                 lastActivity = Date.now();
-                const text = decoder.decode(value);
-                const lines = text.split('\n').filter((l) => l.startsWith('data: '));
+                const text = decoder.decode(value, { stream: true });
+                sseBuffer += text;
 
-                for (const line of lines) {
+                // Parse complete SSE frames; keep tail in buffer if incomplete.
+                let frameEndIdx = sseBuffer.indexOf('\n\n');
+                while (frameEndIdx !== -1) {
+                  const frame = sseBuffer.slice(0, frameEndIdx);
+                  sseBuffer = sseBuffer.slice(frameEndIdx + 2);
+                  frameEndIdx = sseBuffer.indexOf('\n\n');
+
+                  const dataLines = frame
+                    .split('\n')
+                    .filter((l) => l.startsWith('data:'))
+                    .map((l) => l.replace(/^data:\s?/, ''))
+                    .filter(Boolean);
+                  if (dataLines.length === 0) continue;
+
+                  const payload = dataLines.join('\n');
                   try {
-                    const parsed = JSON.parse(line.slice(6));
+                    const parsed = JSON.parse(payload);
 
                     if (parsed.type === 'message_start') {
                       inputTokens = parsed.message?.usage?.input_tokens ?? 0;
@@ -938,6 +992,7 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
             } catch (e) {
               const err = e instanceof AIProviderError ? e : classifyNetworkError(e, 'anthropic');
               console.error('[anthropic] streamWithTools() stream error:', err.message);
+              terminalError = err;
               controller.close();
               resolveAll();
             }
@@ -950,6 +1005,7 @@ export function createAnthropicProvider(customApiKey?: string): AIToolProviderIn
         getUsage: () => usagePromise,
         getStopReason: () => stopReasonPromise,
         getRawContentBlocks: () => rawBlocksPromise,
+        getTerminalError: () => terminalErrorPromise,
         getContainer: () => containerPromise,
         getContextEdits: () => contextEditsPromise,
       };

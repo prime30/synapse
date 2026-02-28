@@ -22,6 +22,15 @@ const MODEL_RATES: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.1, output: 0.4 },
   'gemini-2.0-flash-lite': { input: 0.05, output: 0.2 },
   'gemini-1.5-pro': { input: 1.25, output: 5.0 },
+
+  // xAI -- Grok (dashboard: grok-4-0709 $3/$15, fast variants $0.20/$0.50, grok-code-fast-1 $0.20/$1.50)
+  'grok-4': { input: 3.0, output: 15.0 },
+  'grok-4-0709': { input: 3.0, output: 15.0 },
+  'grok-4-1-fast-reasoning': { input: 0.20, output: 0.50 },
+  'grok-4-1-fast-non-reasoning': { input: 0.20, output: 0.50 },
+  'grok-4-fast-reasoning': { input: 0.20, output: 0.50 },
+  'grok-4-fast-non-reasoning': { input: 0.20, output: 0.50 },
+  'grok-code-fast-1': { input: 0.20, output: 1.50 },
 };
 
 /**

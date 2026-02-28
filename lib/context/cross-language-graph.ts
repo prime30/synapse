@@ -2,9 +2,11 @@
  * Cross-language dependency graph for Shopify themes.
  * Tracks relationships between Liquid sections/snippets, CSS rules, and JS functions.
  *
- * Builds from file content using AST chunking and symbol extraction.
+ * Uses tree-sitter for Liquid extraction when available, regex fallback otherwise.
  * Cached in memory, invalidated on file change.
  */
+
+import { getLiquidParser, isLiquidParserAvailable } from '@/lib/parsers/tree-sitter-loader';
 
 export interface GraphNode {
   path: string;
@@ -143,28 +145,14 @@ export class ThemeDependencyGraph {
   // ── Internal extraction ──────────────────────────────────────────────
 
   private extractLiquidEdges(filePath: string, content: string) {
-    // render/include
+    if (isLiquidParserAvailable()) {
+      this.extractLiquidEdgesTreeSitter(filePath, content);
+    } else {
+      this.extractLiquidEdgesRegex(filePath, content);
+    }
+
+    // CSS class usage (always regex — tree-sitter doesn't track HTML attributes)
     let match;
-    const renderRe = new RegExp(RENDER_RE.source, 'g');
-    while ((match = renderRe.exec(content)) !== null) {
-      const line = content.slice(0, match.index).split('\n').length;
-      this.edges.push({ source: filePath, target: match[1], type: 'renders', line });
-    }
-
-    // section
-    const sectionRe = new RegExp(SECTION_RE.source, 'g');
-    while ((match = sectionRe.exec(content)) !== null) {
-      const line = content.slice(0, match.index).split('\n').length;
-      this.edges.push({ source: filePath, target: match[1], type: 'includes', line });
-    }
-
-    // asset references
-    const assetRe = new RegExp(ASSET_URL_RE.source, 'g');
-    while ((match = assetRe.exec(content)) !== null) {
-      this.edges.push({ source: filePath, target: `assets/${match[1]}.${match[2]}`, type: 'asset_ref' });
-    }
-
-    // CSS class usage (for reverse lookup)
     const classRe = new RegExp(CSS_CLASS_USE_RE.source, 'g');
     while ((match = classRe.exec(content)) !== null) {
       const classes = match[1].split(/\s+/).filter(Boolean);
@@ -175,6 +163,56 @@ export class ThemeDependencyGraph {
           this.cssClassToFile.set(cls, existing);
         }
       }
+    }
+
+    // Asset references (always regex)
+    const assetRe = new RegExp(ASSET_URL_RE.source, 'g');
+    while ((match = assetRe.exec(content)) !== null) {
+      this.edges.push({ source: filePath, target: `assets/${match[1]}.${match[2]}`, type: 'asset_ref' });
+    }
+  }
+
+  private extractLiquidEdgesTreeSitter(filePath: string, content: string) {
+    const parser = getLiquidParser();
+    if (!parser) return;
+
+    const tree = (parser as unknown as { parse(c: string): { rootNode: { children: Array<{ type: string; startPosition: { row: number }; children: Array<{ type: string; startIndex: number; endIndex: number }> }> } } }).parse(content);
+
+    function walk(node: { type: string; startPosition: { row: number }; children: Array<{ type: string; startIndex: number; endIndex: number }> }, edges: GraphEdge[]) {
+      if (node.type === 'render_statement' || node.type === 'include_statement') {
+        const nameChild = node.children.find(c => c.type === 'string' || c.type === 'string_content');
+        if (nameChild) {
+          const target = content.slice(nameChild.startIndex, nameChild.endIndex).replace(/['"]/g, '');
+          edges.push({ source: filePath, target, type: 'renders', line: node.startPosition.row + 1 });
+        }
+      }
+      if (node.type === 'section_statement') {
+        const nameChild = node.children.find(c => c.type === 'string' || c.type === 'string_content');
+        if (nameChild) {
+          const target = content.slice(nameChild.startIndex, nameChild.endIndex).replace(/['"]/g, '');
+          edges.push({ source: filePath, target, type: 'includes', line: node.startPosition.row + 1 });
+        }
+      }
+      for (const child of node.children ?? []) {
+        walk(child as unknown as Parameters<typeof walk>[0], edges);
+      }
+    }
+
+    walk(tree.rootNode as unknown as Parameters<typeof walk>[0], this.edges);
+  }
+
+  private extractLiquidEdgesRegex(filePath: string, content: string) {
+    let match;
+    const renderRe = new RegExp(RENDER_RE.source, 'g');
+    while ((match = renderRe.exec(content)) !== null) {
+      const line = content.slice(0, match.index).split('\n').length;
+      this.edges.push({ source: filePath, target: match[1], type: 'renders', line });
+    }
+
+    const sectionRe = new RegExp(SECTION_RE.source, 'g');
+    while ((match = sectionRe.exec(content)) !== null) {
+      const line = content.slice(0, match.index).split('\n').length;
+      this.edges.push({ source: filePath, target: match[1], type: 'includes', line });
     }
   }
 
@@ -202,6 +240,35 @@ export class ThemeDependencyGraph {
     const importRe = new RegExp(JS_IMPORT_RE.source, 'g');
     while ((match = importRe.exec(content)) !== null) {
       this.edges.push({ source: filePath, target: match[1], type: 'imports' });
+    }
+  }
+
+  /**
+   * Incrementally update a single file in the graph without full rebuild.
+   * Removes old edges from this file and re-extracts from new content.
+   */
+  updateFile(filePath: string, newContent: string) {
+    this.edges = this.edges.filter(e => e.source !== filePath);
+
+    for (const [cls, files] of this.cssClassToFile) {
+      const idx = files.indexOf(filePath);
+      if (idx !== -1) files.splice(idx, 1);
+      if (files.length === 0) this.cssClassToFile.delete(cls);
+    }
+
+    const type = this.inferType(filePath);
+    this.nodes.set(filePath, { path: filePath, type });
+
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext === 'liquid') this.extractLiquidEdges(filePath, newContent);
+    else if (ext === 'css') this.extractCSSEdges(filePath, newContent);
+    else if (ext === 'js') this.extractJSEdges(filePath, newContent);
+
+    this.reverseIndex.clear();
+    for (const edge of this.edges) {
+      const existing = this.reverseIndex.get(edge.target) ?? [];
+      existing.push(edge);
+      this.reverseIndex.set(edge.target, existing);
     }
   }
 

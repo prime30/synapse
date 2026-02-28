@@ -15,6 +15,7 @@ import type { FileContext } from '@/lib/types/agent';
 import type { ToolExecutorContext } from './tool-executor';
 import { loadAllContent } from '@/lib/supabase/file-loader';
 import { estimateTokens } from '@/lib/ai/token-counter';
+import { normalizeWhitespace } from './prettify';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,11 @@ interface GrepMatch {
   path: string;
   line: number;
   content: string;
+}
+
+/** Normalize a single line so it matches what read_file/search_replace use (tabs→spaces, trimEnd). Avoids whitespace mismatches when agents copy grep output into old_text. */
+function normalizeGrepLine(line: string): string {
+  return normalizeWhitespace(line + '\n').trimEnd();
 }
 
 // ── Synonym / widening system ─────────────────────────────────────────────
@@ -133,7 +139,7 @@ export async function executeGrep(
   input: GrepInput,
   ctx: ToolExecutorContext,
 ): Promise<ToolResult & { _matchedFileIds?: string[] }> {
-  const { pattern, filePattern, caseSensitive = false, maxResults = 50, maxTokens = 5000 } = input;
+  const { pattern, filePattern, caseSensitive = false, maxResults = 300, maxTokens = 20_000 } = input;
 
   if (!pattern) {
     return { tool_use_id: '', content: 'Pattern is required.', is_error: true };
@@ -167,7 +173,7 @@ export async function executeGrep(
             fileName: file.fileName,
             path: file.path ?? file.fileName,
             line: i + 1,
-            content: lines[i].trimEnd(),
+            content: normalizeGrepLine(lines[i]),
           });
           matchedFileIds.add(file.fileId);
         }
@@ -232,7 +238,7 @@ export async function executeGrep(
               fileName: file.fileName,
               path: file.path ?? file.fileName,
               line: i + 1,
-              content: lines[i].trimEnd(),
+              content: normalizeGrepLine(lines[i]),
             });
             synFileIds.add(file.fileId);
           }
@@ -279,6 +285,7 @@ export async function executeGrep(
         allMatches.map(m => ({ file: m.path, line: m.line, content: m.content })),
       );
       allMatches = ranked.map(r => ({
+        fileName: r.file.split('/').pop() ?? r.file,
         path: r.file,
         line: r.line,
         content: r.content,

@@ -9,6 +9,7 @@ import {
 } from "geist/font/pixel";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { UpdateToast } from "@/components/features/desktop/UpdateToast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,7 +46,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=sessionStorage.getItem('synapse-theme-session');var dark=t?t==='dark':true;if(dark){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light'}try{localStorage.removeItem('synapse-theme')}catch(_){}}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}})();`,
+            __html: `(function(){try{var t=sessionStorage.getItem('synapse-theme-session');var dark=t?t==='dark':true;if(dark){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';document.documentElement.style.backgroundColor='#0a0a0a'}else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light';document.documentElement.style.backgroundColor='#fafaf9'}try{localStorage.removeItem('synapse-theme')}catch(_){}}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';document.documentElement.style.backgroundColor='#0a0a0a'}})();`,
           }}
         />
       </head>
@@ -54,6 +55,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${GeistPixelGrid.variable} ${GeistPixelCircle.variable} ${GeistPixelTriangle.variable} ${GeistPixelLine.variable} antialiased`}
       >
         <Providers>{children}</Providers>
+        <UpdateToast />
       </body>
     </html>
   );

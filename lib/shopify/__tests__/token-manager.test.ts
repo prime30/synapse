@@ -84,6 +84,8 @@ describe('ShopifyTokenManager', () => {
         last_sync_at: null,
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes'],
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -120,6 +122,8 @@ describe('ShopifyTokenManager', () => {
           last_sync_at: new Date().toISOString(),
           sync_status: status,
           scopes: ['read_themes'],
+          preview_cookie_encrypted: null,
+          preview_cookie_expires_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -139,6 +143,8 @@ describe('ShopifyTokenManager', () => {
         last_sync_at: null,
         sync_status: 'disconnected',
         scopes: [],
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createClient, createReadClient } from '@/lib/supabase/server';
+import { createClientFromRequest } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const userId = await requireAuth(request);
     const { projectId } = await params;
-    const supabase = await createReadClient();
+    const supabase = await createClientFromRequest(request);
 
     const url = new URL(request.url);
     const archived = url.searchParams.get('archived') === 'true';
@@ -116,6 +116,8 @@ const postSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   /** Reuse the newest empty active session instead of always creating a new one. */
   reuseEmpty: z.boolean().optional(),
+  /** When true, cross-session memory recall is suppressed — fully clean context. */
+  cleanStart: z.boolean().optional(),
 });
 
 /**
@@ -127,12 +129,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const userId = await requireAuth(request);
     const { projectId } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientFromRequest(request);
 
     const body = await request.json().catch(() => ({}));
     const parsed = postSchema.safeParse(body);
     const title = parsed.success ? parsed.data.title : undefined;
     const reuseEmpty = parsed.success ? Boolean(parsed.data.reuseEmpty) : false;
+    const cleanStart = parsed.success ? Boolean(parsed.data.cleanStart) : false;
 
     if (reuseEmpty) {
       // Reuse the newest active session with zero messages to avoid piling up empty drafts.
@@ -171,29 +174,56 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         const reusable = (candidates ?? []).find((s) => (countsBySession[s.id] ?? 0) === 0);
         if (reusable) {
+          if (cleanStart) {
+            const updateResult = await supabase
+              .from('ai_sessions')
+              .update({ clean_start: true, title: title ?? 'New Chat' })
+              .eq('id', reusable.id);
+            // If clean_start column doesn't exist yet, at least update the title
+            if (updateResult.error?.message?.includes('clean_start')) {
+              await supabase
+                .from('ai_sessions')
+                .update({ title: title ?? 'New Chat' })
+                .eq('id', reusable.id);
+            }
+          }
           return successResponse({
             id: reusable.id,
-            title: reusable.title,
+            title: title ?? reusable.title,
             createdAt: reusable.created_at,
             updatedAt: reusable.updated_at,
             messageCount: 0,
             reused: true,
+            cleanStart,
           });
         }
       }
     }
 
-    const { data: session, error } = await supabase
+    const insertPayload: Record<string, unknown> = {
+      project_id: projectId,
+      user_id: userId,
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      title: title ?? 'New Chat',
+    };
+    if (cleanStart) insertPayload.clean_start = true;
+
+    let { data: session, error } = await supabase
       .from('ai_sessions')
-      .insert({
-        project_id: projectId,
-        user_id: userId,
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-6',
-        title: title ?? 'New Chat',
-      })
+      .insert(insertPayload)
       .select('id, title, created_at, updated_at')
       .single();
+
+    // Retry without clean_start if the column doesn't exist yet
+    if (error && cleanStart && error.message?.includes('clean_start')) {
+      delete insertPayload.clean_start;
+      ({ data: session, error } = await supabase
+        .from('ai_sessions')
+        .insert(insertPayload)
+        .select('id, title, created_at, updated_at')
+        .single());
+    }
 
     if (error || !session) {
       throw new APIError(
@@ -210,6 +240,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       updatedAt: session.updated_at,
       messageCount: 0,
       reused: false,
+      cleanStart,
     });
   } catch (error) {
     return handleAPIError(error);

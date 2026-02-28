@@ -533,7 +533,7 @@ export class ThemeSyncService {
       }
 
       // Queue background embedding refresh if vector search is enabled
-      if (process.env.ENABLE_VECTOR_SEARCH === 'true' && result.pulled > 0) {
+      if (process.env.DISABLE_VECTOR_SEARCH !== 'true' && !!process.env.OPENAI_API_KEY && result.pulled > 0) {
         import('@/lib/tasks/built-in/warm-embeddings')
           .then(({ warmEmbeddingsForProject }) => warmEmbeddingsForProject(resolvedProjectId))
           .then((embResult) => {

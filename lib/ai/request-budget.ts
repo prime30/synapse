@@ -112,10 +112,10 @@ export interface TierAgentBudget {
 }
 
 const TIER_AGENT_BUDGETS: Record<RoutingTier, TierAgentBudget> = {
-  TRIVIAL:       { pm: 20_000,  specialist: 15_000 },
-  SIMPLE:        { pm: 30_000,  specialist: 25_000 },
-  COMPLEX:       { pm: 50_000,  specialist: 35_000 },
-  ARCHITECTURAL: { pm: 100_000, specialist: 60_000 },
+  TRIVIAL:       { pm: 30_000,  specialist: 20_000 },
+  SIMPLE:        { pm: 60_000,  specialist: 32_000 },
+  COMPLEX:       { pm: 100_000, specialist: 48_000 },
+  ARCHITECTURAL: { pm: 200_000, specialist: 80_000 },
 };
 
 /**

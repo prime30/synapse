@@ -1,5 +1,5 @@
 import type { AgentType, AgentTask, AgentResult, AgentError } from '@/lib/types/agent';
-import type { AIProvider, AIProviderInterface, AIMessage, ToolDefinition, ToolResult as AIToolResult, AIToolCompletionResult, AICompletionOptions, AIToolProviderInterface } from '@/lib/ai/types';
+import type { AIProvider, AIProviderInterface, AIMessage, ToolResult as AIToolResult, AIToolCompletionResult, AICompletionOptions, AIToolProviderInterface } from '@/lib/ai/types';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import { AIProviderError, isRetryable } from '@/lib/ai/errors';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
@@ -12,6 +12,7 @@ import {
   type AIAction,
   type AgentRole,
   type ProviderName,
+  type ExecutionTier,
 } from './model-router';
 
 /** Type guard: does this provider support completeWithTools? */
@@ -20,8 +21,9 @@ export function isToolProvider(provider: AIProviderInterface): provider is AIToo
 }
 import { enforceRequestBudget, getAgentBudget } from '@/lib/ai/request-budget';
 import { estimateTokens } from '@/lib/ai/token-counter';
-import { AGENT_TOOLS } from './tools/definitions';
 import { executeToolCall, type ToolExecutorContext } from './tools/tool-executor';
+import { TOOL_THRESHOLDS } from './tools/constants';
+import { selectSpecialistTools } from './tools/v2-tool-definitions';
 
 export interface RetryConfig {
   maxRetries: number;
@@ -47,6 +49,8 @@ export interface AgentExecuteOptions {
   outputSchema?: Record<string, unknown>;
   /** Routing tier for adaptive budget/model escalation (EPIC V5). */
   tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+  /** Execution tier for cost optimization (planning/editing/review). */
+  executionTier?: ExecutionTier;
   /**
    * When provided, the agent streams LLM output token-by-token instead of
    * waiting for the full response. Each chunk is forwarded to the callback.
@@ -139,6 +143,7 @@ export abstract class Agent {
       userOverride: options?.model,
       agentRole: this.agentRole,
       tier: options?.tier,
+      executionTier: options?.executionTier,
     });
 
     const providerName = getProviderForModel(model);
@@ -201,6 +206,7 @@ export abstract class Agent {
       userOverride: options?.model,
       agentRole: this.agentRole,
       tier: options?.tier,
+      executionTier: options?.executionTier,
     });
     const providerName = getProviderForModel(model);
     this.provider = getAIProvider(toAIProvider(providerName));
@@ -286,7 +292,7 @@ export abstract class Agent {
 
     // If provider doesn't support tools, fall back to regular execution
     if (!isToolProvider(this.provider)) {
-      console.log(`[Agent:${this.agentType}] Provider doesn't support tools (pre-resolve), falling back to execute()`);
+      console.log(`[Agent:${this.type}] Provider doesn't support tools (pre-resolve), falling back to execute()`);
       return this.execute(task, options);
     }
 
@@ -296,6 +302,7 @@ export abstract class Agent {
       userOverride: options?.model,
       agentRole: this.agentRole,
       tier: options?.tier,
+      executionTier: options?.executionTier,
     });
     const providerName = getProviderForModel(model);
     this.provider = getAIProvider(toAIProvider(providerName));
@@ -303,12 +310,12 @@ export abstract class Agent {
 
     // Re-check after provider swap
     if (!isToolProvider(this.provider)) {
-      console.log(`[Agent:${this.agentType}] Provider doesn't support tools (post-resolve, model=${model}), falling back to execute()`);
+      console.log(`[Agent:${this.type}] Provider doesn't support tools (post-resolve, model=${model}), falling back to execute()`);
       return this.execute(task, options);
     }
-    console.log(`[Agent:${this.agentType}] Using executeWithTools with model=${model}, maxIterations=${maxIterations}`);
+    console.log(`[Agent:${this.type}] Using executeWithTools with model=${model}, maxIterations=${maxIterations}`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d09cca'},body:JSON.stringify({sessionId:'d09cca',location:'base.ts:executeWithTools-start',message:'executeWithTools active',data:{agentType:this.agentType,model,maxIterations,providerType:this.provider?.constructor?.name},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d09cca'},body:JSON.stringify({sessionId:'d09cca',location:'base.ts:executeWithTools-start',message:'executeWithTools active',data:{agentType:this.type,model,maxIterations,providerType:this.provider?.constructor?.name},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
     // #endregion
 
     const toolProvider = this.provider;
@@ -318,7 +325,7 @@ export abstract class Agent {
 
     const systemMsg: AIMessage = { role: 'system', content: systemPrompt };
     if (AI_FEATURES.promptCaching) {
-      systemMsg.cacheControl = { type: 'ephemeral' };
+      systemMsg.cacheControl = { type: 'ephemeral', ttl: AI_FEATURES.promptCacheTtl };
     }
     const messages: AIMessage[] = [
       systemMsg,
@@ -326,24 +333,45 @@ export abstract class Agent {
     ];
 
     for (let i = 0; i < maxIterations; i++) {
+      const specialistTools = selectSpecialistTools(this.type);
       const result = await toolProvider.completeWithTools(
         messages,
-        AGENT_TOOLS,
-        { model: this.currentModel, maxTokens: 4096 },
+        specialistTools,
+        { model: this.currentModel, maxTokens: 8192 },
       );
 
       if (result.stopReason === 'end_turn' || !result.toolCalls?.length) {
-        console.log(`[Agent:${this.agentType}] Loop ended at iteration ${i}: stopReason=${result.stopReason}, toolCalls=${result.toolCalls?.length??0}, contentLen=${result.content?.length??0}`);
-        return this.parseResponse(result.content, task);
+        console.log(`[Agent:${this.type}] Loop ended at iteration ${i}: stopReason=${result.stopReason}, toolCalls=${result.toolCalls?.length??0}, contentLen=${result.content?.length??0}`);
+        return this.parseResponse(result.content ?? '', task);
       }
 
       // Execute tool calls
       const toolResults: AIToolResult[] = [];
       for (const toolCall of result.toolCalls) {
-        console.log(`[Agent:${this.agentType}] iter=${i} tool=${toolCall.name} input_keys=${Object.keys(toolCall.input??{}).join(',')}`);
+        console.log(`[Agent:${this.type}] iter=${i} tool=${toolCall.name} input_keys=${Object.keys(toolCall.input??{}).join(',')}`);
         options?.onToolUse?.(toolCall.name);
+
+        // Block search_replace for large files — force edit_lines
+        if (toolCall.name === 'search_replace') {
+          const filePath = String(toolCall.input?.filePath ?? toolCall.input?.file_path ?? '');
+          const file = toolContext.files.find(f =>
+            f.fileName === filePath || f.path === filePath ||
+            f.fileName.endsWith('/' + filePath) || f.path?.endsWith('/' + filePath),
+          );
+          const contentLen = file?.content?.length ?? 0;
+          if (contentLen > TOOL_THRESHOLDS.SEARCH_REPLACE_HARD_BLOCK_CHARS) {
+            console.log(`[Agent:${this.type}] Blocked search_replace on large file ${filePath} (${contentLen} chars) — must use edit_lines`);
+            toolResults.push({
+              tool_use_id: toolCall.id,
+              content: `search_replace is unreliable on large files (${contentLen} chars). Use read_lines to see the exact line numbers, then edit_lines to make changes.`,
+              is_error: true,
+            });
+            continue;
+          }
+        }
+
         const toolResult = await Promise.resolve(executeToolCall(toolCall, toolContext));
-        console.log(`[Agent:${this.agentType}] iter=${i} tool=${toolCall.name} error=${toolResult.is_error??false} result=${(toolResult.content??'').slice(0,150)}`);
+        console.log(`[Agent:${this.type}] iter=${i} tool=${toolCall.name} error=${toolResult.is_error??false} result=${(toolResult.content??'').slice(0,150)}`);
         toolResults.push(toolResult);
       }
 
@@ -516,7 +544,11 @@ export abstract class Agent {
         );
       }
 
-      return this.parseResponse(result.content, task);
+      const parsed = this.parseResponse(result.content, task);
+      if (budgeted.budgetTruncated) {
+        parsed.budgetTruncated = true;
+      }
+      return parsed;
     } catch (error) {
       // Record failure with circuit breaker
       if (error instanceof AIProviderError) {

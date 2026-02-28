@@ -17,7 +17,10 @@ export interface ValidationIssue {
     | 'schema_setting'
     | 'asset_reference'
     | 'deprecated_liquid'
-    | 'locale_key';
+    | 'locale_key'
+    | 'companion_css'
+    | 'companion_js'
+    | 'companion_schema';
 }
 
 export interface ValidationResult {
@@ -386,6 +389,113 @@ function checkLocaleKeyReferences(
   return issues;
 }
 
+function normalizePath(path: string): string {
+  return String(path || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+}
+
+function extractDataAttributes(content: string): Set<string> {
+  const attrs = new Set<string>();
+  const regex = /\b(data-[a-zA-Z0-9_-]+)\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    attrs.add(match[1]);
+  }
+  return attrs;
+}
+
+function extractSectionSettingRefs(content: string): Set<string> {
+  const refs = new Set<string>();
+  const sectionRegex = /section\.settings\.(\w+)/g;
+  const blockRegex = /block\.settings\.(\w+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = sectionRegex.exec(content)) !== null) refs.add(match[1]);
+  while ((match = blockRegex.exec(content)) !== null) refs.add(match[1]);
+  return refs;
+}
+
+function extractSchemaJsonFromSection(content: string): unknown | null {
+  const schemaMatch = content.match(/\{%-?\s*schema\s*-?%\}([\s\S]*?)\{%-?\s*endschema\s*-?%\}/);
+  if (!schemaMatch) return null;
+  try {
+    return JSON.parse(schemaMatch[1].trim()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function checkCompanionCoverage(
+  changes: CodeChange[],
+  mergedMap: Map<string, MergedEntry>
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const normalizedChanges = changes.map((c) => normalizePath(c.fileName));
+  const hasCssChange = normalizedChanges.some((p) => p.startsWith('assets/') && /\.(css|scss)$/i.test(p));
+  const hasJsChange = normalizedChanges.some((p) => p.startsWith('assets/') && /\.(js|mjs|ts)$/i.test(p));
+  const cssClasses = extractCssClasses(mergedMap);
+
+  for (const change of changes) {
+    const filePath = normalizePath(change.fileName);
+    if (!filePath.endsWith('.liquid')) continue;
+
+    const originalClasses = extractLiquidClasses(change.originalContent || '');
+    const proposedClasses = extractLiquidClasses(change.proposedContent || '');
+    const addedClasses = [...proposedClasses].filter((cls) => !originalClasses.has(cls));
+
+    // Hard contract: new Liquid component classes should be backed by CSS in the same change set
+    // unless those classes already exist in project CSS.
+    const trulyNewUnstyled = addedClasses.filter((cls) => !cssClasses.has(cls));
+    if (trulyNewUnstyled.length > 0 && !hasCssChange) {
+      issues.push({
+        severity: 'error',
+        file: filePath,
+        description:
+          `Liquid introduces new class(es) without companion CSS change: ` +
+          `${trulyNewUnstyled.slice(0, 5).map((c) => `"${c}"`).join(', ')}.`,
+        category: 'companion_css',
+      });
+    }
+
+    const originalDataAttrs = extractDataAttributes(change.originalContent || '');
+    const proposedDataAttrs = extractDataAttributes(change.proposedContent || '');
+    const addedDataAttrs = [...proposedDataAttrs].filter((attr) => !originalDataAttrs.has(attr));
+    if (addedDataAttrs.length > 0 && !hasJsChange) {
+      issues.push({
+        severity: 'warning',
+        file: filePath,
+        description:
+          `Liquid introduces new data-attribute(s) without JS changes: ` +
+          `${addedDataAttrs.slice(0, 5).join(', ')}.`,
+        category: 'companion_js',
+      });
+    }
+
+    // Section-schema contract: newly introduced settings refs must exist in final schema.
+    if (filePath.startsWith('sections/')) {
+      const originalRefs = extractSectionSettingRefs(change.originalContent || '');
+      const proposedRefs = extractSectionSettingRefs(change.proposedContent || '');
+      const newlyIntroducedRefs = [...proposedRefs].filter((ref) => !originalRefs.has(ref));
+      if (newlyIntroducedRefs.length > 0) {
+        const schema = extractSchemaJsonFromSection(change.proposedContent || '');
+        const validIds = extractSchemaSettingIds(schema);
+        const missing = newlyIntroducedRefs.filter((ref) => !validIds.has(ref));
+        if (missing.length > 0) {
+          issues.push({
+            severity: 'error',
+            file: filePath,
+            description:
+              `New section/block settings reference(s) missing from {% schema %}: ` +
+              `${missing.slice(0, 5).join(', ')}.`,
+            category: 'companion_schema',
+          });
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
 /**
  * Validate a change set for cross-file consistency.
  * Runs before the review agent to catch structural breakage.
@@ -424,6 +534,8 @@ export function validateChangeSet(
       issues.push(...checkTemplateSections(filePath, content, fileSet));
     }
   }
+
+  issues.push(...checkCompanionCoverage(changes, mergedMap));
 
   const hasErrors = issues.some((i) => i.severity === 'error');
   return {

@@ -405,6 +405,22 @@ export class ShopifyTokenManager {
   ): Promise<ShopifyConnection | null> {
     const supabase = adminSupabase();
 
+    // Project-scoped calls must resolve the project's connection first.
+    // Returning a user-global is_active connection here causes cross-project
+    // leakage (e.g. preview session/password appears disconnected on refresh
+    // because we read/write the wrong connection row).
+    if (options?.projectId) {
+      const reverseConnection = await this.getConnectionViaProject(supabase, options.projectId, userId);
+      if (reverseConnection) {
+        return reverseConnection;
+      }
+
+      const legacyScoped = await this.getLegacyConnectionByProjectId(options.projectId);
+      if (legacyScoped) {
+        return this.asLegacyCompatibleConnection(legacyScoped, userId);
+      }
+    }
+
     try {
       const { data, error } = await supabase
         .from('shopify_connections')
@@ -420,15 +436,6 @@ export class ShopifyTokenManager {
       // Primary query found a result — return it
       if (data) {
         return data as ShopifyConnection;
-      }
-
-      // Primary query succeeded but returned no rows (no is_active connection).
-      // Check reverse lookup via projects.shopify_connection_id before legacy path.
-      if (options?.projectId) {
-        const reverseConnection = await this.getConnectionViaProject(supabase, options.projectId, userId);
-        if (reverseConnection) {
-          return reverseConnection;
-        }
       }
 
       // Fall through to legacy lookup — the connection may have been
@@ -894,6 +901,82 @@ export class ShopifyTokenManager {
         `Failed to delete connection: ${error.message}`,
         'CONNECTION_DELETE_FAILED',
         500
+      );
+    }
+  }
+
+  /**
+   * Store a Theme Kit Access password (shptka_*) for draft theme preview.
+   */
+  async storeThemeAccessPassword(
+    connectionId: string,
+    password: string,
+  ): Promise<void> {
+    const supabase = adminSupabase();
+    const encrypted = this.encrypt(password);
+
+    const { error } = await supabase
+      .from('shopify_connections')
+      .update({
+        theme_access_password_encrypted: encrypted,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connectionId);
+
+    if (error) {
+      throw new APIError(
+        `Failed to store theme access password: ${error.message}`,
+        'TKA_PASSWORD_STORE_FAILED',
+        500,
+      );
+    }
+  }
+
+  /**
+   * Retrieve and decrypt the Theme Kit Access password for a connection.
+   * Returns null if no password is stored.
+   */
+  async getThemeAccessPassword(
+    connectionId: string,
+  ): Promise<string | null> {
+    const supabase = adminSupabase();
+
+    const { data, error } = await supabase
+      .from('shopify_connections')
+      .select('theme_access_password_encrypted')
+      .eq('id', connectionId)
+      .single();
+
+    if (error || !data?.theme_access_password_encrypted) return null;
+
+    try {
+      return this.decrypt(data.theme_access_password_encrypted);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Clear the stored Theme Kit Access password for a connection.
+   */
+  async clearThemeAccessPassword(
+    connectionId: string,
+  ): Promise<void> {
+    const supabase = adminSupabase();
+
+    const { error } = await supabase
+      .from('shopify_connections')
+      .update({
+        theme_access_password_encrypted: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connectionId);
+
+    if (error) {
+      throw new APIError(
+        `Failed to clear theme access password: ${error.message}`,
+        'TKA_PASSWORD_CLEAR_FAILED',
+        500,
       );
     }
   }

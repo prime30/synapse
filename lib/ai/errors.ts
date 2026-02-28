@@ -83,7 +83,9 @@ export class AIProviderError extends Error {
     code: AIErrorCode,
     message: string,
     provider: string,
-    statusCode?: number
+    statusCode?: number,
+    /** When set, used as the user-facing message in toJSON() instead of getUserMessage(code). Use for UNKNOWN to show a truncated actual error. */
+    customUserMessage?: string
   ) {
     super(message);
     this.name = 'AIProviderError';
@@ -91,7 +93,7 @@ export class AIProviderError extends Error {
     this.provider = provider;
     this.statusCode = statusCode;
     this.retryable = isRetryable(code);
-    this.userMessage = getUserMessage(code);
+    this.userMessage = customUserMessage ?? getUserMessage(code);
   }
 
   /** Serialize for SSE transport. */

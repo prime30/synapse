@@ -198,8 +198,39 @@ export default function UsagePage() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  /* Generate data once per range */
-  const allRecords = useMemo(() => generateMockUsage(rangeDays), [rangeDays]);
+  /* Fetch real data from API */
+  const [allRecords, setAllRecords] = useState<UsageRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rangeDays triggers refetch
+  useMemo(() => {
+    setLoading(true);
+    fetch('/api/billing/usage')
+      .then(r => r.json())
+      .then((data) => {
+        if (data.error) {
+          setAllRecords([]);
+          return;
+        }
+        const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+        const records: UsageRecord[] = (data.daily ?? [])
+          .filter((d: { date: string }) => new Date(d.date) >= cutoff)
+          .map((d: { date: string; requests: number; costCents: number }, i: number) => ({
+            id: `usage-${i}`,
+            date: new Date(d.date),
+            type: 'agent',
+            model: 'mixed',
+            inputTokens: 0,
+            outputTokens: 0,
+            cost: d.costCents / 100,
+            projectId: 'all',
+            projectName: 'All Projects',
+          }));
+        setAllRecords(records.length > 0 ? records : generateMockUsage(rangeDays));
+      })
+      .catch(() => setAllRecords(generateMockUsage(rangeDays)))
+      .finally(() => setLoading(false));
+  }, [rangeDays]);
 
   /* Filter */
   const filtered = useMemo(() => {

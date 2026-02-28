@@ -156,6 +156,52 @@ DO NOT repeat the same fix. Instead:
 6. Ask the user for browser console output or DOM inspector info if stuck
 `;
 
+// --- CSS Specificity & Architecture ---
+
+export const CSS_ARCHITECTURE = `## CSS Architecture
+
+- **Specificity ceiling**: Target \`0 1 0\` (single class) for most selectors. Maximum \`0 4 0\` for parent-child relationships. Never use IDs as selectors.
+- **No !important**: If unavoidable, add a comment explaining why.
+- **CSS variables**: Never hardcode colors or magic numbers. Define variables first (\`--touch-target-size: 44px\`). Scope to components unless global.
+- **Global variables**: Define in \`:root\` in \`snippets/theme-styles-variables.liquid\`. Scoped variables can reference globals.
+- **BEM naming**: \`.block__element--modifier\` with dashes between words. Block = component, Element = child, Modifier = variant.
+- **Media queries**: Mobile-first (\`min-width\`). Always use \`screen\`. Nest media queries inside selectors.
+- **Nesting**: Never nest beyond first level. No \`&\` operator. Exceptions: media queries, parent-state affecting children.
+- **Scoping**: Prefer \`{% stylesheet %}\` tags in sections/blocks. Reset variables inline with style attributes for settings. Avoid \`{% style %}\` tags with block/section ID selectors.`;
+
+// --- JavaScript Patterns ---
+
+export const JS_PATTERNS = `## JavaScript Patterns
+
+- **Zero dependencies**: Use native browser APIs first (\`popover\`, \`<details>\`, IntersectionObserver, Fetch).
+- **Variable declarations**: \`const\` over \`let\`. Never \`var\`. Avoid mutation unless necessary.
+- **Iteration**: \`for (const item of items)\` over \`items.forEach()\`.
+- **Module pattern**: Use classes with \`#\` private methods. Public API should be the smallest possible surface.
+- **Utility functions**: Functions that don't use the class instance should be module-scoped, not instance methods.
+- **File organization**: Group scripts by feature area. Multiple related classes can share a file if always used together.
+- **Code blocks**: Put blank lines before new blocks (anything with \`{\` \`}\`).
+
+\`\`\`javascript
+class ProductForm {
+  #cache = new Map();
+  addToCart(variantId) { this.#updateUI(variantId); }
+  #updateUI(id) { this.#cache.set(id, true); }
+}
+const formatPrice = (cents) => (cents / 100).toFixed(2);
+\`\`\``;
+
+// --- Settings UX ---
+
+export const SETTINGS_UX = `## Settings UX Guidelines
+
+- **Ordering**: List settings to match visual order in the preview (top-to-bottom, left-to-right, background-to-foreground). Resource pickers first, then customization.
+- **Groupings**: Group related settings under headings (Layout, Typography, Colors, Padding). Ungrouped settings go at the top.
+- **Naming**: Remove word duplication between heading and nested labels. If heading says "Color", labels don't repeat "Color".
+- **Checkbox labels**: Nouns, not verbs. "Language selector" not "Enable language selector".
+- **Select options**: Keep labels short so they work as segmented controls.
+- **Conditional settings**: Use for progressive disclosure. Limit to 2 levels deep. Code defensively — conditional settings still evaluate in Liquid even when hidden.
+- **Optimistic UI**: Update small UI elements client-side before server response when API success is highly certain (e.g., cart count after add-to-cart). Never optimistically update computed values (cart total, product count).`;
+
 // --- Helper ---
 
 export function getKnowledgeForAgent(agentType: string): string {
@@ -165,13 +211,13 @@ export function getKnowledgeForAgent(agentType: string): string {
     case 'review':
       return ALL_KNOWLEDGE;
     case 'liquid':
-      blocks.push(SCHEMA_BEST_PRACTICES, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, THEME_ARCHITECTURE);
+      blocks.push(SCHEMA_BEST_PRACTICES, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, THEME_ARCHITECTURE, SETTINGS_UX);
       break;
     case 'css':
-      blocks.push(DAWN_CONVENTIONS, ACCESSIBILITY_REQUIREMENTS, PERFORMANCE_PATTERNS);
+      blocks.push(DAWN_CONVENTIONS, CSS_ARCHITECTURE, ACCESSIBILITY_REQUIREMENTS, PERFORMANCE_PATTERNS);
       break;
     case 'javascript':
-      blocks.push(PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, DIAGNOSTIC_REASONING);
+      blocks.push(JS_PATTERNS, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, DIAGNOSTIC_REASONING);
       break;
     default:
       return '';
@@ -185,7 +231,10 @@ export const ALL_KNOWLEDGE = [
   SCHEMA_BEST_PRACTICES,
   PERFORMANCE_PATTERNS,
   DAWN_CONVENTIONS,
+  CSS_ARCHITECTURE,
+  JS_PATTERNS,
   ACCESSIBILITY_REQUIREMENTS,
   THEME_ARCHITECTURE,
   DIAGNOSTIC_REASONING,
+  SETTINGS_UX,
 ].join('\n\n');

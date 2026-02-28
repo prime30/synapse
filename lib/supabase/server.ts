@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -26,6 +27,27 @@ export async function createClient() {
       },
     }
   );
+}
+
+/**
+ * Create a Supabase client that uses the request's auth.
+ * When the request has an Authorization: Bearer token (e.g. from MCP), uses that
+ * so RLS sees the authenticated user. Otherwise uses cookie-based auth.
+ */
+export async function createClientFromRequest(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    return createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: { getAll() { return []; }, setAll() {} },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      }
+    );
+  }
+  return createClient();
 }
 
 /**

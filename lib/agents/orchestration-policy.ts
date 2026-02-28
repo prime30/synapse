@@ -29,7 +29,8 @@ function isNonTrivial(tier: RoutingTier, userRequest: string): boolean {
 
 function isScopedDirectEditRequest(userRequest: string): boolean {
   if (BROAD_SCOPE_RE.test(userRequest)) return false;
-  return DIRECT_EDIT_INTENT_RE.test(userRequest) && SCOPED_EDIT_SIGNAL_RE.test(userRequest);
+  if (DIRECT_EDIT_INTENT_RE.test(userRequest)) return true;
+  return SCOPED_EDIT_SIGNAL_RE.test(userRequest);
 }
 
 function isExplicitDirectCodeChangeRequest(userRequest: string): boolean {

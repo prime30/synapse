@@ -79,7 +79,7 @@ export class SchemaAgent extends Agent {
         (f) => `### ${f.fileName} (${f.fileType})\n\`\`\`\n${f.content}\n\`\`\``
       ),
       '',
-      'Respond with a JSON object containing your proposed changes.',
+      'EDITING STRATEGY: Use read_file or read_lines to see exact content, then edit_lines to make changes by line number. Do NOT use search_replace.',
     ].join('\n');
   }
 

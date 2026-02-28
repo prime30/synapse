@@ -16,6 +16,8 @@ export interface AgentSettings {
   intentMode: IntentMode;
   maxAgents: MaxAgents;
   verbose: boolean;
+  maxQuality: boolean;
+  useFlatPipeline: boolean;
 }
 
 const STORAGE_KEY = 'synapse-agent-settings';
@@ -25,6 +27,8 @@ const DEFAULT_SETTINGS: AgentSettings = {
   intentMode: 'code',
   maxAgents: 1,
   verbose: false,
+  maxQuality: false,
+  useFlatPipeline: true,
 };
 
 function loadSettings(): AgentSettings {
@@ -59,6 +63,8 @@ function loadSettings(): AgentSettings {
       intentMode: INTENT_MODES.includes(parsed.intentMode) ? parsed.intentMode : DEFAULT_SETTINGS.intentMode,
       maxAgents,
       verbose: typeof parsed.verbose === 'boolean' ? parsed.verbose : DEFAULT_SETTINGS.verbose,
+      maxQuality: typeof parsed.maxQuality === 'boolean' ? parsed.maxQuality : DEFAULT_SETTINGS.maxQuality,
+      useFlatPipeline: typeof parsed.useFlatPipeline === 'boolean' ? parsed.useFlatPipeline : DEFAULT_SETTINGS.useFlatPipeline,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -117,17 +123,37 @@ export function useAgentSettings() {
     });
   }, []);
 
+  const setMaxQuality = useCallback((maxQuality: boolean) => {
+    setSettingsState((prev) => {
+      const next = { ...prev, maxQuality };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  const setUseFlatPipeline = useCallback((useFlatPipeline: boolean) => {
+    setSettingsState((prev) => {
+      const next = { ...prev, useFlatPipeline };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
   return {
     specialistMode: settings.maxAgents > 1,
     model: settings.model,
     intentMode: settings.intentMode,
     maxAgents: settings.maxAgents,
     verbose: settings.verbose,
+    maxQuality: settings.maxQuality,
+    useFlatPipeline: settings.useFlatPipeline,
     settings,
     setSpecialistMode,
     setModel,
     setIntentMode,
     setMaxAgents,
     setVerbose,
+    setMaxQuality,
+    setUseFlatPipeline,
   };
 }

@@ -7,11 +7,26 @@
  * token-budgeted context assembly up to ~16 000 tokens for specialists.
  */
 
+import { createHash } from 'node:crypto';
 import type { FileContext } from '@/lib/types/agent';
 import { estimateTokens } from './token-counter';
 import type { MemoryEntry } from './developer-memory';
 import { filterActiveMemories, formatMemoryForPrompt } from './developer-memory';
 import type { LoadedTermMapping } from './term-mapping-learner';
+
+function buildFileFingerprint(file: FileContext): string {
+  const hash = createHash('sha1');
+  hash.update(file.fileId);
+  hash.update(':');
+  hash.update(file.fileName);
+  hash.update(':');
+  hash.update(String(file.content.length));
+  hash.update(':');
+  hash.update(file.content.slice(0, 64));
+  hash.update(':');
+  hash.update(file.content.slice(-64));
+  return hash.digest('hex');
+}
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -388,6 +403,7 @@ export class ContextEngine {
   private fileContents = new Map<string, string>();
   private maxTokens: number;
   private depCache = new Map<string, string[]>();
+  private fileFingerprints = new Map<string, string>();
 
   /**
    * Layer 8: Developer memory entries loaded for the current project.
@@ -400,7 +416,7 @@ export class ContextEngine {
   private termMappings: LoadedTermMapping[] = [];
   private termMappingIndex = new Map<string, string[]>();
 
-  constructor(maxTokens = 16_000) {
+  constructor(maxTokens = 32_000) {
     this.maxTokens = maxTokens;
   }
 
@@ -475,31 +491,58 @@ export class ContextEngine {
   // ── Indexing ──────────────────────────────────────────────────────
 
   /**
-   * Index all project files – computes metadata, token estimates, and
-   * detects outgoing references for each file.
-   * When yieldOpts is provided, yields to the event loop every N files so
-   * timers (e.g. heartbeat) can run during long runs.
+   * Index project files incrementally — only re-indexes files whose content
+   * fingerprint has changed since the last call.  When the full file set is
+   * identical (most chat messages), returns in <1ms.
    */
   async indexFiles(
     files: FileContext[],
     yieldOpts?: { every: number; yieldFn: () => Promise<void> },
   ): Promise<void> {
-    this.index.clear();
-    this.fileContents.clear();
-    this.depCache.clear();
+    const incomingIds = new Set<string>();
+    const changedIds = new Set<string>();
+
+    for (const file of files) {
+      incomingIds.add(file.fileId);
+      const fp = buildFileFingerprint(file);
+      if (this.fileFingerprints.get(file.fileId) !== fp) {
+        changedIds.add(file.fileId);
+        this.fileFingerprints.set(file.fileId, fp);
+      }
+    }
+
+    const removedIds: string[] = [];
+    for (const existingId of this.fileFingerprints.keys()) {
+      if (!incomingIds.has(existingId)) removedIds.push(existingId);
+    }
+
+    if (changedIds.size === 0 && removedIds.length === 0) return;
+
+    for (const id of removedIds) {
+      this.index.delete(id);
+      this.fileContents.delete(id);
+      this.fileFingerprints.delete(id);
+    }
+
+    if (changedIds.size > 0 || removedIds.length > 0) {
+      this.depCache.clear();
+    }
 
     const yieldEvery = yieldOpts?.every ?? 50;
     const yieldFn = yieldOpts?.yieldFn ?? (() => new Promise<void>(r => setTimeout(r, 0)));
     const useSyncFallback = process.env.SYNC_INDEX_FILES === 'true';
 
-    for (let i = 0; i < files.length; i++) {
-      if (!useSyncFallback && i > 0 && i % yieldEvery === 0) {
+    let processed = 0;
+    for (const file of files) {
+      if (!changedIds.has(file.fileId)) continue;
+
+      if (!useSyncFallback && processed > 0 && processed % yieldEvery === 0) {
         await yieldFn();
       }
-      const file = files[i];
+      processed++;
+
       const path = file.path ?? file.fileName;
       const tokens = estimateTokens(file.content);
-
       const isStub = file.content.startsWith('[') && /^\[\d+\s+chars/.test(file.content);
       const references = isStub
         ? []
@@ -984,7 +1027,7 @@ const engineCache = new Map<string, CachedEntry>();
  */
 export function getProjectContextEngine(
   projectId: string,
-  maxTokens = 16_000,
+  maxTokens = 32_000,
 ): ContextEngine {
   const existing = engineCache.get(projectId);
   if (existing) {
@@ -1007,6 +1050,18 @@ export function getProjectContextEngine(
   const engine = new ContextEngine(maxTokens);
   engineCache.set(projectId, { engine, lastUsed: Date.now() });
   return engine;
+}
+
+/**
+ * Returns a multiplier for the context budget based on model's native
+ * context window. Models with 1M+ context (Gemini 2.5) get 2x budget.
+ */
+export function contextBudgetMultiplier(modelId?: string): number {
+  if (!modelId) return 1;
+  const id = modelId.toLowerCase();
+  if (id.includes('gemini-2') || id.includes('gemini-exp')) return 2;
+  if (id.includes('claude-4') || id.includes('opus-4')) return 1.5;
+  return 1;
 }
 
 export default ContextEngine;

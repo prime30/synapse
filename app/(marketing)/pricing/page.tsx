@@ -24,16 +24,16 @@ interface Tier {
 
 const TIERS: Tier[] = [
   {
-    name: 'Starter',
+    name: 'Free',
     monthlyPrice: 0,
     byokMonthlyPrice: null,
-    description: 'Get started for free — perfect for exploring Synapse.',
+    description: 'Best for learning and small personal projects.',
     highlighted: false,
-    requestLimit: '50 requests / mo',
+    requestLimit: '100 requests / mo',
     seats: '1 seat',
     features: [
-      '1 project',
-      'Basic code editor',
+      'Up to 3 projects',
+      'Basic IDE features',
       'Liquid syntax validation',
       'Community support',
     ],
@@ -44,18 +44,16 @@ const TIERS: Tier[] = [
     name: 'Pro',
     monthlyPrice: 49,
     byokMonthlyPrice: 19,
-    description: 'Everything you need to ship Shopify themes faster.',
+    description: 'For developers doing real client work — freelancers and small teams.',
     highlighted: true,
     badge: 'MOST POPULAR',
-    requestLimit: '500 requests / mo',
+    requestLimit: '1,500 requests / mo',
     seats: '1 seat',
     features: [
       'Unlimited projects',
-      'Full IDE experience',
+      'Full multi-agent system',
       'Live preview',
-      'AI-powered agents',
-      'Shopify sync',
-      'Advanced analytics',
+      'Shopify store sync',
       'Priority support',
     ],
     cta: 'Get Started',
@@ -65,15 +63,14 @@ const TIERS: Tier[] = [
     name: 'Team',
     monthlyPrice: 149,
     byokMonthlyPrice: 59,
-    description: 'Collaborate on themes with your team.',
+    description: 'For growing agencies — collaboration, shared projects, and team management.',
     highlighted: false,
-    requestLimit: '2,000 requests / mo',
+    requestLimit: '6,000 requests / mo',
     seats: '5 seats',
     features: [
       'Everything in Pro',
-      'Team collaboration',
-      'Publish workflow',
-      'Shared design tokens',
+      'Team collaboration features',
+      'Shared projects',
       'Role-based access',
       'Audit log',
     ],
@@ -82,19 +79,17 @@ const TIERS: Tier[] = [
   },
   {
     name: 'Agency',
-    monthlyPrice: 349,
+    monthlyPrice: 399,
     byokMonthlyPrice: 149,
-    description: 'For agencies managing multiple client stores.',
+    description: 'For larger agencies and theme shops — unlimited scale, dedicated support.',
     highlighted: false,
-    requestLimit: '6,000 requests / mo',
+    requestLimit: 'Higher request limits',
     seats: 'Unlimited seats',
     features: [
       'Everything in Team',
-      'White-label branding',
+      'White-label options',
       'Unlimited seats',
-      'Priority support & SLA',
-      'Custom integrations',
-      'Dedicated account manager',
+      'Dedicated support',
     ],
     cta: 'Get Started',
     ctaHref: '/auth/signin?callbackUrl=/account/billing',
@@ -112,20 +107,19 @@ interface ComparisonRow {
 }
 
 const COMPARISON: ComparisonRow[] = [
-  { feature: 'AI Requests / mo', starter: '50', pro: '500', team: '2,000', agency: '6,000' },
-  { feature: 'Projects', starter: '1', pro: 'Unlimited', team: 'Unlimited', agency: 'Unlimited' },
+  { feature: 'AI Requests / mo', starter: '100', pro: '1,500', team: '6,000', agency: 'Higher' },
+  { feature: 'Projects', starter: '3', pro: 'Unlimited', team: 'Unlimited', agency: 'Unlimited' },
   { feature: 'Seats', starter: '1', pro: '1', team: '5', agency: 'Unlimited' },
-  { feature: 'Code Editor', starter: 'Basic', pro: 'Full IDE', team: 'Full IDE', agency: 'Full IDE' },
-  { feature: 'Liquid Validation', starter: true, pro: true, team: true, agency: true },
+  { feature: 'IDE Features', starter: 'Basic', pro: 'Full', team: 'Full', agency: 'Full' },
+  { feature: 'Multi-Agent System', starter: false, pro: true, team: true, agency: true },
+  { feature: 'Shopify Store Sync', starter: false, pro: true, team: true, agency: true },
   { feature: 'Live Preview', starter: false, pro: true, team: true, agency: true },
-  { feature: 'AI Agents', starter: false, pro: true, team: true, agency: true },
-  { feature: 'Shopify Sync', starter: false, pro: true, team: true, agency: true },
-  { feature: 'Advanced Analytics', starter: false, pro: true, team: true, agency: true },
   { feature: 'Team Collaboration', starter: false, pro: false, team: true, agency: true },
-  { feature: 'Publish Workflow', starter: false, pro: false, team: true, agency: true },
-  { feature: 'White-label', starter: false, pro: false, team: false, agency: true },
+  { feature: 'Shared Projects', starter: false, pro: false, team: true, agency: true },
+  { feature: 'White-label Options', starter: false, pro: false, team: false, agency: true },
   { feature: 'Priority Support', starter: false, pro: true, team: true, agency: true },
-  { feature: 'Dedicated Account Mgr', starter: false, pro: false, team: false, agency: true },
+  { feature: 'Dedicated Support', starter: false, pro: false, team: false, agency: true },
+  { feature: 'Bring Your Own Keys', starter: false, pro: true, team: true, agency: true },
 ];
 
 /* ─── FAQ ──────────────────────────────────────────────────────────── */
@@ -145,7 +139,7 @@ const FAQS = [
   },
   {
     q: 'What does "Bring Your Own Keys" mean?',
-    a: 'If you already have API keys for providers like OpenAI or Anthropic, you can use them directly. You only pay our reduced platform fee — the AI usage goes on your own account.',
+    a: 'If you already have API keys for providers like OpenAI, Anthropic, or xAI, you can use them directly. You only pay our reduced platform fee — the AI usage goes on your own account.',
   },
   {
     q: 'Is my code secure?',
@@ -323,7 +317,7 @@ export default function PricingPage() {
             Simple, <PixelAccent>transparent</PixelAccent> pricing.
           </h1>
           <p className="text-stone-500 dark:text-white/50 text-lg max-w-xl mx-auto mb-8">
-            Start free. Upgrade when you&apos;re ready. No surprises.
+            Simple, transparent pricing designed for Shopify developers and agencies.
           </p>
 
           {/* ── Billing Toggle ────────────────────────────────────── */}
@@ -379,8 +373,11 @@ export default function PricingPage() {
             <h3 className="text-2xl font-semibold text-stone-900 dark:text-white mb-3">
               Already have API keys? Get reduced pricing.
             </h3>
+            <p className="text-stone-500 dark:text-white/50 text-sm max-w-2xl mx-auto mb-3">
+              Connect your own OpenAI, Anthropic, xAI, or Google API keys. You only pay our platform fee — AI usage goes on your own account.
+            </p>
             <p className="text-stone-500 dark:text-white/50 text-sm max-w-2xl mx-auto mb-6">
-              Connect your own OpenAI, Anthropic, or Google API keys. You only pay our platform fee — AI usage goes on your own account.
+              Already have API keys from another tool? BYOK lets you use them here and save up to 60% on your plan.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
               <span className="rounded-full bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 px-4 py-2 text-stone-700 dark:text-white/70">

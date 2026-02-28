@@ -110,6 +110,57 @@ export function cacheThemeFiles(
   console.log(`[local-file-cache] Cached ${entries.length} files for project ${projectId}`);
 }
 
+/** Update a single file in the local cache and sync the manifest. */
+export function updateCachedFile(
+  projectId: string,
+  fileId: string,
+  fileName: string,
+  relativePath: string,
+  fileType: string,
+  content: string,
+): void {
+  cacheFile(projectId, fileId, fileName, relativePath, fileType, content);
+
+  const manifest = loadManifest(projectId);
+  if (!manifest) return;
+
+  const entry: LocalFileEntry = {
+    fileId,
+    fileName,
+    filePath: relativePath || fileName,
+    fileType,
+    sizeBytes: Buffer.byteLength(content, 'utf-8'),
+    cachedAt: new Date().toISOString(),
+  };
+
+  const idx = manifest.files.findIndex(f => f.fileId === fileId);
+  if (idx >= 0) {
+    manifest.files[idx] = entry;
+  } else {
+    manifest.files.push(entry);
+    manifest.fileCount = manifest.files.length;
+  }
+  manifest.lastSyncAt = new Date().toISOString();
+  fs.writeFileSync(manifestPath(projectId), JSON.stringify(manifest, null, 2), 'utf-8');
+}
+
+/** Remove a file from the local cache and sync the manifest. */
+export function deleteCachedFile(projectId: string, fileId: string): void {
+  const manifest = loadManifest(projectId);
+  if (!manifest) return;
+
+  const entry = manifest.files.find(f => f.fileId === fileId);
+  if (!entry) return;
+
+  const fp = localFilePath(projectId, entry.filePath);
+  try { fs.unlinkSync(fp); } catch { /* file may not exist on disk */ }
+
+  manifest.files = manifest.files.filter(f => f.fileId !== fileId);
+  manifest.fileCount = manifest.files.length;
+  manifest.lastSyncAt = new Date().toISOString();
+  fs.writeFileSync(manifestPath(projectId), JSON.stringify(manifest, null, 2), 'utf-8');
+}
+
 // ── Read ───────────────────────────────────
 
 /** Check if local cache exists for a project. */

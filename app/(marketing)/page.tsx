@@ -10,7 +10,8 @@ import {
   AgentScrollStory,
   StyleIntelligenceSection,
   ScrollRevealSection,
-  TestimonialCarousel,
+  FeatureHighlightsCarousel,
+  SocialProofSection,
   CaseStudySection,
   CTASection,
   Footer,
@@ -38,7 +39,9 @@ export default function MarketingPage() {
         <StyleIntelligenceSection />
         <GridDivider />
         <ScrollRevealSection />
-        <TestimonialCarousel />
+        <FeatureHighlightsCarousel />
+        <GridDivider />
+        <SocialProofSection />
         <GridDivider />
         <CaseStudySection />
         <GridDivider />

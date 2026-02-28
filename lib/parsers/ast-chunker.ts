@@ -8,7 +8,7 @@
  * Falls back to regex-based extraction when tree-sitter is unavailable.
  */
 
-import { getJSParser, getCSSParser, isTreeSitterAvailable } from './tree-sitter-loader';
+import { getJSParser, getCSSParser, getLiquidParser, isTreeSitterAvailable, isLiquidParserAvailable } from './tree-sitter-loader';
 
 export interface ASTChunk {
   type: 'schema_setting' | 'schema_block' | 'schema_preset' | 'liquid_block' | 'render_call' | 'css_rule' | 'js_function' | 'code_block';
@@ -28,14 +28,159 @@ export interface ASTChunk {
   };
 }
 
-// ── Liquid chunking (custom parser — no tree-sitter WASM for Liquid) ──────
+// ── Chunk cache (avoid re-parsing unchanged files) ────────────────────────
+
+const chunkCache = new Map<string, { hash: string; chunks: ASTChunk[] }>();
+
+function simpleHash(content: string): string {
+  let h = 0;
+  for (let i = 0; i < content.length; i++) {
+    h = ((h << 5) - h + content.charCodeAt(i)) | 0;
+  }
+  return h.toString(36);
+}
+
+// ── Liquid chunking (tree-sitter when available, regex fallback) ──────────
 
 const SCHEMA_RE = /\{%[-\s]*schema\s*[-\s]*%\}([\s\S]*?)\{%[-\s]*endschema\s*[-\s]*%\}/;
 const RENDER_RE = /\{%[-\s]*(?:render|include)\s+['"]([^'"]+)['"]/g;
 const BLOCK_OPEN_RE = /\{%-?\s*(?:if|unless|for|case|capture|form|paginate|tablerow)\b/;
 const BLOCK_CLOSE_RE = /\{%-?\s*(?:endif|endunless|endfor|endcase|endcapture|endform|endpaginate|endtablerow)\b/;
 
+function chunkLiquidTreeSitter(content: string, filePath: string): ASTChunk[] {
+  const parser = getLiquidParser();
+  if (!parser) return [];
+
+  const tree = (parser as unknown as { parse(c: string): { rootNode: import('web-tree-sitter').Node } }).parse(content);
+  const root = tree.rootNode;
+  const chunks: ASTChunk[] = [];
+
+  function walk(node: import('web-tree-sitter').Node) {
+    if (node.type === 'schema_statement') {
+      const jsonChild = node.children.find(
+        (c: import('web-tree-sitter').Node) => c.type === 'raw_text' || c.type === 'json_content',
+      );
+      if (jsonChild) {
+        const jsonText = content.slice(jsonChild.startIndex, jsonChild.endIndex).trim();
+        try {
+          const schema = JSON.parse(jsonText);
+          for (const setting of schema.settings ?? []) {
+            if (setting.type === 'header' || setting.type === 'paragraph') continue;
+            chunks.push({
+              type: 'schema_setting',
+              content: JSON.stringify(setting, null, 2),
+              file: filePath,
+              lineStart: node.startPosition.row + 1,
+              lineEnd: node.endPosition.row + 1,
+              metadata: {
+                settingId: setting.id,
+                settingType: setting.type,
+                settingLabel: setting.label,
+              },
+            });
+          }
+          for (const block of schema.blocks ?? []) {
+            chunks.push({
+              type: 'schema_block',
+              content: JSON.stringify(block, null, 2),
+              file: filePath,
+              lineStart: node.startPosition.row + 1,
+              lineEnd: node.endPosition.row + 1,
+              metadata: {
+                settingId: block.type,
+                settingType: 'block',
+                settingLabel: block.name,
+              },
+            });
+          }
+          for (const preset of schema.presets ?? []) {
+            chunks.push({
+              type: 'schema_preset',
+              content: JSON.stringify(preset, null, 2),
+              file: filePath,
+              lineStart: node.startPosition.row + 1,
+              lineEnd: node.endPosition.row + 1,
+              metadata: {
+                settingId: preset.name,
+                settingType: 'preset',
+                settingLabel: preset.name,
+              },
+            });
+          }
+        } catch {
+          chunks.push({
+            type: 'code_block',
+            content: content.slice(node.startIndex, node.endIndex),
+            file: filePath,
+            lineStart: node.startPosition.row + 1,
+            lineEnd: node.endPosition.row + 1,
+            metadata: { nodeType: 'schema_raw' },
+          });
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'render_statement' || node.type === 'include_statement') {
+      const nameChild = node.children.find(
+        (c: import('web-tree-sitter').Node) => c.type === 'string' || c.type === 'string_content',
+      );
+      const target = nameChild
+        ? content.slice(nameChild.startIndex, nameChild.endIndex).replace(/['"]/g, '')
+        : '';
+      chunks.push({
+        type: 'render_call',
+        content: content.slice(node.startIndex, node.endIndex),
+        file: filePath,
+        lineStart: node.startPosition.row + 1,
+        lineEnd: node.endPosition.row + 1,
+        metadata: { renderTarget: target },
+      });
+      return;
+    }
+
+    const blockTypes = new Set([
+      'if_statement', 'unless_statement', 'for_statement', 'case_statement',
+      'capture_statement', 'form_statement', 'paginate_statement', 'tablerow_statement',
+    ]);
+    if (blockTypes.has(node.type)) {
+      const span = node.endPosition.row - node.startPosition.row;
+      if (span >= 3 && span <= 200) {
+        chunks.push({
+          type: 'liquid_block',
+          content: content.slice(node.startIndex, node.endIndex),
+          file: filePath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          metadata: { nodeType: node.type.replace('_statement', '') },
+        });
+        return;
+      }
+      // Large blocks (>200 lines): recurse into children for finer granularity
+      for (let i = 0; i < node.childCount; i++) {
+        walk(node.child(i)!);
+      }
+      return;
+    }
+
+    for (let i = 0; i < node.childCount; i++) {
+      walk(node.child(i)!);
+    }
+  }
+
+  walk(root);
+  return chunks;
+}
+
 function chunkLiquid(content: string, filePath: string): ASTChunk[] {
+  if (isLiquidParserAvailable()) {
+    const tsChunks = chunkLiquidTreeSitter(content, filePath);
+    if (tsChunks.length > 0) return tsChunks;
+  }
+  return chunkLiquidRegex(content, filePath);
+}
+
+function chunkLiquidRegex(content: string, filePath: string): ASTChunk[] {
   const chunks: ASTChunk[] = [];
   const lines = content.split('\n');
 
@@ -120,31 +265,28 @@ function chunkLiquid(content: string, filePath: string): ASTChunk[] {
     });
   }
 
-  // Chunk body at block boundaries (if/for/unless/case)
-  let blockStart = -1;
-  let depth = 0;
+  // Chunk body at block boundaries (if/for/unless/case) at ALL nesting depths.
+  // Blocks >200 lines are skipped so their inner blocks get chunked instead.
+  const blockStack: number[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (BLOCK_OPEN_RE.test(line)) {
-      if (depth === 0) blockStart = i;
-      depth++;
+      blockStack.push(i);
     }
-    if (BLOCK_CLOSE_RE.test(line)) {
-      depth--;
-      if (depth === 0 && blockStart >= 0) {
-        const blockContent = lines.slice(blockStart, i + 1).join('\n');
-        if (blockContent.split('\n').length >= 3) {
-          chunks.push({
-            type: 'liquid_block',
-            content: blockContent,
-            file: filePath,
-            lineStart: blockStart + 1,
-            lineEnd: i + 1,
-            metadata: { nodeType: line.match(/\{%[-\s]*(\w+)/)?.[1] ?? 'block' },
-          });
-        }
-        blockStart = -1;
+    if (BLOCK_CLOSE_RE.test(line) && blockStack.length > 0) {
+      const start = blockStack.pop()!;
+      const span = i - start + 1;
+      if (span >= 3 && span <= 200) {
+        const blockContent = lines.slice(start, i + 1).join('\n');
+        chunks.push({
+          type: 'liquid_block',
+          content: blockContent,
+          file: filePath,
+          lineStart: start + 1,
+          lineEnd: i + 1,
+          metadata: { nodeType: line.match(/\{%[-\s]*(\w+)/)?.[1] ?? 'block' },
+        });
       }
     }
   }
@@ -163,11 +305,12 @@ function chunkCSS(content: string, filePath: string): ASTChunk[] {
 }
 
 function chunkCSSTreeSitter(
-  parser: InstanceType<typeof import('web-tree-sitter')>,
+  parser: import('web-tree-sitter').Parser,
   content: string,
   filePath: string,
 ): ASTChunk[] {
   const tree = parser.parse(content);
+  if (!tree) return [];
   const chunks: ASTChunk[] = [];
 
   for (const node of tree.rootNode.children) {
@@ -230,14 +373,15 @@ function chunkJS(content: string, filePath: string): ASTChunk[] {
 }
 
 function chunkJSTreeSitter(
-  parser: InstanceType<typeof import('web-tree-sitter')>,
+  parser: import('web-tree-sitter').Parser,
   content: string,
   filePath: string,
 ): ASTChunk[] {
   const tree = parser.parse(content);
+  if (!tree) return [];
   const chunks: ASTChunk[] = [];
 
-  function walk(node: import('web-tree-sitter').SyntaxNode) {
+  function walk(node: import('web-tree-sitter').Node) {
     if (
       node.type === 'function_declaration' ||
       node.type === 'arrow_function' ||
@@ -325,6 +469,16 @@ function chunkJSRegex(content: string, filePath: string): ASTChunk[] {
 // ── Public API ─────────────────────────────────────────────────────────────
 
 export function chunkFile(content: string, filePath: string): ASTChunk[] {
+  const hash = simpleHash(content);
+  const cached = chunkCache.get(filePath);
+  if (cached && cached.hash === hash) return cached.chunks;
+
+  const chunks = chunkFileUncached(content, filePath);
+  chunkCache.set(filePath, { hash, chunks });
+  return chunks;
+}
+
+function chunkFileUncached(content: string, filePath: string): ASTChunk[] {
   const ext = filePath.split('.').pop()?.toLowerCase();
 
   if (ext === 'liquid') return chunkLiquid(content, filePath);

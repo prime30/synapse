@@ -3,6 +3,7 @@ import type { FileContext, AgentContext } from '@/lib/types/agent';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ContextEngine } from '@/lib/ai/context-engine';
 import { checkLiquid, checkCSS, checkJavaScript } from '@/lib/agents/validation/syntax-checker';
+import { createModuleLogger } from '@/lib/observability/logger';
 import { isSectionFile, contentMarkupOnly, contentSchemaOnly } from '@/lib/liquid/schema-stripper';
 import type { LoadContentFn } from '@/lib/supabase/file-loader';
 import { executeGrep, executeGlob, executeSemanticSearch } from './search-tools';
@@ -15,7 +16,24 @@ import { webSearch } from '@/lib/ai/web-search';
 import { callPreviewAPI, formatPreviewResult } from './preview-tools';
 import { getShopifyAPI, formatThemeList } from './shopify-tools';
 import { runThemeCheck, formatThemeCheckResult, generatePlaceholderSVG } from './theme-check';
+import { executeScratchpadWrite, executeScratchpadRead } from './scratchpad-tool';
 import { recordHistogram } from '@/lib/observability/metrics';
+import { prettifyFile } from './prettify';
+import { FileStore } from './file-store';
+import { TOOL_THRESHOLDS } from './constants';
+import { executeShellCommand } from './shell-tool';
+import { readNetworkRequests } from './network-inspect-tool';
+import { executeImageGen } from './image-gen-tool';
+import {
+  traceRenderingChain,
+  formatRenderingChainResult,
+  checkThemeSetting,
+  formatSettingCheckResult,
+  diagnoseVisibility,
+  formatVisibilityDiagnosis,
+} from './shopify-diagnostic-tools';
+
+const toolLogger = createModuleLogger('tool-executor');
 
 export interface ToolExecutorContext {
   files: FileContext[];
@@ -42,6 +60,10 @@ export interface ToolExecutorContext {
   projectDir?: string;
   /** Callback when a file is changed via direct DB write (search_replace, write_file). */
   onFileChanged?: (change: { fileId: string; fileName: string; originalContent: string; proposedContent: string; reasoning: string }) => void;
+  /** Unified file store for consistent read/write/resolve. */
+  fileStore?: FileStore;
+  /** Revert history: maps fileId → originalContent from before the most recent edit. */
+  revertHistory?: Map<string, string>;
 }
 
 type DbFileRow = {
@@ -84,8 +106,8 @@ function extractFileSymbols(fileName: string, content: string): string {
           const blockTypes = schema.blocks.map(b => b.type ?? b.name ?? '?').slice(0, 8);
           lines.push(`Block types: ${blockTypes.join(', ')}`);
         }
-      } catch {
-        // malformed schema JSON — skip
+      } catch (e) {
+        toolLogger.warn({ err: e, fileName }, 'Malformed schema JSON in file summary');
       }
     }
     // Extract {% block %} names
@@ -153,8 +175,8 @@ function extractFileSymbols(fileName: string, content: string): string {
         .map(s => s?.type)
         .filter(Boolean) as string[];
       if (sectionTypes.length > 0) lines.push(`Template sections: ${sectionTypes.join(', ')}`);
-    } catch {
-      // skip
+    } catch (e) {
+      toolLogger.warn({ err: e, fileName }, 'Malformed template JSON in file summary');
     }
   }
 
@@ -233,6 +255,42 @@ function resolveFileContext(files: FileContext[], ref: string): FileContext | un
  * Some tools (grep_content, semantic_search) are async — the caller must
  * await the returned Promise when necessary.
  */
+function getFileStore(ctx: ToolExecutorContext): FileStore {
+  if (ctx.fileStore) return ctx.fileStore;
+  return new FileStore(
+    ctx.files,
+    ctx.loadContent,
+    ctx.supabaseClient,
+    ctx.projectId,
+    ctx.onFileChanged,
+  );
+}
+
+const LINT_TIMEOUT_MS = 5_000;
+const LINTABLE_EXTENSIONS = new Set(['liquid', 'css', 'scss']);
+
+async function runQuickLint(fileName: string, content: string): Promise<string> {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (!LINTABLE_EXTENSIONS.has(ext)) return '';
+
+  try {
+    const result = await Promise.race([
+      (async () => {
+        let errors: { line: number; message: string; severity: string }[] = [];
+        if (ext === 'liquid') errors = checkLiquid(content);
+        else if (ext === 'css' || ext === 'scss') errors = checkCSS(content);
+        if (errors.length === 0) return '\n\nLint: clean';
+        const formatted = errors.map(e => `  Line ${e.line}: [${e.severity}] ${e.message}`).join('\n');
+        return `\n\nLint: ${errors.length} issue(s):\n${formatted}`;
+      })(),
+      new Promise<string>((_, reject) => setTimeout(() => reject(new Error('lint timeout')), LINT_TIMEOUT_MS)),
+    ]);
+    return result;
+  } catch {
+    return '';
+  }
+}
+
 export async function executeToolCall(
   toolCall: ToolCall,
   ctx: ToolExecutorContext,
@@ -243,28 +301,15 @@ export async function executeToolCall(
     switch (toolCall.name) {
       case 'read_file': {
         const fileId = String(toolCall.input.fileId ?? '');
-        // If loadContent is available, try to hydrate the file first
-        let file = resolveFileContext(files, fileId);
-        if (!file) {
-          const dbResolved = await resolveFileFromDatabase(fileId, ctx);
-          if (dbResolved) {
-            files.push(dbResolved);
-            file = dbResolved;
-          } else {
-            return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
-          }
-        }
-        // Hydrate if content is a stub
-        if (file.content.startsWith('[') && ctx.loadContent) {
-          const hydrated = await ctx.loadContent([file.fileId]);
-          if (hydrated.length > 0) file = hydrated[0];
+        const store = getFileStore(ctx);
+        const result = await store.read(fileId);
+        if (!result) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${fileId}`, is_error: true };
         }
 
-        let content = file.content;
-
-        // Schema-aware view for section files
+        let content = result.content;
         const view = String(toolCall.input.view ?? 'full');
-        const filePath = file.fileName || file.path || '';
+        const filePath = result.file.fileName || result.file.path || '';
         if (view !== 'full' && isSectionFile(filePath)) {
           if (view === 'markup') {
             content = contentMarkupOnly(content);
@@ -364,25 +409,13 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'hint is required.', is_error: true };
         }
 
-        // Resolve file
-        let regionFile = resolveFileContext(files, regionFileId);
-        if (!regionFile) {
-          const dbResolved = await resolveFileFromDatabase(regionFileId, ctx);
-          if (dbResolved) { files.push(dbResolved); regionFile = dbResolved; }
+        const store = getFileStore(ctx);
+        const regionResult = await store.read(regionFileId);
+        if (!regionResult) {
+          return { tool_use_id: toolCall.id, content: `File not found or content unavailable: ${regionFileId}`, is_error: true };
         }
-        if (!regionFile) {
-          return { tool_use_id: toolCall.id, content: `File not found: ${regionFileId}`, is_error: true };
-        }
-
-        // Hydrate if needed
-        let regionContent = regionFile.content;
-        if (regionContent.startsWith('[') && ctx.loadContent) {
-          const hydrated = await ctx.loadContent([regionFile.fileId]);
-          regionContent = hydrated[0]?.content ?? regionContent;
-        }
-        if (regionContent.startsWith('[')) {
-          return { tool_use_id: toolCall.id, content: 'File content not available for extraction.', is_error: true };
-        }
+        const regionFile = regionResult.file;
+        const regionContent = regionResult.content;
 
         const match = extractTargetRegion(regionContent, hint, contextLines);
 
@@ -589,108 +622,205 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'old_text and new_text are identical — no change needed.', is_error: true };
         }
 
-        const file = resolveFileContext(files, filePath);
-        if (!file) {
+        const store = getFileStore(ctx);
+        const srResult = await store.read(filePath);
+        if (!srResult) {
           return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
         }
+        const file = srResult.file;
+        const currentContent = srResult.content;
 
-        // Hydrate if content is a stub
-        let currentContent = file.content;
-        if (currentContent.startsWith('[') && ctx.loadContent) {
-          const hydrated = await ctx.loadContent([file.fileId]);
-          if (hydrated.length > 0) currentContent = hydrated[0].content;
-        }
-        if (currentContent.startsWith('[')) {
-          return { tool_use_id: toolCall.id, content: `Cannot load content for ${filePath}`, is_error: true };
-        }
-
-        // Find and replace — try exact match first, then whitespace-flexible
-        let idx = currentContent.indexOf(oldText);
-        let usedFuzzy = false;
-        if (idx === -1) {
-          // Fuzzy: normalize leading whitespace on each line and retry
-          const normalizeWs = (s: string) => s.split('\n').map(l => l.trimStart()).join('\n');
-          const normalizedContent = normalizeWs(currentContent);
-          const normalizedOld = normalizeWs(oldText);
-          const fuzzyIdx = normalizedContent.indexOf(normalizedOld);
-          if (fuzzyIdx !== -1) {
-            // Find the original position by counting characters up to fuzzyIdx
-            let origPos = 0;
-            let normPos = 0;
-            const contentLines = currentContent.split('\n');
-            const normContentLines = normalizedContent.split('\n');
-            for (let li = 0; li < contentLines.length && normPos < fuzzyIdx; li++) {
-              const normLineLen = normContentLines[li].length + 1;
-              const origLineLen = contentLines[li].length + 1;
-              if (normPos + normLineLen > fuzzyIdx) {
-                origPos += (fuzzyIdx - normPos) + (contentLines[li].length - normContentLines[li].length);
-                break;
-              }
-              normPos += normLineLen;
-              origPos += origLineLen;
-            }
-            // Extract the actual text span from original content
-            const oldLines = oldText.split('\n').length;
-            const origLines = currentContent.split('\n');
-            const startLine = currentContent.slice(0, origPos).split('\n').length - 1;
-            const actualOld = origLines.slice(startLine, startLine + oldLines).join('\n');
-            idx = currentContent.indexOf(actualOld);
-            if (idx !== -1) usedFuzzy = true;
-          }
-        }
-        if (idx === -1) {
-          return { tool_use_id: toolCall.id, content: `old_text not found in ${filePath}. The text doesn't match the file content (check indentation and whitespace). Try reading the exact lines first with read_file, or use propose_code_edit with full file content.`, is_error: true };
+        // Large file guard: redirect to edit_lines
+        const srLineCount = currentContent.split('\n').length;
+        if (srLineCount > TOOL_THRESHOLDS.SEARCH_REPLACE_HARD_BLOCK_LINES) {
+          return {
+            tool_use_id: toolCall.id,
+            content: `File is too large for search_replace (${srLineCount} lines). Use read_lines to see the exact line numbers, then edit_lines to make changes.`,
+            is_error: true,
+          };
         }
 
-        // Check uniqueness — only the first match is replaced
-        const secondIdx = currentContent.indexOf(oldText, idx + 1);
-        const uniqueWarning = secondIdx !== -1
-          ? ' Warning: old_text matches multiple locations — only the first occurrence was replaced. Add more context lines for precision.'
-          : '';
+        // nearLine hint: if provided, scope matching to +/-20 lines around the hint
+        const nearLine = toolCall.input.nearLine ? Number(toolCall.input.nearLine) : 0;
+        const replaceAll = !!(toolCall.input.replaceAll);
 
-        const updatedContent = currentContent.slice(0, idx) + newText + currentContent.slice(idx + oldText.length);
-
-        if (!ctx.supabaseClient) {
-          return { tool_use_id: toolCall.id, content: 'Database client not available for file writes.', is_error: true };
+        let searchContent = currentContent;
+        let searchOffset = 0;
+        if (nearLine > 0) {
+          const contentLines = currentContent.split('\n');
+          const rangeStart = Math.max(0, nearLine - 21);
+          const rangeEnd = Math.min(contentLines.length, nearLine + 20);
+          searchOffset = contentLines.slice(0, rangeStart).join('\n').length + (rangeStart > 0 ? 1 : 0);
+          searchContent = contentLines.slice(rangeStart, rangeEnd).join('\n');
         }
 
+        // 9-tier matching cascade (ported from OpenCode)
         try {
-          const { error } = await ctx.supabaseClient
-            .from('files')
-            .update({ content: updatedContent, updated_at: new Date().toISOString() })
-            .eq('id', file.fileId);
-          if (error) {
-            return { tool_use_id: toolCall.id, content: `Write failed: ${error.message}`, is_error: true as const };
+          const { replace: cascadeReplace } = await import('./replacer');
+          const result = cascadeReplace(searchContent, oldText, newText, replaceAll);
+
+          // Reconstruct full content if nearLine scoped the search
+          let rawUpdated: string;
+          if (searchOffset > 0) {
+            rawUpdated = currentContent.slice(0, searchOffset) + result.content + currentContent.slice(searchOffset + searchContent.length);
+          } else {
+            rawUpdated = result.content;
           }
 
-          // Update in-memory file content so subsequent reads reflect the change
-          file.content = updatedContent;
+          const writeResult = await store.write(file, rawUpdated, (toolCall.input.reasoning as string) ?? 'search_replace');
+          if (writeResult.error) {
+            return { tool_use_id: toolCall.id, content: writeResult.error, is_error: true as const };
+          }
 
-          // Report the change so the specialist's accumulatedChanges gets populated
-          ctx.onFileChanged?.({
-            fileId: file.fileId,
-            fileName: file.fileName,
-            originalContent: currentContent,
-            proposedContent: updatedContent,
-            reasoning: (toolCall.input.reasoning as string) ?? 'search_replace',
-          });
-
-          // Invalidate cache + trigger Shopify push so changes propagate
-          try {
-            const { invalidateFileContent } = await import('@/lib/supabase/file-loader');
-            invalidateFileContent(file.fileId);
-            if (ctx.projectId) {
-              const { schedulePushForProject } = await import('@/lib/shopify/push-queue');
-              schedulePushForProject(ctx.projectId);
-            }
-          } catch { /* non-blocking */ }
-
-          const sizeBytes = new TextEncoder().encode(updatedContent).length;
-          const fuzzyNote = usedFuzzy ? ' (whitespace-flexible match used)' : '';
-          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes, 1 replacement).${fuzzyNote}${uniqueWarning}` };
+          const sizeBytes = new TextEncoder().encode(file.content).length;
+          const matchNote = result.replacerUsed !== 'Simple'
+            ? ` (matched via ${result.replacerUsed})`
+            : '';
+          const countNote = result.matchCount > 1
+            ? ` ${result.matchCount} replacements`
+            : ' 1 replacement';
+          const lintSuffix = await runQuickLint(file.fileName, rawUpdated);
+          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes,${countNote}).${matchNote}${lintSuffix}` };
         } catch (err) {
-          return { tool_use_id: toolCall.id, content: `Write failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
+          const hint = nearLine > 0 ? ` (searched near line ${nearLine})` : '';
+          const msg = err instanceof Error ? err.message : String(err);
+          return { tool_use_id: toolCall.id, content: `${msg}${hint ? ' ' + hint : ''}`, is_error: true };
         }
+      }
+
+      // ── Line-range editing tools ──────────────────────────────────────
+
+      case 'edit_lines': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        const startLine = Number(toolCall.input.startLine ?? 0);
+        const endLine = Number(toolCall.input.endLine ?? 0);
+        const newContent = String(toolCall.input.newContent ?? '');
+        const mode = String(toolCall.input.mode ?? 'replace');
+
+        if (!filePath) return { tool_use_id: toolCall.id, content: 'filePath is required.', is_error: true };
+        if (startLine < 1 || endLine < 1) return { tool_use_id: toolCall.id, content: 'startLine and endLine must be >= 1.', is_error: true };
+        if (startLine > endLine && mode === 'replace') return { tool_use_id: toolCall.id, content: 'startLine must be <= endLine for replace mode.', is_error: true };
+
+        const store = getFileStore(ctx);
+        const editResult = await store.read(filePath);
+        if (!editResult) return { tool_use_id: toolCall.id, content: `File not found or content unavailable: ${filePath}`, is_error: true };
+
+        const { file, content: currentContent } = editResult;
+        const lines = currentContent.split('\n');
+        if (startLine > lines.length) return { tool_use_id: toolCall.id, content: `startLine ${startLine} exceeds file length (${lines.length} lines).`, is_error: true };
+        if (endLine > lines.length && mode === 'replace') return { tool_use_id: toolCall.id, content: `endLine ${endLine} exceeds file length (${lines.length} lines).`, is_error: true };
+
+        const newLines = newContent.split('\n');
+        let updatedLines: string[];
+
+        if (mode === 'insert_before') {
+          updatedLines = [...lines.slice(0, startLine - 1), ...newLines, ...lines.slice(startLine - 1)];
+        } else if (mode === 'insert_after') {
+          updatedLines = [...lines.slice(0, endLine), ...newLines, ...lines.slice(endLine)];
+        } else {
+          const removedCount = endLine - startLine + 1;
+          if (removedCount > lines.length * 0.5) {
+            return { tool_use_id: toolCall.id, content: `edit_lines rejected: removing ${removedCount} of ${lines.length} lines (>50%).`, is_error: true };
+          }
+          updatedLines = [...lines.slice(0, startLine - 1), ...newLines, ...lines.slice(endLine)];
+        }
+
+        const rawEditContent = updatedLines.join('\n');
+        const writeResult = await store.write(file, rawEditContent, (toolCall.input.reasoning as string) ?? `edit_lines ${startLine}-${endLine}`);
+        if (writeResult.error) return { tool_use_id: toolCall.id, content: writeResult.error, is_error: true as const };
+
+        // Shift ThemeMap line ranges in memory for this file
+        import('@/lib/agents/theme-map').then(({ shiftLineRanges }) => {
+          shiftLineRanges(
+            ctx.projectId,
+            file.path ?? file.fileName,
+            startLine,
+            endLine,
+            newLines.length,
+            mode as 'replace' | 'insert_before' | 'insert_after',
+          );
+        }).catch((e) => { toolLogger.warn({ err: e, filePath }, 'Theme map shiftLineRanges failed'); });
+
+        const modeLabel = mode === 'insert_before' ? 'inserted before' : mode === 'insert_after' ? 'inserted after' : 'replaced';
+        const lintSuffix = await runQuickLint(file.fileName, rawEditContent);
+        return { tool_use_id: toolCall.id, content: `Lines ${startLine}-${endLine} ${modeLabel} in ${file.fileName} (${updatedLines.length} total lines).${lintSuffix}` };
+      }
+
+      case 'read_lines': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        const ranges = Array.isArray(toolCall.input.ranges) ? toolCall.input.ranges as Array<{ startLine: number; endLine: number }> : [];
+        const contextLines = Number(toolCall.input.contextLines ?? 2);
+
+        if (!filePath) return { tool_use_id: toolCall.id, content: 'filePath is required.', is_error: true };
+        if (ranges.length === 0) return { tool_use_id: toolCall.id, content: 'At least one range is required.', is_error: true };
+
+        const store = getFileStore(ctx);
+        const readResult = await store.read(filePath);
+        if (!readResult) return { tool_use_id: toolCall.id, content: `File not found or content unavailable: ${filePath}`, is_error: true };
+
+        const { file, content } = readResult;
+        const lines = content.split('\n');
+        const sections: string[] = [];
+
+        for (const range of ranges) {
+          const start = Math.max(1, (range.startLine ?? 1) - contextLines);
+          const end = Math.min(lines.length, (range.endLine ?? range.startLine) + contextLines);
+          const regionLines = lines.slice(start - 1, end);
+          const numbered = regionLines.map((l, i) => `${String(start + i).padStart(5)}| ${l}`).join('\n');
+          sections.push(`--- ${file.fileName} lines ${start}-${end} ---\n${numbered}`);
+        }
+
+        return { tool_use_id: toolCall.id, content: sections.join('\n\n') };
+      }
+
+      // ── Full file rewrite tool ────────────────────────────────────────
+
+      case 'propose_code_edit': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        let newContent = String(toolCall.input.newContent ?? '');
+        const reasoning = String(toolCall.input.reasoning ?? '');
+
+        if (!filePath) {
+          return { tool_use_id: toolCall.id, content: 'filePath is required.', is_error: true };
+        }
+
+        const store = getFileStore(ctx);
+        const pceResult = await store.read(filePath);
+        if (!pceResult) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
+        }
+        const { file, content: originalContent } = pceResult;
+
+        if (newContent && /keep existing code/i.test(newContent)) {
+          const { expandKeepExisting } = await import('./keep-existing-expander');
+          newContent = expandKeepExisting(newContent, originalContent);
+        }
+
+        if (!newContent || newContent.trim().length === 0) {
+          return { tool_use_id: toolCall.id, content: `propose_code_edit rejected: proposed content is empty. Use edit_lines for targeted changes.`, is_error: true };
+        }
+
+        const fileLineCount = originalContent.split('\n').length;
+        if (fileLineCount > TOOL_THRESHOLDS.PROPOSE_CODE_EDIT_BLOCK_LINES) {
+          return { tool_use_id: toolCall.id, content: `propose_code_edit rejected: file has ${fileLineCount} lines (>${TOOL_THRESHOLDS.PROPOSE_CODE_EDIT_BLOCK_LINES}). Use read_lines + edit_lines for targeted changes.`, is_error: true };
+        }
+
+        const origLen = originalContent.length;
+        const newLen = newContent.length;
+        if (origLen > 200 && newLen < origLen * 0.5) {
+          return { tool_use_id: toolCall.id, content: `propose_code_edit rejected: removes ${Math.round((1 - newLen / origLen) * 100)}% of content. Use edit_lines for targeted changes.`, is_error: true };
+        }
+
+        if (newContent === originalContent) {
+          return { tool_use_id: toolCall.id, content: `No change: file already contains the proposed content.` };
+        }
+
+        const writeResult = await store.write(file, newContent, reasoning || 'propose_code_edit');
+        if (writeResult.error) {
+          return { tool_use_id: toolCall.id, content: writeResult.error, is_error: true as const };
+        }
+        const lineCount = newContent.split('\n').length;
+        return { tool_use_id: toolCall.id, content: `Full rewrite applied to ${file.fileName} (${lineCount} lines).` };
       }
 
       // ── File mutation tools (Agent Power Tools Phase 1) ──────────────
@@ -713,38 +843,25 @@ export async function executeToolCall(
           return { tool_use_id: toolCall.id, content: 'File content exceeds 1MB limit.', is_error: true };
         }
 
-        const file = resolveFileContext(files, fileName);
-        if (!file) {
+        const store = getFileStore(ctx);
+        const existingResult = await store.read(fileName);
+        if (!existingResult) {
           return { tool_use_id: toolCall.id, content: `File not found: ${fileName}`, is_error: true };
         }
+        const { file, content: existingContent } = existingResult;
 
-        if (!ctx.supabaseClient) {
-          return { tool_use_id: toolCall.id, content: 'Database client not available for file writes.', is_error: true };
-        }
-
-        // Destructive write guard: reject if new content is much smaller than existing
-        const existingLen = (file.content ?? '').length;
+        const existingLen = existingContent.length;
         const newLen = content.length;
         if (existingLen > 200 && newLen < existingLen * 0.5) {
-          return { tool_use_id: toolCall.id, content: `write_file rejected: new content (${newLen} chars) is ${Math.round((1 - newLen / existingLen) * 100)}% smaller than existing (${existingLen} chars). Use search_replace for targeted edits.`, is_error: true };
+          return { tool_use_id: toolCall.id, content: `write_file rejected: new content (${newLen} chars) is ${Math.round((1 - newLen / existingLen) * 100)}% smaller than existing (${existingLen} chars). Use edit_lines for targeted edits.`, is_error: true };
         }
 
-        // async
-        return (async () => {
-          try {
-            const { error } = await ctx.supabaseClient!
-              .from('files')
-              .update({ content, updated_at: new Date().toISOString() })
-              .eq('id', file.fileId);
-            if (error) {
-              return { tool_use_id: toolCall.id, content: `Write failed: ${error.message}`, is_error: true as const };
-            }
-            const sizeBytes = new TextEncoder().encode(content).length;
-            return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes)` };
-          } catch (err) {
-            return { tool_use_id: toolCall.id, content: `Write failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
-          }
-        })();
+        const writeResult = await store.write(file, content, (toolCall.input.reasoning as string) ?? 'write_file');
+        if (writeResult.error) {
+          return { tool_use_id: toolCall.id, content: writeResult.error, is_error: true as const };
+        }
+        const sizeBytes = new TextEncoder().encode(file.content).length;
+        return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes)` };
       }
 
       case 'delete_file': {
@@ -772,6 +889,8 @@ export async function executeToolCall(
             if (error) {
               return { tool_use_id: toolCall.id, content: `Delete failed: ${error.message}`, is_error: true as const };
             }
+            const store = getFileStore(ctx);
+            await store.invalidateFile(file.fileId);
             return { tool_use_id: toolCall.id, content: `File deleted: ${file.fileName}` };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Delete failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
@@ -801,7 +920,6 @@ export async function executeToolCall(
 
         return (async () => {
           try {
-            // Extract the new file name (last segment) and new path
             const newName = newFileName.split('/').pop() || newFileName;
             const newPath = newFileName.startsWith('/') ? newFileName : '/' + newFileName;
             const { error } = await ctx.supabaseClient!
@@ -811,11 +929,203 @@ export async function executeToolCall(
             if (error) {
               return { tool_use_id: toolCall.id, content: `Rename failed: ${error.message}`, is_error: true as const };
             }
+            const store = getFileStore(ctx);
+            await store.invalidateRename(file.fileId, newPath);
             return { tool_use_id: toolCall.id, content: `File renamed: ${file.fileName} → ${newFileName}` };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Rename failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
           }
         })();
+      }
+
+      // ── Undo/revert tool ──────────────────────────────────────────────────
+
+      case 'undo_edit': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        if (!filePath) {
+          return { tool_use_id: toolCall.id, content: 'filePath is required.', is_error: true };
+        }
+
+        const store = getFileStore(ctx);
+        const file = store.resolve(filePath);
+        if (!file) {
+          return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
+        }
+
+        const originalContent = ctx.revertHistory?.get(file.fileId);
+        if (!originalContent) {
+          return { tool_use_id: toolCall.id, content: `No edit history for ${filePath} in this session. Nothing to revert.`, is_error: true };
+        }
+
+        const writeResult = await store.write(file, originalContent, (toolCall.input.reasoning as string) ?? `undo_edit: revert ${filePath}`);
+        if (writeResult.error) {
+          return { tool_use_id: toolCall.id, content: writeResult.error, is_error: true as const };
+        }
+
+        ctx.revertHistory?.delete(file.fileId);
+        const lineCount = originalContent.split('\n').length;
+        return { tool_use_id: toolCall.id, content: `Reverted ${file.fileName} to pre-edit state (${lineCount} lines).` };
+      }
+
+      // ── Variant analysis tool ────────────────────────────────────────────
+
+      case 'analyze_variants': {
+        const filePath = String(toolCall.input.filePath ?? '');
+        if (!filePath) return { tool_use_id: toolCall.id, content: 'filePath is required.', is_error: true };
+
+        const store = getFileStore(ctx);
+        const readResult = await store.read(filePath);
+        if (!readResult) return { tool_use_id: toolCall.id, content: `File not found: ${filePath}`, is_error: true };
+
+        const { content } = readResult;
+        const analysis: string[] = ['## Variant Analysis'];
+
+        // Extract option names from product.options or option_name patterns
+        const optionNames: string[] = [];
+        const optionRe = /product\.options\[(\d+)\]|option(\d+)|option_name\s*==\s*['"]([^'"]+)['"]/gi;
+        let om: RegExpExecArray | null;
+        while ((om = optionRe.exec(content)) !== null) {
+          const name = om[3] ?? `Option ${Number(om[1] ?? om[2]) + 1}`;
+          if (!optionNames.includes(name)) optionNames.push(name);
+        }
+        // Also check for explicit option names in assign statements
+        const assignRe = /assign\s+(\w*option\w*)\s*=\s*['"]([^'"]+)['"]/gi;
+        let am: RegExpExecArray | null;
+        while ((am = assignRe.exec(content)) !== null) {
+          if (!optionNames.includes(am[2])) optionNames.push(am[2]);
+        }
+        analysis.push(`**Options found:** ${optionNames.length > 0 ? optionNames.join(', ') : 'None detected'}`);
+
+        // Detect swatch patterns
+        const swatchPatterns: string[] = [];
+        if (/swatch/i.test(content)) swatchPatterns.push('swatch rendering');
+        if (/color_swatch|color-swatch/i.test(content)) swatchPatterns.push('color swatches');
+        if (/variant\.option\d/i.test(content)) swatchPatterns.push('variant option access');
+        if (/available.*variant|variant.*available/i.test(content)) swatchPatterns.push('availability checking');
+        if (/restock|out.of.stock|sold.out/i.test(content)) swatchPatterns.push('restock/sold-out logic');
+        analysis.push(`**Patterns:** ${swatchPatterns.length > 0 ? swatchPatterns.join(', ') : 'None detected'}`);
+
+        // Find variant iteration loops
+        const forLoops: string[] = [];
+        const forRe = /\{%-?\s*for\s+(\w+)\s+in\s+([\w.]+)/g;
+        let fm: RegExpExecArray | null;
+        while ((fm = forRe.exec(content)) !== null) {
+          if (/variant|option|swatch|color/i.test(fm[1]) || /variant|option|swatch|color/i.test(fm[2])) {
+            const lineNum = content.slice(0, fm.index).split('\n').length;
+            forLoops.push(`Line ${lineNum}: for ${fm[1]} in ${fm[2]}`);
+          }
+        }
+        analysis.push(`**Variant loops:** ${forLoops.length > 0 ? '\n  ' + forLoops.join('\n  ') : 'None detected'}`);
+
+        // Find availability conditionals
+        const availChecks: string[] = [];
+        const availRe = /\{%-?\s*(?:if|unless)\s+.*(?:available|sold_out|inventory)/gi;
+        let avm: RegExpExecArray | null;
+        while ((avm = availRe.exec(content)) !== null) {
+          const lineNum = content.slice(0, avm.index).split('\n').length;
+          availChecks.push(`Line ${lineNum}: ${avm[0].trim().slice(0, 80)}`);
+        }
+        if (availChecks.length > 0) {
+          analysis.push(`**Availability checks:** \n  ${availChecks.slice(0, 10).join('\n  ')}`);
+        }
+
+        // Find JS variant handling
+        const jsVariantPatterns: string[] = [];
+        if (/variantId|variant_id|currentVariant/i.test(content)) jsVariantPatterns.push('variant ID tracking');
+        if (/optionChange|option.*change|handleOption/i.test(content)) jsVariantPatterns.push('option change handler');
+        if (/updatePrice|price.*update/i.test(content)) jsVariantPatterns.push('price update logic');
+        if (jsVariantPatterns.length > 0) {
+          analysis.push(`**JS variant handling:** ${jsVariantPatterns.join(', ')}`);
+        }
+
+        return { tool_use_id: toolCall.id, content: analysis.join('\n') };
+      }
+
+      // ── Performance analysis tool ─────────────────────────────────────────
+
+      case 'check_performance': {
+        const filePath = toolCall.input.filePath ? String(toolCall.input.filePath) : undefined;
+        const targetFiles = filePath
+          ? files.filter(f => f.fileName === filePath || f.path === filePath || f.fileName?.endsWith(`/${filePath}`))
+          : files.filter(f => !f.content.startsWith('['));
+
+        if (targetFiles.length === 0) {
+          return { tool_use_id: toolCall.id, content: filePath ? `File not found: ${filePath}` : 'No files available for analysis.', is_error: true };
+        }
+
+        const issues: string[] = [];
+
+        for (const f of targetFiles.slice(0, 20)) {
+          const c = f.content;
+          if (c.startsWith('[')) continue;
+          const name = f.fileName;
+
+          // Images without width/height params
+          if (/\|\s*img_url/i.test(c)) {
+            issues.push(`${name}: Uses deprecated | img_url — switch to | image_url: width: N`);
+          }
+          const imgUrlNoWidth = (c.match(/\|\s*image_url\b(?!.*width)/g) ?? []).length;
+          if (imgUrlNoWidth > 0) {
+            issues.push(`${name}: ${imgUrlNoWidth} image_url call(s) without width param — specify width for responsive loading`);
+          }
+
+          // Missing lazy loading
+          if (/<img\b(?![^>]*loading=)/gi.test(c) && !/hero|banner|above.fold/i.test(name)) {
+            issues.push(`${name}: <img> tags without loading="lazy" — add lazy loading for below-fold images`);
+          }
+
+          // Unbounded for loops
+          const unboundedLoops = c.match(/\{%-?\s*for\s+\w+\s+in\s+[\w.]+\s*-?%\}(?![\s\S]*?limit:)/g);
+          if (unboundedLoops && unboundedLoops.length > 0) {
+            issues.push(`${name}: ${unboundedLoops.length} for loop(s) without limit — add limit: N to prevent unbounded iteration`);
+          }
+
+          // Render-blocking scripts
+          if (/<script\b(?![^>]*(?:defer|async|type=['"]module))/gi.test(c)) {
+            issues.push(`${name}: Render-blocking <script> tags — add defer or async`);
+          }
+
+          // Large inline styles
+          const styleBlocks = c.match(/<style[^>]*>[\s\S]*?<\/style>/gi) ?? [];
+          const inlineStyleChars = styleBlocks.reduce((sum, s) => sum + s.length, 0);
+          if (inlineStyleChars > 5000) {
+            issues.push(`${name}: ${Math.round(inlineStyleChars / 1000)}K chars of inline <style> — consider moving to external CSS`);
+          }
+
+          // fetchpriority missing on likely LCP images
+          if (/hero|banner|main.*image|featured/i.test(name) && /<img\b/i.test(c) && !/fetchpriority/i.test(c)) {
+            issues.push(`${name}: Likely LCP image without fetchpriority="high"`);
+          }
+        }
+
+        if (issues.length === 0) {
+          return { tool_use_id: toolCall.id, content: `No performance issues detected${filePath ? ` in ${filePath}` : ''}.` };
+        }
+
+        return {
+          tool_use_id: toolCall.id,
+          content: `## Performance Analysis\n\n${issues.length} issue(s) found:\n\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`,
+        };
+      }
+
+      // ── Task outcome retrieval tool ───────────────────────────────────────
+
+      case 'retrieve_similar_tasks': {
+        const query = String(toolCall.input.query ?? '');
+        const maxResults = Number(toolCall.input.maxResults ?? 3);
+        if (!query) return { tool_use_id: toolCall.id, content: 'query is required.', is_error: true };
+        if (!ctx.supabaseClient) return { tool_use_id: toolCall.id, content: 'Database not available.', is_error: true };
+
+        try {
+          const { retrieveSimilarOutcomes, formatOutcomesForPrompt } = await import('@/lib/agents/memory/task-outcomes');
+          const outcomes = await retrieveSimilarOutcomes(ctx.supabaseClient, ctx.projectId, query, maxResults);
+          if (outcomes.length === 0) {
+            return { tool_use_id: toolCall.id, content: 'No similar past task outcomes found for this project.' };
+          }
+          return { tool_use_id: toolCall.id, content: formatOutcomesForPrompt(outcomes) };
+        } catch (err) {
+          return { tool_use_id: toolCall.id, content: `Failed to retrieve task outcomes: ${err instanceof Error ? err.message : String(err)}`, is_error: true };
+        }
       }
 
       // ── Web search tool (Agent Power Tools Phase 2) ──────────────────────
@@ -1323,26 +1633,97 @@ export async function executeToolCall(
 
             if (resourceType === 'products' || resourceType === 'all') {
               try {
-                const products = await resourcesApiResult.api.listProducts(limit);
-                sections.push(`## Products (${products.length})\n${products.map((p) => `- ${p.title} (ID: ${p.id})`).join('\n') || 'None'}`);
-              } catch { sections.push('## Products\nFailed to load'); }
+                const gqlResult = await resourcesApiResult.api.listProductsGraphQL(limit);
+                const productLines = gqlResult.products.map((p) => {
+                  const opts = p.options.map(o => `${o.name} (${o.values.length})`).join(', ');
+                  const variantNote = p.totalVariants > 100 ? ' **HIGH-VARIANT**' : '';
+                  return `- ${p.title} (ID: ${p.id}, ${p.totalVariants} variants, options: ${opts})${variantNote}`;
+                });
+                sections.push(`## Products (${gqlResult.products.length})\n${productLines.join('\n') || 'None'}`);
+                if (gqlResult.pageInfo.hasNextPage) {
+                  sections.push(`_More products available (cursor: ${gqlResult.pageInfo.endCursor})_`);
+                }
+              } catch {
+                try {
+                  const products = await resourcesApiResult.api.listProducts(limit);
+                  sections.push(`## Products (${products.length})\n${products.map((p) => `- ${p.title} (ID: ${p.id})`).join('\n') || 'None'}`);
+                } catch (e) { sections.push(`## Products\nFailed to load: ${e instanceof Error ? e.message : String(e)}`); }
+              }
             }
             if (resourceType === 'collections' || resourceType === 'all') {
               try {
                 const collections = await resourcesApiResult.api.listCollections(limit);
                 sections.push(`## Collections (${collections.length})\n${collections.map((c) => `- ${c.title} (ID: ${c.id})`).join('\n') || 'None'}`);
-              } catch { sections.push('## Collections\nFailed to load'); }
+              } catch (e) { sections.push(`## Collections\nFailed to load: ${e instanceof Error ? e.message : String(e)}`); }
             }
             if (resourceType === 'pages' || resourceType === 'all') {
               try {
                 const pages = await resourcesApiResult.api.listPages(limit);
                 sections.push(`## Pages (${pages.length})\n${pages.map((p) => `- ${p.title} (ID: ${p.id})`).join('\n') || 'None'}`);
-              } catch { sections.push('## Pages\nFailed to load'); }
+              } catch (e) { sections.push(`## Pages\nFailed to load: ${e instanceof Error ? e.message : String(e)}`); }
             }
 
             return { tool_use_id: toolCall.id, content: sections.join('\n\n') || 'No resources found.' };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Failed to list resources: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
+          }
+        })();
+      }
+
+      case 'get_product': {
+        const idOrHandle = String(toolCall.input.idOrHandle ?? '');
+        if (!idOrHandle) {
+          return { tool_use_id: toolCall.id, content: 'idOrHandle is required (product ID, GID, or handle).', is_error: true };
+        }
+        if (!ctx.projectId || !ctx.userId) {
+          return { tool_use_id: toolCall.id, content: 'Project ID and User ID are required for Shopify operations.', is_error: true };
+        }
+        return (async () => {
+          try {
+            const apiResult = await getShopifyAPI(ctx.projectId, ctx.userId);
+            if ('error' in apiResult) {
+              return { tool_use_id: toolCall.id, content: apiResult.error, is_error: true as const };
+            }
+            const variantFirst = Math.min(Number(toolCall.input.variantFirst ?? 100), 250);
+            const variantAfter = toolCall.input.variantAfter ? String(toolCall.input.variantAfter) : undefined;
+            const product = await apiResult.api.getProductGraphQL(idOrHandle, variantFirst, variantAfter);
+
+            const optionSummary = product.options
+              .map(o => `- **${o.name}**: ${o.values.join(', ')} (${o.values.length} values)`)
+              .join('\n');
+
+            const variantLines = product.variants.edges.map(e => {
+              const v = e.node;
+              const opts = v.selectedOptions.map(o => `${o.name}=${o.value}`).join(', ');
+              const avail = v.availableForSale ? '' : ' [UNAVAILABLE]';
+              return `- ${v.title} | $${v.price} | SKU: ${v.sku || '—'} | ${opts}${avail}`;
+            });
+
+            const highVariantWarning = product.totalVariants > 100
+              ? `\n\n**HIGH-VARIANT PRODUCT** (${product.totalVariants} variants). Theme must handle option cascading, ` +
+                `availability matrix precomputation, and performant DOM updates. ` +
+                `Avoid iterating all variants in Liquid for UI rendering — use JavaScript with precomputed JSON data.`
+              : '';
+
+            const pagination = product.variants.pageInfo.hasNextPage
+              ? `\n\n_Showing ${product.variants.edges.length} of ${product.totalVariants} variants. ` +
+                `Next page cursor: \`${product.variants.pageInfo.endCursor}\`_`
+              : '';
+
+            const output = [
+              `## ${product.title}`,
+              `**ID:** ${product.id} | **Handle:** ${product.handle} | **Status:** ${product.status}`,
+              `**Total variants:** ${product.totalVariants} | **Options:** ${product.options.length}`,
+              `**Images:** ${product.images.edges.length}`,
+              highVariantWarning,
+              `\n### Options\n${optionSummary}`,
+              `\n### Variants (${product.variants.edges.length} shown)\n${variantLines.join('\n')}`,
+              pagination,
+            ].join('\n');
+
+            return { tool_use_id: toolCall.id, content: output };
+          } catch (err) {
+            return { tool_use_id: toolCall.id, content: `Failed to fetch product: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
           }
         })();
       }
@@ -1371,7 +1752,7 @@ export async function executeToolCall(
             }
             const content = asset.value ?? asset.attachment ?? '[binary asset]';
             // Truncate very large assets
-            const truncated = content.length > 30_000 ? content.slice(0, 30_000) + '\n... (truncated)' : content;
+            const truncated = content.length > 80_000 ? content.slice(0, 80_000) + '\n... (truncated)' : content;
             return { tool_use_id: toolCall.id, content: `## ${assetKey}\n\n${truncated}` };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Failed to get asset: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
@@ -1581,6 +1962,9 @@ export async function executeToolCall(
         return { tool_use_id: toolCall.id, content: `Unknown tool: ${toolCall.name}`, is_error: true };
     }
   } catch (err) {
-    return { tool_use_id: toolCall.id, content: `Tool error: ${String(err)}`, is_error: true };
+    const errType = err instanceof Error ? err.constructor.name : 'Unknown';
+    const errMsg = err instanceof Error ? err.message : String(err);
+    toolLogger.warn({ err, tool: toolCall.name }, 'Unhandled tool error');
+    return { tool_use_id: toolCall.id, content: `Tool error (${errType}): ${errMsg}`, is_error: true };
   }
 }

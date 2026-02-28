@@ -20,6 +20,7 @@ export interface ShopifyConnectionInfo {
 
 export interface ConnectionStatus {
   connected: boolean;
+  devThemeMissing?: boolean;
   connection: ShopifyConnectionInfo | null;
 }
 
@@ -238,6 +239,7 @@ export function useShopifyConnection(projectId: string) {
     // Connection status
     connection: statusQuery.data?.connection ?? null,
     connected: statusQuery.data?.connected ?? false,
+    devThemeMissing: statusQuery.data?.devThemeMissing ?? false,
     isLoading: statusQuery.isLoading,
     error: statusQuery.error,
     refetch: statusQuery.refetch,

@@ -14,8 +14,12 @@ export type MatchType = 'exact' | 'block-boundary' | 'fuzzy' | 'none';
 export interface RegionMatch {
   startLine: number;
   endLine: number;
-  /** Line-numbered snippet (e.g. "  42: .hero { ... }") */
+  /** Line-numbered snippet (e.g. "  42: .hero { ... }") — use for context display. */
   snippet: string;
+  /** Raw lines without line numbers — use as copy-safe old_text for search_replace. */
+  rawSnippet: string;
+  /** Same as snippet; alias for "context (line numbers for reference)". */
+  contextSnippet: string;
   matchType: MatchType;
 }
 
@@ -94,6 +98,11 @@ function makeSnippet(lines: string[], start: number, end: number): string {
     .join('\n');
 }
 
+/** Build raw lines without line numbers (copy-safe for search_replace). */
+function makeRawSnippet(lines: string[], start: number, end: number): string {
+  return lines.slice(start, end + 1).join('\n');
+}
+
 // ── Main export ────────────────────────────────────────────────────────────
 
 /**
@@ -123,20 +132,28 @@ export function extractTargetRegion(
       const isBlockOpener = BLOCK_OPENER_RE.test(lines[i]) || lines[i].includes('{') || /\{%-?\s*\w+/.test(lines[i]);
       if (isBlockOpener) {
         const { start, end } = expandToBlockBoundary(lines, i);
+        const snip = makeSnippet(lines, start, end);
+        const raw = makeRawSnippet(lines, start, end);
         return {
           startLine: start + 1,
           endLine: end + 1,
-          snippet: makeSnippet(lines, start, end),
+          snippet: snip,
+          rawSnippet: raw,
+          contextSnippet: snip,
           matchType: 'block-boundary',
         };
       }
       // Non-block line — return with context
       const start = Math.max(0, i - contextLines);
       const end = Math.min(lines.length - 1, i + contextLines);
+      const snip = makeSnippet(lines, start, end);
+      const raw = makeRawSnippet(lines, start, end);
       return {
         startLine: start + 1,
         endLine: end + 1,
-        snippet: makeSnippet(lines, start, end),
+        snippet: snip,
+        rawSnippet: raw,
+        contextSnippet: snip,
         matchType: 'exact',
       };
     }
@@ -152,10 +169,14 @@ export function extractTargetRegion(
   for (let i = 0; i < lines.length; i++) {
     if (declRe.test(lines[i])) {
       const { start, end } = expandToBlockBoundary(lines, i);
+      const snip = makeSnippet(lines, start, end);
+      const raw = makeRawSnippet(lines, start, end);
       return {
         startLine: start + 1,
         endLine: end + 1,
-        snippet: makeSnippet(lines, start, end),
+        snippet: snip,
+        rawSnippet: raw,
+        contextSnippet: snip,
         matchType: 'block-boundary',
       };
     }
@@ -177,14 +198,18 @@ export function extractTargetRegion(
     if (bestLine >= 0 && bestScore > 0) {
       const start = Math.max(0, bestLine - contextLines);
       const end = Math.min(lines.length - 1, bestLine + contextLines);
+      const snip = makeSnippet(lines, start, end);
+      const raw = makeRawSnippet(lines, start, end);
       return {
         startLine: start + 1,
         endLine: end + 1,
-        snippet: makeSnippet(lines, start, end),
+        snippet: snip,
+        rawSnippet: raw,
+        contextSnippet: snip,
         matchType: 'fuzzy',
       };
     }
   }
 
-  return { startLine: 0, endLine: 0, snippet: '', matchType: 'none' };
+  return { startLine: 0, endLine: 0, snippet: '', rawSnippet: '', contextSnippet: '', matchType: 'none' };
 }

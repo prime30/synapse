@@ -55,7 +55,7 @@ export class JSONAgent extends Agent {
         (f) => `### ${f.path ?? f.fileName} (${f.fileType})\n\`\`\`\n${f.content.slice(0, 500)}${f.content.length > 500 ? '\n... (truncated)' : ''}\n\`\`\``,
       ),
       '',
-      'Respond with a JSON object containing your proposed changes.',
+      'EDITING STRATEGY: Use read_file or read_lines to see exact content, then edit_lines to make changes by line number. Do NOT use search_replace.',
     ].join('\n');
   }
 

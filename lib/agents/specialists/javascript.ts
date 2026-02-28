@@ -5,6 +5,7 @@ import type { AgentTask, AgentResult, CodeChange, CodePatch } from '@/lib/types/
 import { applyPatches } from '@/lib/types/agent';
 import { budgetFiles } from './prompt-budget';
 import { SPECIALIST_OUTPUT_SCHEMA } from './output-schema';
+import { formatFileForSpecialist } from './format-file';
 
 /**
  * JavaScript specialist agent.
@@ -45,16 +46,20 @@ export class JavaScriptAgent extends Agent {
         ? [task.context.domContext, '']
         : []),
       '## JavaScript/TypeScript Files (you may modify these):',
-      ...jsFiles.map(
-        (f) => `### ${f.fileName}\n\`\`\`javascript\n${f.content}\n\`\`\``
-      ),
+      ...jsFiles.map((f) => formatFileForSpecialist(f, 'javascript')),
       '',
       '## Other Files (read-only context):',
-      ...otherFiles.map(
-        (f) => `### ${f.fileName} (${f.fileType})\n\`\`\`\n${f.content}\n\`\`\``
-      ),
+      ...otherFiles.slice(0, 5).map((f) => {
+        const content = f.content.length > 3000 ? f.content.slice(0, 3000) + '\n... (truncated)' : f.content;
+        return `### ${f.fileName} (${f.fileType})\n\`\`\`\n${content}\n\`\`\``;
+      }),
       '',
-      'Respond with a JSON object containing your proposed changes.',
+      'EDITING STRATEGY (follow exactly):',
+      '1. read_lines or extract_region — see the exact content and line numbers first.',
+      '2. edit_lines — make changes by line number using the verified content.',
+      'Use extract_region with a function name to find the exact code block quickly.',
+      'Do NOT use search_replace. It fails on whitespace. Always use read_lines + edit_lines.',
+      'Do NOT use grep_content — read the file directly instead.',
     ].join('\n');
   }
 

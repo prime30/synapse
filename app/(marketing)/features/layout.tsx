@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Features — AI-Powered Shopify Theme IDE | Synapse',
+  title: 'Features — Synapse',
   description:
-    'Explore Synapse features: AI code generation, Liquid completions, performance scoring, accessibility checks, template composer, asset browser, and one-click deploy.',
+    'Synapse is an AI-powered development environment built from the ground up for Shopify theme developers. Multi-agent system, Liquid intelligence, structural editing, and built-in validation.',
   keywords: [
     'Shopify theme IDE features',
     'AI Shopify development',
@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://synapse.shop/features',
     siteName: 'Synapse',
-    title: 'Features — AI-Powered Shopify Theme IDE | Synapse',
+    title: 'Features — Synapse',
     description:
-      'AI code generation, Liquid intelligence, performance scoring, and one-click deploy for Shopify theme developers.',
+      'Multi-agent AI, Liquid intelligence, structural editing, and built-in validation for Shopify theme developers.',
     images: [
       {
         url: 'https://synapse.shop/og-lambda-animated.svg',
@@ -36,9 +36,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Features — Synapse Shopify Theme IDE',
+    title: 'Features — Synapse',
     description:
-      'AI code generation, Liquid intelligence, performance scoring, and one-click deploy.',
+      'Multi-agent AI, Liquid intelligence, structural editing, and built-in validation for Shopify theme developers.',
     images: ['https://synapse.shop/og-lambda-animated.svg'],
   },
   robots: { index: true, follow: true },

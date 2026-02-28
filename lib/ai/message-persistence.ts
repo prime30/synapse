@@ -89,6 +89,96 @@ export async function loadStructuredHistory(
 }
 
 /**
+ * Search across past sessions for messages relevant to the current request.
+ * Returns a compact summary of matching prior conversations for cross-session recall.
+ */
+export async function recallFromPastSessions(
+  projectId: string,
+  currentSessionId: string | undefined,
+  query: string,
+  maxResults: number = 5,
+): Promise<string> {
+  try {
+    const supabase = createServiceClient();
+
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 3)
+      .slice(0, 8);
+
+    if (keywords.length === 0) return '';
+
+    const { data: sessions } = await supabase
+      .from('ai_sessions')
+      .select('id, title, created_at')
+      .eq('project_id', projectId)
+      .neq('id', currentSessionId ?? '')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (!sessions || sessions.length === 0) return '';
+
+    const sessionIds = sessions.map(s => s.id);
+
+    const searchPattern = keywords.join(' | ');
+    const { data: matches } = await supabase
+      .from('ai_messages')
+      .select('session_id, role, content, created_at')
+      .in('session_id', sessionIds)
+      .textSearch('content', searchPattern, { type: 'websearch', config: 'english' })
+      .order('created_at', { ascending: false })
+      .limit(maxResults * 2);
+
+    if (!matches || matches.length === 0) {
+      const { data: fallback } = await supabase
+        .from('ai_messages')
+        .select('session_id, role, content, created_at')
+        .in('session_id', sessionIds)
+        .ilike('content', `%${keywords[0]}%`)
+        .order('created_at', { ascending: false })
+        .limit(maxResults);
+
+      if (!fallback || fallback.length === 0) return '';
+
+      const sessionMap = new Map(sessions.map(s => [s.id, s]));
+      const lines = fallback.slice(0, maxResults).map(m => {
+        const session = sessionMap.get(m.session_id);
+        const date = new Date(m.created_at).toLocaleDateString();
+        const title = session?.title ?? 'Untitled';
+        const excerpt = m.content.slice(0, 200).replace(/\n/g, ' ');
+        return `- [${date} "${title}"] ${m.role}: ${excerpt}`;
+      });
+
+      return `Relevant context from past sessions:\n${lines.join('\n')}`;
+    }
+
+    const sessionMap = new Map(sessions.map(s => [s.id, s]));
+    const seen = new Set<string>();
+    const lines: string[] = [];
+
+    for (const m of matches) {
+      if (lines.length >= maxResults) break;
+      const key = `${m.session_id}:${m.role}:${m.content.slice(0, 50)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const session = sessionMap.get(m.session_id);
+      const date = new Date(m.created_at).toLocaleDateString();
+      const title = session?.title ?? 'Untitled';
+      const excerpt = m.content.slice(0, 200).replace(/\n/g, ' ');
+      lines.push(`- [${date} "${title}"] ${m.role}: ${excerpt}`);
+    }
+
+    if (lines.length === 0) return '';
+    return `Relevant context from past sessions:\n${lines.join('\n')}`;
+  } catch (err) {
+    console.warn('[message-persistence] recallFromPastSessions error:', err);
+    return '';
+  }
+}
+
+/**
  * Convert structured history from DB into AIMessage[] suitable for the
  * coordinator's message array. Restores __toolCalls and __toolResults
  * from the metadata column.

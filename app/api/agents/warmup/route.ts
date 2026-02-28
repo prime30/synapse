@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { loadProjectFiles } from '@/lib/supabase/file-loader';
 import { classifyRequest } from '@/lib/agents/classifier';
-import { ContextEngine } from '@/lib/ai/context-engine';
+import { getProjectContextEngine } from '@/lib/ai/context-engine';
 import type { FileContext as GraphFileContext } from '@/lib/context/types';
 import { SymbolGraphCache } from '@/lib/context/symbol-graph-cache';
 import { DependencyGraphCache } from '@/lib/context/dependency-graph-cache';
@@ -17,6 +17,8 @@ const warmupSchema = z.object({
   activeFilePath: z.string().optional(),
   openTabs: z.array(z.string()).optional().default([]),
   explicitFiles: z.array(z.string()).optional().default([]),
+  recentFiles: z.array(z.string()).optional().default([]),
+  cachedFileHashes: z.record(z.string(), z.string()).optional(),
 });
 
 const symbolGraphCache = new SymbolGraphCache();
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth(request);
     const payload = warmupSchema.parse(await request.json());
-    const { projectId, draft, activeFilePath, openTabs, explicitFiles } = payload;
+    const { projectId, draft, activeFilePath, openTabs, explicitFiles, recentFiles } = payload;
 
     const service = createServiceClient();
     const { allFiles } = await loadProjectFiles(projectId, service);
@@ -48,8 +50,8 @@ export async function POST(request: NextRequest) {
       skipLLM: true,
     });
 
-    const engine = new ContextEngine(10_000);
-    engine.indexFiles(allFiles);
+    const engine = getProjectContextEngine(projectId, 10_000);
+    await engine.indexFiles(allFiles);
     const selected = engine.selectRelevantFiles(draft, [], activeFilePath, 10_000);
 
     const explicitMatched = explicitFiles
@@ -58,13 +60,17 @@ export async function POST(request: NextRequest) {
     const openTabMatched = openTabs
       .map((id) => allFiles.find((f) => f.fileId === id))
       .filter((v): v is (typeof allFiles)[number] => !!v);
+    const recentMatched = recentFiles
+      .map((id) => allFiles.find((f) => f.fileId === id || f.path === id))
+      .filter((v): v is (typeof allFiles)[number] => !!v);
 
     const candidates = new Map<string, (typeof allFiles)[number]>();
     for (const f of explicitMatched) candidates.set(f.fileId, f);
     for (const f of openTabMatched) candidates.set(f.fileId, f);
+    for (const f of recentMatched) candidates.set(f.fileId, f);
     for (const f of selected.files) candidates.set(f.fileId, f);
 
-    const warmedFiles = [...candidates.values()].slice(0, 20);
+    const warmedFiles = [...candidates.values()].slice(0, 40);
     const graphFiles = toGraphFiles(warmedFiles);
 
     await symbolGraphCache.getOrCompute(projectId, graphFiles);

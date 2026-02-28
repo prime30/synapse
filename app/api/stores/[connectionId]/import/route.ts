@@ -159,6 +159,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               const { startFileWatcher } = await import('@/lib/sync/file-watcher');
               startFileWatcher();
             } catch { /* chokidar may not be available */ }
+
+            // Fire-and-forget: build theme intelligence map
+            try {
+              const { triggerThemeMapIndexing } = await import('@/lib/agents/theme-map');
+              triggerThemeMapIndexing(project.id, diskFiles);
+            } catch { /* non-fatal */ }
           }
         } catch (err) {
           console.warn('[Import] Local disk sync failed:', err);
@@ -172,7 +178,37 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       } catch { /* non-critical */ }
     }
 
-    // 3c. Fire-and-forget design token ingestion in the background (was 3b).
+    // 3c. Fire-and-forget theme map indexing (runs for ALL imports, not just local sync).
+    (async () => {
+      try {
+        const { data: mapFiles } = await supabase
+          .from('files')
+          .select('id, path, content, file_type')
+          .eq('project_id', project.id)
+          .not('content', 'is', null);
+
+        const indexableFiles = (mapFiles ?? [])
+          .filter((f: { path: string | null; content: string | null }) =>
+            f.path && typeof f.content === 'string' && f.content.length > 0,
+          )
+          .map((f: { id: string; path: string; content: string; file_type?: string }) => ({
+            path: f.path,
+            content: f.content,
+            fileId: f.id,
+            fileType: f.file_type,
+          }));
+
+        if (indexableFiles.length > 0) {
+          const { triggerThemeMapIndexing } = await import('@/lib/agents/theme-map');
+          triggerThemeMapIndexing(project.id, indexableFiles);
+          console.log(`[Import] Theme map indexing triggered for ${indexableFiles.length} files (project ${project.id})`);
+        }
+      } catch (err) {
+        console.warn('[Import] Theme map indexing trigger failed:', err);
+      }
+    })();
+
+    // 3d. Fire-and-forget design token ingestion in the background.
     (async () => {
       try {
         const { data: projectFiles } = await supabase

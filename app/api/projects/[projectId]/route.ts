@@ -37,14 +37,31 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .from('projects')
       .update({ name })
       .eq('id', projectId)
-      .select('id, name, updated_at')
+      .select('id, name, updated_at, shopify_connection_id, dev_theme_id')
       .single();
 
     if (error || !project) {
       throw APIError.internal(error?.message ?? 'Failed to update project');
     }
 
-    return successResponse(project);
+    // Rename the Shopify dev theme to match (fire-and-forget, non-critical)
+    if (project.shopify_connection_id && project.dev_theme_id) {
+      const devThemeId = Number(project.dev_theme_id);
+      const connectionId = project.shopify_connection_id as string;
+      if (Number.isFinite(devThemeId)) {
+        (async () => {
+          try {
+            const { ShopifyAdminAPIFactory } = await import('@/lib/shopify/admin-api-factory');
+            const api = await ShopifyAdminAPIFactory.create(connectionId);
+            await api.updateTheme(devThemeId, { name: `Synapse Dev - ${name}` });
+          } catch {
+            // Non-critical — theme rename failure doesn't block the project rename
+          }
+        })();
+      }
+    }
+
+    return successResponse({ id: project.id, name: project.name, updated_at: project.updated_at });
   } catch (error) {
     return handleAPIError(error);
   }

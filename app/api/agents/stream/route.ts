@@ -1010,7 +1010,7 @@ function handleAskMode({ body, executionId, userId, orgId, usageCheck, elementHi
         const systemPrompt = buildAskSystemPrompt(fileContexts) + (memoryContext || '');
 
         // Use ContextEngine for smarter file selection within token budget
-        const askContextEngine = new ContextEngine(12_000);
+        const askContextEngine = new ContextEngine(24_000);
         await askContextEngine.indexFiles(fileContexts, { every: 80, yieldFn: yieldToEventLoop });
 
         // Select relevant files via fuzzy matching (includes activeFilePath, open tabs, explicitFiles)
@@ -1018,7 +1018,7 @@ function handleAskMode({ body, executionId, userId, orgId, usageCheck, elementHi
           body.request,
           body.history?.slice(-3).map(m => m.content) ?? [],
           body.activeFilePath,
-          12_000,
+          24_000,
         );
         const selectedIds = new Set(askSelection.files.map(f => f.fileId));
         await yieldToEventLoop();

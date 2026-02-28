@@ -39,6 +39,15 @@ const VALUE_CHANGE_PATTERN = /\b(change|set|update|make|switch)\b.*\b(to|from|in
 
 const COMPLEX_KEYWORDS = /\b(add section|new section|new feature|redesign|refactor|rebuild|rewrite|create.*component)\b/i;
 
+/** Single-file edit that needs Liquid + styling + data (metafield/variant) in one place → COMPLEX so God Mode runs instead of delegating to multiple specialists. */
+const ADD_UNDER_ELEMENT = /\b(add|insert|show|display)\b.*\b(under|below|underneath|in)\b.*\b(badge|swatch|block|section)\b/i;
+const DATA_OR_STYLING_CONCERN = /\b(metafield|variant|option\d|contrast|styling|style|lengths?|custom_values)\b/i;
+
+/** Three-file edit: Liquid + CSS + JS implied (snippet/template + style + script) → COMPLEX so God Mode runs. */
+const LIQUID_OR_SNIPPET = /\b(liquid|snippet|\.liquid|template)\b/i;
+const STYLING_REF = /\b(css|style|styling|\.css)\b/i;
+const SCRIPT_REF = /\.js\b|\b(javascript|script)\b/i;
+
 const ARCHITECTURAL_KEYWORDS = /\b(entire theme|full refactor|migrate from|restructure|overhaul|rebuild.*theme|refactor.*entire|rewrite.*all)\b/i;
 
 const FILE_REFERENCE_PATTERN = /\b[\w-]+\.(liquid|css|js|json|scss)\b/gi;
@@ -73,7 +82,8 @@ export function heuristicClassify(
   const fileRefs = request.match(FILE_REFERENCE_PATTERN) ?? [];
 
   // ── Mode-switch acceleration: Ask → Code with prior code suggestions.
-  if (request.includes('[Mode switch:')) {
+  // Don't downgrade to SIMPLE if the request content is actually complex.
+  if (request.includes('[Mode switch:') && !ARCHITECTURAL_KEYWORDS.test(request)) {
     return 'SIMPLE';
   }
 
@@ -84,6 +94,14 @@ export function heuristicClassify(
 
   // ── COMPLEX: multi-file, structural, or feature-level changes
   if (COMPLEX_KEYWORDS.test(request)) {
+    return 'COMPLEX';
+  }
+  // Single-snippet edit with styling + data (e.g. "add lengths under badge, contrast-aware, metafield") → God Mode, not HYBRID
+  if (ADD_UNDER_ELEMENT.test(request) && DATA_OR_STYLING_CONCERN.test(request)) {
+    return 'COMPLEX';
+  }
+  // Three-file edit: Liquid + CSS + JS (snippet + style + script) → God Mode
+  if (LIQUID_OR_SNIPPET.test(request) && STYLING_REF.test(request) && SCRIPT_REF.test(request)) {
     return 'COMPLEX';
   }
   if (fileRefs.length >= 3) {
@@ -122,12 +140,12 @@ export function heuristicClassify(
 const CLASSIFIER_SYSTEM_PROMPT = `You classify Shopify theme editing requests by complexity. Reply with valid JSON only.
 
 Tiers:
-- TRIVIAL: Single-file cosmetic change (color, font, spacing, text, visibility)
-- SIMPLE: 1-2 files, clear scope, no cross-file dependencies
-- COMPLEX: 3+ files, architectural decisions, cross-file dependencies, new features
+- TRIVIAL: Single-file cosmetic change (color, font, spacing, text, visibility) — one clear value change.
+- SIMPLE: 1-2 files, truly independent changes (e.g. change one color in CSS, no Liquid or data logic).
+- COMPLEX: 3+ files, OR one/two/three files with multiple concerns (e.g. add markup in Liquid + styling in CSS + behavior in JS). Prefer COMPLEX when the request combines template/markup + styling + JS/script so one agent (God Mode) can complete it without delegating to specialists.
 - ARCHITECTURAL: Theme-wide restructuring, migration, full redesign
 
-Important: If the request is a follow-up in a multi-turn conversation where code was previously generated, classify based on the CUMULATIVE complexity of the full feature, not just the follow-up message in isolation.`;
+Important: If the request targets a single snippet or 2–3 files and involves Liquid + CSS + JS (markup, styling, and script/behavior), classify as COMPLEX so God Mode runs. If the request is a follow-up in a multi-turn conversation where code was previously generated, classify based on the CUMULATIVE complexity of the full feature, not just the follow-up message in isolation.`;
 
 export interface LLMClassifyOptions {
   lastMessageSummary?: string;

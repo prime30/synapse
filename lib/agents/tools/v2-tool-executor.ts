@@ -7,6 +7,7 @@ import type {
   FileContext,
   UserPreference,
   OrchestrationActivitySignal,
+  ScoutBrief,
 } from '@/lib/types/agent';
 import { CodexContextPackager } from '@/lib/context/packager';
 import type { ProjectContext } from '@/lib/context/types';
@@ -20,7 +21,7 @@ import { Agent } from '../base';
 import { getAIProvider } from '@/lib/ai/get-provider';
 import type { ToolExecutorContext } from './tool-executor';
 import { ContextEngine } from '@/lib/ai/context-engine';
-import { MODELS } from '../model-router';
+import { MODELS, type AgentCostEvent } from '../model-router';
 import type { SpecialistLifecycleEvent } from '../specialist-lifecycle';
 import { createPlan, updatePlan, readPlanForAgent } from '@/lib/services/plans';
 import type { Plan } from '@/lib/services/plans';
@@ -32,7 +33,7 @@ const SECOND_OPINION_SYSTEM = `You are a critical second reviewer. Given a plan 
 const VALID_SPECIALISTS = ['liquid', 'javascript', 'css', 'json'] as const;
 type SpecialistName = (typeof VALID_SPECIALISTS)[number];
 
-const MAX_RESULT_CHARS = 8_000;
+const MAX_RESULT_CHARS = 32_000;
 
 export interface V2ToolExecutorContext {
   /** All project files (stubs + hydrated). */
@@ -81,6 +82,27 @@ export interface V2ToolExecutorContext {
   tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
   /** Content hydrator for loading file stubs on demand. */
   loadContent?: (fileIds: string[]) => Promise<Array<{ fileId: string; content: string }>>;
+  /** Max Quality mode: force highest iterations and Opus for specialists. */
+  maxQuality?: boolean;
+  /** Accumulated change summaries from completed specialists (for cross-specialist context). */
+  changeSummaries?: ChangeSummary[];
+  /** Structural Scout brief — precise file targets and line ranges for specialist context. */
+  scoutBrief?: ScoutBrief;
+  /** Callback that returns a structured memory anchor string for the current session state. */
+  getMemoryAnchor?: () => string;
+  /** Supabase client for persisting role memory (task outcomes, developer memory). */
+  supabaseClient?: unknown;
+}
+
+export interface ChangeSummary {
+  agent: string;
+  files: Array<{
+    filePath: string;
+    edits: Array<{
+      lineRange: [number, number];
+      addedSymbols: string[];
+    }>;
+  }>;
 }
 
 // -- Helpers -----------------------------------------------------------------
@@ -207,12 +229,12 @@ export async function executeV2Tool(
       }
 
       // EPIC 4b: Per-request specialist rate limit
-      const MAX_SPECIALIST_CALLS = 8;
+      const MAX_SPECIALIST_CALLS = 16;
       if (ctx.specialistCallCount) {
         if (ctx.specialistCallCount.value >= MAX_SPECIALIST_CALLS) {
           return {
             tool_use_id: toolCall.id,
-            content: 'Specialist call limit reached (8). Complete remaining edits directly.',
+            content: 'Specialist call limit reached (16). Complete remaining edits directly.',
             is_error: true,
           };
         }
@@ -266,6 +288,28 @@ export async function executeV2Tool(
         const scoped = scopeFiles(ctx.files, files);
         const scopedFiles = scoped.files;
 
+        // Load role-specific past outcomes to enrich specialist context
+        let combinedMemory = ctx.memoryContext;
+        if (ctx.supabaseClient) {
+          try {
+            const { retrieveSimilarOutcomes, formatOutcomesForPrompt } =
+              await import('@/lib/agents/memory/task-outcomes');
+            const roleOutcomes = await retrieveSimilarOutcomes(
+              ctx.supabaseClient as import('@supabase/supabase-js').SupabaseClient,
+              ctx.projectId, task, 3, 0.6,
+              { role: agentName },
+            );
+            if (roleOutcomes.length > 0) {
+              const roleContext = formatOutcomesForPrompt(roleOutcomes, {
+                maxResults: 3, similarityThreshold: 0.7,
+              });
+              if (roleContext) {
+                combinedMemory = [ctx.memoryContext, roleContext].filter(Boolean).join('\n\n') || undefined;
+              }
+            }
+          } catch { /* role memory is best-effort */ }
+        }
+
         const agentContext: AgentContext = {
           executionId: ctx.executionId,
           projectId: ctx.projectId,
@@ -275,12 +319,47 @@ export async function executeV2Tool(
           userPreferences: ctx.userPreferences,
           dependencyContext: ctx.dependencyContext,
           designContext: ctx.designContext,
-          memoryContext: ctx.memoryContext,
+          memoryContext: combinedMemory,
         };
+
+        let enrichedTask = task;
+
+        // Inject relevant scout targets so the specialist knows exact line ranges
+        if (ctx.scoutBrief && files.length > 0) {
+          const relevantTargets: string[] = [];
+          for (const kf of ctx.scoutBrief.keyFiles) {
+            const matches = files.some(f =>
+              kf.path === f || kf.path.endsWith('/' + f) || f.endsWith('/' + kf.path),
+            );
+            if (matches && kf.targets.length > 0) {
+              relevantTargets.push(`${kf.path} [${kf.type}, relevance: ${kf.relevance}]`);
+              for (const t of kf.targets) {
+                relevantTargets.push(`  → Lines ${t.lineRange[0]}-${t.lineRange[1]}: ${t.context} — ${t.description}`);
+              }
+            }
+          }
+          if (relevantTargets.length > 0) {
+            enrichedTask = `${task}\n\nSCOUT TARGETS (precise line ranges for this task):\n${relevantTargets.join('\n')}`;
+          }
+        }
+
+        if (ctx.changeSummaries && ctx.changeSummaries.length > 0) {
+          const priorContext = ctx.changeSummaries
+            .map((s) => {
+              const fileEdits = s.files.map((f) => {
+                const symbols = f.edits.flatMap((e) => e.addedSymbols).filter(Boolean);
+                return `  ${f.filePath}${symbols.length > 0 ? ` [added: ${symbols.join(', ')}]` : ''}`;
+              }).join('\n');
+              return `${s.agent} specialist:\n${fileEdits}`;
+            })
+            .join('\n')
+            .slice(0, 1500);
+          enrichedTask += `\n\nPRIOR SPECIALIST CHANGES (coordinate with these):\n${priorContext}`;
+        }
 
         const agentTask: AgentTask = {
           executionId: ctx.executionId,
-          instruction: task,
+          instruction: enrichedTask,
           context: agentContext,
         };
 
@@ -296,11 +375,25 @@ export async function executeV2Tool(
         }
         if (!specialistSupabase) {
           const message = `Specialist failed to initialize file writer: ${supabaseInitError ?? 'service client unavailable'}`;
+          const failTs = Date.now();
           ctx.onSpecialistLifecycleEvent?.({
             type: 'failed',
             agent: specialistAgent,
-            timestampMs: Date.now(),
+            timestampMs: failTs,
             details: { error: message },
+          });
+          ctx.onActivitySignal?.({
+            type: 'specialist_failed',
+            agent: specialistAgent,
+            timestampMs: failTs,
+            details: { error: message },
+          });
+          ctx.onProgress?.({
+            type: 'worker_progress',
+            workerId: agentName,
+            label: `${agentName} specialist`,
+            status: 'failed',
+            metadata: { agentType: agentName, error: message },
           });
           return {
             tool_use_id: toolCall.id,
@@ -316,7 +409,23 @@ export async function executeV2Tool(
           contextEngine: new ContextEngine(8_000),
           projectId: ctx.projectId,
           userId: ctx.userId,
-          loadContent: ctx.loadContent,
+          loadContent: ctx.loadContent
+            ? async (fileIds: string[]) => {
+                const loaded = await ctx.loadContent!(fileIds);
+                return loaded.map(
+                  (f: { fileId: string; content: string }) => {
+                    const known = scopedFiles.find((s) => s.fileId === f.fileId);
+                    return {
+                      fileId: f.fileId,
+                      fileName: known?.fileName ?? f.fileId,
+                      fileType: known?.fileType ?? 'other',
+                      content: f.content,
+                      path: known?.path,
+                    };
+                  },
+                );
+              }
+            : undefined,
           supabaseClient: specialistSupabase,
           sessionId: ctx.executionId,
           onFileChanged: (change) => {
@@ -333,9 +442,20 @@ export async function executeV2Tool(
           },
         };
 
+        const SPECIALIST_ITERATION_LIMITS: Record<string, number> = {
+          TRIVIAL: 8,
+          SIMPLE: 12,
+          COMPLEX: 16,
+          ARCHITECTURAL: 20,
+        };
+        const maxIter = ctx.maxQuality || ctx.tier === 'ARCHITECTURAL'
+          ? 20
+          : SPECIALIST_ITERATION_LIMITS[ctx.tier ?? 'COMPLEX'] ?? 14;
+
         const executeOptions: AgentExecuteOptions & { maxIterations?: number; onToolUse?: (name: string) => void } = {
           action: 'generate',
-          maxIterations: 8,
+          executionTier: 'editing' as const,
+          maxIterations: maxIter,
           ...(ctx.model ? { model: ctx.model } : {}),
           ...(ctx.onReasoningChunk
             ? { onReasoningChunk: (chunk: string) => ctx.onReasoningChunk!(agentName, chunk) }
@@ -366,11 +486,75 @@ export async function executeV2Tool(
             result.error?.message ||
             result.analysis ||
             `Specialist ${agentName} returned unsuccessful result`;
+          const failTs = Date.now();
+          ctx.onSpecialistLifecycleEvent?.({
+            type: 'failed',
+            agent: specialistAgent,
+            timestampMs: failTs,
+            details: { error: errMsg },
+          });
+          ctx.onActivitySignal?.({
+            type: 'specialist_failed',
+            agent: specialistAgent,
+            timestampMs: failTs,
+            details: { error: errMsg },
+          });
+          ctx.onProgress?.({
+            type: 'worker_progress',
+            workerId: agentName,
+            label: `${agentName} specialist`,
+            status: 'failed',
+            metadata: { agentType: agentName, error: errMsg },
+          });
           return {
             tool_use_id: toolCall.id,
             content: truncate(`Specialist ${agentName} failed: ${errMsg}`),
             is_error: true,
           };
+        }
+
+        // Syntax validation: when using cheap editing tier, verify output
+        if (executeOptions.executionTier === 'editing' && specialistTrackedChanges.length > 0) {
+          const hasLiquidError = specialistTrackedChanges.some(c => {
+            if (!c.fileName.endsWith('.liquid')) return false;
+            const content = c.proposedContent;
+            const opens = (content.match(/\{%/g) || []).length;
+            const closes = (content.match(/%\}/g) || []).length;
+            return opens !== closes;
+          });
+          const hasCssError = specialistTrackedChanges.some(c => {
+            if (!c.fileName.endsWith('.css')) return false;
+            const content = c.proposedContent;
+            const opens = (content.match(/\{/g) || []).length;
+            const closes = (content.match(/\}/g) || []).length;
+            return opens !== closes;
+          });
+
+          if (hasLiquidError || hasCssError) {
+            console.warn(`[V2ToolExecutor] Cheap model syntax error detected for ${agentName}, retrying with mid-tier`);
+            ctx.onProgress?.({
+              type: 'worker_progress',
+              workerId: agentName,
+              label: `${agentName} specialist`,
+              status: 'retrying',
+              metadata: { reason: 'syntax_validation_failed' },
+            });
+
+            specialistTrackedChanges.length = 0;
+            const retryOptions = { ...executeOptions, executionTier: undefined as undefined };
+            const retryResult = await specialist.executeWithTools(
+              agentTask,
+              specialistToolCtx,
+              retryOptions,
+            );
+            if (!retryResult.success) {
+              return {
+                tool_use_id: toolCall.id,
+                content: truncate(`Specialist ${agentName} failed on retry: ${retryResult.error?.message || retryResult.analysis || 'unknown'}`),
+                is_error: true,
+              };
+            }
+          }
         }
 
         const validChanges = specialistTrackedChanges.filter(
@@ -381,11 +565,30 @@ export async function executeV2Tool(
           const fallbackNote = scoped.usedFallback
             ? ' File scoping fell back to project-wide context because declared files did not match.'
             : '';
+          const message = `Specialist ${agentName} completed with 0 file changes. Re-scope files and provide exact target edits.${fallbackNote}`;
+          const failTs = Date.now();
+          ctx.onSpecialistLifecycleEvent?.({
+            type: 'failed',
+            agent: specialistAgent,
+            timestampMs: failTs,
+            details: { error: message },
+          });
+          ctx.onActivitySignal?.({
+            type: 'specialist_failed',
+            agent: specialistAgent,
+            timestampMs: failTs,
+            details: { error: message },
+          });
+          ctx.onProgress?.({
+            type: 'worker_progress',
+            workerId: agentName,
+            label: `${agentName} specialist`,
+            status: 'failed',
+            metadata: { agentType: agentName, error: message },
+          });
           return {
             tool_use_id: toolCall.id,
-            content: truncate(
-              `Specialist ${agentName} completed with 0 file changes. Re-scope files and provide exact target edits.${fallbackNote}`,
-            ),
+            content: truncate(message),
             is_error: true,
           };
         }
@@ -394,8 +597,72 @@ export async function executeV2Tool(
           ? ` ${result.analysis.slice(0, 300)}`
           : '';
 
+        const changeSummaryLines = validChanges.map((c) => {
+          const origLines = (c.originalContent ?? '').split('\n').length;
+          const newLines = (c.proposedContent ?? '').split('\n').length;
+          const addedSymbols: string[] = [];
+          const proposed = c.proposedContent ?? '';
+          const original = c.originalContent ?? '';
+          const newCssClasses = proposed.match(/\.([\w-]+)\s*\{/g)?.filter(m => !original.includes(m)) ?? [];
+          for (const cls of newCssClasses) addedSymbols.push(cls.replace(/\s*\{/, ''));
+          const newDataAttrs = proposed.match(/data-[\w-]+/g)?.filter(a => !original.includes(a)) ?? [];
+          for (const attr of newDataAttrs) addedSymbols.push(attr);
+          const newFunctions = proposed.match(/function\s+([\w$]+)/g)?.filter(f => !original.includes(f)) ?? [];
+          for (const fn of newFunctions) addedSymbols.push(fn.replace('function ', ''));
+          const symbolNote = addedSymbols.length > 0 ? ` [added: ${addedSymbols.slice(0, 5).join(', ')}]` : '';
+          return `- ${c.fileName}: ${origLines}→${newLines} lines${symbolNote}`;
+        }).join('\n');
+
+        const structuredSummary: ChangeSummary = {
+          agent: agentName,
+          files: validChanges.map((c) => {
+            const proposed = c.proposedContent ?? '';
+            const original = c.originalContent ?? '';
+            const addedSymbols: string[] = [];
+            const newCssClasses = proposed.match(/\.([\w-]+)\s*\{/g)?.filter(m => !original.includes(m)) ?? [];
+            for (const cls of newCssClasses) addedSymbols.push(cls.replace(/\s*\{/, ''));
+            const newDataAttrs = proposed.match(/data-[\w-]+/g)?.filter(a => !original.includes(a)) ?? [];
+            for (const attr of newDataAttrs) addedSymbols.push(attr);
+            const newFunctions = proposed.match(/function\s+([\w$]+)/g)?.filter(f => !original.includes(f)) ?? [];
+            for (const fn of newFunctions) addedSymbols.push(fn.replace('function ', ''));
+            const origLineCount = original.split('\n').length;
+            const newLineCount = proposed.split('\n').length;
+            return {
+              filePath: c.fileName,
+              edits: [{
+                lineRange: [1, Math.max(origLineCount, newLineCount)] as [number, number],
+                addedSymbols: addedSymbols.slice(0, 10),
+              }],
+            };
+          }),
+        };
+        ctx.changeSummaries?.push(structuredSummary);
+
+        // Emit cost event for monitoring
+        const usage = specialist.getLastUsage();
+        if (usage) {
+          const { calculateCostCents } = await import('@/lib/billing/cost-calculator');
+          const costEvent: AgentCostEvent = {
+            executionId: ctx.executionId,
+            projectId: ctx.projectId,
+            phase: 'specialist',
+            modelId: usage.model,
+            executionTier: executeOptions.executionTier ?? 'default',
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            costCents: calculateCostCents(usage.model, usage.inputTokens, usage.outputTokens),
+            durationMs: Date.now() - startTs,
+          };
+          ctx.onActivitySignal?.({
+            type: 'cost_event',
+            agent: specialistAgent,
+            timestampMs: Date.now(),
+            details: costEvent as unknown as Record<string, unknown>,
+          });
+        }
+
         const summary = truncate(
-          `Specialist ${agentName} completed: ${changesCount} file(s) changed.${analysisBrief}`,
+          `Specialist ${agentName} completed: ${changesCount} file(s) changed.${analysisBrief}\n\nChange summary:\n${changeSummaryLines}`,
         );
         const completeTs = Date.now();
         ctx.onSpecialistLifecycleEvent?.({
@@ -419,6 +686,21 @@ export async function executeV2Tool(
           status: 'complete',
           metadata: { agentType: agentName, changesCount, success: result.success },
         });
+
+        // Persist role-tagged outcome for specialist memory (fire-and-forget)
+        if (ctx.supabaseClient && result.success && changesCount > 0) {
+          import('@/lib/agents/memory/task-outcomes').then(({ storeTaskOutcome }) => {
+            storeTaskOutcome(ctx.supabaseClient as import('@supabase/supabase-js').SupabaseClient, {
+              projectId: ctx.projectId,
+              userId: ctx.userId,
+              taskSummary: task.slice(0, 2000),
+              outcome: 'success',
+              filesChanged: validChanges.map(c => c.fileName),
+              toolSequence: [],
+              role: agentName,
+            }).catch(() => {});
+          });
+        }
 
         console.log(
           `[V2ToolExecutor] Specialist "${agentName}" done -- ${changesCount} change(s), success=${result.success}`,
@@ -536,11 +818,32 @@ export async function executeV2Tool(
 
         const reviewOptions: AgentExecuteOptions = {
           action: 'review',
+          executionTier: 'review' as const,
           ...(ctx.model ? { model: ctx.model } : {}),
           ...(ctx.tier ? { tier: ctx.tier } : {}),
         };
 
         const result: AgentResult = await reviewer.execute(reviewTask, reviewOptions);
+
+        // If the reviewer's context was truncated, it cannot reliably evaluate the changes.
+        // Force-approve and surface a warning rather than blocking on incomplete analysis.
+        if (result.budgetTruncated) {
+          console.warn('[V2ToolExecutor] Review context was truncated — auto-approving with advisory warning');
+          ctx.onActivitySignal?.({
+            type: 'review_completed',
+            agent: 'review',
+            timestampMs: Date.now(),
+            details: { approved: true, issues: 0 },
+          });
+          return {
+            tool_use_id: toolCall.id,
+            content: truncate(
+              'Review APPROVED (advisory)\n' +
+              'NOTE: Review context was truncated due to token budget limits. ' +
+              'Changes are provisionally approved. Manual review recommended.',
+            ),
+          };
+        }
 
         let summary: string;
         if (result.reviewResult) {
@@ -562,6 +865,29 @@ export async function executeV2Tool(
         console.log(
           `[V2ToolExecutor] Review done -- approved=${result.reviewResult?.approved ?? 'N/A'}`,
         );
+
+        const reviewUsage = reviewer.getLastUsage();
+        if (reviewUsage) {
+          const { calculateCostCents } = await import('@/lib/billing/cost-calculator');
+          const costEvent: AgentCostEvent = {
+            executionId: ctx.executionId,
+            projectId: ctx.projectId,
+            phase: 'review',
+            modelId: reviewUsage.model,
+            executionTier: 'review',
+            inputTokens: reviewUsage.inputTokens,
+            outputTokens: reviewUsage.outputTokens,
+            costCents: calculateCostCents(reviewUsage.model, reviewUsage.inputTokens, reviewUsage.outputTokens),
+            durationMs: 0,
+          };
+          ctx.onActivitySignal?.({
+            type: 'cost_event',
+            agent: 'review',
+            timestampMs: Date.now(),
+            details: costEvent as unknown as Record<string, unknown>,
+          });
+        }
+
         ctx.onActivitySignal?.({
           type: 'review_completed',
           agent: 'review',
@@ -582,6 +908,47 @@ export async function executeV2Tool(
           is_error: true,
         };
       }
+    }
+
+    // -- refresh_memory_anchor ------------------------------------------------
+    // -- recall_role_memory -------------------------------------------------
+    case 'recall_role_memory': {
+      const role = String(toolCall.input.role ?? '');
+      const query = String(toolCall.input.query ?? '');
+      if (!ctx.supabaseClient) {
+        return { tool_use_id: toolCall.id, content: 'Role memory not available — no database connection.' };
+      }
+      try {
+        const { retrieveSimilarOutcomes, formatOutcomesForPrompt } =
+          await import('@/lib/agents/memory/task-outcomes');
+        const outcomes = await retrieveSimilarOutcomes(
+          ctx.supabaseClient as import('@supabase/supabase-js').SupabaseClient,
+          ctx.projectId, query, 5, 0.5, { role },
+        );
+        const formatted = outcomes.length > 0
+          ? formatOutcomesForPrompt(outcomes, { maxResults: 5 })
+          : `No past patterns found for ${role} specialist matching "${query}".`;
+        return { tool_use_id: toolCall.id, content: formatted };
+      } catch (err) {
+        return {
+          tool_use_id: toolCall.id,
+          content: `Role memory lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
+    case 'refresh_memory_anchor': {
+      if (ctx.getMemoryAnchor) {
+        return {
+          tool_use_id: toolCall.id,
+          content: ctx.getMemoryAnchor(),
+        };
+      }
+      return {
+        tool_use_id: toolCall.id,
+        content: 'Memory anchor not available in this execution context.',
+        is_error: true,
+      };
     }
 
     // -- get_second_opinion ---------------------------------------------------

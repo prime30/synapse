@@ -8,7 +8,7 @@ export const AI_FEATURES = {
   promptCaching: process.env.ENABLE_PROMPT_CACHING !== 'false',
 
   /** Claude adaptive thinking with effort control. */
-  adaptiveThinking: process.env.ENABLE_ADAPTIVE_THINKING === 'true',
+  adaptiveThinking: process.env.ENABLE_ADAPTIVE_THINKING !== 'false',
 
   /** Structured JSON outputs via output_config (Anthropic only). */
   structuredOutputs: process.env.ENABLE_STRUCTURED_OUTPUTS === 'true',
@@ -36,8 +36,8 @@ export const AI_FEATURES = {
    *  Direct tool calling is more reliable. Re-enable when Anthropic improves PTC stability. */
   programmaticToolCalling: process.env.ENABLE_PTC === 'true',
 
-  /** Server-side context editing: auto-clear old tool results and thinking blocks (beta). */
-  contextEditing: process.env.ENABLE_CONTEXT_EDITING === 'true',
+  /** Server-side context editing: auto-clear old tool results and thinking blocks. */
+  contextEditing: process.env.ENABLE_CONTEXT_EDITING !== 'false',
 
   /** Prompt cache TTL: '5m' (default free refresh) or '1h' (2x write cost, same read cost). */
   promptCacheTtl: (process.env.PROMPT_CACHE_TTL ?? '1h') as '5m' | '1h',
@@ -50,4 +50,14 @@ export const AI_FEATURES = {
 
   /** Semantic skill matching: hybrid keyword + word-vector similarity for module selection. */
   semanticSkillMatching: process.env.ENABLE_SEMANTIC_SKILL_MATCHING !== 'false',
+
+  /** God Mode: full-context single-agent execution for complex tasks. */
+  godMode: process.env.ENABLE_GOD_MODE !== 'false',
+
+  /** Preview verification: post-edit snapshot + reflection loop. */
+  previewVerification: process.env.ENABLE_PREVIEW_VERIFICATION === 'true',
+
+  /** Structural Scout LLM enrichment for COMPLEX+ tiers (requires XAI_API_KEY or Anthropic key). */
+  scoutEnrichment: process.env.ENABLE_SCOUT_ENRICHMENT === 'true'
+    || (process.env.XAI_API_KEY != null && process.env.XAI_API_KEY !== ''),
 } as const;

@@ -21,6 +21,8 @@ describe('Shopify Types', () => {
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes'],
         is_active: true,
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -47,6 +49,8 @@ describe('Shopify Types', () => {
         sync_status: 'disconnected',
         scopes: [],
         is_active: true,
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -66,6 +70,8 @@ describe('Shopify Types', () => {
         sync_status: 'disconnected',
         scopes: [],
         is_active: true,
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -85,6 +91,8 @@ describe('Shopify Types', () => {
         sync_status: 'disconnected',
         scopes: [],
         is_active: true,
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -104,6 +112,8 @@ describe('Shopify Types', () => {
         sync_status: 'connected',
         scopes: ['read_themes', 'write_themes', 'read_content', 'write_content'],
         is_active: true,
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };
@@ -221,6 +231,8 @@ describe('Shopify Types', () => {
         is_active: true,
         last_sync_at: null,
         scopes: [],
+        preview_cookie_encrypted: null,
+        preview_cookie_expires_at: null,
         created_at: '2026-02-07T00:00:00Z',
         updated_at: '2026-02-07T00:00:00Z',
       };

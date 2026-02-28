@@ -422,7 +422,7 @@ export default function PlanPage() {
       )}
 
       {/* Header */}
-      <header className="border-b border-stone-200 dark:border-white/10 px-6 py-4 flex items-center gap-4">
+      <header className="border-b border-stone-200 dark:border-[#2a2a2a] px-6 py-4 flex items-center gap-4">
         <button
           type="button"
           onClick={() => router.back()}
@@ -433,7 +433,7 @@ export default function PlanPage() {
           Back
         </button>
 
-        <div className="h-5 w-px bg-stone-200 dark:bg-white/10" aria-hidden />
+        <div className="h-5 w-px bg-stone-200 dark:bg-[#1e1e1e]" aria-hidden />
 
         {editingName ? (
           <input
@@ -474,7 +474,7 @@ export default function PlanPage() {
             {draftStatus}
           </button>
           {showStatusDropdown && (
-            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[120px]">
+            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-[#2a2a2a] rounded-lg shadow-lg py-1 z-20 min-w-[120px]">
               {STATUS_OPTIONS.map((s) => (
                 <button
                   key={s}
@@ -504,7 +504,7 @@ export default function PlanPage() {
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             isDirty
               ? 'bg-[oklch(0.745_0.189_148)] text-white hover:bg-[oklch(0.684_0.178_149)] shadow-sm'
-              : 'bg-stone-100 text-stone-400 dark:bg-white/5 dark:text-gray-500 cursor-not-allowed'
+              : 'bg-stone-100 text-stone-400 dark:bg-[#141414] dark:text-gray-500 cursor-not-allowed'
           }`}
         >
           {saving ? 'Saving...' : 'Save'}
@@ -521,7 +521,7 @@ export default function PlanPage() {
             <EllipsisIcon className="w-5 h-5" />
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-white/10 rounded-lg shadow-lg py-1 z-20 min-w-[150px]">
+            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[oklch(0.21_0_0)] border border-stone-200 dark:border-[#2a2a2a] rounded-lg shadow-lg py-1 z-20 min-w-[150px]">
               <button
                 type="button"
                 onClick={archivePlan}
@@ -543,9 +543,9 @@ export default function PlanPage() {
 
       {/* Progress bar */}
       {totalCount > 0 && (
-        <div className="px-6 py-3 border-b border-stone-200 dark:border-white/10">
+        <div className="px-6 py-3 border-b border-stone-200 dark:border-[#2a2a2a]">
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 bg-stone-200 dark:bg-white/10 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-stone-200 dark:bg-[#1e1e1e] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[oklch(0.745_0.189_148)] rounded-full transition-all duration-300"
                 style={{ width: `${progressPct}%` }}
@@ -569,7 +569,7 @@ export default function PlanPage() {
               onClick={() => setContentMode(mode)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-colors ${
                 contentMode === mode
-                  ? 'bg-stone-200 dark:bg-white/10 text-stone-900 dark:text-white'
+                  ? 'bg-stone-200 dark:bg-[#1e1e1e] text-stone-900 dark:text-white'
                   : 'text-stone-500 dark:text-gray-400 hover:text-stone-700 dark:hover:text-gray-200 hover:bg-stone-100 dark:hover:bg-white/5'
               }`}
             >
@@ -597,14 +597,14 @@ export default function PlanPage() {
               resizeTextarea();
             }}
             placeholder="Write your plan in Markdown..."
-            className="w-full min-h-[300px] bg-white dark:bg-[oklch(0.176_0_0)] border border-stone-200 dark:border-white/10 rounded-lg p-4 text-sm text-stone-900 dark:text-white font-mono leading-relaxed placeholder:text-stone-400 dark:placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-[oklch(0.745_0.189_148)]/30 focus:border-[oklch(0.745_0.189_148)] resize-none"
+            className="w-full min-h-[300px] bg-white dark:bg-[oklch(0.176_0_0)] border border-stone-200 dark:border-[#2a2a2a] rounded-lg p-4 text-sm text-stone-900 dark:text-white font-mono leading-relaxed placeholder:text-stone-400 dark:placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-[oklch(0.745_0.189_148)]/30 focus:border-[oklch(0.745_0.189_148)] resize-none"
           />
         )}
       </div>
 
       {/* Todos section */}
       <div className="px-6 pb-12 max-w-4xl mx-auto">
-        <div className="border-t border-stone-200 dark:border-white/10 pt-6">
+        <div className="border-t border-stone-200 dark:border-[#2a2a2a] pt-6">
           <h2 className="text-base font-semibold text-stone-900 dark:text-white mb-4">
             Todos
           </h2>
@@ -628,7 +628,7 @@ export default function PlanPage() {
                   className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
                     todo.status === 'completed'
                       ? 'bg-[oklch(0.745_0.189_148)] border-[oklch(0.745_0.189_148)] text-white'
-                      : 'border-stone-300 dark:border-white/20 hover:border-[oklch(0.745_0.189_148)]'
+                      : 'border-stone-300 dark:border-[#333333] hover:border-[oklch(0.745_0.189_148)]'
                   }`}
                   aria-label={`Toggle "${todo.content}"`}
                 >
@@ -677,7 +677,7 @@ export default function PlanPage() {
             {/* Add todo inline input */}
             {addingTodo && (
               <div className="flex items-center gap-3 py-2 px-3">
-                <div className="w-5 h-5 rounded-md border-2 border-stone-300 dark:border-white/20 flex-shrink-0" />
+                <div className="w-5 h-5 rounded-md border-2 border-stone-300 dark:border-[#333333] flex-shrink-0" />
                 <input
                   type="text"
                   value={newTodoContent}
@@ -698,7 +698,7 @@ export default function PlanPage() {
                   }}
                   autoFocus
                   placeholder="What needs to be done?"
-                  className="flex-1 text-sm bg-transparent border-b border-stone-300 dark:border-white/20 outline-none text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 px-1 focus:border-[oklch(0.745_0.189_148)]"
+                  className="flex-1 text-sm bg-transparent border-b border-stone-300 dark:border-[#333333] outline-none text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-gray-500 px-1 focus:border-[oklch(0.745_0.189_148)]"
                 />
               </div>
             )}

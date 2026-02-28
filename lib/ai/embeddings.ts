@@ -91,6 +91,13 @@ export async function storeFileEmbedding(
   embedding: number[],
   chunkIndex: number = 0,
   chunkText?: string,
+  chunkMeta?: {
+    chunkType?: string;
+    lineStart?: number;
+    lineEnd?: number;
+    settingId?: string;
+    references?: string[];
+  },
 ): Promise<void> {
   const supabase = await createClient();
 
@@ -104,6 +111,11 @@ export async function storeFileEmbedding(
       embedding: `[${embedding.join(',')}]`,
       chunk_index: chunkIndex,
       chunk_text: chunkText ?? null,
+      chunk_type: chunkMeta?.chunkType ?? null,
+      line_start: chunkMeta?.lineStart ?? null,
+      line_end: chunkMeta?.lineEnd ?? null,
+      setting_id: chunkMeta?.settingId ?? null,
+      chunk_references: chunkMeta?.references ?? null,
     });
 
   if (error) {
@@ -257,6 +269,13 @@ export async function indexProjectFiles(
           embeddings[j],
           batch[j].chunkIndex,
           batch[j].chunkContent,
+          {
+            chunkType: batch[j].chunkType,
+            lineStart: (batch[j].metadata as Record<string, unknown>)?.lineStart as number | undefined,
+            lineEnd: (batch[j].metadata as Record<string, unknown>)?.lineEnd as number | undefined,
+            settingId: (batch[j].metadata as Record<string, unknown>)?.settingId as string | undefined,
+            references: (batch[j].metadata as Record<string, unknown>)?.references as string[] | undefined,
+          },
         );
         indexed++;
       }

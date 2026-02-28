@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAuth } from '@/lib/middleware/auth';
 import { handleAPIError } from '@/lib/errors/handler';
-import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
+import { ShopifyTokenManager, decryptToken } from '@/lib/shopify/token-manager';
 import { registerPreviewCacheInvalidator } from '@/lib/preview/preview-cache';
+import { getStorefrontSessionFromConnection, type StorefrontSessionResult } from '@/lib/shopify/storefront-session';
+import { cliPreviewManager } from '@/lib/preview/cli-manager';
 
 /* ------------------------------------------------------------------ */
 /*  In-memory response cache                                           */
@@ -32,7 +34,7 @@ function getCacheTTL(contentType: string): number {
   if (contentType.includes('image/') || contentType.includes('font/') || contentType.includes('woff'))
     return 30 * 60 * 1000; // 30 minutes for images/fonts
   if (contentType.includes('javascript') || contentType.includes('css'))
-    return 5 * 60 * 1000; // 5 minutes for JS/CSS
+    return 30 * 1000; // 30 seconds — short enough that pushes reflect quickly
   if (contentType.includes('text/html'))
     return 3 * 1000; // 3 seconds — prevents duplicate fetches on rapid navigation/back-nav
   return 10 * 1000; // 10 seconds for everything else (section fragments, etc.)
@@ -89,8 +91,87 @@ const NO_PREVIEW_HTML = (msg: string) =>
   `<html><body style="font-family:system-ui;color:oklch(0.637 0 0);display:flex;align-items:center;justify-content:center;height:100vh;margin:0">${msg}</body></html>`;
 
 /**
+ * Empty state shown when no Theme Access password is configured.
+ * Contains a "Connect Theme Access" button that posts a message to the
+ * parent frame so PreviewPanel can open the session modal.
+ */
+const CONNECT_PREVIEW_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Synapse Preview</title></head>
+<body style="font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0a;color:#a1a1aa">
+  <div style="text-align:center;max-width:480px;padding:0 24px">
+    <div style="width:72px;height:72px;border-radius:18px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 28px">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+    </div>
+    <p style="font-size:20px;font-weight:700;color:#f4f4f5;margin:0 0 12px;letter-spacing:-0.01em">Connect Theme Access</p>
+    <p style="font-size:14px;line-height:1.6;color:#71717a;margin:0 0 32px">
+      To preview your draft theme in this panel, connect a Theme Access password from your Shopify store.
+    </p>
+    <button onclick="window.parent.postMessage({type:'synapse-open-session-modal'},'*')"
+      style="padding:14px 36px;border:none;border-radius:10px;background:#28CD56;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;letter-spacing:-0.01em"
+      onmouseover="this.style.background='#22b84a'" onmouseout="this.style.background='#28CD56'">
+      Connect Theme Access
+    </button>
+    <p style="font-size:12px;color:#52525b;margin:20px 0 0">
+      Install the <a href="https://apps.shopify.com/theme-access" target="_blank" rel="noopener" style="color:#38bdf8;text-decoration:underline">Theme Access app</a> in your Shopify admin to get a password.
+    </p>
+  </div>
+</body></html>`;
+
+/**
+ * Error state shown when TKA password exists but is rejected by Shopify.
+ */
+const TKA_INVALID_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Synapse Preview</title></head>
+<body style="font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0a;color:#a1a1aa">
+  <div style="text-align:center;max-width:340px">
+    <div style="width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+    </div>
+    <p style="font-size:15px;font-weight:600;color:#e4e4e7;margin:0 0 8px">Theme Access Disconnected</p>
+    <p style="font-size:13px;line-height:1.5;color:#71717a;margin:0 0 24px">
+      The stored password was not accepted by Shopify. It may have been revoked or expired.
+    </p>
+    <button onclick="window.parent.postMessage({type:'synapse-open-session-modal'},'*')"
+      style="padding:10px 24px;border:none;border-radius:8px;background:#28CD56;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s">
+      Reconnect
+    </button>
+  </div>
+</body></html>`;
+
+/**
+ * Shown when TKA is configured but the CLI dev server isn't running yet.
+ * Prompts the user to click "Start Preview" in the toolbar.
+ */
+const START_CLI_PREVIEW_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Synapse Preview</title></head>
+<body style="font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0a;color:#a1a1aa">
+  <div style="text-align:center;max-width:480px;padding:0 24px">
+    <div style="width:72px;height:72px;border-radius:18px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 28px">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+    </div>
+    <p style="font-size:20px;font-weight:700;color:#f4f4f5;margin:0 0 12px;letter-spacing:-0.01em">Start CLI Preview</p>
+    <p style="font-size:14px;line-height:1.6;color:#71717a;margin:0 0 32px">
+      Theme Access is connected. Click <strong style="color:#38bdf8;font-weight:600">Start Preview</strong> in the toolbar above, or press the button below to launch the Shopify CLI dev server and preview your draft theme.
+    </p>
+    <button onclick="window.parent.postMessage({type:'synapse-start-cli-preview'},'*')"
+      style="padding:14px 36px;border:none;border-radius:10px;background:#28CD56;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;letter-spacing:-0.01em"
+      onmouseover="this.style.background='#22b84a'" onmouseout="this.style.background='#28CD56'">
+      Start Preview
+    </button>
+  </div>
+</body></html>`;
+
+/**
  * Auto-retrying preview page shown while the dev theme is being populated.
  * Shopify returns 422 when the theme has no renderable templates.
+ * Retries a few times with long delays, then shows a clear message + manual Retry.
  */
 const SYNCING_PREVIEW_HTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Synapse Preview</title></head>
@@ -98,36 +179,39 @@ const SYNCING_PREVIEW_HTML = `<!DOCTYPE html>
   <div style="text-align:center" id="sync-msg">
     <div style="width:32px;height:32px;border:2px solid oklch(0.32 0 0);border-top-color:oklch(0.718 0.158 248);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
     <p style="font-size:14px;color:oklch(0.734 0 0);margin:0 0 4px">Syncing files to preview theme&hellip;</p>
-    <p style="font-size:12px;color:oklch(0.49 0 0);margin:0">The parent IDE will refresh this when ready.</p>
+    <p style="font-size:12px;color:oklch(0.49 0 0);margin:0">Checking again in <span id="countdown">10</span>s</p>
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
   <script>
     (function(){
-      // Notify the parent IDE frame that we're waiting for sync
       if(window.parent!==window){
         window.parent.postMessage({type:'synapse-preview-syncing',status:'waiting'},'*');
       }
-      // Listen for the parent to tell us to reload (event-driven, no polling)
       window.addEventListener('message',function(e){
         if(e.data&&e.data.type==='synapse-preview-refresh'){
           sessionStorage.removeItem('__synapse_sync_retries');
           location.reload();
         }
       });
-      // Fallback: retry with exponential backoff, max 30 attempts (~4 min)
       var key='__synapse_sync_retries';
       var count=parseInt(sessionStorage.getItem(key)||'0',10)+1;
       sessionStorage.setItem(key,String(count));
-      if(count>30){
+      var maxAttempts=6;
+      var delay=10000;
+      if(count>maxAttempts){
         sessionStorage.removeItem(key);
         document.getElementById('sync-msg').innerHTML=
-          '<p style="font-size:14px;color:oklch(0.704 0.191 22);margin:0 0 8px">Preview timed out</p>'+
-          '<p style="font-size:12px;color:oklch(0.49 0 0);margin:0 0 12px">The dev theme may still be syncing.</p>'+
-          '<button onclick="sessionStorage.removeItem(\\''+key+'\\');location.reload()" style="padding:6px 16px;border:1px solid oklch(0.368 0 0);border-radius:6px;background:transparent;color:oklch(0.734 0 0);cursor:pointer;font-size:13px">Retry</button>';
+          '<p style="font-size:14px;color:oklch(0.734 0 0);margin:0 0 8px">Preview theme isn\'t ready</p>'+
+          '<p style="font-size:12px;color:oklch(0.49 0 0);margin:0 0 12px">Sync your theme from the project, or try again in a moment.</p>'+
+          '<button onclick="sessionStorage.removeItem(\\''+key+'\\');location.reload()" style="padding:8px 20px;border:1px solid oklch(0.368 0 0);border-radius:6px;background:transparent;color:oklch(0.734 0 0);cursor:pointer;font-size:13px">Retry</button>';
       } else {
-        // Exponential backoff: 4s, 5s, 6s... up to 15s max
-        var delay=Math.min(4000+count*500,15000);
-        setTimeout(function(){location.reload()},delay);
+        var el=document.getElementById('countdown');
+        var n=Math.floor(delay/1000);
+        var iv=setInterval(function(){
+          n--;
+          if(el)el.textContent=n;
+        },1000);
+        setTimeout(function(){clearInterval(iv);location.reload();},delay);
       }
     })();
   </script>
@@ -138,14 +222,52 @@ async function resolveConnection(userId: string, projectId: string) {
   return tokenManager.getActiveConnection(userId, { projectId });
 }
 
-function buildShopifyUrl(storeDomain: string, themeId: string, pathParam: string) {
+const TKA_DOMAIN = 'theme-kit-access.shopifyapps.com';
+
+function buildShopifyUrl(storeDomain: string, themeId: string, pathParam: string, useTKA = false) {
   const domain = storeDomain.replace(/^https?:\/\//, '');
-  const url = new URL(
-    pathParam.startsWith('/') ? pathParam : `/${pathParam}`,
-    `https://${domain}`
-  );
+  const basePath = pathParam.startsWith('/') ? pathParam : `/${pathParam}`;
+
+  const baseUrl = useTKA
+    ? `https://${TKA_DOMAIN}/cli/sfr${basePath}`
+    : `https://${domain}${basePath}`;
+
+  const url = new URL(baseUrl);
   url.searchParams.set('preview_theme_id', themeId);
+  url.searchParams.set('_fd', '0');
+  url.searchParams.set('pb', '0');
   return { url, domain };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom-domain resolution                                           */
+/*  Shopify redirects myshopify.com → custom domain. Cookies captured  */
+/*  from the custom domain are stripped by Node fetch on cross-origin   */
+/*  redirects. We discover the real domain once and cache it for 1 h.  */
+/* ------------------------------------------------------------------ */
+const customDomainCache = new Map<string, { domain: string; ts: number }>();
+const DOMAIN_CACHE_TTL = 60 * 60 * 1000;
+
+async function resolveCustomDomain(myshopifyDomain: string): Promise<string> {
+  const clean = myshopifyDomain.replace(/^https?:\/\//, '');
+  const cached = customDomainCache.get(clean);
+  if (cached && Date.now() - cached.ts < DOMAIN_CACHE_TTL) return cached.domain;
+
+  try {
+    const res = await fetch(`https://${clean}/`, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SynapsePreview/1.0)' },
+      signal: AbortSignal.timeout(5_000),
+    });
+    const location = res.headers.get('location');
+    if (location) {
+      const resolved = new URL(location).hostname;
+      customDomainCache.set(clean, { domain: resolved, ts: Date.now() });
+      return resolved;
+    }
+  } catch { /* fall through */ }
+
+  return clean;
 }
 
 function stripIframeHeaders(shopifyRes: Response): Headers {
@@ -164,7 +286,7 @@ function stripIframeHeaders(shopifyRes: Response): Headers {
     contentType.includes('svg');
   headers.set(
     'Cache-Control',
-    isStatic ? 'public, max-age=300, stale-while-revalidate=600' : 'no-store, no-cache, must-revalidate'
+    isStatic ? 'public, max-age=30, stale-while-revalidate=60' : 'no-store, no-cache, must-revalidate'
   );
 
   const safe = ['content-language', 'vary', 'etag'];
@@ -207,6 +329,12 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
   var SKIP_RX=/\\/monorail|web-pixel|\\/checkouts\\/internal\\/analytics|\\.myshopify\\.com\\/wpm|\\/cdn\\/wpm|\\/\\.well-known\\/|shopify-perf/;
   // Shopify CDN static assets — bypass proxy for ALL Shopify CDN URLs
   var CDN_RX=/^https?:\\/\\/(cdn\\.shopify\\.com|shopify-assets\\.shopifycdn\\.com)\\//;
+  // Third-party telemetry endpoint that fails CORS inside localhost iframe.
+  // Treat it as best-effort and no-op so theme boot code doesn't get noisy rejections.
+  var COLLECT_RX=/^https?:\\/\\/dropdeadextensions\\.com\\/api\\/collect(?:[/?#]|$)/i;
+  function isCollectUrl(u){
+    return typeof u==='string' && COLLECT_RX.test(u);
+  }
   function rw(u){
     if(typeof u!=='string')return u;
     // Skip analytics/tracking and static CDN assets — let them go direct
@@ -255,6 +383,12 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
   // Intercept fetch
   var _f=window.fetch;
   window.fetch=function(i,o){
+    if(typeof i==='string' && isCollectUrl(i)){
+      return Promise.resolve(new Response(null,{status:204,statusText:'No Content'}));
+    }
+    if(i&&typeof i==='object'&&i.url&&isCollectUrl(i.url)){
+      return Promise.resolve(new Response(null,{status:204,statusText:'No Content'}));
+    }
     if(typeof i==='string'){i=rw(i);}
     else if(i&&typeof i==='object'&&i.url){
       var nu=rw(i.url);
@@ -271,7 +405,10 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
   // Intercept navigator.sendBeacon (used by Shopify analytics/monorail)
   if(navigator.sendBeacon){
     var _b=navigator.sendBeacon.bind(navigator);
-    navigator.sendBeacon=function(u,d){return _b(rw(u),d);};
+    navigator.sendBeacon=function(u,d){
+      if(isCollectUrl(u))return true;
+      return _b(rw(u),d);
+    };
   }
   // Intercept <a> link clicks for in-iframe navigation
   document.addEventListener('click',function(e){
@@ -317,12 +454,21 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
       });
     }
   }catch(e){}
-  // Intercept history.pushState / replaceState (only absolute store-domain URLs)
+  // Intercept history.pushState / replaceState.
+  // Some themes navigate with relative paths (e.g. "/collections/all"),
+  // so rewrite those through the proxy as well.
   var _ps=history.pushState;
   var _rs=history.replaceState;
   function rwNav(u){
     if(typeof u!=='string')return u;
-    if(u.startsWith(S)||/^https?:\\/\\/[^/]*\\.myshopify\\.com/.test(u))return rw(u);
+    if(
+      u.startsWith(S) ||
+      /^https?:\\/\\/[^/]*\\.myshopify\\.com/.test(u) ||
+      u.startsWith(O + '/') ||
+      u.startsWith(PP) ||
+      u.startsWith('/') ||
+      u.startsWith('?')
+    ) return rw(u);
     return u;
   }
   history.pushState=function(s,t,u){return _ps.call(this,s,t,u!=null?rwNav(String(u)):u);};
@@ -333,7 +479,7 @@ function buildInterceptorScript(projectId: string, storeDomain: string, storePat
 
 /**
  * Inject scripts into the HTML <head>.
- * Order: base tag (for static assets) → interceptor (for AJAX) → bridge (for IDE).
+ * Order: block CORS-failing third-party requests → base tag → interceptor → bridge.
  *
  * Also strips CSP <meta> tags so our injected scripts aren't blocked by
  * Shopify's nonce-based Content Security Policy.
@@ -354,8 +500,6 @@ function injectIntoHTML(
   );
 
   // --- 2. Extract the nonce used by existing scripts (belt-and-suspenders) ---
-  // If a nonce is found, add it to our injected scripts so they match if any
-  // other CSP mechanism is in play.
   const nonceMatch = html.match(/\bscript[^>]+nonce="([^"]+)"/i);
   const nonce = nonceMatch ? nonceMatch[1] : '';
   const nonceAttr = nonce ? ` nonce="${nonce}"` : '';
@@ -375,35 +519,45 @@ function injectIntoHTML(
   return injection + html;
 }
 
+interface ForwardHeaderOptions {
+  sessionCookie?: string;
+  storefrontToken?: string;
+  /** Theme Kit Access: store .myshopify.com domain for X-Shopify-Shop */
+  tkaStoreDomain?: string;
+  /** Theme Kit Access: shptka_* password for X-Shopify-Access-Token */
+  tkaPassword?: string;
+}
+
 /**
  * Forward-friendly fetch headers from the incoming request to Shopify.
+ *
+ * Standard session: Authorization: Bearer {storefrontToken} + Cookie
+ * TKA session: adds X-Shopify-Shop + X-Shopify-Access-Token: shptka_*
  */
-function buildForwardHeaders(request: NextRequest): Record<string, string> {
+function buildForwardHeaders(
+  request: NextRequest,
+  opts: ForwardHeaderOptions = {},
+): Record<string, string> {
+  const { sessionCookie, storefrontToken, tkaStoreDomain, tkaPassword } = opts;
   const h: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (compatible; SynapsePreview/1.0)',
+    'User-Agent': 'Shopify CLI; v=synapse',
     'Accept-Language': 'en-US,en;q=0.5',
   };
-  // Forward Accept so Shopify can return JSON vs HTML
   const accept = request.headers.get('accept');
   if (accept) {
     h['Accept'] = accept;
   } else {
     h['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
   }
-  // Forward Content-Type for POST/PUT
   const ct = request.headers.get('content-type');
   if (ct) h['Content-Type'] = ct;
-  // Forward X-Requested-With (Shopify AJAX convention)
   const xrw = request.headers.get('x-requested-with');
   if (xrw) h['X-Requested-With'] = xrw;
-  // Forward If-None-Match for conditional requests (ETag)
   const ifNoneMatch = request.headers.get('if-none-match');
   if (ifNoneMatch) h['If-None-Match'] = ifNoneMatch;
-  // Forward cookies so Shopify can maintain cart/session state.
-  // The browser sends its cookies for our origin; we relay them to Shopify.
+
   const cookie = request.headers.get('cookie');
   if (cookie) {
-    // Only forward Shopify-relevant cookies (cart, session, localization)
     const shopifyCookies = cookie
       .split(';')
       .map(c => c.trim())
@@ -417,12 +571,31 @@ function buildForwardHeaders(request: NextRequest): Record<string, string> {
           name === 'secure_customer_sig' ||
           name.startsWith('_tracking') ||
           name.startsWith('_y') ||
-          name.startsWith('_s')
+          name.startsWith('_s') ||
+          name.startsWith('_orig_referrer') ||
+          name.startsWith('_landing_page')
         );
       })
       .join('; ');
     if (shopifyCookies) h['Cookie'] = shopifyCookies;
   }
+
+  if (sessionCookie) {
+    h['Cookie'] = h['Cookie'] ? `${h['Cookie']}; ${sessionCookie}` : sessionCookie;
+  }
+
+  if (storefrontToken) {
+    h['Authorization'] = `Bearer ${storefrontToken}`;
+  }
+
+  // TKA headers — Shopify CLI sends these when using a theme access password
+  if (tkaPassword) {
+    h['X-Shopify-Access-Token'] = tkaPassword;
+  }
+  if (tkaStoreDomain) {
+    h['X-Shopify-Shop'] = tkaStoreDomain.replace(/^https?:\/\//, '');
+  }
+
   return h;
 }
 
@@ -450,6 +623,503 @@ function rewriteSetCookieHeaders(shopifyRes: Response, headers: Headers): void {
     rewritten = rewritten.replace(/;\s*samesite=[^;]*/gi, '');
     rewritten += '; SameSite=Lax';
     headers.append('Set-Cookie', rewritten);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Manual redirect following (preserves auth headers + preview_theme_id) */
+/* ------------------------------------------------------------------ */
+
+async function fetchWithManualRedirects(
+  url: string,
+  headers: Record<string, string>,
+  themeId: string,
+  opts?: { isTKA?: boolean },
+  maxRedirects = 5,
+): Promise<Response> {
+  let currentUrl = url;
+  const isTKA = opts?.isTKA ?? false;
+  console.log(`[Preview Fetch] START url=${currentUrl} isTKA=${isTKA}`);
+  for (let i = 0; i < maxRedirects; i++) {
+    const res = await fetch(currentUrl, {
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(25_000),
+    });
+
+    console.log(`[Preview Fetch] Step ${i}: ${res.status} url=${currentUrl}`);
+    if (res.status < 300 || res.status >= 400) return res;
+
+    const location = res.headers.get('location');
+    if (!location) return res;
+
+    const nextUrl = new URL(location, currentUrl);
+
+    // If TKA redirects us to the store domain, the TKA password is invalid.
+    // Return a synthetic 401 instead of following (which would serve the published theme).
+    if (isTKA && nextUrl.hostname !== TKA_DOMAIN) {
+      console.log(`[Preview Fetch] TKA redirected to store domain ${nextUrl.hostname} — password invalid`);
+      return new Response('Theme Access password not accepted by Shopify', { status: 401 });
+    }
+
+    if (!nextUrl.searchParams.has('preview_theme_id')) {
+      nextUrl.searchParams.set('preview_theme_id', themeId);
+    }
+    console.log(`[Preview Fetch] Redirect → ${nextUrl.toString()}`);
+    currentUrl = nextUrl.toString();
+  }
+  return fetch(currentUrl, { headers, redirect: 'follow', signal: AbortSignal.timeout(25_000) });
+}
+
+type ParityIssueCategory = 'auth-cookie' | 'missing-local-file' | 'app-endpoint' | 'proxy-rewrite' | 'upstream-other';
+
+function isParityDiagnosticEnabled(request: NextRequest): boolean {
+  const qp = request.nextUrl.searchParams.get('diag');
+  return qp === '1' || process.env.PREVIEW_PARITY_DIAG === '1';
+}
+
+function classifyParityIssue(status: number, pathParam: string): { category: ParityIssueCategory; reason: string } {
+  const pathOnly = pathParam.split('?')[0] || '/';
+  const isAsset =
+    /\.(?:js|css|map|json|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|eot)$/i.test(pathOnly);
+  const isAppEndpoint =
+    /^\/(?:apps|app_proxy|tools|a\/|api\/)/i.test(pathOnly) ||
+    /shopify|checkout|wpm|monorail|analytics/i.test(pathParam);
+
+  if (status === 401 || status === 403) {
+    return { category: 'auth-cookie', reason: 'Upstream rejected session or auth context' };
+  }
+  if (status === 404 && isAsset) {
+    return { category: 'missing-local-file', reason: 'Asset not found in local CLI theme output' };
+  }
+  if (isAppEndpoint) {
+    return { category: 'app-endpoint', reason: 'Third-party/app endpoint mismatch in proxied context' };
+  }
+  if (status === 404) {
+    return { category: 'proxy-rewrite', reason: 'Page path likely escaped rewrite or upstream route mismatch' };
+  }
+  return { category: 'upstream-other', reason: `Unhandled upstream status ${status}` };
+}
+
+/* ------------------------------------------------------------------ */
+/*  CLI dev server proxy                                               */
+/*  When the Shopify CLI `theme dev` is running, we proxy through it.  */
+/*  This gives us correct draft-theme rendering because the CLI uses   */
+/*  the replace_templates API internally.                               */
+/* ------------------------------------------------------------------ */
+
+async function proxyCLIDevServer(
+  request: NextRequest,
+  projectId: string,
+  cliPort: number,
+  storeDomain: string,
+): Promise<NextResponse> {
+  const pathParam = request.nextUrl.searchParams.get('path') || '/';
+  const cliUrl = `http://127.0.0.1:${cliPort}${pathParam}`;
+  const domain = storeDomain.replace(/^https?:\/\//, '');
+  const parityDiag = isParityDiagnosticEnabled(request);
+
+  try {
+    const fwdHeaders: Record<string, string> = {};
+    const accept = request.headers.get('accept');
+    if (accept) fwdHeaders['Accept'] = accept;
+    const cookie = request.headers.get('cookie');
+    if (cookie) fwdHeaders['Cookie'] = cookie;
+    const ct = request.headers.get('content-type');
+    if (ct) fwdHeaders['Content-Type'] = ct;
+    const xrw = request.headers.get('x-requested-with');
+    if (xrw) fwdHeaders['X-Requested-With'] = xrw;
+
+    const cliRes = await fetch(cliUrl, {
+      headers: fwdHeaders,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(25_000),
+    });
+
+    const contentType = cliRes.headers.get('content-type') || 'text/html';
+    const body = await cliRes.arrayBuffer();
+    const headers = stripIframeHeaders(cliRes);
+    rewriteSetCookieHeaders(cliRes, headers);
+    headers.set('X-Synapse-Preview-Session', 'cli');
+    if (parityDiag && cliRes.status >= 400) {
+      const issue = classifyParityIssue(cliRes.status, pathParam);
+      headers.set('X-Synapse-Preview-Diag', issue.category);
+      console.warn(
+        `[Preview Parity] GET ${pathParam} -> ${cliRes.status} (${issue.category}) reason="${issue.reason}" contentType="${contentType}"`
+      );
+    }
+
+    if (contentType.includes('text/html')) {
+      const html = new TextDecoder().decode(body);
+      const isFullPage =
+        /<!doctype\s+html/i.test(html) ||
+        /<html[\s>]/i.test(html) ||
+        /<head[\s>]/i.test(html);
+
+      if (isFullPage) {
+        const origin = request.nextUrl.origin;
+        const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+        return new NextResponse(rewritten, { status: cliRes.status, headers });
+      }
+    }
+
+    return new NextResponse(body, { status: cliRes.status, headers });
+  } catch (error) {
+    const isTimeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    if (isTimeout) {
+      return new NextResponse(
+        NO_PREVIEW_HTML('CLI preview timed out. The dev server may be starting up — try refreshing.'),
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      );
+    }
+    console.error(`[CLI Preview Proxy] Error:`, error instanceof Error ? error.message : error);
+    return new NextResponse(
+      NO_PREVIEW_HTML('CLI preview server is not responding. It may have stopped.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dev store proxy                                                     */
+/*  Proxies the published theme on a secondary dev store. No            */
+/*  preview_theme_id needed — the theme is published, so Shopify        */
+/*  renders it by default. TKA is only used to bypass storefront        */
+/*  password protection.                                                */
+/* ------------------------------------------------------------------ */
+
+async function proxyDevStoreStorefront(
+  request: NextRequest,
+  projectId: string,
+): Promise<NextResponse> {
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('preview_connection_id')
+    .eq('id', projectId)
+    .single();
+
+  if (!project?.preview_connection_id) {
+    return new NextResponse(
+      NO_PREVIEW_HTML('Connect a dev store in Settings to enable embedded preview.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const { data: conn } = await supabase
+    .from('shopify_connections')
+    .select('store_domain, theme_access_password_encrypted')
+    .eq('id', project.preview_connection_id)
+    .single();
+
+  if (!conn?.store_domain) {
+    return new NextResponse(
+      NO_PREVIEW_HTML('Dev store connection not found. Please reconnect.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const domain = conn.store_domain.replace(/^https?:\/\//, '');
+  const pathParam = request.nextUrl.searchParams.get('path') || '/';
+
+  const fullPathWithQuery = `devstore::${pathParam}${request.nextUrl.search || ''}`;
+  const cacheKey = getCacheKey(projectId, fullPathWithQuery);
+  const cached = getCachedResponse(cacheKey);
+  if (cached) {
+    const headers = new Headers();
+    cached.headers.forEach((v, k) => headers.set(k, v));
+    headers.set('X-Synapse-Preview-Session', 'devstore');
+    headers.set('X-Synapse-Cache', 'HIT');
+    if (cached.isFullPage && cached.contentType.includes('text/html')) {
+      const html = new TextDecoder().decode(cached.body);
+      const origin = request.nextUrl.origin;
+      const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+      return new NextResponse(rewritten, { status: cached.status, headers });
+    }
+    return new NextResponse(cached.body, { status: cached.status, headers });
+  }
+
+  try {
+    const basePath = pathParam.startsWith('/') ? pathParam : `/${pathParam}`;
+    const url = new URL(`https://${domain}${basePath}`);
+    url.searchParams.set('_fd', '0');
+    url.searchParams.set('pb', '0');
+
+    const fwdHeaders = buildForwardHeaders(request, {
+      tkaStoreDomain: domain,
+      tkaPassword: conn.theme_access_password_encrypted
+        ? decryptToken(conn.theme_access_password_encrypted)
+        : undefined,
+    });
+
+    const shopifyRes = await fetchWithManualRedirects(
+      url.toString(),
+      fwdHeaders,
+      undefined,
+      { isTKA: false },
+    );
+
+    if (shopifyRes.status === 401) {
+      return new NextResponse(
+        NO_PREVIEW_HTML('Dev store authentication failed. Check that the Theme Access app is installed.'),
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      );
+    }
+
+    const contentType = shopifyRes.headers.get('content-type') || 'text/html';
+    const body = await shopifyRes.arrayBuffer();
+    const headers = stripIframeHeaders(shopifyRes);
+    rewriteSetCookieHeaders(shopifyRes, headers);
+    headers.set('X-Synapse-Preview-Session', 'devstore');
+
+    if (contentType.includes('text/html')) {
+      const html = new TextDecoder().decode(body);
+      const isFullPage =
+        /<!doctype\s+html/i.test(html) ||
+        /<html[\s>]/i.test(html) ||
+        /<head[\s>]/i.test(html);
+
+      setCachedResponse(cacheKey, {
+        body, headers, status: shopifyRes.status, isFullPage,
+        timestamp: Date.now(), contentType,
+        etag: shopifyRes.headers.get('etag') ?? undefined,
+      });
+
+      if (isFullPage) {
+        const origin = request.nextUrl.origin;
+        const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+        return new NextResponse(rewritten, { status: shopifyRes.status, headers });
+      }
+    } else {
+      setCachedResponse(cacheKey, {
+        body, headers, status: shopifyRes.status, isFullPage: false,
+        timestamp: Date.now(), contentType,
+        etag: shopifyRes.headers.get('etag') ?? undefined,
+      });
+    }
+
+    return new NextResponse(body, { status: shopifyRes.status, headers });
+  } catch (error) {
+    console.error('[Dev Store Proxy] Error:', error instanceof Error ? error.message : error);
+    return new NextResponse(
+      NO_PREVIEW_HTML('Dev store preview error. Try refreshing.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+}
+
+async function proxyDevStorePost(
+  request: NextRequest,
+  projectId: string,
+): Promise<NextResponse> {
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('preview_connection_id')
+    .eq('id', projectId)
+    .single();
+
+  if (!project?.preview_connection_id) {
+    return NextResponse.json({ error: 'No dev store connected' }, { status: 503 });
+  }
+
+  const { data: conn } = await supabase
+    .from('shopify_connections')
+    .select('store_domain, theme_access_password_encrypted')
+    .eq('id', project.preview_connection_id)
+    .single();
+
+  if (!conn?.store_domain) {
+    return NextResponse.json({ error: 'Dev store connection not found' }, { status: 503 });
+  }
+
+  const domain = conn.store_domain.replace(/^https?:\/\//, '');
+  const pathParam = request.nextUrl.searchParams.get('path') || '/';
+  const basePath = pathParam.startsWith('/') ? pathParam : `/${pathParam}`;
+  const url = new URL(`https://${domain}${basePath}`);
+  url.searchParams.set('_fd', '0');
+  url.searchParams.set('pb', '0');
+
+  const fwdHeaders = buildForwardHeaders(request, {
+    tkaStoreDomain: domain,
+    tkaPassword: conn.theme_access_password_encrypted
+      ? decryptToken(conn.theme_access_password_encrypted)
+      : undefined,
+  });
+
+  const reqBody = await request.arrayBuffer();
+  const shopifyRes = await fetch(url.toString(), {
+    method: 'POST',
+    headers: fwdHeaders,
+    body: reqBody.byteLength > 0 ? reqBody : undefined,
+    redirect: 'follow',
+    signal: AbortSignal.timeout(25_000),
+  });
+
+  const contentType = shopifyRes.headers.get('content-type') || 'application/json';
+  const body = await shopifyRes.arrayBuffer();
+  const headers = new Headers();
+  headers.set('Content-Type', contentType);
+  headers.set('Cache-Control', 'no-store');
+  rewriteSetCookieHeaders(shopifyRes, headers);
+
+  return new NextResponse(body, { status: shopifyRes.status, headers });
+}
+
+/* ------------------------------------------------------------------ */
+/*  TKA storefront proxy                                               */
+/*  When the CLI is not running, proxy directly through the TKA        */
+/*  endpoint (theme-kit-access.shopifyapps.com). This uses Shopify's   */
+/*  native Liquid renderer and requires no local tooling.              */
+/* ------------------------------------------------------------------ */
+
+interface ShopifyConnectionForProxy {
+  store_domain: string;
+  access_token_encrypted: string;
+  theme_access_password_encrypted?: string | null;
+  online_token_encrypted?: string | null;
+  online_token_expires_at?: string | null;
+}
+
+async function proxyShopifyStorefront(
+  request: NextRequest,
+  projectId: string,
+  connection: ShopifyConnectionForProxy,
+  themeId: string,
+): Promise<NextResponse> {
+  const pathParam = request.nextUrl.searchParams.get('path') || '/';
+  const parityDiag = isParityDiagnosticEnabled(request);
+  const domain = connection.store_domain.replace(/^https?:\/\//, '');
+
+  // Check in-memory cache first
+  const fullPathWithQuery = pathParam + (request.nextUrl.search || '');
+  const cacheKey = getCacheKey(projectId, fullPathWithQuery);
+  const cached = getCachedResponse(cacheKey);
+  if (cached) {
+    const headers = new Headers();
+    cached.headers.forEach((v, k) => headers.set(k, v));
+    headers.set('X-Synapse-Preview-Session', 'proxy');
+    headers.set('X-Synapse-Cache', 'HIT');
+    if (cached.isFullPage && cached.contentType.includes('text/html')) {
+      const html = new TextDecoder().decode(cached.body);
+      const origin = request.nextUrl.origin;
+      const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+      return new NextResponse(rewritten, { status: cached.status, headers });
+    }
+    return new NextResponse(cached.body, { status: cached.status, headers });
+  }
+
+  try {
+    const session = await getStorefrontSessionFromConnection(connection, themeId);
+    if (!session) {
+      return new NextResponse(
+        NO_PREVIEW_HTML('Could not establish a preview session with Shopify. Check your Theme Access password.'),
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      );
+    }
+
+    const isTKA = 'isTKA' in session && session.isTKA === true;
+    const { url } = buildShopifyUrl(domain, themeId, pathParam, isTKA);
+
+    const fwdHeaders = buildForwardHeaders(request, {
+      sessionCookie: session.cookie,
+      storefrontToken: session.storefrontToken,
+      tkaStoreDomain: isTKA ? domain : undefined,
+      tkaPassword: isTKA ? (session as { themeAccessPassword: string }).themeAccessPassword : undefined,
+    });
+
+    const shopifyRes = await fetchWithManualRedirects(
+      url.toString(),
+      fwdHeaders,
+      themeId,
+      { isTKA },
+    );
+
+    if (shopifyRes.status === 401) {
+      return new NextResponse(TKA_INVALID_HTML, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Synapse-Preview-Session': 'invalid',
+        },
+      });
+    }
+
+    if (shopifyRes.status === 422) {
+      return new NextResponse(SYNCING_PREVIEW_HTML, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+
+    const contentType = shopifyRes.headers.get('content-type') || 'text/html';
+    const body = await shopifyRes.arrayBuffer();
+    const headers = stripIframeHeaders(shopifyRes);
+    rewriteSetCookieHeaders(shopifyRes, headers);
+    headers.set('X-Synapse-Preview-Session', isTKA ? 'tka' : 'storefront');
+
+    if (parityDiag && shopifyRes.status >= 400) {
+      const issue = classifyParityIssue(shopifyRes.status, pathParam);
+      headers.set('X-Synapse-Preview-Diag', issue.category);
+    }
+
+    if (contentType.includes('text/html')) {
+      const html = new TextDecoder().decode(body);
+      const isFullPage =
+        /<!doctype\s+html/i.test(html) ||
+        /<html[\s>]/i.test(html) ||
+        /<head[\s>]/i.test(html);
+
+      // Cache the raw HTML before injection
+      setCachedResponse(cacheKey, {
+        body,
+        headers,
+        status: shopifyRes.status,
+        isFullPage,
+        timestamp: Date.now(),
+        contentType,
+        etag: shopifyRes.headers.get('etag') ?? undefined,
+      });
+
+      if (isFullPage) {
+        const origin = request.nextUrl.origin;
+        const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
+        return new NextResponse(rewritten, { status: shopifyRes.status, headers });
+      }
+    } else {
+      setCachedResponse(cacheKey, {
+        body,
+        headers,
+        status: shopifyRes.status,
+        isFullPage: false,
+        timestamp: Date.now(),
+        contentType,
+        etag: shopifyRes.headers.get('etag') ?? undefined,
+      });
+    }
+
+    return new NextResponse(body, { status: shopifyRes.status, headers });
+  } catch (error) {
+    const isTimeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    if (isTimeout) {
+      return new NextResponse(
+        NO_PREVIEW_HTML('Preview request timed out. The store may be slow — try refreshing.'),
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      );
+    }
+    console.error('[TKA Proxy] Error:', error instanceof Error ? error.message : error);
+    return new NextResponse(
+      NO_PREVIEW_HTML('Preview proxy error. Try refreshing.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
   }
 }
 
@@ -505,214 +1175,57 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    const pathParam = request.nextUrl.searchParams.get('path') || '/';
-    const otherParams = new URLSearchParams();
-    request.nextUrl.searchParams.forEach((v, k) => {
-      if (k !== 'path') otherParams.set(k, v);
-    });
-    const fullPathWithQuery = otherParams.toString()
-      ? (pathParam.includes('?') ? `${pathParam}&${otherParams}` : `${pathParam}?${otherParams}`)
-      : pathParam;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H1',location:'app/api/projects/[projectId]/preview/route.ts:get-start',message:'preview GET request received',data:{projectId,pathParam,fullPathWithQuery,accept:request.headers.get('accept') ?? '',secFetchDest:request.headers.get('sec-fetch-dest') ?? '',ua:(request.headers.get('user-agent') ?? '').slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    const requestedMode = request.nextUrl.searchParams.get('mode');
 
-    // --- Check in-memory cache before hitting Shopify ---
-    const cacheKey = getCacheKey(projectId, fullPathWithQuery);
-    const cached = getCachedResponse(cacheKey);
-    if (cached) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H5',location:'app/api/projects/[projectId]/preview/route.ts:cache-hit',message:'preview cache hit',data:{projectId,cacheKey,contentType:cached.contentType,status:cached.status},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      const ifNoneMatch = request.headers.get('if-none-match');
-      if (ifNoneMatch && cached.etag && ifNoneMatch.trim() === cached.etag.trim()) {
-        return new NextResponse(null, {
-          status: 304,
-          headers: { 'X-Synapse-Cache': 'HIT', ETag: cached.etag },
-        });
-      }
-      // Clone headers so we don't mutate the cached entry
-      const h = new Headers();
-      cached.headers.forEach((v, k) => h.set(k, v));
-      h.set('X-Synapse-Cache', 'HIT');
-      return new NextResponse(cached.body, { status: cached.status, headers: h });
+    // ── Dev store proxy ──────────────────────────────────────────
+    // When mode=devstore, proxy through the dev store's published theme.
+    // No preview_theme_id needed since the theme is published on the dev store.
+    if (requestedMode === 'devstore') {
+      return proxyDevStoreStorefront(request, projectId);
     }
 
-    const { url: shopifyUrl, domain } = buildShopifyUrl(
-      connection.store_domain,
-      String(themeId),
-      fullPathWithQuery
-    );
-    const incomingCookie = request.headers.get('cookie') || '';
-    // #region agent log
-    console.log('[preview-debug] request context', {
-      projectId,
-      pathParam,
-      hasCookie: incomingCookie.length > 0,
-      cookieLength: incomingCookie.length,
-      ua: (request.headers.get('user-agent') || '').slice(0, 80),
-    });
-    // #endregion
-
-    const shopifyRes = await fetch(shopifyUrl.toString(), {
-      headers: buildForwardHeaders(request),
-      redirect: 'follow',
-    });
-    // #region agent log
-    console.log('[preview-debug] shopify response', {
-      projectId,
-      pathParam,
-      status: shopifyRes.status,
-      ok: shopifyRes.ok,
-      contentType: shopifyRes.headers.get('content-type') || '',
-    });
-    // #endregion
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'app/api/projects/[projectId]/preview/route.ts:shopify-response',message:'shopify response received',data:{projectId,status:shopifyRes.status,ok:shopifyRes.ok,contentType:shopifyRes.headers.get('content-type') ?? '',shopifyUrl:shopifyUrl.pathname},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
-    // Forward 304 Not Modified from Shopify
-    if (shopifyRes.status === 304) {
-      const etag = shopifyRes.headers.get('etag');
-      const h = new Headers();
-      if (etag) h.set('ETag', etag);
-      h.set('X-Synapse-Cache', 'MISS');
-      return new NextResponse(null, { status: 304, headers: h });
+    // ── CLI dev server proxy ─────────────────────────────────────
+    // Only proxy through CLI when explicitly requested via mode=cli.
+    // This prevents CLI from silently hijacking the TKA proxy when both are available.
+    const cliPort = cliPreviewManager.getPort(projectId);
+    if (cliPort && requestedMode === 'cli') {
+      return proxyCLIDevServer(request, projectId, cliPort, connection.store_domain);
     }
 
-    if (!shopifyRes.ok) {
-      // 422 = theme has no renderable templates yet (dev theme still syncing)
-      // 503 = service unavailable — empty dev theme not yet populated
-      // Both indicate the background push hasn't finished; show auto-retry page.
-      if (shopifyRes.status === 422 || shopifyRes.status === 503) {
-        // #region agent log
-        console.warn('[preview-debug] returning syncing fallback', {
-          projectId,
-          pathParam,
-          status: shopifyRes.status,
-        });
-        // #endregion
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'app/api/projects/[projectId]/preview/route.ts:syncing-fallback',message:'returning syncing fallback html',data:{projectId,status:shopifyRes.status,pathParam},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        return new NextResponse(SYNCING_PREVIEW_HTML, {
-          status: 200,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        });
-      }
-      return new NextResponse(NO_PREVIEW_HTML(`Shopify returned ${shopifyRes.status}`), {
+    // No TKA password → show connect empty state
+    if (!connection.theme_access_password_encrypted) {
+      return new NextResponse(CONNECT_PREVIEW_HTML, {
         status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Synapse-Preview-Session': 'none',
+        },
       });
     }
 
-    const contentType = shopifyRes.headers.get('content-type') || 'text/html';
-    const etag = shopifyRes.headers.get('etag');
-
-    // If-None-Match: return 304 when client's ETag matches Shopify's
-    const ifNoneMatch = request.headers.get('if-none-match');
-    if (ifNoneMatch && etag && ifNoneMatch.trim() === etag.trim()) {
-      const h = new Headers();
-      h.set('ETag', etag);
-      h.set('X-Synapse-Cache', 'MISS');
-      return new NextResponse(null, { status: 304, headers: h });
-    }
-
-    const body = await shopifyRes.arrayBuffer();
-    const headers = stripIframeHeaders(shopifyRes);
-    // Forward Shopify cookies to the client (rewritten for our origin)
-    rewriteSetCookieHeaders(shopifyRes, headers);
-    // #region agent log
-    console.log('[preview-debug] response cookie headers', {
-      projectId,
-      pathParam,
-      hasSetCookie: !!shopifyRes.headers.get('set-cookie'),
-    });
-    // #endregion
-
-    // HTML responses: only inject into full page documents, NOT section
-    // rendering fragments (which are also text/html but lack <head>/<html>).
-    // Injecting into fragments corrupts the HTML that theme JS parses for
-    // drawer/cart/search content, causing permanent skeleton states.
-    if (contentType.includes('text/html')) {
-      const html = new TextDecoder().decode(body);
-      const isFullPage =
-        /<!doctype\s+html/i.test(html) ||
-        /<html[\s>]/i.test(html) ||
-        /<head[\s>]/i.test(html);
-
-      if (isFullPage) {
-        const origin = request.nextUrl.origin;
-        const rewritten = injectIntoHTML(html, domain, projectId, origin, pathParam);
-        // #region agent log
-        console.log('[preview-debug] returning full page html', {
-          projectId,
-          pathParam,
-          includesBridge: rewritten.includes('data-synapse-bridge="1"'),
-          includesInterceptor: rewritten.includes('data-synapse-interceptor="1"'),
-        });
-        // #endregion
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H3',location:'app/api/projects/[projectId]/preview/route.ts:fullpage-html',message:'returning rewritten full-page html',data:{projectId,pathParam,includesBridge:rewritten.includes('data-synapse-bridge="1"'),includesInterceptor:rewritten.includes('data-synapse-interceptor="1"')},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        const respBody = new TextEncoder().encode(rewritten);
-        headers.set('X-Synapse-Cache', 'MISS');
-        // HTML: getCacheTTL returns 0, so we don't cache
-        const ttl = getCacheTTL(contentType);
-        if (ttl > 0) {
-          setCachedResponse(cacheKey, {
-            body: respBody.buffer as ArrayBuffer,
-            headers,
-            status: 200,
-            isFullPage: true,
-            timestamp: Date.now(),
-            contentType,
-            etag: etag ?? undefined,
-          });
-        }
-        return new NextResponse(rewritten, { status: 200, headers });
-      }
-
-      // HTML fragment (section rendering, etc.) — cache with shorter TTL
-      // #region agent log
-      console.log('[preview-debug] returning html fragment', {
-        projectId,
-        pathParam,
-      });
-      // #endregion
-      const fragBody = new TextEncoder().encode(html);
-      headers.set('X-Synapse-Cache', 'MISS');
-      const fragTtl = getCacheTTL(contentType);
-      if (fragTtl > 0) {
-        setCachedResponse(cacheKey, {
-          body: fragBody.buffer as ArrayBuffer,
-          headers,
-          status: 200,
-          isFullPage: false,
-          timestamp: Date.now(),
-          contentType,
-          etag: etag ?? undefined,
-        });
-      }
-      return new NextResponse(html, { status: 200, headers });
-    }
-
-    // Non-HTML (JSON, JS, CSS, images) — cache as fragment
-    headers.set('X-Synapse-Cache', 'MISS');
-    const assetTtl = getCacheTTL(contentType);
-    if (assetTtl > 0) {
-      setCachedResponse(cacheKey, {
-        body,
-        headers,
+    // mode=cli was requested but CLI isn't running → prompt to start it
+    if (requestedMode === 'cli') {
+      return new NextResponse(START_CLI_PREVIEW_HTML, {
         status: 200,
-        isFullPage: false,
-        timestamp: Date.now(),
-        contentType,
-        etag: etag ?? undefined,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Synapse-Preview-Session': 'tka',
+        },
       });
     }
-    return new NextResponse(body, { status: 200, headers });
+
+    // Default: proxy through Shopify's TKA endpoint (no CLI needed)
+    return proxyShopifyStorefront(request, projectId, connection, String(themeId));
   } catch (error) {
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === 'TimeoutError' || error.name === 'AbortError');
+    if (isTimeout) {
+      return new NextResponse(
+        NO_PREVIEW_HTML('Preview request timed out. The store may be slow — try refreshing.'),
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
     return handleAPIError(error);
   }
 }
@@ -727,13 +1240,60 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const userId = await requireAuth(request);
     const { projectId } = await params;
 
-    const connection = await resolveConnection(userId, projectId);
-    if (!connection?.store_domain) {
-      return NextResponse.json({ error: 'No preview theme configured' }, { status: 400 });
+    // Proxy POST through CLI dev server only when mode=cli is requested
+    const cliPort = cliPreviewManager.getPort(projectId);
+    const postMode = request.nextUrl.searchParams.get('mode');
+    if (cliPort && postMode === 'cli') {
+      const pathParam = request.nextUrl.searchParams.get('path') || '/';
+      const cliUrl = `http://127.0.0.1:${cliPort}${pathParam}`;
+      const parityDiag = isParityDiagnosticEnabled(request);
+      const reqBody = await request.arrayBuffer();
+
+      const fwdHeaders: Record<string, string> = {};
+      const accept = request.headers.get('accept');
+      if (accept) fwdHeaders['Accept'] = accept;
+      const cookie = request.headers.get('cookie');
+      if (cookie) fwdHeaders['Cookie'] = cookie;
+      const ct = request.headers.get('content-type');
+      if (ct) fwdHeaders['Content-Type'] = ct;
+
+      const cliRes = await fetch(cliUrl, {
+        method: 'POST',
+        headers: fwdHeaders,
+        body: reqBody.byteLength > 0 ? reqBody : undefined,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(25_000),
+      });
+
+      const contentType = cliRes.headers.get('content-type') || 'application/json';
+      const body = await cliRes.arrayBuffer();
+      const headers = new Headers();
+      headers.set('Content-Type', contentType);
+      headers.set('Cache-Control', 'no-store');
+      rewriteSetCookieHeaders(cliRes, headers);
+      if (parityDiag && cliRes.status >= 400) {
+        const issue = classifyParityIssue(cliRes.status, pathParam);
+        headers.set('X-Synapse-Preview-Diag', issue.category);
+        console.warn(
+          `[Preview Parity] POST ${pathParam} -> ${cliRes.status} (${issue.category}) reason="${issue.reason}" contentType="${contentType}"`
+        );
+      }
+      return new NextResponse(body, { status: cliRes.status, headers });
     }
 
-    // Per-project dev theme takes precedence
-    let themeIdPost = connection.theme_id;
+    // Dev store POST proxy
+    const requestedMode = request.nextUrl.searchParams.get('mode');
+    if (requestedMode === 'devstore') {
+      return proxyDevStorePost(request, projectId);
+    }
+
+    // CLI not running — try proxying POST through TKA
+    const connection = await resolveConnection(userId, projectId);
+    if (!connection?.store_domain || !connection.theme_access_password_encrypted) {
+      return NextResponse.json({ error: 'No preview session available' }, { status: 503 });
+    }
+
+    let themeId = connection.theme_id;
     try {
       const supabase = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -744,41 +1304,44 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         .select('dev_theme_id')
         .eq('id', projectId)
         .single();
-      if (proj?.dev_theme_id) {
-        themeIdPost = proj.dev_theme_id;
-      }
-    } catch {
-      // Fall back to connection.theme_id
+      if (proj?.dev_theme_id) themeId = proj.dev_theme_id;
+    } catch { /* fall back to connection.theme_id */ }
+
+    if (!themeId) {
+      return NextResponse.json({ error: 'No theme configured' }, { status: 503 });
     }
 
-    if (!themeIdPost) {
-      return NextResponse.json({ error: 'No preview theme configured' }, { status: 400 });
+    const session = await getStorefrontSessionFromConnection(connection, String(themeId));
+    if (!session) {
+      return NextResponse.json({ error: 'Could not establish preview session' }, { status: 503 });
     }
 
     const pathParam = request.nextUrl.searchParams.get('path') || '/';
-    const { url: shopifyUrl } = buildShopifyUrl(
-      connection.store_domain,
-      String(themeIdPost),
-      pathParam
-    );
+    const isTKA = 'isTKA' in session && session.isTKA === true;
+    const domain = connection.store_domain.replace(/^https?:\/\//, '');
+    const { url } = buildShopifyUrl(domain, String(themeId), pathParam, isTKA);
 
-    // Forward the request body
+    const fwdHeaders = buildForwardHeaders(request, {
+      sessionCookie: session.cookie,
+      storefrontToken: session.storefrontToken,
+      tkaStoreDomain: isTKA ? domain : undefined,
+      tkaPassword: isTKA ? (session as { themeAccessPassword: string }).themeAccessPassword : undefined,
+    });
+
     const reqBody = await request.arrayBuffer();
-
-    const shopifyRes = await fetch(shopifyUrl.toString(), {
+    const shopifyRes = await fetch(url.toString(), {
       method: 'POST',
-      headers: buildForwardHeaders(request),
+      headers: fwdHeaders,
       body: reqBody.byteLength > 0 ? reqBody : undefined,
       redirect: 'follow',
+      signal: AbortSignal.timeout(25_000),
     });
 
     const contentType = shopifyRes.headers.get('content-type') || 'application/json';
     const body = await shopifyRes.arrayBuffer();
-
     const headers = new Headers();
     headers.set('Content-Type', contentType);
     headers.set('Cache-Control', 'no-store');
-    // Forward Shopify cookies (e.g. cart session)
     rewriteSetCookieHeaders(shopifyRes, headers);
 
     return new NextResponse(body, { status: shopifyRes.status, headers });

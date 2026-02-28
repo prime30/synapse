@@ -32,6 +32,9 @@ export default function FeaturesPage() {
       <GridDivider />
       <FeatureDeepDive />
 
+      {/* For agencies — team/scale messaging (placeholder: component not yet built) */}
+      <GridDivider />
+
       {/* How it works — 3 steps */}
       <GridDivider />
       <HowItWorksV2 />

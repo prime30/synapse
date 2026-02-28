@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 function normalizeNextPath(raw: string | null): string {
-  const fallback = '/onboarding?signed_in=1';
+  const fallback = '/projects?signed_in=1';
   if (!raw) return fallback;
   const value = raw.trim();
   if (!value) return fallback;

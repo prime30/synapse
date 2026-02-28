@@ -42,7 +42,7 @@ function sleep(ms: number): Promise<void> {
  * Exported so it can be called after file sync.
  */
 export async function warmEmbeddingsForProject(projectId: string): Promise<{ embedded: number; errors: number }> {
-  if (process.env.ENABLE_VECTOR_SEARCH !== 'true') {
+  if (process.env.DISABLE_VECTOR_SEARCH === 'true' || !process.env.OPENAI_API_KEY) {
     return { embedded: 0, errors: 0 };
   }
 
@@ -123,8 +123,8 @@ export async function warmEmbeddingsForProject(projectId: string): Promise<{ emb
 }
 
 async function warmEmbeddings(): Promise<TaskResult> {
-  if (process.env.ENABLE_VECTOR_SEARCH !== 'true') {
-    return { success: true, message: 'Vector search disabled (ENABLE_VECTOR_SEARCH != true)' };
+  if (process.env.DISABLE_VECTOR_SEARCH === 'true' || !process.env.OPENAI_API_KEY) {
+    return { success: true, message: 'Vector search disabled (DISABLE_VECTOR_SEARCH=true or OPENAI_API_KEY unset)' };
   }
 
   const supabase = createServiceClient();

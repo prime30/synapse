@@ -28,7 +28,8 @@ export type AIAction =
   | 'classify'          // Request complexity classification (Haiku)
   | 'classify_trivial'  // Trivial-tier PM execution (Haiku)
   | 'ask'               // Ask-mode informational questions (Haiku fast path)
-  | 'debug';            // Debug mode: Codex (GPT-4o) for investigation/diagnostics
+  | 'debug'             // Debug mode: Codex (GPT-4o) for investigation/diagnostics
+  | 'scout';            // Structural Scout: lightweight brief enrichment (Grok Code Fast)
 
 // ── Model identifiers ───────────────────────────────────────────────────────
 
@@ -66,20 +67,21 @@ export type ModelId = (typeof MODELS)[keyof typeof MODELS];
  * These can be overridden by user preferences.
  */
 export const MODEL_MAP: Record<AIAction, ModelId> = {
-  analyze:          MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6 for rate-limit headroom)
-  generate:         MODELS.CLAUDE_OPUS,      // Specialists (Liquid/JS/CSS): Opus for best code quality
-  review:           MODELS.CLAUDE_SONNET,    // Review uses Sonnet
-  summary:          MODELS.CLAUDE_HAIKU,     // Summaries use Haiku (fast + cheap)
-  fix:              MODELS.CLAUDE_OPUS,      // Specialists: Opus for multi-step fixes
-  explain:          MODELS.CLAUDE_SONNET,    // Explanations use Sonnet
-  refactor:         MODELS.CLAUDE_OPUS,     // Specialists: Opus for refactoring
-  document:         MODELS.CLAUDE_SONNET,    // Documentation uses Sonnet
-  plan:             MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6)
-  chat:             MODELS.CLAUDE_SONNET,    // General chat uses Sonnet
-  classify:         MODELS.CLAUDE_HAIKU,     // Request classification (fast + cheap)
-  classify_trivial: MODELS.CLAUDE_HAIKU,     // Trivial-tier PM execution (Haiku)
-  ask:              MODELS.CLAUDE_HAIKU,     // Ask-mode fast path (3-5x faster)
-  debug:            MODELS.CLAUDE_OPUS,      // Debug: Opus for reliable edits after diagnosis
+  analyze:          MODELS.CLAUDE_OPUS,      // PM orchestration: Opus for reliable delegation
+  generate:         MODELS.CLAUDE_SONNET,    // Specialists: Sonnet for fast targeted edits
+  review:           MODELS.CLAUDE_SONNET,    // Review: Sonnet (Opus via tier routing for COMPLEX+)
+  summary:          MODELS.CLAUDE_HAIKU,     // Summaries: Haiku (fast + cheap)
+  fix:              MODELS.CLAUDE_SONNET,    // Fix: Sonnet for fast single-file fixes
+  explain:          MODELS.CLAUDE_SONNET,    // Explanations: Sonnet
+  refactor:         MODELS.CLAUDE_SONNET,    // Refactoring: Sonnet (Opus via tier routing for COMPLEX+)
+  document:         MODELS.CLAUDE_SONNET,    // Documentation: Sonnet
+  plan:             MODELS.CLAUDE_OPUS,      // Planning: Opus for deep reasoning
+  chat:             MODELS.CLAUDE_SONNET,    // General chat: Sonnet
+  classify:         MODELS.CLAUDE_HAIKU,     // Classification: Haiku (fast + cheap)
+  classify_trivial: MODELS.CLAUDE_HAIKU,     // Trivial classification: Haiku
+  ask:              MODELS.CLAUDE_SONNET,    // Ask mode: Sonnet for quality answers
+  debug:            MODELS.CLAUDE_OPUS,      // Debug: Opus for reliable diagnosis + edits
+  scout:            MODELS.GROK_CODE,        // Scout: Grok Code Fast (cheap + fast; Sonnet fallback)
 };
 
 // ── Agent defaults ──────────────────────────────────────────────────────────
@@ -88,12 +90,12 @@ export type AgentRole = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'r
 
 /** Default model for each agent role (used when no action override exists). */
 export const AGENT_DEFAULTS: Record<AgentRole, ModelId> = {
-  project_manager: MODELS.CLAUDE_SONNET,    // PM orchestration (Sonnet 4.6 for rate-limit headroom)
-  liquid:          MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
-  javascript:      MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
-  css:             MODELS.CLAUDE_OPUS,      // Specialist: Opus for best code quality
-  review:          MODELS.GPT_4O,
-  summary:         MODELS.CLAUDE_HAIKU,
+  project_manager: MODELS.CLAUDE_OPUS,      // PM: Opus for reliable orchestration + delegation
+  liquid:          MODELS.CLAUDE_SONNET,    // Specialist: Sonnet for fast targeted edits
+  javascript:      MODELS.CLAUDE_SONNET,    // Specialist: Sonnet for fast targeted edits
+  css:             MODELS.CLAUDE_SONNET,    // Specialist: Sonnet for fast targeted edits
+  review:          MODELS.CLAUDE_SONNET,    // Review: Sonnet for speed (Opus via tier routing for COMPLEX+)
+  summary:         MODELS.CLAUDE_HAIKU,     // Summary: Haiku for speed
 };
 
 // ── Effort mapping (Phase 4: Adaptive Thinking) ─────────────────────────────
@@ -114,6 +116,7 @@ export const ACTION_EFFORT: Record<AIAction, 'low' | 'medium' | 'high' | 'max'> 
   classify_trivial: 'low',
   ask:              'low',
   debug:            'high',
+  scout:            'low',
 };
 
 /** Actions that benefit from adaptive thinking (deep reasoning). */
@@ -152,7 +155,119 @@ export function getProviderForModel(model: string): ProviderName {
   return 'anthropic';
 }
 
+// ── Tier-based model resolution ─────────────────────────────────────────────
+
+const SPECIALIST_ROLES = new Set<AgentRole>(['liquid', 'javascript', 'css']);
+const SPECIALIST_ACTIONS = new Set<AIAction>(['generate', 'fix', 'refactor']);
+
+function resolveTierModel(
+  tier: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL',
+  action?: AIAction,
+  agentRole?: AgentRole,
+): string | null {
+  const isSpecialist = (agentRole && SPECIALIST_ROLES.has(agentRole)) ||
+    (action && SPECIALIST_ACTIONS.has(action));
+  const hasGrok = Boolean(process.env.XAI_API_KEY);
+
+  let model: string;
+
+  switch (tier) {
+    case 'TRIVIAL':
+      if (action === 'review') { model = MODELS.CLAUDE_SONNET; break; }
+      if (isSpecialist) { model = hasGrok ? MODELS.GROK_CODE : MODELS.CLAUDE_HAIKU; break; }
+      model = MODELS.CLAUDE_SONNET;
+      break;
+
+    case 'SIMPLE':
+      if (action === 'review') { model = MODELS.CLAUDE_SONNET; break; }
+      if (isSpecialist) { model = hasGrok ? MODELS.GROK_CODE : MODELS.CLAUDE_SONNET; break; }
+      model = MODELS.CLAUDE_SONNET;
+      break;
+
+    case 'COMPLEX':
+      if (action === 'review') { model = MODELS.CLAUDE_OPUS; break; }
+      if (isSpecialist) { model = MODELS.CLAUDE_SONNET; break; }
+      model = MODELS.CLAUDE_OPUS;
+      break;
+
+    case 'ARCHITECTURAL':
+      model = MODELS.CLAUDE_OPUS;
+      break;
+
+    default:
+      return null;
+  }
+
+  console.log(`[ModelRouter] tier=${tier} action=${action ?? '-'} role=${agentRole ?? '-'} → ${model}`);
+  return model;
+}
+
 // ── Model resolution ────────────────────────────────────────────────────────
+
+// ── Execution tier routing ───────────────────────────────────────────────────
+
+export type ExecutionTier = 'planning' | 'editing' | 'review';
+
+/**
+ * Map execution tier to cheapest viable model.
+ * Planning: user's model (or Opus). Editing: cheapest tool-use model. Review: mid-tier.
+ */
+function resolveExecutionTierModel(executionTier: ExecutionTier): ModelId {
+  const hasGrok = Boolean(process.env.XAI_API_KEY);
+  switch (executionTier) {
+    case 'editing':
+      return hasGrok ? MODELS.GROK_CODE : MODELS.CLAUDE_HAIKU;
+    case 'review':
+      return MODELS.CLAUDE_SONNET;
+    case 'planning':
+      return MODELS.CLAUDE_OPUS;
+  }
+}
+
+/** Approximate cost per 1M output tokens in USD for tier comparison / monitoring. */
+export const MODEL_COST_PER_M_OUTPUT: Record<string, number> = {
+  [MODELS.CLAUDE_OPUS]:    60,
+  [MODELS.CLAUDE_SONNET]:  15,
+  [MODELS.CLAUDE_HAIKU]:   5,
+  [MODELS.GPT_4O]:         30,
+  [MODELS.GPT_4O_MINI]:    2.4,
+  [MODELS.GEMINI_3_FLASH]: 1.5,
+  [MODELS.GEMINI_3_PRO]:   7,
+  [MODELS.GEMINI_PRO]:     2.5,
+  [MODELS.GEMINI_FLASH]:   0.3,
+  [MODELS.GROK_4]:         20,
+  [MODELS.GROK_FAST]:      6,
+  [MODELS.GROK_CODE]:      2,
+};
+
+/** Approximate cost per 1M input tokens in USD. */
+export const MODEL_COST_PER_M_INPUT: Record<string, number> = {
+  [MODELS.CLAUDE_OPUS]:    15,
+  [MODELS.CLAUDE_SONNET]:  3,
+  [MODELS.CLAUDE_HAIKU]:   1,
+  [MODELS.GPT_4O]:         5,
+  [MODELS.GPT_4O_MINI]:    0.6,
+  [MODELS.GEMINI_3_FLASH]: 0.15,
+  [MODELS.GEMINI_3_PRO]:   1.25,
+  [MODELS.GEMINI_PRO]:     0.1,
+  [MODELS.GEMINI_FLASH]:   0.075,
+  [MODELS.GROK_4]:         6,
+  [MODELS.GROK_FAST]:      2,
+  [MODELS.GROK_CODE]:      0.5,
+};
+
+/** Structured cost event emitted after each agent phase for monitoring. */
+export interface AgentCostEvent {
+  executionId: string;
+  projectId: string;
+  phase: 'pm' | 'specialist' | 'review';
+  modelId: string;
+  executionTier: ExecutionTier | 'default';
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  durationMs: number;
+}
 
 export interface ResolveModelOptions {
   /** The AI action being performed (highest priority override). */
@@ -165,32 +280,48 @@ export interface ResolveModelOptions {
   agentRole?: AgentRole;
   /** Routing tier for adaptive model escalation (EPIC V5). */
   tier?: 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
+  /** Max Quality mode: force Opus for all agents including specialists. */
+  maxQuality?: boolean;
+  /** Execution tier: overrides model selection for cost optimization.
+   *  Planning uses the user's model, editing drops to cheapest tool-use,
+   *  review uses mid-tier. Takes priority over tier routing when set. */
+  executionTier?: ExecutionTier;
 }
 
 /**
  * Resolve which model to use for a given request.
  *
  * Priority chain:
- *   0. Forced model     -> forcedModel (benchmark/test override, bypasses everything)
- *   1. Action override  -> MODEL_MAP[action]
- *   2. User preference  -> userOverride (if provided and non-empty)
- *   3. Agent default    -> AGENT_DEFAULTS[agentRole]
- *   4. System default   -> SYSTEM_DEFAULT_MODEL
- *
- * The `action` override is highest in normal operation because certain
- * actions (e.g. summary) MUST use specific models regardless of user
- * preference. `forcedModel` exists for benchmarks that need to bypass
- * all routing to test specific model behavior.
+ *   0. Forced model       -> forcedModel (benchmark/test override)
+ *   0.5 Tuned model canary -> hybrid router
+ *   1. User preference    -> userOverride (highest normal priority)
+ *   2. Infrastructure     -> classify/summary locked to Haiku/Grok
+ *   3. Tier routing       -> TRIVIAL=Grok, SIMPLE=Sonnet, COMPLEX+=Opus
+ *   4. Grok routing       -> explain/document/chat when XAI_API_KEY set
+ *   5. Action default     -> MODEL_MAP[action]
+ *   6. Agent default      -> AGENT_DEFAULTS[agentRole]
+ *   7. System default     -> SYSTEM_DEFAULT_MODEL
  */
 export function resolveModel(options: ResolveModelOptions = {}): string {
-  const { action, forcedModel, userOverride, agentRole, tier } = options;
+  const { action, forcedModel, userOverride, agentRole, tier, maxQuality, executionTier } = options;
 
   // 0. Forced model — bypasses all routing (benchmark/test use only)
   if (forcedModel && forcedModel.trim()) {
     return forcedModel;
   }
 
-  // 0.5 Hybrid router: tuned model canary for routed actions (ask, plan, chat, etc.)
+  // 0.1 Max Quality mode — Opus for PM/plan/debug/ask/review/explain.
+  // Specialists get Sonnet (or Grok Code if available) to avoid rate limits.
+  if (maxQuality) {
+    if (action === 'classify' || action === 'classify_trivial') return MODELS.CLAUDE_HAIKU;
+    if (action === 'summary') return MODELS.CLAUDE_HAIKU;
+    if (action === 'generate' || action === 'fix' || action === 'refactor') {
+      return process.env.XAI_API_KEY ? MODELS.GROK_CODE : MODELS.CLAUDE_SONNET;
+    }
+    return MODELS.CLAUDE_OPUS;
+  }
+
+  // 0.5 Hybrid router: tuned model canary
   if (action) {
     const canary = shouldUseTunedModel(action);
     if (canary.useTunedModel) {
@@ -198,61 +329,63 @@ export function resolveModel(options: ResolveModelOptions = {}): string {
     }
   }
 
-  // 0. TRIVIAL / SIMPLE tier: use Haiku only for non-editing actions.
-  // Code-producing actions (generate, fix, refactor, analyze) stay on Sonnet
-  // because Haiku often explains instead of editing.
-  if (tier === 'TRIVIAL' || tier === 'SIMPLE') {
-    if (
-      action === 'ask' ||
-      action === 'classify_trivial' ||
-      action === 'classify' ||
-      action === 'explain' ||
-      action === 'chat'
-    ) {
-      return MODELS.CLAUDE_HAIKU;
+  // 1. User preference — HIGHEST priority in normal operation.
+  // Only classify/summary are exempt (infrastructure actions that need specific models).
+  const infraActions = new Set<AIAction>(['classify', 'classify_trivial', 'summary', 'scout']);
+  if (userOverride && userOverride.trim()) {
+    if (!action || !infraActions.has(action)) {
+      // executionTier 'editing' overrides user preference — the whole point
+      // is to drop specialists to the cheapest model regardless of user's pick.
+      if (executionTier === 'editing') {
+        const model = resolveExecutionTierModel('editing');
+        console.log(`[ModelRouter] executionTier=editing overrides user pref → ${model}`);
+        return model;
+      }
+      return userOverride;
     }
   }
 
-  // 0. Review by tier: Codex (GPT-4o) for SIMPLE/TRIVIAL, Opus for COMPLEX/ARCHITECTURAL
-  if (action === 'review' && tier) {
-    if (tier === 'TRIVIAL' || tier === 'SIMPLE') return MODELS.GPT_4O;   // Codex: fast, consistent
-    if (tier === 'COMPLEX' || tier === 'ARCHITECTURAL') return MODELS.CLAUDE_OPUS; // Opus: deeper review
+  // 2. Infrastructure actions always use their designated models
+  if (action && infraActions.has(action)) {
+    if (action === 'summary' && process.env.XAI_API_KEY) return MODELS.GROK_FAST;
+    if (action === 'scout') return process.env.XAI_API_KEY ? MODELS.GROK_CODE : MODELS.CLAUDE_SONNET;
+    return MODEL_MAP[action];
   }
 
-  // 0. ARCHITECTURAL tier: Opus for generation/fix/refactor (including PM in solo mode).
-  //    Only pure analysis/planning stays on Sonnet for speed.
-  if (tier === 'ARCHITECTURAL') {
-    if (action === 'generate' || action === 'fix' || action === 'refactor') {
-      return MODELS.CLAUDE_OPUS;
-    }
-    if (action === 'analyze' || action === 'plan') {
-      return MODELS.CLAUDE_SONNET;
-    }
+  // 2.5 Execution tier routing — cost optimization for specialist edits
+  if (executionTier) {
+    const model = resolveExecutionTierModel(executionTier);
+    console.log(`[ModelRouter] executionTier=${executionTier} → ${model}`);
+    return model;
   }
 
-  // 0.9 Grok routing: use Grok for non-tool conversational actions.
-  // Only for actions that DON'T need tool calling (summary, explain).
-  // Ask/chat stay on Claude because the coordinator needs tool support.
+  // 3. Tier-based routing (when no user override)
+  // TRIVIAL  → Grok Code (specialists) / Haiku (fallback)
+  // SIMPLE   → Grok Code (specialists when XAI key) / Sonnet (PM + fallback)
+  // COMPLEX  → Opus (PM) / Sonnet (specialists)
+  // ARCHITECTURAL → Opus everywhere
+  if (tier) {
+    const resolved = resolveTierModel(tier, action, agentRole);
+    if (resolved) return resolved;
+  }
+
+  // 4. Grok routing for non-tool conversational actions (when no tier set)
   if (process.env.XAI_API_KEY) {
-    if (action === 'summary') return MODELS.GROK_FAST;
     if (action === 'explain') return MODELS.GROK_4;
+    if (action === 'document') return MODELS.GROK_FAST;
+    if (action === 'chat') return MODELS.GROK_4;
   }
 
-  // 1. Action override — certain actions are locked to specific models
+  // 5. Action default
   if (action && MODEL_MAP[action]) {
     return MODEL_MAP[action];
   }
 
-  // 2. User preference
-  if (userOverride && userOverride.trim()) {
-    return userOverride;
-  }
-
-  // 3. Agent default
+  // 6. Agent role default
   if (agentRole && AGENT_DEFAULTS[agentRole]) {
     return AGENT_DEFAULTS[agentRole];
   }
 
-  // 4. System default
+  // 7. System default
   return SYSTEM_DEFAULT_MODEL;
 }

@@ -1,8 +1,15 @@
 export type AIProvider = 'openai' | 'anthropic' | 'google' | (string & {});
 
+export interface AIMessageImage {
+  base64: string;
+  mimeType: string;
+}
+
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** Attached images for multimodal input (user messages only). */
+  images?: AIMessageImage[];
   /** Mark this message for Anthropic prompt caching with optional TTL. */
   cacheControl?: { type: 'ephemeral'; ttl?: '5m' | '1h' };
   /** Enable citations on document-source messages. */
@@ -160,6 +167,8 @@ export interface ToolStreamResult {
   getStopReason: () => Promise<'end_turn' | 'tool_use' | 'max_tokens'>;
   /** Resolves when the stream closes with the raw Anthropic content blocks (text + tool_use). */
   getRawContentBlocks: () => Promise<unknown[]>;
+  /** Resolves with a terminal stream error when provider stream failed mid-flight. */
+  getTerminalError?: () => Promise<Error | null>;
   /** PTC: container info for sandbox reuse across requests. */
   getContainer?: () => Promise<{ id: string; expires_at: string } | null>;
   /** Context editing: applied edits from the API response. */

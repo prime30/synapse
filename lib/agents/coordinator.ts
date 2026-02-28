@@ -10,6 +10,7 @@ import type {
   UserPreference,
   ElementHint,
   ToolProgressEvent,
+  ScoutBrief,
 } from '@/lib/types/agent';
 import {
   createExecution,
@@ -321,7 +322,7 @@ async function selectPMFiles(
   projectId: string,
   options?: CoordinatorExecuteOptions,
 ): Promise<FileContext[]> {
-  const contextEngine = getProjectContextEngine(projectId, 60_000);
+  const contextEngine = getProjectContextEngine(projectId, 100_000);
   await contextEngine.indexFiles(files);
 
   const openTabIds = options?.openTabs ?? [];
@@ -662,8 +663,8 @@ export async function buildSignalContext(
   options?: CoordinatorExecuteOptions & { projectId?: string },
 ): Promise<SignalContext> {
   const contextEngine = options?.projectId
-    ? getProjectContextEngine(options.projectId, 60_000)
-    : new ContextEngine(60_000);
+    ? getProjectContextEngine(options.projectId, 100_000)
+    : new ContextEngine(100_000);
   const preloadIds = new Set<string>();
 
   // Signal 1: Active file (highest priority)
@@ -918,6 +919,8 @@ export interface CoordinatorExecuteOptions {
   onToolEvent?: (event: AgentToolEvent) => void;
   /** True when the user is referencing proposed changes from a prior turn. Bypasses plan-first policy. */
   isReferentialCodePrompt?: boolean;
+  /** Structured history with tool metadata (V2 fallback path). */
+  recentHistory?: AIMessage[];
 }
 
 /** Tool event emitted from the streaming agent loop to the client via SSE. */
@@ -932,6 +935,8 @@ export interface AgentToolEvent {
   /** True if the tool execution failed. */
   isError?: boolean;
   progress?: ToolProgressEvent['progress'];
+  /** LLM reasoning/thinking text captured before this tool call. */
+  reasoning?: string;
 }
 
 // ── Usage tracking types ────────────────────────────────────────────────
@@ -1093,7 +1098,7 @@ export class AgentCoordinator {
 
     const toolCtx: ToolExecutorContext = {
       files,
-      contextEngine: getProjectContextEngine(options.projectId, 60_000),
+      contextEngine: getProjectContextEngine(options.projectId, 100_000),
       projectId: options.projectId,
       userId: options.userId,
       loadContent: options.loadContent,
@@ -1425,6 +1430,78 @@ export class AgentCoordinator {
       buildFileGroupContext(hydratedForDeps),
     ]);
 
+    // V1 parity with V2: structural brief from programmatic theme map (instant)
+    let scoutSection = '';
+    let currentScoutBrief: ScoutBrief | undefined;
+    try {
+      const { getThemeMap, setThemeMap, loadFromDisk, indexTheme, lookupThemeMap, formatLookupResult } =
+        await import('@/lib/agents/theme-map');
+
+      let themeMap = getThemeMap(projectId) ?? await loadFromDisk(projectId);
+
+      // Build on-demand if no cached map exists
+      if ((!themeMap || Object.keys(themeMap.files).length === 0) && hydratedForDeps.length > 0) {
+        themeMap = indexTheme(
+          projectId,
+          hydratedForDeps.map(f => ({
+            fileId: f.fileId,
+            fileName: f.fileName,
+            path: f.path ?? f.fileName,
+            fileType: f.fileType,
+            content: f.content?.startsWith('[') ? '' : (f.content ?? ''),
+          })),
+        );
+        setThemeMap(projectId, themeMap);
+        console.log(`[Coordinator V1] On-demand build: ${Object.keys(themeMap.files).length} files`);
+      }
+
+      if (themeMap && Object.keys(themeMap.files).length > 0) {
+        const lookupResult = lookupThemeMap(themeMap, userRequest, {
+          activeFilePath: options?.activeFilePath,
+          maxTargets: 15,
+        });
+        scoutSection = formatLookupResult(lookupResult);
+        const inferFileType = (p: string): ScoutBrief['keyFiles'][0]['type'] => {
+          if (p.startsWith('sections/')) return 'section';
+          if (p.startsWith('snippets/')) return 'snippet';
+          if (p.startsWith('layout/')) return 'layout';
+          if (p.startsWith('templates/')) return 'template';
+          if (p.endsWith('.css') || p.endsWith('.scss')) return 'css';
+          if (p.endsWith('.js') || p.endsWith('.ts')) return 'js';
+          if (p.endsWith('.json')) return 'json';
+          return 'snippet';
+        };
+        currentScoutBrief = {
+          summary: `Theme map lookup (${lookupResult.targets.length} targets)`,
+          keyFiles: lookupResult.targets.map(t => ({
+            path: t.path,
+            type: inferFileType(t.path),
+            relevance: 1.0,
+            targets: t.features.map(f => ({
+              description: f.description,
+              lineRange: f.lines,
+              context: f.name,
+              confidence: 1.0,
+            })),
+          })),
+          relationships: [],
+          recommendations: [],
+          suggestedEditOrder: [],
+          source: 'programmatic',
+          tokenCount: Math.ceil(scoutSection.length / 4),
+        };
+        console.log(`[Coordinator V1] Theme map: ${lookupResult.targets.length} targets`);
+      }
+    } catch (err) {
+      console.warn('[Coordinator V1] Theme map failed:', err);
+    }
+
+    const baseDependencyText = (dependencyContext + fileGroupContext) || '';
+    const dependencyContextWithScout =
+      scoutSection
+        ? `${baseDependencyText}\n\n## STRUCTURAL BRIEF — File targets and relationships:\n${scoutSection}`
+        : baseDependencyText;
+
     // Trim domContext to token budget using iterative tiktoken trimming
     let trimmedDomContext = options?.domContext;
     if (trimmedDomContext) {
@@ -1442,7 +1519,7 @@ export class AgentCoordinator {
       userRequest,
       files: pmFiles,
       userPreferences,
-      dependencyContext: (dependencyContext + fileGroupContext) || undefined,
+      dependencyContext: dependencyContextWithScout || undefined,
       designContext: designContext || undefined,
       domContext: trimmedDomContext || undefined,
       memoryContext: options?.memoryContext || undefined,
@@ -1657,7 +1734,7 @@ export class AgentCoordinator {
         .map(f => f.fileId);
 
       // Expand with dependencies (using stub index — reference detection skipped for stubs)
-      const expandedIds = getProjectContextEngine(projectId, 60_000).resolveWithDependencies(affectedFileIds);
+      const expandedIds = getProjectContextEngine(projectId, 100_000).resolveWithDependencies(affectedFileIds);
 
       // Hydrate specialist files via loadContent (bounded to expanded set only)
       const loadContent = options?.loadContent;
@@ -1770,6 +1847,26 @@ export class AgentCoordinator {
           instruction: delegation.task,
         });
 
+        // Inject scout targets for this delegation so specialist sees precise line ranges (V1 parity with V2)
+        let specialistInstruction = delegation.task;
+        if (currentScoutBrief && delegation.affectedFiles.length > 0) {
+          const relevantTargets: string[] = [];
+          for (const kf of currentScoutBrief.keyFiles) {
+            const matches = delegation.affectedFiles.some(
+              f => kf.path === f || kf.path.endsWith('/' + f) || f.endsWith('/' + kf.path),
+            );
+            if (matches && kf.targets.length > 0) {
+              relevantTargets.push(`${kf.path} [${kf.type}, relevance: ${kf.relevance}]`);
+              for (const t of kf.targets) {
+                relevantTargets.push(`  → Lines ${t.lineRange[0]}-${t.lineRange[1]}: ${t.context} — ${t.description}`);
+              }
+            }
+          }
+          if (relevantTargets.length > 0) {
+            specialistInstruction = `${delegation.task}\n\nSCOUT TARGETS (precise line ranges for this task):\n${relevantTargets.join('\n')}`;
+          }
+        }
+
         // Build scoped context: hydrate only affected + dependency files
         const specialistBudget = getTierAgentBudget(currentTier, 'specialist');
         const specialistContextEngine = new ContextEngine(specialistBudget);
@@ -1791,7 +1888,7 @@ export class AgentCoordinator {
 
         const delegationTask: AgentTask = {
           executionId,
-          instruction: delegation.task,
+          instruction: specialistInstruction,
           context: {
             ...context,
             files: specialistFiles,
@@ -3207,7 +3304,7 @@ export class AgentCoordinator {
       // ── Tool executor context ──────────────────────────────────────────
       const toolCtx: ToolExecutorContext = {
         files: signalCtx.allFiles,
-        contextEngine: getProjectContextEngine(projectId, 60_000),
+        contextEngine: getProjectContextEngine(projectId, 100_000),
         projectId,
         userId,
         loadContent: options.loadContent,

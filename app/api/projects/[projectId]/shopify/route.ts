@@ -56,17 +56,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Guarantee a dev theme exists and is persisted (provision or reuse)
-    let themeId = connection.theme_id;
+    const themeId = connection.theme_id;
+
+    // Check if the project's dev_theme_id still exists on Shopify
+    let devThemeMissing = false;
     try {
-      themeId = await ensureDevTheme(connection.id);
+      const supabase = await adminSupabase();
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('dev_theme_id')
+        .eq('id', projectId)
+        .single();
+      if (proj?.dev_theme_id) {
+        const { ShopifyAdminAPIFactory } = await import('@/lib/shopify/admin-api-factory');
+        const api = await ShopifyAdminAPIFactory.create(connection.id);
+        try {
+          await api.getTheme(Number(proj.dev_theme_id));
+        } catch {
+          devThemeMissing = true;
+        }
+      }
     } catch {
-      // Return connection as-is; theme_id may be null if provisioning failed
-      if (!themeId && connection.theme_id) themeId = connection.theme_id;
+      // Non-critical — don't block the response
     }
 
     return successResponse({
       connected: true,
+      devThemeMissing,
       connection: {
         id: connection.id,
         store_domain: connection.store_domain,

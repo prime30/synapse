@@ -2,7 +2,12 @@
  * OpenAI-compatible provider -- EPIC E
  *
  * Generic adapter for any API compatible with OpenAI's chat completions.
- * Supports: DeepSeek, Groq, Mistral, Fireworks, Together AI, Ollama, etc.
+ * Supports: DeepSeek, Groq, Mistral, Fireworks, Together AI, Ollama, xAI, etc.
+ *
+ * xAI/Grok prefix caching: xAI automatically caches identical message prefixes
+ * across requests. To maximize cache hits, callers should ensure system messages
+ * and tool definitions appear first and stay stable across requests for the same
+ * project. Dynamic content (user message, history) should come last.
  */
 
 import type {
@@ -46,7 +51,15 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): AIProvid
           },
           body: JSON.stringify({
             model,
-            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: messages.map((m) => ({
+              role: m.role,
+              content: m.images?.length
+                ? [
+                    ...m.images.map((img) => ({ type: 'image_url' as const, image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
+                    { type: 'text' as const, text: m.content },
+                  ]
+                : m.content,
+            })),
             max_tokens: options?.maxTokens ?? 1024,
             temperature: options?.temperature ?? 0.7,
           }),
@@ -98,7 +111,15 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): AIProvid
         },
         body: JSON.stringify({
           model,
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.images?.length
+              ? [
+                  ...m.images.map((img) => ({ type: 'image_url' as const, image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
+                  { type: 'text' as const, text: m.content },
+                ]
+              : m.content,
+          })),
           max_tokens: options?.maxTokens ?? 4096,
           temperature: options?.temperature ?? 0.7,
           stream: true,

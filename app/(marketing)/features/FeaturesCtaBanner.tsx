@@ -30,8 +30,8 @@ export function FeaturesCtaBanner() {
           animate={inView ? show : hide}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          Stop context-switching.{' '}
-          <PixelAccent>Ship themes faster.</PixelAccent>
+          Ready to try it?{' '}
+          <PixelAccent>Start building.</PixelAccent>
         </motion.h2>
 
         <motion.p
@@ -44,8 +44,7 @@ export function FeaturesCtaBanner() {
             ease: [0.22, 1, 0.36, 1],
           }}
         >
-          Free for solo developers. No credit card required. Your first
-          project is a click away.
+          No credit card required. Free for personal projects.
         </motion.p>
 
         <motion.div

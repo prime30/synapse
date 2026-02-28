@@ -48,6 +48,32 @@ export interface ToolProgressEvent {
   };
 }
 
+// ── Structural Scout types ──────────────────────────────────────────────────
+
+export interface ScoutTarget {
+  description: string;
+  lineRange: [number, number];
+  context: string;
+  confidence: number;
+}
+
+export interface ScoutKeyFile {
+  path: string;
+  type: 'section' | 'snippet' | 'layout' | 'template' | 'css' | 'js' | 'json';
+  relevance: number;
+  targets: ScoutTarget[];
+}
+
+export interface ScoutBrief {
+  summary: string;
+  keyFiles: ScoutKeyFile[];
+  relationships: string[];
+  recommendations: string[];
+  suggestedEditOrder: string[];
+  source: 'programmatic' | 'llm_enriched';
+  tokenCount: number;
+}
+
 /** A message exchanged between agents through the coordinator */
 export interface AgentMessage {
   id: string;
@@ -199,6 +225,8 @@ export interface AgentResult {
   pmUsedTools?: boolean;
   /** True when content was streamed directly to the client (no summary needed). */
   directStreamed?: boolean;
+  /** True when the agent's input was truncated to fit the token budget. */
+  budgetTruncated?: boolean;
   /** Token usage breakdown for the request (v2 coordinator). */
   usage?: {
     totalInputTokens: number;
@@ -230,6 +258,19 @@ export interface AgentResult {
   suggestedAction?: string | null;
   failedTool?: string | null;
   failedFilePath?: string | null;
+  /** Validation issues from post-loop gates. Changes may be kept despite issues (see changesKept). */
+  validationIssues?: {
+    gate: 'syntax' | 'cross_file' | 'theme_check';
+    errors: string[];
+    changesKept: boolean;
+  }[];
+  /** True when the agent was checkpointed mid-run for background continuation. */
+  checkpointed?: boolean;
+  /** Aggregated cost summary from per-phase AgentCostEvents. */
+  costSummary?: {
+    totalCostCents: number;
+    byPhase: Record<string, { totalCostCents: number; calls: number; models: string[] }>;
+  };
 }
 
 /** In-memory state for an active execution */

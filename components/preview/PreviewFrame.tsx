@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useRef, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { buildPreviewUrl } from '@/lib/preview/url-generator';
+import type { PreviewMode } from '@/lib/preview/url-generator';
 
 /** Default fixed height when not in fill mode (legacy). */
 const FIXED_HEIGHT = 520;
@@ -26,6 +27,8 @@ interface PreviewFrameProps {
   className?: string;
   /** When true, the frame fills its parent height instead of using a fixed 520px height */
   fill?: boolean;
+  /** Preview mode: 'proxy' (TKA storefront) or 'cli' (Shopify CLI dev server) */
+  mode?: PreviewMode;
 }
 
 export interface PreviewFrameHandle {
@@ -46,6 +49,7 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
       deviceWidth,
       className,
       fill = false,
+      mode,
     },
     ref
   ) {
@@ -62,7 +66,7 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
     // Opacity is 1 normally; on refresh it fades to 0, updates src, then fades to 1.
     const [opacity, setOpacity] = useState(1);
     const [iframeSrc, setIframeSrc] = useState(() =>
-      buildPreviewUrl({ projectId, path })
+      buildPreviewUrl({ projectId, path, mode, parityDiagnostic: true })
     );
     // Track the previous refreshToken to detect changes (skip initial mount)
     const prevRefreshTokenRef = useRef(refreshToken);
@@ -100,14 +104,11 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
       return () => ro.disconnect();
     }, [measure]);
 
-    // ── Update iframe src when projectId / path change (not refresh) ──
+    // ── Update iframe src when projectId / path / mode change (not refresh) ──
     useEffect(() => {
-      const nextSrc = buildPreviewUrl({ projectId, path });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H3',location:'components/preview/PreviewFrame.tsx:src-effect',message:'iframe src updated',data:{projectId,path:path ?? '/',nextSrc},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      const nextSrc = buildPreviewUrl({ projectId, path, mode, parityDiagnostic: true });
       setIframeSrc(nextSrc);
-    }, [projectId, path]);
+    }, [projectId, path, mode]);
 
     // ── Fade-refresh cycle when refreshToken changes ─────────────
     useEffect(() => {
@@ -124,43 +125,62 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(
       // Phase 2: after fade-out completes, update the src with cache-bust
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
       fadeTimerRef.current = setTimeout(() => {
-        setIframeSrc(buildPreviewUrl({ projectId, path, cacheBust: true }));
+        setIframeSrc(buildPreviewUrl({ projectId, path, mode, cacheBust: true, parityDiagnostic: true }));
         // Opacity will be restored in the onLoad handler
       }, FADE_MS);
 
       return () => {
         if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
       };
-    }, [refreshToken, projectId, path]);
+    }, [refreshToken, projectId, path, mode]);
 
     // ── Handlers ────────────────────────────────────────────────
-    const handleLoad = useCallback(() => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H2',location:'components/preview/PreviewFrame.tsx:handleLoad',message:'iframe onLoad fired',data:{iframeSrc},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+    const markReady = useCallback(() => {
       setLoading(false);
       setError(null);
       hasLoadedOnce.current = true;
       // Fade back in after load completes
       setOpacity(1);
-    }, [iframeSrc]);
+    }, []);
+
+    const handleLoad = useCallback(() => {
+      markReady();
+    }, [markReady]);
 
     const handleError = useCallback(() => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H2',location:'components/preview/PreviewFrame.tsx:handleError',message:'iframe onError fired',data:{iframeSrc},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setLoading(false);
       setError('Failed to load preview');
       // Still fade back in so the error overlay is visible
       setOpacity(1);
-    }, [iframeSrc]);
+    }, []);
+
+    // If the page has long-hanging resources, iframe onLoad may not fire for a long time.
+    // Treat bridge readiness/passive messages from this iframe as "ready enough" to hide skeleton.
+    useEffect(() => {
+      const onMessage = (event: MessageEvent) => {
+        const source = iframeRef.current?.contentWindow;
+        if (!source || event.source !== source) return;
+        const data = event.data;
+        if (!data || typeof data !== 'object') return;
+
+        const isBridgeReady =
+          data.type === 'synapse-bridge-response' && data.action === 'ready';
+        const isBridgePassive = data.type === 'synapse-bridge-passive';
+        const isSyncingPageSignal = data.type === 'synapse-preview-syncing';
+
+        if (isBridgeReady || isBridgePassive || isSyncingPageSignal) {
+          markReady();
+        }
+      };
+
+      window.addEventListener('message', onMessage);
+      return () => window.removeEventListener('message', onMessage);
+    }, [markReady]);
 
     useEffect(() => {
       const onMessage = (e: MessageEvent) => {
         if (e.data?.type === 'synapse-preview-syncing') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/94ec7461-fb53-4d66-8f0b-fb3af4497904',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'73e657'},body:JSON.stringify({sessionId:'73e657',runId:'run1',hypothesisId:'H4',location:'components/preview/PreviewFrame.tsx:message-syncing',message:'received syncing message from iframe',data:{status:e.data?.status ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
+          // Optional debug ingest when NEXT_PUBLIC_DEBUG_INGEST=1 (see .env.example)
         }
       };
       window.addEventListener('message', onMessage);

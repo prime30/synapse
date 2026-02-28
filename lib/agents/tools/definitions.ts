@@ -5,7 +5,7 @@ import type { ToolDefinition } from '@/lib/ai/types';
 export const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'read_file',
-    description: 'Read the full content of a file by its file ID or file name. For section files with large schemas, use view parameter to read only the part you need.',
+    description: 'Read the full content of a file by its file ID or file name. Best for small files (<200 lines) or when you need the entire file. For section files with large schemas, use view parameter to read only the part you need.',
     input_schema: {
       type: 'object',
       properties: {
@@ -26,7 +26,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'search_files',
-    description: 'Search across all theme file names and content for a query string. Returns matching file names and relevant excerpts.',
+    description: 'Text/keyword search across all theme file names and content for a query string. Returns matching file names and relevant excerpts. For meaning-based search, use semantic_search instead.',
     input_schema: {
       type: 'object',
       properties: {
@@ -75,7 +75,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   // ── Search tools (Phase 1: Agent Tooling Upgrade) ──────────────────────
   {
     name: 'grep_content',
-    description: 'Search file contents using a regex or substring pattern. Returns matching lines with file names and line numbers. ALWAYS provide filePattern to scope the search to relevant files — searching all files is slow and wasteful.',
+    description: 'Search file contents using a regex or substring pattern. Returns matching lines with file names and line numbers. Line content is normalized (tabs→spaces, trimEnd) so it matches read_file — safe to copy into search_replace old_text. For multi-line old_text prefer extract_region or read_file to get exact context. ALWAYS provide filePattern to scope the search.',
     input_schema: {
       type: 'object',
       properties: {
@@ -102,7 +102,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'semantic_search',
-    description: 'Search for files by meaning and relevance. Returns ranked results with line-numbered code excerpts pinned to the most relevant region. Use when you need to find files related to a concept rather than an exact text match.',
+    description: 'Concept/meaning search with ranked results. Returns line-numbered code excerpts pinned to the most relevant region. Use when you need to find files related to a concept rather than an exact text match. For exact text matching, use search_files or grep_content.',
     input_schema: {
       type: 'object',
       properties: {
@@ -118,7 +118,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     description:
       'Extract a specific named region from a file — function, CSS selector, Liquid block, schema setting, or any named symbol. ' +
       'Returns the exact line range and a line-numbered snippet. ' +
-      'Always call this BEFORE search_replace on files you have not fully read, to get the precise surrounding context needed for a successful patch.',
+      'Use when STRUCTURAL BRIEF does not cover the region you need, or to verify a line range before editing.',
     input_schema: {
       type: 'object',
       properties: {
@@ -418,7 +418,9 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'list_store_resources',
     description:
-      'List products, collections, and pages from the connected Shopify store. Useful for understanding available content when building templates.',
+      'List products (with variant counts and option names via GraphQL), collections, and pages from the connected Shopify store. ' +
+      'Products show totalVariants so you can identify high-variant products that need special handling. ' +
+      'Use get_product for full variant details on a specific product.',
     input_schema: {
       type: 'object',
       properties: {
@@ -432,6 +434,32 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           description: 'Maximum resources per type (default 10, max 25)',
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_product',
+    description:
+      'Fetch a single product from the connected Shopify store via GraphQL. Returns full option structure, ' +
+      'variant count, variant details with pagination, and images. Essential for high-variant products ' +
+      '(100+ variants) that exceed REST API limits. Use before editing product templates, variant pickers, or swatch logic.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        idOrHandle: {
+          type: 'string',
+          description: 'Product ID (numeric or GID) or handle (e.g. "classic-tee")',
+        },
+        variantFirst: {
+          type: 'number',
+          description: 'Number of variants to fetch per page (default 100, max 250)',
+        },
+        variantAfter: {
+          type: 'string',
+          description: 'Cursor for variant pagination (from previous response pageInfo.endCursor)',
+        },
+      },
+      required: ['idOrHandle'],
       additionalProperties: false,
     },
   },
@@ -616,6 +644,91 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
 
+  {
+    name: 'undo_edit',
+    description:
+      'Revert a file to its state before the most recent edit in this session. ' +
+      'Use when an edit produced incorrect results and you need to restore the original content. ' +
+      'Only works for files modified in the current session.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'File name or path to revert',
+        },
+        reasoning: {
+          type: 'string',
+          description: 'Why the edit is being reverted',
+        },
+      },
+      required: ['filePath'],
+      additionalProperties: false,
+    },
+  },
+
+  {
+    name: 'retrieve_similar_tasks',
+    description:
+      'Search past successful task outcomes on this project to find similar approaches. ' +
+      'Returns strategy used, files changed, and tool sequence from past successes. ' +
+      'Use before starting complex tasks to learn from previous solutions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Description of the current task to find similar past outcomes',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum results to return (default 3)',
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+
+  {
+    name: 'check_performance',
+    description:
+      'Run static performance analysis on a file or the entire theme. ' +
+      'Checks: image sizes without width params, render-blocking scripts, ' +
+      'unbounded for loops, missing lazy loading, large inline styles, ' +
+      'excessive DOM nesting, and unused CSS selectors. Returns actionable recommendations.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Optional file path to check. If omitted, checks theme-wide patterns.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+
+  {
+    name: 'analyze_variants',
+    description:
+      'Analyze a Liquid file to extract Shopify variant and option structure. ' +
+      'Returns: option names (e.g., Color, Size, Length), variant availability map, ' +
+      'swatch rendering patterns, and which options control which variants. ' +
+      'Use before editing product forms, swatch displays, or variant-dependent logic.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to the Liquid file containing variant/option logic',
+        },
+      },
+      required: ['filePath'],
+      additionalProperties: false,
+    },
+  },
+
   // ── Structural retrieval tools (Search Architecture Upgrade) ───────────────
   {
     name: 'get_schema_settings',
@@ -657,7 +770,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'read_chunk',
     description:
-      'Read a specific line range from a file with 2 lines of context above and below. Use when you know the exact lines you need instead of reading the entire file.',
+      'Read a single line range from a file with 2 lines of context padding. Shorthand for a quick single-range read. For multiple ranges in one call, use read_lines instead.',
     input_schema: {
       type: 'object',
       properties: {
@@ -700,6 +813,57 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         },
       },
       required: ['chunks'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'edit_lines',
+    description:
+      'Edit a specific range of lines in a file by line number. Safer than search_replace for large files with repeated patterns. ' +
+      'Use after read_file, read_lines, or extract_region when you know the exact line numbers. ' +
+      'Use line ranges from STRUCTURAL BRIEF for precise edits.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'File path to edit' },
+        startLine: { type: 'number', description: '1-indexed start line' },
+        endLine: { type: 'number', description: '1-indexed end line (inclusive). Same as startLine for single-line edits.' },
+        newContent: { type: 'string', description: 'Replacement content for the specified line range' },
+        mode: {
+          type: 'string',
+          enum: ['replace', 'insert_before', 'insert_after'],
+          description: 'replace: replace lines startLine through endLine. insert_before: insert before startLine. insert_after: insert after endLine. Default: replace.',
+        },
+        reasoning: { type: 'string', description: 'Brief explanation of the change' },
+      },
+      required: ['filePath', 'startLine', 'endLine', 'newContent'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_lines',
+    description:
+      'PREFERRED for large files. Read multiple specific line ranges from a file in one call — reads only the lines you need. ' +
+      'Returns numbered lines with optional context. Line ranges from STRUCTURAL BRIEF can be passed directly.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'File path to read from' },
+        ranges: {
+          type: 'array',
+          description: 'Line ranges to read (1-indexed)',
+          items: {
+            type: 'object',
+            properties: {
+              startLine: { type: 'number', description: '1-indexed start line' },
+              endLine: { type: 'number', description: '1-indexed end line (inclusive)' },
+            },
+            required: ['startLine', 'endLine'],
+          },
+        },
+        contextLines: { type: 'number', description: 'Number of context lines before/after each range. Default: 2.' },
+      },
+      required: ['filePath', 'ranges'],
       additionalProperties: false,
     },
   },
@@ -774,7 +938,7 @@ export const PROPOSE_PLAN_TOOL: ToolDefinition = {
 
 export const PROPOSE_CODE_EDIT_TOOL: ToolDefinition = {
   name: 'propose_code_edit',
-  description: 'Propose a code edit to an existing project file. Provide the complete new file content. Use this when search_replace fails repeatedly, or when making large structural changes. The user will see a diff and can approve or reject.',
+  description: 'Propose a code edit to an existing project file. Provide the complete new file content. Use for files under 1000 lines when search_replace fails. Not available in God Mode. Blocked for files >1000 lines — use edit_lines instead. The user will see a diff and can approve or reject.',
   input_schema: {
     type: 'object',
     properties: {
@@ -830,14 +994,16 @@ export const NAVIGATE_PREVIEW_TOOL: ToolDefinition = {
 
 export const SEARCH_REPLACE_TOOL: ToolDefinition = {
   name: 'search_replace',
-  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. Prefer this over propose_code_edit for small, focused changes. If search_replace fails twice due to old_text mismatch, switch to propose_code_edit.',
+  description: 'Make a targeted edit to an existing file by replacing a specific text span. Provide enough context lines in old_text to uniquely identify the location. For large files with repeated patterns, use nearLine to scope the match. If search_replace fails twice, switch to edit_lines.',
   input_schema: {
     type: 'object',
     properties: {
       filePath: { type: 'string', description: 'Relative file path (e.g., sections/header.liquid)' },
       old_text: { type: 'string', description: 'Exact text to find (include 2-3 surrounding context lines for uniqueness)' },
       new_text: { type: 'string', description: 'Replacement text (must differ from old_text)' },
+      nearLine: { type: 'number', description: 'Optional: scope matching to +/-20 lines around this line number. Useful for files with repeated patterns.' },
       reasoning: { type: 'string', description: 'Brief explanation of the change' },
+      replaceAll: { type: 'boolean', description: 'Replace all occurrences of old_text (default: false). Use for renaming a CSS class or variable throughout a file.' },
     },
     required: ['filePath', 'old_text', 'new_text'],
     additionalProperties: false,

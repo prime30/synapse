@@ -203,55 +203,55 @@
 
 /* ── IDE Surface Tokens: Dark mode ─────────────────────────────── */
 .dark .ide-surface       { background-color: #0a0a0a; }
-.dark .ide-surface-panel { background-color: rgba(255, 255, 255, 0.05); }
-.dark .ide-surface-input { background-color: rgba(255, 255, 255, 0.03); }
-.dark .ide-surface-inset { background-color: rgba(255, 255, 255, 0.05); }
-.dark .ide-surface-pop   { background-color: #0a0a0a; }
+.dark .ide-surface-panel { background-color: #141414; }
+.dark .ide-surface-input { background-color: #111111; }
+.dark .ide-surface-inset { background-color: #161616; }
+.dark .ide-surface-pop   { background-color: #1a1a1a; }
 
-.dark .ide-border        { border-color: rgba(255, 255, 255, 0.1); }
-.dark .ide-border-subtle { border-color: rgba(255, 255, 255, 0.05); }
+.dark .ide-border        { border-color: #2a2a2a; }
+.dark .ide-border-subtle { border-color: #1f1f1f; }
 
 .dark .ide-text          { color: #ffffff; }
-.dark .ide-text-2        { color: rgba(255, 255, 255, 0.7); }
-.dark .ide-text-3        { color: rgba(255, 255, 255, 0.5); }
-.dark .ide-text-muted    { color: rgba(255, 255, 255, 0.4); }
-.dark .ide-text-quiet    { color: rgba(255, 255, 255, 0.3); }
+.dark .ide-text-2        { color: #b0aca7; }
+.dark .ide-text-3        { color: #807a74; }
+.dark .ide-text-muted    { color: #636059; }
+.dark .ide-text-quiet    { color: #4a4844; }
 
-.dark .ide-hover:hover   { background-color: rgba(255, 255, 255, 0.05); }
-.dark .ide-active        { background-color: rgba(14, 165, 233, 0.1); }
+.dark .ide-hover:hover   { background-color: #1a1a1a; }
+.dark .ide-active        { background-color: #1c1c1c; }
 
 /* Swiss neumorphic tab bar (dark) */
 .dark .ide-tabbar {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: #0e0e0e;
 }
 .dark .ide-tab-active {
-  background-color: rgba(255, 255, 255, 0.10);
+  background-color: #1e1e1e;
   box-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 1px 4px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .dark .ide-tab-inactive {
   background-color: transparent;
 }
 .dark .ide-tab-inactive:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.7);
+  background-color: #161616;
+  box-shadow: none;
+  color: #b0aca7;
 }
 
 .dark .ide-input {
-  background-color: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.1);
+  background-color: #111111;
+  border-color: #2a2a2a;
   color: #ffffff;
 }
-.dark .ide-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.dark .ide-input::placeholder { color: #636059; }
 .dark .ide-input:focus {
   border-color: #38bdf8;
   box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2);
 }
 
 .dark .ide-overlay {
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.7);
 }
 
 html {
@@ -274,44 +274,40 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ───────────────────────────────────────────────
-   Glass Morphism — strengthened blur + saturation
+   Solid surface cards (replaces glass morphism)
    ─────────────────────────────────────────────── */
 
 .glass-dark {
-  background: rgba(10, 10, 10, 0.6);
-  backdrop-filter: blur(32px) saturate(1.8);
-  -webkit-backdrop-filter: blur(32px) saturate(1.8);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #111111;
+  border: 1px solid #2a2a2a;
 }
 
 .glass-dark.glass-hover:hover,
 .glass-hover.glass-dark:hover {
-  background: rgba(10, 10, 10, 0.7);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: #161616;
+  border-color: #333333;
 }
 
 .glass-light {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(32px) saturate(1.8);
-  -webkit-backdrop-filter: blur(32px) saturate(1.8);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
 }
 
 .glass-light.glass-hover:hover,
 .glass-hover.glass-light:hover {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: #fafaf9;
+  border-color: #d6d3d1;
 }
 
 .dark .glass-light {
-  background: rgba(10, 10, 10, 0.6);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #111111;
+  border-color: #2a2a2a;
 }
 
 .dark .glass-light.glass-hover:hover,
 .dark .glass-hover.glass-light:hover {
-  background: rgba(10, 10, 10, 0.75);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: #161616;
+  border-color: #333333;
 }
 
 /* ───────────────────────────────────────────────
@@ -352,13 +348,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .dark .canvas-grid {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(to right, #1a1a1a 1px, transparent 1px),
+    linear-gradient(to bottom, #1a1a1a 1px, transparent 1px);
 }
 
 .dark .canvas-crosshair::before,
 .dark .canvas-crosshair::after {
-  color: rgba(255, 255, 255, 0.08);
+  color: #2a2a2a;
 }
 
 /* ───────────────────────────────────────────────
@@ -560,7 +556,7 @@ h2 .font-pixel-circle, .text-3xl .font-pixel-circle {
   background-size: 32px 32px;
 }
 .dark .dot-grid {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.006) 0.5px, transparent 0.5px);
+  background-image: radial-gradient(circle, #151515 0.5px, transparent 0.5px);
 }
 
 @keyframes glow-breathe {
@@ -671,9 +667,9 @@ body.cursor-none * {
   margin-bottom: 1rem;
 }
 .dark .section-badge {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.5);
+  border-color: #2a2a2a;
+  background: #161616;
+  color: #807a74;
 }
 
 /* Legacy compat */
@@ -682,7 +678,7 @@ body.cursor-none * {
   border-right: 1px solid #e7e5e4;
 }
 .dark .content-frame {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: #1f1f1f;
 }
 
 /* Synaptic section — first-paint fade-in for canvas layers */
@@ -771,6 +767,16 @@ body.cursor-none * {
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: rgba(120, 120, 120, 0.3) transparent;
+}
+
+/* Single scroll for chat: no inner vertical scroll in conversation content.
+ * All content inside the conversation scroll flows; only the .chat-conversation-scroll
+ * container scrolls. This removes multiple scrollbars (sticky prompt, transcript,
+ * findings, follow-up) and gives one unified scroll. */
+.chat-conversation-scroll pre,
+.chat-conversation-scroll [data-syntax-highlighter-pre] {
+  max-height: none !important;
+  overflow-y: visible !important;
 }
 
 

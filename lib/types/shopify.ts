@@ -13,6 +13,12 @@ export interface ShopifyConnection {
   last_sync_at: string | null;
   sync_status: ShopifySyncStatus;
   scopes: string[];
+  preview_cookie_encrypted: string | null;
+  preview_cookie_expires_at: string | null;
+  online_token_encrypted: string | null;
+  online_token_expires_at: string | null;
+  online_token_user: Record<string, unknown> | null;
+  theme_access_password_encrypted: string | null;
   created_at: string;
   updated_at: string;
 }

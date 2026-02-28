@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError, APIError } from '@/lib/errors/handler';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createClientFromRequest } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -19,9 +19,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const userId = await requireAuth(request);
     const { projectId } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientFromRequest(request);
 
-    // Find recent sessions for this user + project, then pick the newest non-empty one.
+    // Find recent sessions for this user + project
     const { data: sessionCandidates, error: sessionError } = await supabase
       .from('ai_sessions')
       .select('id, title, created_at, updated_at')
@@ -59,7 +59,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }, {});
     }
 
-    const session = candidates.find((s) => (messageCounts[s.id] ?? 0) > 0) ?? null;
+    // Prefer the newest non-empty session; if none have messages, still return the newest session (e.g. active chat not yet persisted or count RPC wrong).
+    const session =
+      candidates.find((s) => (messageCounts[s.id] ?? 0) > 0) ?? candidates[0] ?? null;
     if (!session) {
       return successResponse({ session: null, messages: [] });
     }
@@ -78,9 +80,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (messagesError) throw messagesError;
 
+    type MessageRow = { id: string; role: string; content: string; created_at: string; metadata?: unknown };
     return successResponse({
       session,
-      messages: (messages ?? [])
+      messages: ((messages ?? []) as unknown as MessageRow[])
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           id: m.id,
@@ -101,7 +104,7 @@ const postSchema = z.object({
   /** Optional: target a specific session instead of the most recent one. */
   sessionId: z.string().uuid().optional(),
   /** Optional: structured tool call metadata for context awareness. */
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 /**
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const userId = await requireAuth(request);
     const { projectId } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientFromRequest(request);
 
     const body = await request.json().catch(() => ({}));
     const parsed = postSchema.safeParse(body);
