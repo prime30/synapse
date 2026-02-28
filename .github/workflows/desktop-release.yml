@@ -1,0 +1,75 @@
+name: Desktop Release (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      changelog:
+        description: 'Release changelog (shown in the in-app update toast)'
+        required: false
+        default: 'Bug fixes and improvements.'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run icons
+
+      - name: Build Next.js (standalone)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3000'
+
+      - name: Write server.env.json
+        run: node scripts/create-server-env.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_AI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Install Electron dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Determine release body
+        id: release_body
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "body=${{ github.event.inputs.changelog }}" >> $GITHUB_OUTPUT
+          else
+            echo "body=See https://github.com/prime30/synapse/releases for full changelog." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and publish Windows installer
+        run: npx electron-builder --win --publish always
+        working-directory: electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Embed changelog as the GitHub Release body so electron-updater exposes it as releaseNotes
+          EP_RELEASE_NOTES: ${{ steps.release_body.outputs.body }}
