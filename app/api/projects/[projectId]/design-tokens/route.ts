@@ -4,6 +4,10 @@ import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { listByProject, type DesignTokenRow } from '@/lib/design-tokens/models/token-model';
 import { listProjectFiles, getFile } from '@/lib/services/files';
+import { invalidateStyleProfileCache } from '@/lib/ai/style-profile-builder';
+import { isTokensStale, clearTokensStale } from '@/lib/design-tokens/stale-detection';
+import { getDriftEvents } from '@/lib/design-tokens/drift-events';
+import { wcagContrast } from 'culori';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -24,6 +28,11 @@ function aggregateTokens(rows: DesignTokenRow[]) {
   const spacing: string[] = [];
   const radii: string[] = [];
   const shadows: string[] = [];
+  const animation: string[] = [];
+  const breakpoints: string[] = [];
+  const layout: string[] = [];
+  const zindex: string[] = [];
+  const a11y: string[] = [];
 
   for (const row of rows) {
     const val = row.value;
@@ -32,7 +41,6 @@ function aggregateTokens(rows: DesignTokenRow[]) {
         colors.push(val);
         break;
       case 'typography': {
-        // Heuristic: values like "16px", "1.5rem" → fontSizes; rest → fonts
         if (/^\d/.test(val)) fontSizes.push(val);
         else fonts.push(val);
         break;
@@ -46,7 +54,21 @@ function aggregateTokens(rows: DesignTokenRow[]) {
       case 'shadow':
         shadows.push(val);
         break;
-      // animation — no matching bucket in legacy shape; skip
+      case 'animation':
+        animation.push(val);
+        break;
+      case 'breakpoint':
+        breakpoints.push(val);
+        break;
+      case 'layout':
+        layout.push(val);
+        break;
+      case 'zindex':
+        zindex.push(val);
+        break;
+      case 'a11y':
+        a11y.push(val);
+        break;
     }
   }
 
@@ -57,7 +79,45 @@ function aggregateTokens(rows: DesignTokenRow[]) {
     spacing: [...new Set(spacing)],
     radii: [...new Set(radii)],
     shadows: [...new Set(shadows)],
+    animation: [...new Set(animation)],
+    breakpoints: [...new Set(breakpoints)],
+    layout: [...new Set(layout)],
+    zindex: [...new Set(zindex)],
+    a11y: [...new Set(a11y)],
   };
+}
+
+/** Build ramp data from tokens with metadata.ramp=true. */
+function buildRampsFromRows(rows: DesignTokenRow[]): Record<string, Array<{ step: number; hex: string; contrastOnWhite: number; contrastOnBlack: number }>> {
+  const rampRows = rows.filter(
+    (r) => r.category === 'color' && r.metadata?.ramp === true && typeof r.metadata?.step === 'number',
+  );
+  if (rampRows.length === 0) return {};
+
+  const byParent = new Map<string, DesignTokenRow[]>();
+  for (const r of rampRows) {
+    const parent = (r.metadata?.parentColor as string) ?? r.name.replace(/-\d+$/, '');
+    const list = byParent.get(parent) ?? [];
+    list.push(r);
+    byParent.set(parent, list);
+  }
+
+  const ramps: Record<string, Array<{ step: number; hex: string; contrastOnWhite: number; contrastOnBlack: number }>> = {};
+  const white = '#ffffff';
+  const black = '#000000';
+
+  for (const [parent, list] of byParent) {
+    const entries = list
+      .sort((a, b) => (a.metadata?.step as number) - (b.metadata?.step as number))
+      .map((r) => ({
+        step: r.metadata?.step as number,
+        hex: r.value,
+        contrastOnWhite: wcagContrast(r.value, white) ?? 0,
+        contrastOnBlack: wcagContrast(r.value, black) ?? 0,
+      }));
+    ramps[parent] = entries;
+  }
+  return ramps;
 }
 
 /* ------------------------------------------------------------------ */
@@ -71,7 +131,7 @@ function aggregateTokens(rows: DesignTokenRow[]) {
  * to the design_tokens table (populated automatically on theme import).
  */
 const EMPTY_TOKEN_RESPONSE = {
-  tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+  tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [], animation: [], breakpoints: [], layout: [], zindex: [], a11y: [] },
   tokenCount: 0,
   fileCount: 0,
   analyzedFiles: [],
@@ -99,12 +159,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       listProjectFiles(projectId),
     ]);
     const tokens = aggregateTokens(rows);
+    const ramps = buildRampsFromRows(rows);
+    const stale = await isTokensStale(projectId);
+    const driftEvents = getDriftEvents(projectId, 3);
 
     return successResponse({
       tokens,
+      ramps,
       tokenCount: rows.length,
       fileCount: files?.length ?? 0,
       analyzedFiles: [],
+      stale,
+      driftEvents,
     });
   } catch (error) {
     if (isTableMissingError(error)) {
@@ -134,7 +200,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const files = await listProjectFiles(projectId);
     if (!files || files.length === 0) {
       return successResponse({
-        tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+        tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [], animation: [], breakpoints: [], layout: [], zindex: [], a11y: [] },
         tokenCount: 0,
         tokensCreated: 0,
         tokensUpdated: 0,
@@ -161,7 +227,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (ingestionFiles.length === 0) {
       return successResponse({
-        tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+        tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [], animation: [], breakpoints: [], layout: [], zindex: [], a11y: [] },
         tokenCount: 0,
         tokensCreated: 0,
         tokensUpdated: 0,
@@ -178,9 +244,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 3. Read back the now-persisted tokens for the response
     const rows = await listByProject(projectId);
     const tokens = aggregateTokens(rows);
+    const ramps = buildRampsFromRows(rows);
+
+    invalidateStyleProfileCache(projectId);
+    clearTokensStale(projectId);
 
     return successResponse({
       tokens,
+      ramps,
       tokenCount: rows.length,
       tokensCreated: result.tokensCreated,
       tokensUpdated: result.tokensUpdated,

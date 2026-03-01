@@ -1,9 +1,10 @@
 'use client';
 
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleSignInButton } from '@/components/features/auth/GoogleSignInButton';
+import { isElectron } from '@/lib/utils/environment';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
@@ -20,6 +21,8 @@ function SignInContent() {
   const [state, setState] = useState<SignInState>('idle');
   const [errorMessage, setErrorMessage] = useState(errorParam ?? '');
   const [devLoading, setDevLoading] = useState(false);
+  const [desktopApp, setDesktopApp] = useState(false);
+  useEffect(() => { setDesktopApp(isElectron()); }, []);
 
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {
@@ -100,18 +103,20 @@ function SignInContent() {
   return (
     <div className="flex min-h-screen items-center justify-center ide-surface px-4">
       <div className="w-full max-w-sm">
-        {/* Back to home */}
-        <div className="mb-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm ide-text-muted hover:text-stone-900 dark:hover:text-white transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to home
-          </Link>
-        </div>
+        {/* Back to home — hidden in desktop app (no marketing site) */}
+        {!desktopApp && (
+          <div className="mb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm ide-text-muted hover:text-stone-900 dark:hover:text-white transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to home
+            </Link>
+          </div>
+        )}
 
         {/* Logo / Brand */}
         <div className="mb-8 text-center">

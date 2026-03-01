@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Supabase pgvector store -- EPIC A
  */
 
@@ -78,10 +78,29 @@ export async function getStaleFiles(
   projectId: string,
 ): Promise<Array<{ fileId: string; fileName: string }>> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase.from('project_files').select('id, name, content_hash').eq('project_id', projectId);
+  const { data, error } = await supabase
+    .from('files')
+    .select('id, name, content')
+    .eq('project_id', projectId);
   if (error || !data) return [];
-  const { data: embedded } = await supabase.from('file_embeddings').select('file_id, content_hash').eq('project_id', projectId);
+  const { data: embedded } = await supabase
+    .from('file_embeddings')
+    .select('file_id, content_hash')
+    .eq('project_id', projectId);
   const embeddedMap = new Map<string, string>();
   for (const e of embedded ?? []) embeddedMap.set(e.file_id, e.content_hash);
-  return data.filter((f) => { const h = embeddedMap.get(f.id); return !h || h !== f.content_hash; }).map((f) => ({ fileId: f.id, fileName: f.name }));
+
+  const encoder = new TextEncoder();
+  return (await Promise.all(
+    data.map(async (f) => {
+      const hash = Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode((f.content as string) ?? ''))),
+      ).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const embeddedHash = embeddedMap.get(f.id);
+      if (!embeddedHash || embeddedHash !== hash) {
+        return { fileId: f.id as string, fileName: f.name as string };
+      }
+      return null;
+    }),
+  )).filter((f): f is { fileId: string; fileName: string } => f !== null);
 }

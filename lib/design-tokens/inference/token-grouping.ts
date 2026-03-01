@@ -2,12 +2,13 @@
  * REQ-52 Task 2: Token grouping algorithm.
  *
  * Groups extracted tokens by similarity within each category:
- *   - Colors   → RGB Euclidean-distance clustering (deltaE ≈ 30 threshold)
+ *   - Colors   → CIEDE2000 perceptual distance clustering (deltaE ~20 = near match)
  *   - Spacing  → Numeric-value proximity grouping
  *   - Typography → Font-family grouping
  *   - Other    → Exact-value grouping
  */
 
+import { differenceCiede2000, parse } from 'culori';
 import type { ExtractedToken, TokenCategory, TokenGroup } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -54,9 +55,12 @@ export function rgbStringToRgb(value: string): RGB | null {
   return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
 }
 
-/** Approximate colour distance (Euclidean in RGB — sufficient for clustering). */
+/** Colour distance using CIEDE2000 (perceptually uniform). Re-exported for tests. */
 export function colorDistance(a: RGB, b: RGB): number {
-  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+  const deltaE = differenceCiede2000();
+  const rgbA = parse(`rgb(${a.r},${a.g},${a.b})`);
+  const rgbB = parse(`rgb(${b.r},${b.g},${b.b})`);
+  return deltaE(rgbA, rgbB) ?? Infinity;
 }
 
 /** Try to parse any supported colour string to RGB. */
@@ -109,9 +113,12 @@ function describeColorGroup(rgbs: RGB[]): string {
 // Grouping strategies per category
 // ---------------------------------------------------------------------------
 
-const COLOR_DISTANCE_THRESHOLD = 30 * 4.42; // deltaE ~30 maps to ~133 Euclidean RGB distance
+/** CIEDE2000 deltaE ~20 = near match for clustering. */
+const COLOR_DISTANCE_THRESHOLD = 20;
 
 function groupColors(tokens: ExtractedToken[]): TokenGroup[] {
+  const deltaE = differenceCiede2000();
+
   // Build (token, rgb) pairs; tokens without parseable colours form a single fallback group.
   const parseable: { token: ExtractedToken; rgb: RGB }[] = [];
   const unparseable: ExtractedToken[] = [];
@@ -122,19 +129,19 @@ function groupColors(tokens: ExtractedToken[]): TokenGroup[] {
     else unparseable.push(t);
   }
 
-  // Simple greedy clustering
+  // Simple greedy clustering using CIEDE2000
   const clusters: { tokens: ExtractedToken[]; rgbs: RGB[] }[] = [];
 
   for (const { token, rgb } of parseable) {
     let placed = false;
     for (const cluster of clusters) {
-      // Check against the cluster centroid
       const centroid: RGB = {
         r: Math.round(cluster.rgbs.reduce((s, c) => s + c.r, 0) / cluster.rgbs.length),
         g: Math.round(cluster.rgbs.reduce((s, c) => s + c.g, 0) / cluster.rgbs.length),
         b: Math.round(cluster.rgbs.reduce((s, c) => s + c.b, 0) / cluster.rgbs.length),
       };
-      if (colorDistance(rgb, centroid) < COLOR_DISTANCE_THRESHOLD) {
+      const d = colorDistance(rgb, centroid);
+      if (d < COLOR_DISTANCE_THRESHOLD) {
         cluster.tokens.push(token);
         cluster.rgbs.push(rgb);
         placed = true;

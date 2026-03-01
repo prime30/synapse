@@ -1,0 +1,51 @@
+---
+description: "HARD RULE: Understand existing code intent and search for prior solutions before making changes."
+alwaysApply: true
+---
+
+# Understand Before Changing (HARD RULE)
+
+## When This Applies
+
+Every time you are about to modify, remove, or replace existing code. No exceptions.
+
+## Procedure
+
+### Step 1: Answer "Why does it work this way?"
+
+Before changing any code, you MUST be able to articulate why the current implementation exists. If you cannot answer this, read more — do not write.
+
+Ask yourself:
+- What problem does this code solve?
+- What constraints does it operate under (rate limits, API contracts, downstream consumers)?
+- What breaks if I remove or change this?
+
+If a value looks like a magic number, a delay looks unnecessary, or a file filter seems arbitrary — assume there is a reason. Find it before touching it.
+
+### Step 2: Search for prior work
+
+Before implementing a fix, search for existing solutions:
+- `.cursor/plans/` for plans that already addressed this area
+- Git log for commits that touched these files
+- Agent transcripts for prior conversations about this system
+- Code comments and doc headers explaining design decisions
+
+If prior work exists, understand what it solved and what it left unsolved. Only implement what is actually missing.
+
+### Step 3: Trace downstream impact
+
+Before removing safety mechanisms (delays, retries, filters, guards):
+- Identify every consumer of the code you are changing
+- Verify the mechanism is not protecting against a real constraint (rate limits, API contracts, data integrity)
+- If the mechanism looks wrong, confirm with the user rather than silently removing it
+
+## What Constitutes a Violation
+
+- Removing a delay/guard without understanding why it exists
+- Excluding files/data from a pipeline without confirming nothing downstream needs them
+- Reimplementing something that a prior plan already solved
+- Changing architecture (sequential to parallel, adding/removing code paths) without analyzing constraints
+
+## Enforcement
+
+If the user catches you violating this rule, acknowledge immediately, revert the change, and follow the procedure before trying again.

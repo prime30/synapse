@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { GlassCard } from '@/components/marketing/glass/GlassCard';
@@ -92,10 +93,13 @@ interface ConnectStoreStepProps {
 
 export function ConnectStoreStep({ onConnected, onBack: _onBack }: ConnectStoreStepProps) {
   const { connectStore, isConnecting, connectError } = useActiveStore();
+  const searchParams = useSearchParams();
 
   const [storeDomain, setStoreDomain] = useState('');
   const [adminToken, setAdminToken] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    () => searchParams.get('shopify_error'),
+  );
   const [success, setSuccess] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 

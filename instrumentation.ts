@@ -12,6 +12,10 @@ export async function register() {
   const isNode = typeof process !== 'undefined' && process.versions?.node;
   if (!isNode) return;
 
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    await import('./sentry.server.config');
+  }
+
   // Start file watcher for local sync (Node.js runtime only). Skip when DISABLE_FILE_WATCHER=1 to avoid Synapse reloads during benchmark/agent runs.
   if (
     process.env.NEXT_PUBLIC_ENABLE_LOCAL_SYNC === '1' &&

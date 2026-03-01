@@ -676,14 +676,116 @@ export class ThemeSyncService {
         return result;
       }
 
-      // 4. Push files concurrently using a worker pool (5 parallel)
+      // 4. Separate text and binary files for different push strategies
+      const textFiles: typeof pendingFiles = [];
+      const binaryFiles: typeof pendingFiles = [];
+      for (const themeFile of pendingFiles) {
+        if (this.shouldFetchAssetValue(themeFile.file_path)) {
+          textFiles.push(themeFile);
+        } else {
+          binaryFiles.push(themeFile);
+        }
+      }
+
+      // 4a. Batch-push text files via GraphQL upsertThemeFiles (up to 50 per call)
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < textFiles.length; i += BATCH_SIZE) {
+        const batch = textFiles.slice(i, i + BATCH_SIZE);
+        const batchPayload: Array<{ filename: string; body: { type: 'TEXT'; value: string }; themeFileId: string }> = [];
+
+        for (const themeFile of batch) {
+          const { data: file } = await supabase
+            .from('files')
+            .select('id, content, storage_path')
+            .eq('project_id', resolvedProjectId)
+            .eq('path', themeFile.file_path)
+            .maybeSingle();
+
+          if (!file) {
+            result.errors.push(`${themeFile.file_path}: File not found in project`);
+            continue;
+          }
+
+          let content = file.content;
+          if (!content && file.storage_path) {
+            content = await downloadFromStorage(file.storage_path);
+          }
+          if (!content) {
+            result.errors.push(`${themeFile.file_path}: File content is empty`);
+            continue;
+          }
+
+          batchPayload.push({
+            filename: themeFile.file_path,
+            body: { type: 'TEXT' as const, value: content },
+            themeFileId: themeFile.id,
+          });
+        }
+
+        if (batchPayload.length === 0) continue;
+
+        try {
+          const upsertResult = await api.upsertThemeFiles(
+            themeId,
+            batchPayload.map(({ filename, body }) => ({ filename, body })),
+          );
+
+          const now = new Date().toISOString();
+          for (const item of batchPayload) {
+            const contentHash = this.computeHash(item.body.value);
+            await supabase
+              .from('theme_files')
+              .update({
+                sync_status: 'synced',
+                content_hash: contentHash,
+                local_updated_at: now,
+                remote_updated_at: now,
+                updated_at: now,
+              })
+              .eq('id', item.themeFileId);
+            result.pushed++;
+          }
+
+          for (const err of upsertResult.errors) {
+            result.errors.push(`Batch upsert: ${err}`);
+          }
+        } catch (error) {
+          // Fall back to per-file REST push for this batch
+          for (const item of batchPayload) {
+            try {
+              await api.putAsset(themeId, item.filename, item.body.value);
+              const now = new Date().toISOString();
+              const contentHash = this.computeHash(item.body.value);
+              await supabase
+                .from('theme_files')
+                .update({
+                  sync_status: 'synced',
+                  content_hash: contentHash,
+                  local_updated_at: now,
+                  remote_updated_at: now,
+                  updated_at: now,
+                })
+                .eq('id', item.themeFileId);
+              result.pushed++;
+            } catch (fallbackErr) {
+              const msg = fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error';
+              result.errors.push(`${item.filename}: ${msg}`);
+              await supabase
+                .from('theme_files')
+                .update({ sync_status: 'error', updated_at: new Date().toISOString() })
+                .eq('id', item.themeFileId);
+            }
+          }
+        }
+      }
+
+      // 4b. Push binary files individually via REST putAsset
       let pushIndex = 0;
-      const pushWorker = async () => {
-        while (pushIndex < pendingFiles.length) {
+      const pushBinaryWorker = async () => {
+        while (pushIndex < binaryFiles.length) {
           const idx = pushIndex++;
-          const themeFile = pendingFiles[idx];
+          const themeFile = binaryFiles[idx];
           try {
-            // Get file content from files table
             const { data: file } = await supabase
               .from('files')
               .select('id, content, storage_path')
@@ -691,85 +793,41 @@ export class ThemeSyncService {
               .eq('path', themeFile.file_path)
               .maybeSingle();
 
-            if (!file) {
-              result.errors.push(
-                `${themeFile.file_path}: File not found in project`
-              );
+            if (!file || !file.storage_path) {
+              result.errors.push(`${themeFile.file_path}: Binary file not found`);
               continue;
             }
 
-            const isBinary = !this.shouldFetchAssetValue(themeFile.file_path);
+            const buffer = await downloadBinaryFromStorage(file.storage_path);
+            const base64 = buffer.toString('base64');
+            await api.putAsset(themeId, themeFile.file_path, undefined, base64);
 
-            if (isBinary && file.storage_path) {
-              // Binary file: download from storage as Buffer, push as base64 attachment
-              const buffer = await downloadBinaryFromStorage(file.storage_path);
-              const base64 = buffer.toString('base64');
-              await api.putAsset(themeId, themeFile.file_path, undefined, base64);
-
-              const now = new Date().toISOString();
-              const contentHash = this.computeHash(buffer);
-              await supabase
-                .from('theme_files')
-                .update({
-                  sync_status: 'synced',
-                  content_hash: contentHash,
-                  local_updated_at: now,
-                  remote_updated_at: now,
-                  updated_at: now,
-                })
-                .eq('id', themeFile.id);
-
-              result.pushed++;
-            } else {
-              // Text file: get content from DB or text storage, push as value
-              let content = file.content;
-              if (!content && file.storage_path) {
-                content = await downloadFromStorage(file.storage_path);
-              }
-
-              if (!content) {
-                result.errors.push(
-                  `${themeFile.file_path}: File content is empty`
-                );
-                continue;
-              }
-
-              await api.putAsset(themeId, themeFile.file_path, content);
-
-              const now = new Date().toISOString();
-              const contentHash = this.computeHash(content);
-              await supabase
-                .from('theme_files')
-                .update({
-                  sync_status: 'synced',
-                  content_hash: contentHash,
-                  local_updated_at: now,
-                  remote_updated_at: now,
-                  updated_at: now,
-                })
-                .eq('id', themeFile.id);
-
-              result.pushed++;
-            }
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Unknown error';
-            result.errors.push(`${themeFile.file_path}: ${errorMessage}`);
-
-            // Mark as error status
+            const now = new Date().toISOString();
+            const contentHash = this.computeHash(buffer);
             await supabase
               .from('theme_files')
               .update({
-                sync_status: 'error',
-                updated_at: new Date().toISOString(),
+                sync_status: 'synced',
+                content_hash: contentHash,
+                local_updated_at: now,
+                remote_updated_at: now,
+                updated_at: now,
               })
+              .eq('id', themeFile.id);
+            result.pushed++;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            result.errors.push(`${themeFile.file_path}: ${msg}`);
+            await supabase
+              .from('theme_files')
+              .update({ sync_status: 'error', updated_at: new Date().toISOString() })
               .eq('id', themeFile.id);
           }
         }
       };
 
       await Promise.all(
-        Array.from({ length: Math.min(PUSH_CONCURRENCY, pendingFiles.length) }, () => pushWorker())
+        Array.from({ length: Math.min(PUSH_CONCURRENCY, binaryFiles.length) }, () => pushBinaryWorker())
       );
 
       // 5. Handle deleted files: remove from Shopify and clean up theme_files rows

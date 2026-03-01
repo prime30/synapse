@@ -20,6 +20,7 @@ import { WelcomeStep } from './WelcomeStep';
 import { ConnectStoreStep } from './ConnectStoreStep';
 import { ImportThemeStep } from './ImportThemeStep';
 import { MeetAgentsStep } from './MeetAgentsStep';
+import { DesignSystemStep } from './DesignSystemStep';
 
 // ── Step definitions ──────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ const STEPS = [
   { id: 'welcome', label: 'Welcome' },
   { id: 'connect', label: 'Connect Store' },
   { id: 'import', label: 'Import Theme' },
+  { id: 'design_system', label: 'Design System' },
   { id: 'agents', label: 'Meet Your Agents' },
 ] as const;
 
@@ -388,6 +390,13 @@ function WizardInner({
                 onBack={goBack}
                 activeProjects={activeProjects}
                 archivedProjects={archivedProjects}
+              />
+            )}
+            {currentStep.id === 'design_system' && (
+              <DesignSystemStep
+                projectId={createdProjectId}
+                onNext={goNext}
+                onBack={goBack}
               />
             )}
             {currentStep.id === 'agents' && (

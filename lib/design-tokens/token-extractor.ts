@@ -79,7 +79,13 @@ export class TokenExtractor {
       return tokens;
     }
 
-    const settings: Array<{ type?: string; id?: string; default?: unknown; unit?: string }> = [];
+    const settings: Array<{
+      type?: string;
+      id?: string;
+      default?: unknown;
+      unit?: string;
+      options?: Array<{ value: string }>;
+    }> = [];
     this.collectSettings(parsed, settings);
 
     let idx = 0;
@@ -138,6 +144,56 @@ export class TokenExtractor {
           context: `setting: ${setting.id} (range, ${setting.unit})`,
         });
       }
+
+      // text settings with gradient or color in the name (some themes store gradients as text)
+      if (
+        setting.type === 'text' &&
+        typeof setting.default === 'string' &&
+        setting.default
+      ) {
+        const idLower = (setting.id ?? '').toLowerCase();
+        if (idLower.includes('gradient') || idLower.includes('color')) {
+          tokens.push({
+            id: `json-${++idx}`,
+            name: setting.id,
+            category: 'color',
+            value: setting.default,
+            filePath,
+            lineNumber: 0,
+            context: `setting: ${setting.id} (${setting.type}, gradient/color)`,
+          });
+        }
+      }
+
+      // select settings where options are CSS values (e.g. font-weight: "300", "400", "700")
+      if (setting.type === 'select' && Array.isArray(setting.options) && setting.options.length > 0) {
+        const idLower = (setting.id ?? '').toLowerCase();
+        const defaultVal =
+          typeof setting.default === 'string'
+            ? setting.default
+            : (setting.options[0] as { value?: string })?.value;
+        if (typeof defaultVal === 'string' && defaultVal) {
+          const isCssValue =
+            /^\d{2,4}$/.test(defaultVal) || // font-weight: 300, 400, 700
+            /^\d+(?:\.\d+)?(?:px|rem|em|%)?$/.test(defaultVal) || // 16px, 1.5rem
+            /^#[0-9a-fA-F]{3,8}$/.test(defaultVal) || // hex
+            /^[a-zA-Z-]+$/.test(defaultVal); // named values
+          if (
+            isCssValue &&
+            (idLower.includes('font') || idLower.includes('weight') || idLower.includes('size'))
+          ) {
+            tokens.push({
+              id: `json-${++idx}`,
+              name: setting.id,
+              category: 'typography',
+              value: defaultVal,
+              filePath,
+              lineNumber: 0,
+              context: `setting: ${setting.id} (${setting.type}, CSS value)`,
+            });
+          }
+        }
+      }
     }
 
     return tokens;
@@ -145,7 +201,13 @@ export class TokenExtractor {
 
   private collectSettings(
     obj: unknown,
-    out: Array<{ type?: string; id?: string; default?: unknown; unit?: string }>,
+    out: Array<{
+      type?: string;
+      id?: string;
+      default?: unknown;
+      unit?: string;
+      options?: Array<{ value: string }>;
+    }>,
   ): void {
     if (Array.isArray(obj)) {
       for (const item of obj) {
@@ -156,7 +218,13 @@ export class TokenExtractor {
     if (obj && typeof obj === 'object') {
       const record = obj as Record<string, unknown>;
       if (typeof record.type === 'string' && typeof record.id === 'string') {
-        out.push(record as { type: string; id: string; default?: unknown; unit?: string });
+        out.push(record as {
+          type: string;
+          id: string;
+          default?: unknown;
+          unit?: string;
+          options?: Array<{ value: string }>;
+        });
       }
       for (const value of Object.values(record)) {
         this.collectSettings(value, out);

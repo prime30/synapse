@@ -6,6 +6,17 @@ import { invalidatePreviewCache } from '@/lib/preview/preview-cache';
 const DEBOUNCE_MS = 800;
 
 const timers = new Map<string, NodeJS.Timeout>();
+const lastPushCompleted = new Map<string, number>();
+
+/** Timestamp (epoch ms) of the most recent successful push for a project. */
+export function getLastPushTimestamp(projectId: string): number | null {
+  return lastPushCompleted.get(projectId) ?? null;
+}
+
+/** Whether a debounced push is currently pending for a project. */
+export function hasPendingPush(projectId: string): boolean {
+  return timers.has(projectId);
+}
 
 /**
  * Schedule a push to the Shopify dev theme for this project after the next save.
@@ -75,7 +86,7 @@ export async function runPushForProject(projectId: string): Promise<void> {
       console.warn('[Shopify push-queue] Push had errors:', projectId, result.errors);
     }
     if (result.pushed > 0) {
-      // Invalidate preview cache so the next iframe request gets fresh HTML
+      lastPushCompleted.set(projectId, Date.now());
       invalidatePreviewCache(projectId);
 
       if (snapshot.files.length > 0) {

@@ -25,6 +25,11 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'spacing', label: 'Spacing', tokenType: 'spacing', icon: '⇔' },
   { key: 'radii', label: 'Borders', tokenType: 'radius', icon: '◠' },
   { key: 'shadows', label: 'Shadows', tokenType: 'shadow', icon: '▣' },
+  { key: 'animation', label: 'Animations', tokenType: 'animation', icon: '▶' },
+  { key: 'breakpoints', label: 'Breakpoints', tokenType: 'breakpoint', icon: '⊞' },
+  { key: 'layout', label: 'Layout', tokenType: 'layout', icon: '⊟' },
+  { key: 'zindex', label: 'Z-Index', tokenType: 'zindex', icon: '↕' },
+  { key: 'a11y', label: 'Accessibility', tokenType: 'a11y', icon: '♿' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -107,7 +112,8 @@ export function DesignTokenBrowser({ projectId }: DesignTokenBrowserProps) {
       (tokens.fontSizes?.length ?? 0) +
       (tokens.spacing?.length ?? 0) +
       (tokens.radii?.length ?? 0) +
-      (tokens.shadows?.length ?? 0)
+      (tokens.shadows?.length ?? 0) +
+      (tokens.animation?.length ?? 0)
     );
   }, [tokens]);
 
@@ -216,7 +222,7 @@ export function DesignTokenBrowser({ projectId }: DesignTokenBrowserProps) {
               type="button"
               onClick={handleScan}
               disabled={isScanning || isLoading}
-              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-[#333333] disabled:opacity-50 transition-colors"
+              className="text-[10px] px-2 py-1 rounded ide-surface-input border ide-border ide-text-muted hover:ide-text-2 hover:border-stone-400 dark:hover:border-white/10 disabled:opacity-50 transition-colors"
             >
               Scan Theme
             </button>

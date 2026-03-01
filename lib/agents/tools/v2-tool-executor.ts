@@ -25,6 +25,7 @@ import { MODELS, type AgentCostEvent } from '../model-router';
 import type { SpecialistLifecycleEvent } from '../specialist-lifecycle';
 import { createPlan, updatePlan, readPlanForAgent } from '@/lib/services/plans';
 import type { Plan } from '@/lib/services/plans';
+import type { DesignTokenRow } from '@/lib/design-tokens/models/token-model';
 
 // -- Types -------------------------------------------------------------------
 
@@ -949,6 +950,142 @@ export async function executeV2Tool(
         content: 'Memory anchor not available in this execution context.',
         is_error: true,
       };
+    }
+
+    // -- get_design_tokens ----------------------------------------------------
+    case 'get_design_tokens': {
+      const category = String(toolCall.input.category ?? 'all');
+      const query = String(toolCall.input.query ?? '').trim().toLowerCase();
+      const includeRamps = Boolean(toolCall.input.include_ramps);
+
+      try {
+        const { listByProject } = await import(
+          '@/lib/design-tokens/models/token-model'
+        );
+        const { listComponentsByProject } = await import(
+          '@/lib/design-tokens/components/component-persistence'
+        );
+
+        const MAX_OUTPUT_CHARS = 6000;
+
+        if (category === 'button_system') {
+          const components = await listComponentsByProject(ctx.projectId);
+          const buttons = components.filter(
+            (c) =>
+              c.name.toLowerCase().includes('button') ||
+              c.name.toLowerCase().includes('btn') ||
+              c.name.toLowerCase().includes('cta'),
+          );
+          if (buttons.length === 0) {
+            return {
+              tool_use_id: toolCall.id,
+              content: 'No button components found for this project.',
+            };
+          }
+          const lines: string[] = ['## Button System\n'];
+          for (const btn of buttons) {
+            lines.push(`**${btn.name}** (${btn.file_path})`);
+            if (btn.variants?.length) {
+              lines.push(`- Variants: ${btn.variants.join(', ')}`);
+            }
+            const tokenSet = btn.preview_data?.buttonTokenSet as
+              | Record<string, Record<string, string>>
+              | undefined;
+            if (tokenSet && typeof tokenSet === 'object') {
+              for (const [variant, tokens] of Object.entries(tokenSet)) {
+                if (tokens && typeof tokens === 'object') {
+                  const parts = Object.entries(tokens)
+                    .filter(([, v]) => v)
+                    .map(([k, v]) => `${k}: ${v}`);
+                  if (parts.length) lines.push(`- \`${variant}\`: ${parts.join(', ')}`);
+                }
+              }
+            }
+            lines.push('');
+          }
+          lines.push('Use existing button classes and variants. Do not introduce new button styles.');
+          const out = truncate(lines.join('\n'), MAX_OUTPUT_CHARS);
+          return { tool_use_id: toolCall.id, content: out };
+        }
+
+        let tokens: DesignTokenRow[] = await listByProject(ctx.projectId);
+
+        const tokenCategories = [
+          'color',
+          'typography',
+          'spacing',
+          'border',
+          'shadow',
+          'animation',
+          'breakpoint',
+          'layout',
+          'zindex',
+          'a11y',
+        ] as const;
+        const catFilter =
+          category === 'all'
+            ? tokenCategories
+            : [category as (typeof tokenCategories)[number]];
+
+        tokens = tokens.filter((t) => catFilter.includes(t.category));
+
+        if (query) {
+          tokens = tokens.filter(
+            (t) =>
+              t.name.toLowerCase().includes(query) ||
+              (t.description ?? '').toLowerCase().includes(query),
+          );
+        }
+
+        if (includeRamps && (category === 'color' || category === 'all')) {
+          const parentIds = new Set(tokens.map((t) => t.id));
+          const allTokens = await listByProject(ctx.projectId);
+          const rampChildren = allTokens.filter(
+            (t) =>
+              t.semantic_parent_id && parentIds.has(t.semantic_parent_id),
+          );
+          const seen = new Set(tokens.map((t) => t.id));
+          for (const c of rampChildren) {
+            if (!seen.has(c.id)) {
+              tokens.push(c);
+              seen.add(c.id);
+            }
+          }
+        }
+
+        const grouped = new Map<string, DesignTokenRow[]>();
+        for (const t of tokens) {
+          const list = grouped.get(t.category) ?? [];
+          list.push(t);
+          grouped.set(t.category, list);
+        }
+
+        const sections: string[] = ['## Design Tokens\n'];
+        const order = ['color', 'typography', 'spacing', 'border', 'shadow', 'animation'];
+        for (const cat of order) {
+          const list = grouped.get(cat);
+          if (!list?.length) continue;
+          sections.push(`### ${cat.charAt(0).toUpperCase() + cat.slice(1)}`);
+          for (const t of list) {
+            sections.push(
+              `- \`--${t.name}: ${t.value};\`${t.description ? ` — ${t.description}` : ''}`,
+            );
+          }
+          sections.push('');
+        }
+        sections.push('**Usage:** CSS: `var(--token-name)`. Liquid: `{{ settings.token_name }}`.');
+
+        const out = truncate(sections.join('\n'), MAX_OUTPUT_CHARS);
+        return { tool_use_id: toolCall.id, content: out };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[V2ToolExecutor] get_design_tokens failed:', msg);
+        return {
+          tool_use_id: toolCall.id,
+          content: truncate(`Design token lookup failed: ${msg}`),
+          is_error: true,
+        };
+      }
     }
 
     // -- get_second_opinion ---------------------------------------------------

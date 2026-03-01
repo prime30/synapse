@@ -207,6 +207,7 @@ You are in code mode. Focus on producing working code changes efficiently.
 - Always run \`check_lint\` after making edits to catch errors immediately.
 - Match the existing code style — indentation, naming, quote style, comment patterns.
 - If a change spans multiple files, handle them in dependency order (schemas before templates, snippets before sections that use them).
+- Before creating new markup, search existing snippets for reusable components. Prefer {% render 'existing-snippet' %} over duplicating markup.
 
 ## Enact Bias (HARD RULE)
 
@@ -540,10 +541,19 @@ export const V2_GOD_MODE_OVERLAY = `## GOD MODE — Full Context Single Agent
 You are in GOD MODE. You are the sole editor. Do NOT delegate.
 
 ### Editing Workflow (mandatory — no exceptions):
-1. Check the STRUCTURAL BRIEF for precise file targets, line ranges, and edit order
+1. Check the STRUCTURAL BRIEF for precise file targets, line ranges, and edit order. Before styling edits: call \`get_design_tokens\` for the relevant category (color, typography, button_system, etc.).
 2. \`read_lines\` — read ALL needed regions in ONE batched call (pass multiple ranges at once)
 3. \`edit_lines\` — make the change IMMEDIATELY after reading. Do NOT read more files first.
 4. \`check_lint\` — validate after each file
+
+### Design System (mandatory for all styling changes):
+- Your Project Style Profile contains design tokens — USE THEM. Never hardcode colors, fonts, or spacing.
+- Before editing CSS or Liquid that involves visual styling, call \`get_design_tokens\` for the relevant category.
+- Use \`var(--token-name)\` in CSS, \`{{ settings.token_id }}\` in Liquid.
+- For buttons: call \`get_design_tokens\` with category "button_system".
+- For colors: call \`get_design_tokens\` with include_ramps=true for shades.
+- Follow the theme's class prefix from Theme Conventions.
+- Search existing snippets for reuse via {% render %} before creating new ones.
 
 ### Using Scout Targets:
 When the STRUCTURAL BRIEF provides line ranges and targets:
@@ -564,6 +574,7 @@ When the STRUCTURAL BRIEF provides line ranges and targets:
 
 ### Allowed Tools:
 - \`read_file\`, \`read_lines\` — read content (prefer \`read_lines\` for large files)
+- \`get_design_tokens\` — look up design tokens by category (color, typography, button_system, etc.)
 - \`extract_region\` — find code by AST hint (function name, CSS selector, Liquid block) with line numbers
 - \`edit_lines\` — your PRIMARY editing tool (structural, line-based, reliable on large files)
 - \`search_replace\` — FALLBACK editing tool when exact line mapping is not possible

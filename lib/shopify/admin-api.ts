@@ -40,7 +40,7 @@ interface ShopifyAssetResponse {
 
 export interface GraphQLResponse<T> {
   data: T;
-  errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }> }>;
+  errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }>; extensions?: { code?: string } }>;
   extensions?: { cost: { requestedQueryCost: number; actualQueryCost: number; throttleStatus: { maximumAvailable: number; currentlyAvailable: number; restoreRate: number } } };
 }
 
@@ -466,36 +466,63 @@ export class ShopifyAdminAPI {
   async graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const cleanDomain = this.storeDomain.replace(/^https?:\/\//, '');
     const url = `https://${cleanDomain}/admin/api/${this.apiVersion}/graphql.json`;
+    const maxAttempts = 3;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': this.accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, variables }),
-    });
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': this.accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables }),
+      });
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new APIError(
-        `GraphQL error: ${response.status} ${text.slice(0, 200)}`,
-        'GRAPHQL_ERROR',
-        response.status
+      if (response.status === 429 && attempt < maxAttempts - 1) {
+        const retryAfter = response.headers.get('Retry-After');
+        const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : 2;
+        await new Promise((resolve) => setTimeout(resolve, retrySeconds * 1000));
+        continue;
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new APIError(
+          `GraphQL error: ${response.status} ${text.slice(0, 200)}`,
+          'GRAPHQL_ERROR',
+          response.status
+        );
+      }
+
+      const result = (await response.json()) as GraphQLResponse<T>;
+
+      // Shopify may return a 200 with a THROTTLED error in the body
+      const isThrottled = result.errors?.some(
+        (e) => e.extensions?.code === 'THROTTLED'
       );
+      if (isThrottled && attempt < maxAttempts - 1) {
+        const cost = result.extensions as
+          | { cost: { requestedQueryCost: number; currentlyAvailable: number; restoreRate: number } }
+          | undefined;
+        const waitMs = cost?.cost?.restoreRate
+          ? Math.ceil(((cost.cost.requestedQueryCost ?? 100) - (cost.cost.currentlyAvailable ?? 0)) / cost.cost.restoreRate) * 1000
+          : 2000;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 30_000)));
+        continue;
+      }
+
+      if (result.errors?.length) {
+        throw new APIError(
+          `GraphQL errors: ${result.errors.map((e) => e.message).join('; ')}`,
+          'GRAPHQL_QUERY_ERROR',
+          400
+        );
+      }
+
+      return result.data;
     }
 
-    const result = (await response.json()) as GraphQLResponse<T>;
-
-    if (result.errors?.length) {
-      throw new APIError(
-        `GraphQL errors: ${result.errors.map((e) => e.message).join('; ')}`,
-        'GRAPHQL_QUERY_ERROR',
-        400
-      );
-    }
-
-    return result.data;
+    throw new APIError('GraphQL request failed after retries', 'GRAPHQL_ERROR', 429);
   }
 
   /**
@@ -996,5 +1023,34 @@ export class ShopifyAdminAPI {
   async listProductsForPreview(limit = 10): Promise<ShopifyProduct[]> {
     const res = await this.request<{ products: ShopifyProduct[] }>('GET', `products?limit=${limit}&fields=id,title,handle,variants,images,status`);
     return res.products;
+  }
+
+  /**
+   * Register required webhooks with Shopify via REST API.
+   * Idempotent: checks existing webhooks and only creates missing ones.
+   */
+  async registerWebhooks(callbackUrl: string): Promise<void> {
+    const requiredTopics = ['themes/update', 'app/uninstalled'];
+
+    const existing = await this.request<{
+      webhooks: Array<{ id: number; topic: string; address: string }>;
+    }>('GET', 'webhooks');
+
+    const registeredTopics = new Set(
+      existing.webhooks
+        .filter((w) => w.address === callbackUrl)
+        .map((w) => w.topic),
+    );
+
+    for (const topic of requiredTopics) {
+      if (registeredTopics.has(topic)) continue;
+      try {
+        await this.request<unknown>('POST', 'webhooks', {
+          webhook: { topic, address: callbackUrl, format: 'json' },
+        });
+      } catch (err) {
+        console.warn(`[Webhooks] Failed to register ${topic}:`, err);
+      }
+    }
   }
 }

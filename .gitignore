@@ -70,3 +70,11 @@ theme-workspace - Copy/
 .finetune-data/
 .finetune-output/
 .finetune-configs/
+
+# Local utility scripts (may contain hardcoded tokens)
+scripts/check-product-options.js
+scripts/find-length-products.js
+scripts/sync-liquid-to-shopify.js
+scripts/sync-liquid-fix.js
+scripts/check-avail-lengths.js
+scripts/check-length-var.js

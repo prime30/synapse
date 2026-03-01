@@ -18,6 +18,133 @@ interface ScoredFile {
   }>;
 }
 
+// ── B1: Concept Expansion Dictionary ──────────────────────────────────
+// Maps natural-language concepts to Shopify theme technical terms,
+// bridging the vocabulary gap between merchant requests and theme code.
+
+const CONCEPT_EXPANSION: Record<string, string[]> = {
+  'bigger': ['font-size', 'padding', 'height', 'width', 'scale', 'margin', 'size'],
+  'larger': ['font-size', 'padding', 'height', 'width', 'scale', 'margin', 'size'],
+  'smaller': ['font-size', 'padding', 'height', 'width', 'compact', 'size'],
+  'reduce': ['font-size', 'padding', 'height', 'width', 'compact'],
+  'shrink': ['font-size', 'padding', 'height', 'width', 'compact'],
+  'color': ['background', 'fill', 'border-color', 'gradient', 'swatch', 'colour'],
+  'colour': ['background', 'fill', 'border-color', 'gradient', 'swatch', 'color'],
+  'broken': ['display-none', 'opacity', 'visibility-hidden', 'error', 'undefined', 'null'],
+  'bug': ['display-none', 'opacity', 'visibility-hidden', 'error', 'undefined'],
+  'slow': ['lazy', 'defer', 'async', 'preload', 'critical', 'render-blocking', 'performance'],
+  'performance': ['lazy', 'defer', 'async', 'preload', 'critical', 'render-blocking'],
+  'hide': ['display-none', 'opacity', 'visibility-hidden', 'hidden', 'remove'],
+  'remove': ['display-none', 'opacity', 'visibility-hidden', 'hidden', 'delete'],
+  'invisible': ['display-none', 'opacity', 'visibility-hidden', 'hidden'],
+  'spacing': ['margin', 'padding', 'gap', 'grid-gap'],
+  'gap': ['margin', 'padding', 'gap', 'grid-gap', 'spacing'],
+  'text': ['content', 'heading', 'description', 'label', 'placeholder', 'copy'],
+  'copy': ['content', 'heading', 'description', 'label', 'placeholder', 'text'],
+  'wording': ['content', 'heading', 'description', 'label', 'placeholder', 'text'],
+  'image': ['thumbnail', 'media', 'gallery', 'srcset', 'lazy', 'responsive', 'photo', 'picture'],
+  'photo': ['thumbnail', 'media', 'gallery', 'srcset', 'image', 'picture'],
+  'picture': ['thumbnail', 'media', 'gallery', 'srcset', 'image', 'photo'],
+  'mobile': ['breakpoint', 'media-query', 'responsive', 'tablet', 'viewport'],
+  'responsive': ['breakpoint', 'media-query', 'mobile', 'tablet', 'viewport'],
+  'animation': ['transition', 'transform', 'keyframes', 'animate', 'motion'],
+  'motion': ['transition', 'transform', 'keyframes', 'animate', 'animation'],
+  'announcement': ['announcement-bar', 'banner', 'header-notice', 'marquee'],
+  'restock': ['awaiting', 'out-of-stock', 'sold-out', 'inventory', 'variant', 'back-in-stock'],
+  'badge': ['indicator', 'stock-badge', 'sale-badge', 'label', 'tag'],
+  'label': ['indicator', 'badge', 'tag', 'text'],
+  'swatch': ['variant', 'option', 'picker', 'color-swatch', 'color'],
+  'cart': ['basket', 'bag', 'checkout', 'line-item', 'add-to-cart'],
+  'checkout': ['cart', 'payment', 'order', 'shipping'],
+  'search': ['predictive', 'autocomplete', 'filter', 'search-bar'],
+  'filter': ['facet', 'refine', 'sort', 'collection-filter'],
+  'slider': ['carousel', 'slideshow', 'swiper', 'flickity', 'glide'],
+  'carousel': ['slider', 'slideshow', 'swiper', 'flickity', 'glide'],
+  'font': ['typography', 'typeface', 'font-family', 'font-size', 'heading', 'body-font'],
+  'typography': ['font', 'typeface', 'font-family', 'font-size', 'heading'],
+  'menu': ['navigation', 'nav', 'mega-menu', 'drawer', 'sidebar-menu'],
+  'navigation': ['menu', 'nav', 'mega-menu', 'drawer', 'header'],
+  'footer': ['footer-menu', 'newsletter', 'social-links', 'copyright'],
+  'header': ['announcement', 'logo', 'navigation', 'menu', 'search-bar'],
+};
+
+/**
+ * Expand user tokens with synonymous theme-development terms.
+ * E.g. ["make", "image", "bigger"] → includes "thumbnail", "font-size", etc.
+ */
+export function expandQuery(tokens: string[]): string[] {
+  const expanded = new Set(tokens);
+  for (const token of tokens) {
+    const expansions = CONCEPT_EXPANSION[token];
+    if (expansions) {
+      for (const exp of expansions) expanded.add(exp);
+    }
+  }
+  return [...expanded];
+}
+
+// ── B2: Intent-Aware Scoring ──────────────────────────────────────────
+// Detects user intent (styling, fixing, adding, removing, text editing)
+// and boosts files/keywords that align with that intent.
+
+const INTENT_BOOSTS: Array<{
+  pattern: RegExp;
+  fileBoosts: Array<{ pathPattern: RegExp; boost: number }>;
+  keywordBoosts: Array<{ keywords: string[]; boost: number }>;
+}> = [
+  {
+    pattern: /\b(style|bigger|smaller|color|colour|font|spacing|padding|margin|css|align|center|responsive|design)\b/i,
+    fileBoosts: [
+      { pathPattern: /assets\/.*\.css$/, boost: 5 },
+      { pathPattern: /assets\/.*\.scss$/, boost: 5 },
+    ],
+    keywordBoosts: [{ keywords: ['font-size', 'padding', 'margin', 'color', 'background', 'border', 'width', 'height'], boost: 3 }],
+  },
+  {
+    pattern: /\b(fix|broken|bug|not.?working|error|missing|invisible|disappeared)\b/i,
+    fileBoosts: [
+      { pathPattern: /assets\/.*\.js$/, boost: 4 },
+    ],
+    keywordBoosts: [{ keywords: ['function', 'addEventListener', 'querySelector', 'error', 'console'], boost: 3 }],
+  },
+  {
+    pattern: /\b(add|create|new|insert|include)\b/i,
+    fileBoosts: [
+      { pathPattern: /templates\/.*\.json$/, boost: 4 },
+      { pathPattern: /sections\/.*\.liquid$/, boost: 3 },
+    ],
+    keywordBoosts: [],
+  },
+  {
+    pattern: /\b(remove|delete|hide|disable|turn.?off)\b/i,
+    fileBoosts: [],
+    keywordBoosts: [{ keywords: ['display-none', 'hidden', 'visibility', 'opacity'], boost: 4 }],
+  },
+  {
+    pattern: /\b(change.?text|update.?copy|wording|heading|title|description|translate)\b/i,
+    fileBoosts: [
+      { pathPattern: /sections\/.*\.liquid$/, boost: 4 },
+      { pathPattern: /locales\/.*\.json$/, boost: 4 },
+    ],
+    keywordBoosts: [{ keywords: ['content', 'heading', 'title', 'description', 'label'], boost: 3 }],
+  },
+];
+
+function getIntentBoost(filePath: string, rawPrompt: string, fileKeywords: string[]): number {
+  let boost = 0;
+  for (const intent of INTENT_BOOSTS) {
+    if (!intent.pattern.test(rawPrompt)) continue;
+    for (const fb of intent.fileBoosts) {
+      if (fb.pathPattern.test(filePath)) boost += fb.boost;
+    }
+    for (const kb of intent.keywordBoosts) {
+      const kwLower = fileKeywords.map(k => k.toLowerCase());
+      if (kb.keywords.some(k => kwLower.includes(k))) boost += kb.boost;
+    }
+  }
+  return boost;
+}
+
 /**
  * Look up files relevant to a user prompt from the cached theme map.
  * Uses multi-signal scoring: keyword overlap, purpose match, feature match.
@@ -34,13 +161,14 @@ export function lookupThemeMap(
   const tokens = tokenize(userPrompt);
 
   if (tokens.length === 0) {
-    return { targets: [], related: [], confident: false };
+    return { targets: [], related: [], confident: false, conventions: map.globalPatterns ?? [] };
   }
 
+  const expandedTokens = expandQuery(tokens);
   const scored: ScoredFile[] = [];
 
   for (const file of Object.values(map.files)) {
-    const result = scoreFile(file, tokens, userPrompt);
+    const result = scoreFile(file, expandedTokens, userPrompt);
     if (result.score > 0) {
       scored.push(result);
     }
@@ -62,6 +190,7 @@ export function lookupThemeMap(
     path: s.file.path,
     purpose: s.file.purpose,
     features: s.matchedFeatures,
+    patterns: s.file.patterns,
   }));
 
   // Related files: dependsOn + renderedBy of top targets (deduped)
@@ -82,6 +211,7 @@ export function lookupThemeMap(
     targets,
     related: [...relatedSet].slice(0, 10),
     confident,
+    conventions: map.globalPatterns ?? [],
   };
 }
 
@@ -100,11 +230,25 @@ export function formatLookupResult(result: ThemeMapLookupResult): string {
   for (const target of result.targets) {
     lines.push(`### ${target.path}`);
     lines.push(`Purpose: ${target.purpose}`);
+    if (target.patterns?.length > 0) {
+      lines.push('Patterns:');
+      for (const p of target.patterns) {
+        lines.push(`  - ${p}`);
+      }
+    }
     if (target.features.length > 0) {
       lines.push('Key regions:');
       for (const f of target.features) {
         lines.push(`  - Lines ${f.lines[0]}-${f.lines[1]}: ${f.description}`);
       }
+    }
+    lines.push('');
+  }
+
+  if (result.conventions?.length > 0) {
+    lines.push('### Theme Conventions');
+    for (const c of result.conventions) {
+      lines.push(`- ${c}`);
     }
     lines.push('');
   }
@@ -139,8 +283,8 @@ function scoreFile(file: ThemeMapFile, tokens: string[], rawPrompt: string): Sco
     score += 10;
   }
 
-  // 2. Purpose match — tokens overlap with the file's purpose
-  const purposeLower = file.purpose.toLowerCase();
+  // 2. Purpose match — tokens overlap with LLM summary (preferred) or programmatic purpose
+  const purposeLower = (file.llmSummary ?? file.purpose).toLowerCase();
   for (const token of tokens) {
     if (purposeLower.includes(token)) score += 1;
   }
@@ -183,6 +327,10 @@ function scoreFile(file: ThemeMapFile, tokens: string[], rawPrompt: string): Sco
     ).length;
     return bKeywordHits - aKeywordHits;
   });
+
+  // B2: Intent-aware boost — use file keywords from all features
+  const allFileKeywords = Object.values(file.features).flatMap(f => f.keywords);
+  score += getIntentBoost(file.path, rawPrompt, allFileKeywords);
 
   return { file, score, matchedFeatures };
 }

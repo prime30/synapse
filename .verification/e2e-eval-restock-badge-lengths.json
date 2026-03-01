@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-02-25T02:28:11.958Z",
+  "projectId": "f70d9af0-616a-4723-b231-ada0f2d41d77",
+  "scenarios": [
+    {
+      "id": "restock-badge-lengths",
+      "passed": false,
+      "reason": "No code change or specialist call made",
+      "toolCalls": 10,
+      "elapsedMs": 130136
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "total": 1,
+    "passRate": "0%",
+    "avgToolCalls": 10,
+    "avgTimeSeconds": 130
+  }
+}

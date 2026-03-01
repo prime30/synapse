@@ -6,7 +6,8 @@
  * Cached in memory, invalidated on file change.
  */
 
-import { getLiquidParser, isLiquidParserAvailable } from '@/lib/parsers/tree-sitter-loader';
+import { toLiquidHtmlAST, walk as walkLiquidAST, NodeTypes } from '@shopify/liquid-html-parser';
+import type { LiquidHtmlNode } from '@shopify/liquid-html-parser';
 
 export interface GraphNode {
   path: string;
@@ -145,13 +146,12 @@ export class ThemeDependencyGraph {
   // ── Internal extraction ──────────────────────────────────────────────
 
   private extractLiquidEdges(filePath: string, content: string) {
-    if (isLiquidParserAvailable()) {
-      this.extractLiquidEdgesTreeSitter(filePath, content);
-    } else {
+    try {
+      this.extractLiquidEdgesAST(filePath, content);
+    } catch {
       this.extractLiquidEdgesRegex(filePath, content);
     }
 
-    // CSS class usage (always regex — tree-sitter doesn't track HTML attributes)
     let match;
     const classRe = new RegExp(CSS_CLASS_USE_RE.source, 'g');
     while ((match = classRe.exec(content)) !== null) {
@@ -165,40 +165,44 @@ export class ThemeDependencyGraph {
       }
     }
 
-    // Asset references (always regex)
     const assetRe = new RegExp(ASSET_URL_RE.source, 'g');
     while ((match = assetRe.exec(content)) !== null) {
       this.edges.push({ source: filePath, target: `assets/${match[1]}.${match[2]}`, type: 'asset_ref' });
     }
   }
 
-  private extractLiquidEdgesTreeSitter(filePath: string, content: string) {
-    const parser = getLiquidParser();
-    if (!parser) return;
+  private extractLiquidEdgesAST(filePath: string, content: string) {
+    const ast = toLiquidHtmlAST(content, { mode: 'tolerant', allowUnclosedDocumentNode: true });
+    const edges = this.edges;
 
-    const tree = (parser as unknown as { parse(c: string): { rootNode: { children: Array<{ type: string; startPosition: { row: number }; children: Array<{ type: string; startIndex: number; endIndex: number }> }> } } }).parse(content);
-
-    function walk(node: { type: string; startPosition: { row: number }; children: Array<{ type: string; startIndex: number; endIndex: number }> }, edges: GraphEdge[]) {
-      if (node.type === 'render_statement' || node.type === 'include_statement') {
-        const nameChild = node.children.find(c => c.type === 'string' || c.type === 'string_content');
-        if (nameChild) {
-          const target = content.slice(nameChild.startIndex, nameChild.endIndex).replace(/['"]/g, '');
-          edges.push({ source: filePath, target, type: 'renders', line: node.startPosition.row + 1 });
+    walkLiquidAST(ast, (node: LiquidHtmlNode) => {
+      if (node.type === NodeTypes.LiquidTag && (node.name === 'render' || node.name === 'include')) {
+        let target = '';
+        if (node.markup && typeof node.markup === 'object' && 'snippet' in node.markup) {
+          const rm = node.markup as { snippet?: string | { value?: string } };
+          target = typeof rm.snippet === 'string' ? rm.snippet : rm.snippet?.value ?? '';
+        }
+        if (!target) {
+          const raw = typeof node.markup === 'string' ? node.markup : '';
+          const nameMatch = raw.match(/['"]([^'"]+)['"]/);
+          if (nameMatch) target = nameMatch[1];
+        }
+        if (target) {
+          const line = content.slice(0, node.position.start).split('\n').length;
+          edges.push({ source: filePath, target, type: 'renders', line });
         }
       }
-      if (node.type === 'section_statement') {
-        const nameChild = node.children.find(c => c.type === 'string' || c.type === 'string_content');
-        if (nameChild) {
-          const target = content.slice(nameChild.startIndex, nameChild.endIndex).replace(/['"]/g, '');
-          edges.push({ source: filePath, target, type: 'includes', line: node.startPosition.row + 1 });
+      if (node.type === NodeTypes.LiquidTag && node.name === 'section') {
+        let target = '';
+        const raw = typeof node.markup === 'string' ? node.markup : '';
+        const nameMatch = raw.match(/['"]([^'"]+)['"]/);
+        if (nameMatch) target = nameMatch[1];
+        if (target) {
+          const line = content.slice(0, node.position.start).split('\n').length;
+          edges.push({ source: filePath, target, type: 'includes', line });
         }
       }
-      for (const child of node.children ?? []) {
-        walk(child as unknown as Parameters<typeof walk>[0], edges);
-      }
-    }
-
-    walk(tree.rootNode as unknown as Parameters<typeof walk>[0], this.edges);
+    });
   }
 
   private extractLiquidEdgesRegex(filePath: string, content: string) {

@@ -13,6 +13,8 @@ import { estimateTokens } from './token-counter';
 import type { MemoryEntry } from './developer-memory';
 import { filterActiveMemories, formatMemoryForPrompt } from './developer-memory';
 import type { LoadedTermMapping } from './term-mapping-learner';
+import { expandQuery } from '@/lib/agents/theme-map/lookup';
+import { rerankResults } from './reranker';
 
 function buildFileFingerprint(file: FileContext): string {
   const hash = createHash('sha1');
@@ -584,7 +586,7 @@ export class ContextEngine {
    */
   fuzzyMatch(query: string, topN = 5): FileMetadata[] {
     const queryLower = query.toLowerCase();
-    const queryWords = toSegments(query);
+    const queryWords = expandQuery(toSegments(query));
     const scored: { meta: FileMetadata; score: number }[] = [];
 
     // ── Theme-aware topic boosting ────────────────────────────────────
@@ -895,7 +897,7 @@ export class ContextEngine {
     // EPIC A: Use hybrid search (vector + keyword fusion via RRF)
     try {
       const { hybridSearch } = await import('./hybrid-search');
-      const hybridResults = await hybridSearch(
+      let hybridResults = await hybridSearch(
         projectId,
         userMessage,
         Array.from(this.index.values()).map(f => ({ fileId: f.fileId, fileName: f.fileName, content: this.fileContents.get(f.fileId) ?? '' })),
@@ -903,18 +905,27 @@ export class ContextEngine {
       );
 
       if (hybridResults.length > 0) {
-        // Merge hybrid results with fuzzy results
-        const existingIds = new Set(fuzzyResult.files.map(f => f.fileId));
-        const additionalIds = hybridResults
-          .filter(r => !existingIds.has(r.fileId) && r.score > 0)
+        const reranked = await rerankResults({
+          query: userMessage,
+          documents: hybridResults.map(r => ({
+            id: r.fileId,
+            text: (this.fileContents.get(r.fileId) ?? r.fileName).slice(0, 500),
+          })),
+          topN: 10,
+        });
+        const rerankedOrder = reranked.map(r => r.id);
+        hybridResults = rerankedOrder
+          .map(id => hybridResults.find(h => h.fileId === id))
+          .filter((h): h is typeof hybridResults[number] => !!h);
+
+        const fuzzyIds = fuzzyResult.files.map(f => f.fileId);
+        const fuzzyIdSet = new Set(fuzzyIds);
+        const hybridOnlyIds = hybridResults
+          .filter(r => !fuzzyIdSet.has(r.fileId) && r.score > 0)
           .map(r => r.fileId);
 
-        if (additionalIds.length > 0) {
-          const allPriorityIds = [
-            ...fuzzyResult.files.map(f => f.fileId),
-            ...additionalIds,
-          ];
-          return this.buildContext([], allPriorityIds, budget);
+        if (hybridOnlyIds.length > 0) {
+          return this.buildContext(fuzzyIds, hybridOnlyIds, budget);
         }
       }
     } catch {

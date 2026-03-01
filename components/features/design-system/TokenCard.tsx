@@ -6,7 +6,18 @@ import { useState } from 'react';
 // Types
 // ---------------------------------------------------------------------------
 
-export type TokenType = 'color' | 'font' | 'fontSize' | 'spacing' | 'radius' | 'shadow';
+export type TokenType =
+  | 'color'
+  | 'font'
+  | 'fontSize'
+  | 'spacing'
+  | 'radius'
+  | 'shadow'
+  | 'animation'
+  | 'breakpoint'
+  | 'layout'
+  | 'zindex'
+  | 'a11y';
 
 export interface TokenCardProps {
   value: string;
@@ -92,6 +103,34 @@ function ShadowPreview({ value }: { value: string }) {
   );
 }
 
+function TextPreview({ value }: { value: string }) {
+  return (
+    <span className="text-xs ide-text font-mono truncate max-w-[100px]" title={value}>
+      {value}
+    </span>
+  );
+}
+
+function AnimationPreview({ value }: { value: string }) {
+  // Show duration/easing hint for animation tokens (e.g. "0.3s ease", "200ms")
+  const durationMatch = value.match(/(\d+(?:\.\d+)?)\s*(ms|s)/);
+  const easingMatch = value.match(/(?:ease|linear|cubic-bezier|steps)\([^)]*\)|ease-in-out|ease-in|ease-out/);
+  const duration = durationMatch ? durationMatch[1] + durationMatch[2] : null;
+  const easing = easingMatch ? easingMatch[0] : null;
+  const label = [duration, easing].filter(Boolean).join(' ') || value.slice(0, 16);
+
+  return (
+    <div
+      className="w-8 h-8 rounded border border-stone-200 dark:border-white/10 flex items-center justify-center bg-sky-500/20 dark:bg-sky-500/30"
+      title={value}
+    >
+      <span className="text-[9px] text-stone-600 dark:text-gray-400 font-mono truncate max-w-[60px]" title={value}>
+        {label || '—'}
+      </span>
+    </div>
+  );
+}
+
 const previewMap: Record<TokenType, React.ComponentType<{ value: string }>> = {
   color: ColorPreview,
   font: FontPreview,
@@ -99,6 +138,11 @@ const previewMap: Record<TokenType, React.ComponentType<{ value: string }>> = {
   spacing: SpacingPreview,
   radius: RadiusPreview,
   shadow: ShadowPreview,
+  animation: AnimationPreview,
+  breakpoint: TextPreview,
+  layout: TextPreview,
+  zindex: TextPreview,
+  a11y: TextPreview,
 };
 
 // ---------------------------------------------------------------------------

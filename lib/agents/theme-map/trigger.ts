@@ -11,6 +11,7 @@
 import type { FileContext } from '@/lib/types/agent';
 import { indexTheme, reindexFile } from './indexer';
 import { setThemeMap, getThemeMap } from './cache';
+import { generateFileSummaries } from './summary-generator';
 
 type FileTypeValue = FileContext['fileType'];
 
@@ -22,6 +23,19 @@ const reindexPending = new Map<
   string,
   { dirty: Map<string, ReindexPayload>; timeoutId: ReturnType<typeof setTimeout> | null }
 >();
+
+async function computeContentHash(content: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const encoded = new TextEncoder().encode(content);
+    const hash = await crypto.subtle.digest('SHA-256', encoded);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h = 0;
+  for (let i = 0; i < content.length; i++) {
+    h = ((h << 5) - h + content.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+}
 
 function inferType(pathOrType: string): FileTypeValue {
   if (pathOrType === 'liquid' || pathOrType === 'javascript' || pathOrType === 'css' || pathOrType === 'other') {
@@ -43,7 +57,7 @@ function toFileContext(file: ReindexPayload): FileContext {
   };
 }
 
-function flushReindex(projectId: string): void {
+async function flushReindex(projectId: string): Promise<void> {
   const state = reindexPending.get(projectId);
   if (!state || state.dirty.size === 0) return;
 
@@ -55,11 +69,24 @@ function flushReindex(projectId: string): void {
   let map = getThemeMap(projectId);
   if (!map) return;
 
+  let skipped = 0;
   for (const file of files) {
+    const contentHash = await computeContentHash(file.content);
+    const key = file.path ?? file.fileName ?? '';
+    const existing = map.files[key];
+    if (existing?.contentHash === contentHash) {
+      skipped++;
+      continue;
+    }
+
     map = reindexFile(map, toFileContext(file));
+    if (map.files[key]) {
+      map.files[key].contentHash = contentHash;
+    }
   }
   setThemeMap(projectId, map);
-  console.log(`[ThemeMap] Re-indexed ${files.length} file(s) for ${projectId} (v${map.version})`);
+  const processed = files.length - skipped;
+  console.log(`[ThemeMap] Re-indexed ${processed} file(s), skipped ${skipped} unchanged for ${projectId} (v${map.version})`);
 }
 
 /**
@@ -86,9 +113,29 @@ export function triggerThemeMapIndexing(
     content: f.content,
   }));
 
-  const map = indexTheme(projectId, fileContexts);
-  setThemeMap(projectId, map);
-  console.log(`[ThemeMap] Indexing complete: ${Object.keys(map.files).length} files mapped for project ${projectId}`);
+  const existingMap = getThemeMap(projectId);
+  if (existingMap) {
+    existingMap.intelligenceStatus = 'indexing';
+    setThemeMap(projectId, existingMap);
+  }
+
+  try {
+    const map = indexTheme(projectId, fileContexts);
+    map.intelligenceStatus = 'ready';
+    setThemeMap(projectId, map);
+    console.log(`[ThemeMap] Indexing complete: ${Object.keys(map.files).length} files mapped for project ${projectId}`);
+
+    generateFileSummaries(projectId, files, map).catch(err => {
+      console.warn('[trigger] Summary generation failed:', err);
+    });
+  } catch (err) {
+    const staleMap = getThemeMap(projectId);
+    if (staleMap) {
+      staleMap.intelligenceStatus = 'stale';
+      setThemeMap(projectId, staleMap);
+    }
+    throw err;
+  }
 }
 
 /**

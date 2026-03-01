@@ -1,0 +1,815 @@
+{
+  "timestamp": "2026-02-27T06:59:52.277Z",
+  "projectId": "838e7498-6dc5-4268-9fcd-e6f6148f65ad",
+  "scenario": "restock-badge-lengths",
+  "prompt": "On the product page template, update product-form-dynamic so out-of-stock color swatches with \"Awaiting Restock\" also show a second line listing available longer lengths for that color. Implement all three layers in one pass: (1) Liquid markup in snippets/product-form-dynamic.liquid, (2) styling in assets/product-form-dynamic.css, and (3) behavior/data handling in assets/product-form-dynamic.js. The length list must come from variant option1 availability and must exclude any lengths present in the product metafield list custom_values. Ensure text contrast is background-aware over swatch images.",
+  "totalRuns": 1,
+  "results": [
+    {
+      "run": 1,
+      "passed": false,
+      "reason": "No code change made",
+      "metrics": {
+        "totalToolCalls": 28,
+        "editToolCalls": 0,
+        "readToolCalls": 28,
+        "searchToolCalls": 0,
+        "elapsedMs": 204972,
+        "costCents": 0,
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "tier": "COMPLEX",
+      "strategy": "GOD_MODE",
+      "changedFiles": [
+        "snippets/product-form-dynamic.liquid",
+        "assets/product-form-dynamic.js",
+        "assets/product-form-dynamic.css"
+      ],
+      "transcript": {
+        "runId": "run-1",
+        "scenario": "restock-badge-lengths",
+        "decisions": [
+          {
+            "phase": "analyzing",
+            "label": "Loading context...",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Context ready",
+            "detail": "606 files, 5 prefs",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Building context...",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Classifying request...",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Preparing file context...",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Building structural brief...",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Starting agent...",
+            "timestamp": 0
+          },
+          {
+            "phase": "strategy",
+            "label": "Strategy: GOD_MODE",
+            "detail": "strategy=GOD_MODE, tier=COMPLEX",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "COMPLEX tier — GOD_MODE strategy — claude-sonnet-4-6",
+            "detail": "routingTier=COMPLEX, strategy=GOD_MODE",
+            "timestamp": 0
+          },
+          {
+            "phase": "analyzing",
+            "label": "Style profile loaded",
+            "detail": "styleProfileRules=8, designTokenCount=0, patternConflictResolutions=0, referenceSectionsLoaded=0, cssPreloaded=false, snippetConsumers=0",
+            "timestamp": 0
+          }
+        ],
+        "toolSequence": [
+          {
+            "name": "read_lines",
+            "id": "toolu_01CXBGf6gfvhYr4fBs8LyEEP",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 112,
+                  "endLine": 145
+                },
+                {
+                  "startLine": 580,
+                  "endLine": 680
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01DxPpBU35qYL3v259sinHsN",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 460,
+                  "endLine": 590
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01Ai5aJP9dkjpkRt5521KLFw",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 651,
+                  "endLine": 700
+                },
+                {
+                  "startLine": 826,
+                  "endLine": 960
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01TofrmC4nKhVTAPvUqBDBT5",
+            "input": {
+              "filePath": "assets/product-form-dynamic.css",
+              "ranges": [
+                {
+                  "startLine": 715,
+                  "endLine": 791
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01LKkmvMKZ6opRZYgx8xzVAo",
+            "input": {
+              "filePath": "assets/product-form-dynamic.css",
+              "ranges": [
+                {
+                  "startLine": 625,
+                  "endLine": 720
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01RvwFFmzknt7ZrP7sz5chfe",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 1,
+                  "endLine": 115
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01KX1aFNNEEkSXR59xzeJrgv",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 380,
+                  "endLine": 465
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01PzMmsj6pRvdwj6Q4Zyyfzm",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 112,
+                  "endLine": 135
+                },
+                {
+                  "startLine": 590,
+                  "endLine": 680
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01L56bpwcdE2qFk8baT3uEnS",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 380,
+                  "endLine": 590
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01YNuWMFCwHbK3BoCR7C9Uti",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 651,
+                  "endLine": 700
+                },
+                {
+                  "startLine": 828,
+                  "endLine": 950
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01T9FQN6gHjCPU993AZFySr9",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 58,
+                  "endLine": 115
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_019YXa4wcitjkrNsH9SG5tsU",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 1,
+                  "endLine": 58
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01Vv2tWS1JeK5akZh2fse1rH",
+            "input": {
+              "filePath": "assets/product-form-dynamic.css",
+              "ranges": [
+                {
+                  "startLine": 715,
+                  "endLine": 791
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 1
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_012KohfaUZou938NZHvavTvx",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 410,
+                  "endLine": 471
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01KA9cmGZDBtcbj2PgfT9v7b",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 330,
+                  "endLine": 415
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01KuGXo7CYCrVCFr9M8QBTrY",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 112,
+                  "endLine": 145
+                },
+                {
+                  "startLine": 580,
+                  "endLine": 670
+                },
+                {
+                  "startLine": 1220,
+                  "endLine": 1329
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01EdDmDDb2mzTjA6MAzwPHNn",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 430,
+                  "endLine": 590
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01NxX9NyWx2VdPhuLRLVLYS7",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 300,
+                  "endLine": 430
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01UACKczasvHXAuUs6fpoiLK",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 651,
+                  "endLine": 700
+                },
+                {
+                  "startLine": 826,
+                  "endLine": 930
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01SZQtiS4mRS2bckEf1rmzxR",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 410,
+                  "endLine": 470
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01ULgJb1U3YXKTL1hjh7rG4L",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 1,
+                  "endLine": 115
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01SxCq2ZCi7xtATcrRKKAFvG",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 826,
+                  "endLine": 950
+                },
+                {
+                  "startLine": 1310,
+                  "endLine": 1420
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_018KoaZmqi3fiLz1C9kKVsNY",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 950,
+                  "endLine": 1060
+                },
+                {
+                  "startLine": 1420,
+                  "endLine": 1520
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01DccC8sk2pcA6Fh4nnYUBPE",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 651,
+                  "endLine": 700
+                },
+                {
+                  "startLine": 1520,
+                  "endLine": 1650
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_013kG6CitRN6RbpJmZ14optF",
+            "input": {
+              "filePath": "assets/product-form-dynamic.js",
+              "ranges": [
+                {
+                  "startLine": 1652,
+                  "endLine": 1750
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_013YNudcxyd8swaU7cUHSZ3p",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 100,
+                  "endLine": 200
+                },
+                {
+                  "startLine": 580,
+                  "endLine": 680
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01A363gnwzqV6N8Y9WGywrif",
+            "input": {
+              "filePath": "snippets/product-form-dynamic.liquid",
+              "ranges": [
+                {
+                  "startLine": 430,
+                  "endLine": 590
+                }
+              ]
+            },
+            "result": "",
+            "isError": false,
+            "elapsedMs": 0
+          },
+          {
+            "name": "read_lines",
+            "id": "toolu_01JabRSrMuUwdWjSPAWFcWg7",
+            "input": {
+              "_error": true,
+              "message": "Failed to parse tool input JSON"
+            },
+            "result": "(no result received)",
+            "isError": true,
+            "elapsedMs": 1
+          }
+        ],
+        "reasoningBlocks": [],
+        "responseText": "",
+        "outcome": {
+          "status": "no-change",
+          "changedFiles": 0
+        },
+        "metrics": {
+          "totalToolCalls": 28,
+          "editToolCalls": 0,
+          "readToolCalls": 28,
+          "searchToolCalls": 0,
+          "elapsedMs": 204972,
+          "costCents": 0,
+          "inputTokens": 0,
+          "outputTokens": 0
+        }
+      },
+      "analysis": {
+        "diagnosis": {
+          "summary": "Agent executed 28 tool calls (all read_lines, zero edits) over 205s without producing any changes. The final tool call (28) failed with JSON parse error. Agent loaded context, classified as COMPLEX tier with GOD_MODE strategy, but never transitioned from analysis to execution. No edit_lines or specialist/review calls were attempted despite having adequate context and strategy.",
+          "rootCause": "The coordinator loop entered an analysis-only stagnation state. The agent repeatedly read the same three files (product-form-dynamic.liquid, .js, .css) without calling edit_lines or run_specialist/run_review tools. The final malformed tool call suggests the PM reached a dead-end state where it attempted to construct an invalid tool invocation, triggering a JSON parse error that terminated execution without fallback recovery.",
+          "agentBehavior": "1. Context loading and classification succeeded (COMPLEX tier, GOD_MODE, claude-sonnet-4-6). 2. Scout and theme map prepared file targets correctly. 3. Agent read all three target files multiple times (11 reads to liquid, 6 to js, 3 to css, 8 other reads). 4. No think->tool->observe cycle produced an edit_lines call or specialist invocation. 5. Agent likely entered a loop where each iteration read files but failed to construct a valid edit strategy. 6. Final iteration produced malformed JSON, crashing the tool executor. 7. No stagnation detection or iteration limit enforcement prevented this (28 iterations well under 80-iteration max)."
+        },
+        "recommendations": [
+          {
+            "priority": "critical",
+            "category": "coordinator",
+            "title": "Add stagnation detection for read-only loops",
+            "description": "Implement sliding-window stagnation detection in coordinator-v2.ts. If N consecutive iterations (suggest N=3) produce only read_lines calls with zero edit_lines or specialist/review calls, force strategy escalation or emit diagnostic error. Currently, the agent can loop indefinitely reading files without attempting edits.",
+            "targetFile": "lib/agents/coordinator-v2.ts",
+            "targetArea": "Main loop iteration logic, post-tool-execution observation phase",
+            "suggestedChange": "Add state tracking: `readOnlyIterationCount`. After each iteration, if toolCall.type === 'read_lines' and no edit/specialist/review in last 3 iterations, increment counter. If counter >= 3, call `forceStrategyEscalation()` or `emitDiagnostic('read-only-stagnation')` and break loop with error. Reset counter on any edit/specialist/review call."
+          },
+          {
+            "priority": "critical",
+            "category": "tools",
+            "title": "Fix malformed tool invocation JSON serialization",
+            "description": "The final tool call (28) failed with 'Failed to parse tool input JSON'. This suggests the PM constructed an invalid tool call object. Add defensive validation in v2-tool-executor.ts and v2-tool-definitions.ts to catch and report malformed invocations before JSON.parse, with fallback recovery.",
+            "targetFile": "lib/agents/tools/v2-tool-executor.ts",
+            "targetArea": "Tool invocation parsing and validation",
+            "suggestedChange": "Wrap JSON.parse(toolInputStr) in try-catch. On parse error, log the raw input, call PM with diagnostic context ('Your last tool call was malformed: [raw input]. Please retry with valid JSON.'), and continue loop instead of crashing. Add schema validation via ajv or similar before execution."
+          },
+          {
+            "priority": "high",
+            "category": "prompt",
+            "title": "Add explicit edit decision gate to PM prompt",
+            "description": "The PM prompt (v2-pm-prompt.ts) lacks a clear decision gate for when to transition from analysis to edit_lines. For multi-file tasks, the PM should explicitly reason about readiness before each tool call. Add a structured instruction: 'After reading files, if you have sufficient context to make edits, call edit_lines. If you need more info, read more. Never read the same file twice in a row.'",
+            "targetFile": "lib/agents/prompts/v2-pm-prompt.ts",
+            "targetArea": "Tool usage instructions and decision logic",
+            "suggestedChange": "Add section: 'EDIT DECISION GATE: After reading a file, evaluate: (1) Do I understand the current structure? (2) Can I identify the exact lines to modify? (3) Have I read this file before? If yes to 1&2 and no to 3, call edit_lines. Otherwise, read a different file or call run_specialist if unsure. Never loop on the same file.'"
+          },
+          {
+            "priority": "high",
+            "category": "validation",
+            "title": "Enforce tool diversity in orchestration policy",
+            "description": "The orchestration-policy.ts should validate that in GOD_MODE with COMPLEX tier, after reading all target files once, at least one edit_lines or run_specialist call must occur within N iterations. This prevents analysis-only loops.",
+            "targetFile": "lib/agents/orchestration-policy.ts",
+            "targetArea": "Context gates and policy enforcement rules",
+            "suggestedChange": "Add policy rule: 'If toolSequence.filter(t => t.type === 'read_lines').length >= targetFileCount * 2 and toolSequence.filter(t => t.type in ['edit_lines', 'run_specialist', 'run_review']).length === 0, reject next read_lines call and return validation error forcing edit/specialist attempt.'"
+          },
+          {
+            "priority": "high",
+            "category": "coordinator",
+            "title": "Add explicit iteration budget enforcement",
+            "description": "Although max 80 iterations exists, the agent hit 28 with zero progress. Add a stricter budget for analysis-only iterations (e.g., max 5 read_lines per file before forcing edit/specialist). Emit diagnostic at iteration 20 if no edits attempted.",
+            "targetFile": "lib/agents/coordinator-v2.ts",
+            "targetArea": "Iteration counting and budget enforcement",
+            "suggestedChange": "Track `analysisIterationCount`. After each read_lines, increment. If analysisIterationCount > 5 and editCount === 0, emit warning. If analysisIterationCount > 10 and editCount === 0, call `forceRunSpecialist()` with current context. Reset analysisIterationCount on any edit/specialist call."
+          },
+          {
+            "priority": "high",
+            "category": "prompt",
+            "title": "Add multi-file coordination strategy to PM prompt",
+            "description": "For this three-file task (liquid, css, js), the PM should have explicit guidance on coordinating changes across layers. The prompt should include a template for multi-file edits that ensures all three files are targeted in a single coordinated pass, not in separate analysis loops.",
+            "targetFile": "lib/agents/prompts/v2-pm-prompt.ts",
+            "targetArea": "Task decomposition and multi-file strategy",
+            "suggestedChange": "Add section: 'MULTI-FILE TASKS: For tasks spanning 3+ files, plan edits in this order: (1) Read all files once to understand structure. (2) Identify all edit locations across all files. (3) Call edit_lines for each file in sequence (liquid, css, js). (4) Call run_review to validate consistency. Never re-read a file after identifying edit locations.'"
+          },
+          {
+            "priority": "medium",
+            "category": "context",
+            "title": "Pre-populate file edit locations in structural brief",
+            "description": "The scout/structural-scout.ts could provide hint locations in the brief (e.g., 'Line 45-60 in liquid contains swatch rendering; Line 120-150 in css contains swatch styles'). This would help PM skip to relevant sections faster and reduce redundant reads.",
+            "targetFile": "lib/agents/scout/structural-scout.ts",
+            "targetArea": "Structural brief generation for multi-file tasks",
+            "suggestedChange": "For each target file, include a 'suggested_edit_zones' array with line ranges and brief descriptions. Example: { file: 'product-form-dynamic.liquid', suggested_edit_zones: [{ lines: '45-60', description: 'Swatch rendering loop' }] }. Pass to PM context."
+          },
+          {
+            "priority": "medium",
+            "category": "tools",
+            "title": "Add run_specialist fallback for read-only detection",
+            "description": "When stagnation detection triggers (recommendation 1), automatically call run_specialist with the accumulated context instead of crashing. This gives the agent a recovery path.",
+            "targetFile": "lib/agents/tools/v2-tool-executor.ts",
+            "targetArea": "Specialist invocation and fallback logic",
+            "suggestedChange": "If stagnation is detected, construct a run_specialist call with accumulated file contents and task prompt. Pass to specialist model (Sonnet) with instruction: 'You have read-only context for these files. Plan and execute all edits in one pass.' Return specialist's edit_lines calls to coordinator."
+          },
+          {
+            "priority": "medium",
+            "category": "strategy",
+            "title": "Adjust GOD_MODE strategy to enforce edit enforcement",
+            "description": "GOD_MODE should guarantee at least one edit or specialist call per 5 iterations. Currently, strategy.ts selects GOD_MODE but doesn't enforce action-oriented behavior.",
+            "targetFile": "lib/agents/strategy.ts",
+            "targetArea": "GOD_MODE strategy definition and enforcement rules",
+            "suggestedChange": "Add to GOD_MODE: 'enforceEditFrequency: true, maxReadOnlyIterations: 5'. Coordinator checks this flag and escalates if violated."
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "passRate": "0/1 (0%)",
+    "avgToolCalls": 28,
+    "avgTimeSeconds": 205,
+    "totalCostCents": 0,
+    "failureReasons": [
+      "No code change made"
+    ]
+  },
+  "aggregateAnalysis": {
+    "diagnosis": {
+      "summary": "Agent executed 28 consecutive read_lines operations without any edits or tool diversity, resulting in zero file modifications. The agent entered a read-only loop, gathering information but never transitioning to execution phase. All read_lines calls returned no results, suggesting either file path resolution failures or premature context exhaustion.",
+      "rootCause": "The coordinator's iteration loop lacks a forced transition mechanism from information-gathering (read phase) to execution (edit phase). When read_lines returns empty results repeatedly, the agent should either: (1) trigger strategy escalation, (2) invoke run_specialist for execution, or (3) fail-fast with validation error. Instead, it continues looping indefinitely until hitting iteration limit (80 max, but stopped at 28 tools = likely context window exhaustion before reaching hard limit).",
+      "agentBehavior": "Agent classified the task, began structural reconnaissance (reading files), but never committed to editing. The PM prompt's tool instructions may not include a decision threshold for 'when to stop reading and start editing' or 'how many failed reads before escalating.' The tool executor (run_specialist, run_review) was never invoked despite the task requiring implementation across three files (Liquid, CSS, JS)."
+    },
+    "patterns": {
+      "consistentFailureMode": "Read-only loop with no execution: Agent repeatedly calls read_lines without receiving results, never transitions to edit_lines or run_specialist, exhausts token budget before completing any modifications.",
+      "intermittentIssues": [
+        "read_lines returns no result: Could indicate file paths are incorrect, theme map lookup failed, or scout brief did not properly target files",
+        "No tool diversity: Only read_lines used suggests PM prompt did not activate edit or specialist tools despite having them available"
+      ],
+      "toolUsageAntiPatterns": [
+        "28 consecutive read_lines calls with no edit_lines or run_specialist invocation",
+        "No attempt to call run_specialist despite task explicitly requiring implementation in three layers (Liquid, CSS, JS)",
+        "No run_review or get_second_opinion invoked to validate approach",
+        "No error recovery: When read_lines fails, agent retries same operation rather than escalating strategy"
+      ],
+      "contextGaps": [
+        "snippets/product-form-dynamic.liquid — Never read or edited",
+        "assets/product-form-dynamic.css — Never read or edited",
+        "assets/product-form-dynamic.js — Never read or edited",
+        "product metafield schema (custom_values) — Never consulted",
+        "variant option1 structure — Never explored",
+        "Theme map file index — May not have been populated or consulted correctly"
+      ]
+    },
+    "recommendations": [
+      {
+        "priority": "critical",
+        "category": "coordinator",
+        "title": "Implement execution gate with read-count threshold",
+        "description": "Add a coordinator-level check: if agent executes >N read operations (e.g., 5-8) without invoking edit_lines, run_specialist, or run_review, force strategy escalation or fail with validation error. This prevents infinite read loops.",
+        "targetFile": "lib/agents/coordinator-v2.ts",
+        "targetArea": "Main loop, after tool execution, before next iteration",
+        "suggestedChange": "Track consecutive read-only tool calls. If count exceeds threshold and task involves edits, either (1) invoke run_specialist automatically with current context, (2) escalate to HYBRID/GOD_MODE strategy, or (3) emit validation error with 'unable to locate target files' message."
+      },
+      {
+        "priority": "critical",
+        "category": "context",
+        "title": "Validate scout brief and theme map before read loop",
+        "description": "The scout (structural-scout.ts) or theme map (lookup.ts) may have failed to identify target files. Add pre-execution validation: confirm that files identified by scout exist and are readable before entering main loop.",
+        "targetFile": "lib/agents/scout/structural-scout.ts",
+        "targetArea": "Scout brief generation, file targeting logic",
+        "suggestedChange": "After scout generates brief, validate that all target files in brief are resolvable in theme map. If any critical files (product-form-dynamic.liquid, .css, .js) are missing, emit warning and optionally trigger LLM brief augmentation or fail-fast."
+      },
+      {
+        "priority": "critical",
+        "category": "prompt",
+        "title": "Add explicit decision logic to PM prompt for read-to-edit transition",
+        "description": "The PM prompt (v2-pm-prompt.ts) must include clear instructions on when to stop reading and start editing. For multi-file implementation tasks, provide decision criteria: 'After reading 2-3 target files, invoke run_specialist to implement changes' or 'If read_lines returns empty, check theme map or escalate.'",
+        "targetFile": "lib/agents/prompts/v2-pm-prompt.ts",
+        "targetArea": "Tool usage instructions, decision-making guidance",
+        "suggestedChange": "Add section: 'For implementation tasks requiring edits to multiple files: (1) Read target file structures once, (2) Immediately invoke run_specialist with implementation details, (3) Do not read same file multiple times. If read_lines returns no result, use get_second_opinion or escalate strategy.'"
+      },
+      {
+        "priority": "high",
+        "category": "tools",
+        "title": "Add validation and error recovery to read_lines tool",
+        "description": "When read_lines returns no result, the tool should emit a diagnostic error (e.g., 'file not found', 'invalid path') rather than silent failure. This helps coordinator detect and respond to file resolution issues.",
+        "targetFile": "lib/agents/tools/v2-tool-executor.ts",
+        "targetArea": "read_lines implementation, result handling",
+        "suggestedChange": "If read_lines returns empty, return error object with reason (file not found, path invalid, etc.). Coordinator can then decide to retry with corrected path or escalate."
+      },
+      {
+        "priority": "high",
+        "category": "coordinator",
+        "title": "Implement stagnation detection for repeated empty results",
+        "description": "If the same tool (e.g., read_lines) is called 3+ times in a row with no result change, coordinator should detect stagnation and trigger escalation or fail-fast.",
+        "targetFile": "lib/agents/coordinator-v2.ts",
+        "targetArea": "Iteration loop, after tool execution",
+        "suggestedChange": "Track last N tool results. If same tool called consecutively with identical empty/null results, increment stagnation counter. At threshold (e.g., 3), invoke run_specialist or emit validation error."
+      },
+      {
+        "priority": "high",
+        "category": "validation",
+        "title": "Add pre-execution validation gate for multi-file edit tasks",
+        "description": "For tasks that explicitly require edits to 3+ files (Liquid, CSS, JS), validate that all target files are identifiable before entering main loop. Use orchestration-policy.ts to enforce this gate.",
+        "targetFile": "lib/agents/orchestration-policy.ts",
+        "targetArea": "Context gates, validation rules",
+        "suggestedChange": "Add gate: 'For multi-file implementation tasks, require successful read of all target files before permitting edit phase. If any target file unresolvable, fail-fast with clear error message listing missing files.'"
+      },
+      {
+        "priority": "high",
+        "category": "strategy",
+        "title": "Escalate multi-file edit tasks to HYBRID or GOD_MODE by default",
+        "description": "The task requires coordinated edits across 3 files (Liquid, CSS, JS) with cross-file dependencies (variant data, metafield exclusions, styling). SIMPLE strategy may be insufficient. Default multi-file tasks to HYBRID or use tier-aware escalation.",
+        "targetFile": "lib/agents/strategy.ts",
+        "targetArea": "Strategy selection logic",
+        "suggestedChange": "If task involves edits to 3+ files or cross-file dependencies, automatically select HYBRID (or tier-appropriate strategy). Do not allow SIMPLE strategy for multi-file implementation without explicit override."
+      },
+      {
+        "priority": "medium",
+        "category": "prompt",
+        "title": "Add Shopify-specific guidance for variant and metafield data handling",
+        "description": "The PM prompt should include explicit knowledge about: (1) How to query variant option1 availability, (2) How to access product metafield custom_values, (3) How to exclude lengths from metafield list. This guides read and edit phases.",
+        "targetFile": "lib/agents/prompts/v2-pm-prompt.ts",
+        "targetArea": "Shopify knowledge section",
+        "suggestedChange": "Add: 'Variant data is in Liquid via product.variants. option1 contains length values. Product metafields are accessed via product.metafields.custom_values. When filtering lengths, iterate product.variants, collect option1 values, then subtract custom_values list.'"
+      },
+      {
+        "priority": "medium",
+        "category": "context",
+        "title": "Ensure theme map includes all three target files with correct paths",
+        "description": "Theme map (cache.ts, lookup.ts) must have pre-indexed paths for snippets/product-form-dynamic.liquid, assets/product-form-dynamic.css, assets/product-form-dynamic.js. If any are missing, scout brief cannot target them.",
+        "targetFile": "lib/agents/theme-map/cache.ts",
+        "targetArea": "Theme map initialization, file indexing",
+        "suggestedChange": "Verify theme map includes all three files. Add debug logging to confirm file paths are correctly resolved. If files missing, emit warning or trigger fallback file discovery."
+      },
+      {
+        "priority": "medium",
+        "category": "tools",
+        "title": "Add run_specialist invocation guidance to PM prompt",
+        "description": "PM prompt should include clear examples of when and how to invoke run_specialist for implementation. For this task, run_specialist should be called once per file (or once for all three with clear instructions).",
+        "targetFile": "lib/agents/prompts/v2-pm-prompt.ts",
+        "targetArea": "Tool usage examples",
+        "suggestedChange": "Add example: 'For multi-file Liquid/CSS/JS tasks, call run_specialist with detailed implementation plan: (1) Liquid changes with exact code, (2) CSS changes with selectors, (3) JS changes with event handlers. Provide variant data and metafield exclusion logic in specialist context.'"
+      }
+    ]
+  }
+}

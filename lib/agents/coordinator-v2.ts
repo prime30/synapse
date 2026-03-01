@@ -61,7 +61,7 @@ import {
   buildMaximumEffortPolicyMessage,
 } from './orchestration-policy';
 import { verifyChanges, mergeThemeCheckIssues } from './verification';
-import { validateChangeSet } from './validation/change-set-validator';
+import { validateCodeChanges } from './validation/unified-validator';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { runThemeCheck } from './tools/theme-check';
 import { buildThemePlanArtifact } from './theme-plan-artifact';
@@ -121,6 +121,7 @@ import type { ShopifyFileTree, ShopifyFileTreeEntry } from '@/lib/supabase/shopi
 import { buildUnifiedStyleProfile } from '@/lib/ai/style-profile-builder';
 import { PatternLearning } from '@/lib/agents/pattern-learning';
 import { extractTargetRegion } from './tools/region-extractor';
+import { getFrameworkInstructions } from './theme-map/framework-instructions';
 export { extractTargetRegion };
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -824,8 +825,9 @@ async function buildV2Context(
   await contextEngine.indexFiles(files);
   recordHistogram('agent.context_index_ms', Date.now() - indexStart).catch(() => {});
 
-  // Select relevant files (top N based on request + active file)
-  const result = contextEngine.selectRelevantFiles(
+  // Select relevant files (top N based on request + active file) — hybrid search + optional reranking
+  const result = await contextEngine.selectRelevantFilesWithSemantics(
+    projectId,
     userRequest,
     options.recentMessages,
     options.activeFilePath,
@@ -1638,6 +1640,7 @@ export async function streamV2(
     // Single path: get cached map or build on-demand (<100ms).
     // lookupThemeMap → buildEnrichedScoutBrief → context gate.
     let scoutSection = manifest;
+    let detectedFramework: string | undefined;
     let currentScoutBrief: import('@/lib/types/agent').ScoutBrief | undefined;
     const formatScoutLocationIndex = (brief: import('@/lib/types/agent').ScoutBrief): string => {
       const lines: string[] = ['SCOUT LOCATION INDEX (paths + line ranges only)'];
@@ -1689,6 +1692,7 @@ export async function streamV2(
       }
 
       if (themeMap && Object.keys(themeMap.files).length > 0) {
+        detectedFramework = themeMap.framework;
         const lookupResult = lookupThemeMap(themeMap, userRequest, {
           activeFilePath: options.activeFilePath,
           maxTargets: 15,
@@ -2083,6 +2087,13 @@ export async function streamV2(
         ? '## THEME INTELLIGENCE MAP — Pre-computed file targets, line ranges, and relationships:'
         : '## STRUCTURAL BRIEF — File targets, line ranges, and relationships:',
       scoutSection,
+      ...(detectedFramework ? [`\nTheme framework: ${detectedFramework}`] : []),
+      ...(detectedFramework
+        ? (() => {
+            const instr = getFrameworkInstructions(detectedFramework);
+            return instr ? [`\nFramework instructions: ${instr}`] : [];
+          })()
+        : []),
     ];
     // Mark file context message for prompt caching â€” this stays identical across iterations
     const fileContextMsg: AIMessage = { role: 'user', content: userMessageParts.join('\n') };
@@ -5001,7 +5012,27 @@ export async function streamV2(
 
     // ── Change-set validation ───────────────────────────────────────────────
     if (accumulatedChanges.length > 0) {
-      const validation = validateChangeSet(accumulatedChanges, allFiles);
+      const validation = await validateCodeChanges(accumulatedChanges, allFiles, {
+        designTokens: { projectId },
+        timeoutMs: 2000,
+      });
+
+      // Fire-and-forget: record drift events for design_token issues (Phase 8c)
+      if (projectId) {
+        const designTokenIssues = validation.issues.filter((i) => i.category === 'design_token');
+        if (designTokenIssues.length > 0) {
+          import('@/lib/design-tokens/drift-events').then(({ upsertDriftEvent }) => {
+            const varMatch = /var\(--([\w-]+)\)/;
+            for (const issue of designTokenIssues) {
+              const expectedToken = issue.description?.match(varMatch)?.[1];
+              const hardcodedMatch = issue.description?.match(/hardcoded "([^"]+)"/);
+              const hardcodedValue = hardcodedMatch?.[1] ?? 'unknown';
+              upsertDriftEvent(projectId, issue.file, hardcodedValue, expectedToken);
+            }
+          }).catch(() => {});
+        }
+      }
+
       if (!validation.valid) {
         const errorIssues = validation.issues.filter(i => i.severity === 'error');
         const warnIssues = validation.issues.filter(i => i.severity === 'warning');
@@ -5215,6 +5246,20 @@ export async function streamV2(
     if (accumulatedChanges.length > 0) {
       // Persist proposed changes for approve/reject flows.
       storeChanges(executionId, 'project_manager', accumulatedChanges);
+
+      // Fire-and-forget: track token usages in changed files (Phase 8a)
+      if (intentMode === 'code' && projectId) {
+        import('@/lib/design-tokens/post-edit-tracking').then(({ trackTokenUsagesAfterEdit }) => {
+          trackTokenUsagesAfterEdit(projectId, accumulatedChanges, allFiles).catch((err) =>
+            console.warn('[V2] Token usage tracking failed:', err),
+          );
+        });
+        // Fire-and-forget: mark tokens stale if token source files changed (Phase 8b)
+        import('@/lib/design-tokens/stale-detection').then(({ checkAndMarkStale }) => {
+          const changedPaths = accumulatedChanges.map((c) => c.fileName);
+          checkAndMarkStale(projectId, changedPaths);
+        });
+      }
     }
     updateExecutionStatus(executionId, noChangeCodeRun ? 'failed' : 'completed');
     await persistExecution(executionId);

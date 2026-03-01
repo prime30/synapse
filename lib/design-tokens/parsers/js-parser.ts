@@ -43,6 +43,9 @@ const STYLE_SHADOW = /boxShadow\s*:\s*['"]([^'"]+)['"]/gi;
 /** Animation/transition duration */
 const ANIM_DURATION = /(?:duration|delay|transitionDuration|animationDuration)\s*:\s*['"]?([^'",;}\s]+)['"]?/gi;
 
+/** Easing functions */
+const ANIM_EASING = /easing\s*:\s*['"]([^'"]+)['"]/gi;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -197,6 +200,19 @@ export function parseJSTokens(content: string, filePath: string): ExtractedToken
         context: contextAround(content, index),
       });
     }
+  }
+
+  // 9. Easing
+  for (const { value, index } of execAll(content, ANIM_EASING, 1)) {
+    tokens.push({
+      id: nextId(),
+      name: null,
+      category: 'animation',
+      value,
+      filePath,
+      lineNumber: lineNumberAt(content, index),
+      context: contextAround(content, index),
+    });
   }
 
   return tokens;

@@ -13,7 +13,11 @@ export type TokenCategory =
   | 'spacing'
   | 'shadow'
   | 'border'
-  | 'animation';
+  | 'animation'
+  | 'breakpoint'
+  | 'layout'
+  | 'zindex'
+  | 'a11y';
 
 // ---------------------------------------------------------------------------
 // Extracted token (from parsers — Task 1)
@@ -35,17 +39,25 @@ export interface ExtractedToken {
   lineNumber: number;
   /** Surrounding source code for context. */
   context: string;
+  /** Optional extraction metadata (keyframes, state, etc.). */
+  metadata?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
 // Inferred token (after grouping/naming — Task 2)
 // ---------------------------------------------------------------------------
 
+export type TokenTier = 'primitive' | 'semantic' | 'component';
+
 export interface InferredToken extends ExtractedToken {
   suggestedName: string;
   confidence: number;
   groupId: string;
   inconsistencies: string[];
+  /** Three-tier hierarchy: primitive (raw values), semantic (role-based), component (UI-specific). */
+  tier: TokenTier;
+  /** When value is var(--other-token), the ID of the referenced token. */
+  semantic_parent_id?: string | null;
 }
 
 export interface TokenGroup {
@@ -80,6 +92,11 @@ export interface DesignTokens {
   spacing: string[];
   radii: string[];
   shadows: string[];
+  animation: string[];
+  breakpoints: string[];
+  layout: string[];
+  zindex: string[];
+  a11y: string[];
 }
 
 /** Design tokens with full source tracking. */
@@ -95,6 +112,7 @@ export interface DesignTokensDetailed {
   spacing: DesignToken[];
   radii: DesignToken[];
   shadows: DesignToken[];
+  animation: DesignToken[];
 }
 
 /** Empty DesignTokens for merging / initialization. */
@@ -106,5 +124,10 @@ export function emptyTokens(): DesignTokens {
     spacing: [],
     radii: [],
     shadows: [],
+    animation: [],
+    breakpoints: [],
+    layout: [],
+    zindex: [],
+    a11y: [],
   };
 }

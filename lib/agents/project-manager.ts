@@ -117,7 +117,14 @@ export class ProjectManagerAgent extends Agent {
       fileList,
       '',
       ...(task.context.designContext
-        ? ['## Design Tokens:', task.context.designContext.slice(0, 2000), '']
+        ? [
+            '## Design Tokens:',
+            task.context.designContext.length > 2000
+              ? task.context.designContext.slice(0, 2000) +
+                '\n\n*(Truncated. Use `get_design_tokens` tool for full list.)*'
+              : task.context.designContext,
+            '',
+          ]
         : []),
       '## File Contents:',
       ...selectedFiles.map(

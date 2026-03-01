@@ -43,16 +43,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // Filter out stale references (deleted tokens)
       const validTokenIds = rawTokenIds.filter((id) => tokenNameMap.has(id));
       const tokenNames = validTokenIds.map((id) => tokenNameMap.get(id)!);
+      const previewData = (row.preview_data as Record<string, unknown>) ?? {};
 
       return {
         id: row.id as string,
         name: row.name as string,
         file_path: row.file_path as string,
         component_type: row.component_type as string,
-        files: ((row.preview_data as Record<string, unknown>)?.files as string[]) ?? [],
+        files: (previewData.files as string[]) ?? [],
         tokens_used: validTokenIds,
         token_names: tokenNames,
         usage_frequency: (row.usage_frequency as number) ?? 0,
+        variants: (row.variants as string[]) ?? [],
+        buttonTokenSet: previewData.buttonTokenSet as Record<string, Record<string, string>> | undefined,
       };
     });
 

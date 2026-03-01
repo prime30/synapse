@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
           deadlineMs: Date.now(),
           loadContent: async (fileIds: string[]) => {
             const { data } = await serviceClient
-              .from('project_files')
+              .from('files')
               .select('id, path, content')
               .in('id', fileIds);
             return (data ?? []).map((row) => ({

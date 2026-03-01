@@ -46,7 +46,7 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { EnhancedTypingIndicator } from './EnhancedTypingIndicator';
 import { AgentCard } from './AgentCard';
 import { NextStepChips, type NextStepChip } from './NextStepChips';
-import { EmptyStateCoaching } from './EmptyStateCoaching';
+import { EmptyStateCoaching, type EmptyStateSuggestion } from './EmptyStateCoaching';
 import { GlobalUndo } from './GlobalUndo';
 import { MessageActions } from './MessageActions';
 import { useToolProgress } from '@/hooks/useToolProgress';
@@ -54,6 +54,13 @@ import { useChatScroll } from '@/hooks/useChatScroll';
 import { useChatAttachments } from '@/hooks/useChatAttachments';
 import { WorktreeStatus } from './WorktreeStatus';
 import { BackgroundTaskBanner } from './BackgroundTaskBanner';
+
+const FIRST_INTERACTION_PROMPTS: EmptyStateSuggestion[] = [
+  { label: 'Make the header bigger', prompt: 'Make the header bigger' },
+  { label: 'Add a sale badge to products', prompt: 'Add a sale badge to products' },
+  { label: 'Change the color scheme', prompt: 'Change the color scheme' },
+  { label: 'Fix the mobile menu', prompt: 'Fix the mobile menu' },
+];
 
 /** Sanitize user message content for the sticky prompt banner. */
 function sanitizeForStickyPrompt(content: string): string {
@@ -553,6 +560,8 @@ interface ChatInterfaceProps {
   contextPressure?: { percentage: number; level: 'warning' | 'critical'; usedTokens: number; maxTokens: number } | null;
   /** Called when user clicks "Continue in new chat" — generates summary and starts fresh session. */
   onContinueInNewChat?: () => Promise<boolean>;
+  /** Theme intelligence indexing status for non-blocking banner. */
+  intelligenceStatus?: 'pending' | 'indexing' | 'ready' | 'enriching' | 'stale';
 }
 
 function HistorySummaryBlock({ count, summary }: { count: number; summary?: string }) {
@@ -1015,6 +1024,7 @@ export function ChatInterface({
   onOpenTraining,
   contextPressure,
   onContinueInNewChat,
+  intelligenceStatus,
 }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1812,6 +1822,13 @@ export function ChatInterface({
                 </button>
               ))}
             </div>
+            <EmptyStateCoaching
+              suggestions={FIRST_INTERACTION_PROMPTS}
+              onSelect={(prompt) => {
+                emitInteraction('button_click', 'empty_state_suggestion.select', { prompt });
+                onSend(prompt);
+              }}
+            />
           </div>
         )}
 
@@ -1849,6 +1866,21 @@ export function ChatInterface({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Theme intelligence indexing banner */}
+        {intelligenceStatus && intelligenceStatus !== 'ready' && (
+          <div className="mx-3 mt-2 rounded-lg border border-sky-200 dark:border-sky-500/20 bg-sky-50 dark:bg-sky-900/10 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500 dark:bg-sky-400" />
+              </span>
+              <span className="text-stone-700 dark:text-stone-200">
+                Theme intelligence is being built. You can start chatting — results will improve in a moment.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         {messages.map((m, idx) => (

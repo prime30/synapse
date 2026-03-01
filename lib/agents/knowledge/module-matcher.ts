@@ -29,6 +29,16 @@ import { PERFORMANCE_PATTERNS, PERFORMANCE_PATTERNS_KEYWORDS, PERFORMANCE_PATTER
 import { VARIANT_PATTERNS, VARIANT_PATTERNS_KEYWORDS, VARIANT_PATTERNS_TOKENS } from './variant-patterns';
 import { MOTION_PATTERNS, MOTION_PATTERNS_KEYWORDS, MOTION_PATTERNS_TOKENS } from './motion-patterns';
 import { LIQUID_EDITING_PATTERNS, LIQUID_EDITING_PATTERNS_KEYWORDS, LIQUID_EDITING_PATTERNS_TOKENS } from './liquid-editing-patterns';
+import { DESIGN_STANDARDS, DESIGN_STANDARDS_KEYWORDS, DESIGN_STANDARDS_TOKENS } from './design-standards';
+import { THEME_ARCHITECTURE } from './shopify-best-practices';
+
+const THEME_ARCHITECTURE_KEYWORDS = [
+  'theme', 'architecture', 'template', 'section', 'snippet', 'layout', 'render', 'include',
+  'file', 'resolution', 'hierarchy', 'product', 'collection', 'cart', 'header', 'footer',
+  'main-product', 'templates', 'sections', 'snippets', 'assets', 'theme.liquid',
+];
+
+const THEME_ARCHITECTURE_TOKENS = Math.ceil(THEME_ARCHITECTURE.length / 4);
 
 const MODULES: KnowledgeModule[] = [
   {
@@ -108,6 +118,20 @@ const MODULES: KnowledgeModule[] = [
     keywords: PACKING_SLIP_REFERENCE_KEYWORDS,
     content: PACKING_SLIP_REFERENCE,
     tokenEstimate: PACKING_SLIP_REFERENCE_TOKENS,
+  },
+  {
+    id: 'design-standards',
+    keywords: DESIGN_STANDARDS_KEYWORDS,
+    content: DESIGN_STANDARDS,
+    tokenEstimate: DESIGN_STANDARDS_TOKENS,
+    fileTypeAffinity: ['liquid', 'css'],
+  },
+  {
+    id: 'theme-architecture',
+    keywords: THEME_ARCHITECTURE_KEYWORDS,
+    content: THEME_ARCHITECTURE,
+    tokenEstimate: THEME_ARCHITECTURE_TOKENS,
+    fileTypeAffinity: ['liquid'],
   },
 ];
 

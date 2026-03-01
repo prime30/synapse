@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
+import { requireAuth, requireProjectAccess } from '@/lib/middleware/auth';
 import { checkIdempotency } from '@/lib/middleware/idempotency';
 import { validateBody } from '@/lib/middleware/validation';
 import { checkRateLimit } from '@/lib/middleware/rate-limit';
@@ -106,6 +106,13 @@ export async function POST(req: NextRequest) {
       body = await validateBody(streamSchema)(req);
     } catch {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    // ── Project access ────────────────────────────────────────────────
+    try {
+      await requireProjectAccess(req, body.projectId);
+    } catch {
+      return NextResponse.json({ error: 'No access to this project' }, { status: 403 });
     }
 
     // ── Rate limiting ────────────────────────────────────────────────

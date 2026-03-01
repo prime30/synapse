@@ -22,7 +22,7 @@ function CardSkeleton() {
   );
 }
 
-/* ── Health score helpers ──────────────────────────────────────────── */
+/* ── Health score helpers (aligned with DesignHealthScore) ─────────── */
 
 function computeHealthScore(tokens: { colors?: string[]; fonts?: string[]; fontSizes?: string[]; spacing?: string[]; radii?: string[]; shadows?: string[] }): number {
   const total =
@@ -35,13 +35,15 @@ function computeHealthScore(tokens: { colors?: string[]; fonts?: string[]; fontS
     tokens.fontSizes?.length ?? 0, tokens.spacing?.length ?? 0,
     tokens.radii?.length ?? 0, tokens.shadows?.length ?? 0,
   ].filter(c => c > 0).length;
-  return Math.round((covered / 6) * 60 + Math.min(total / 30, 1) * 40);
+  const coverage = covered / 6;
+  const tokenRichness = Math.min(total / 30, 1);
+  return Math.round(coverage * 30 + tokenRichness * 15 + 30 + 15 + 10); // conformity/consistency/freshness placeholder 1.0
 }
 
 function scoreColor(score: number) {
-  if (score >= 70) return 'text-emerald-500';
-  if (score >= 40) return 'text-yellow-500';
-  return 'text-red-500';
+  if (score >= 80) return 'text-emerald-500 dark:text-emerald-400';
+  if (score >= 50) return 'text-yellow-500 dark:text-yellow-400';
+  return 'text-red-500 dark:text-red-400';
 }
 
 /* ── Component ─────────────────────────────────────────────────────── */
@@ -130,6 +132,53 @@ export function OverviewSection({ projectId, onNavigateTab }: OverviewSectionPro
   /* ── Populated state ───────────────────────────────────── */
   return (
     <div className="space-y-6">
+      {/* Drift suggestions (Phase 8c) */}
+      {tokenData?.driftEvents && tokenData.driftEvents.length > 0 && !scanProgress && (
+        <div className="px-4 py-3 rounded-lg border border-sky-200 dark:border-sky-900/50 bg-sky-50 dark:bg-sky-950/30">
+          <p className="text-sm text-sky-800 dark:text-sky-200 font-medium mb-2">
+            Token drift detected
+          </p>
+          <p className="text-xs text-sky-700 dark:text-sky-300 mb-2">
+            These hardcoded values appear frequently. Consider using design tokens instead:
+          </p>
+          <ul className="space-y-1 text-xs text-sky-700 dark:text-sky-300">
+            {tokenData.driftEvents.slice(0, 5).map((e, i) => (
+              <li key={i}>
+                <code className="font-mono bg-sky-100 dark:bg-sky-900/50 px-1 rounded">
+                  {e.hardcodedValue}
+                </code>
+                {e.expectedToken && (
+                  <>
+                    {' → '}
+                    <code className="font-mono bg-sky-100 dark:bg-sky-900/50 px-1 rounded">
+                      var(--{e.expectedToken})
+                    </code>
+                  </>
+                )}
+                {' '}({e.count}× in {e.filePath})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Stale banner (Phase 8b) */}
+      {tokenData?.stale && !scanProgress && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Tokens may be outdated after recent file changes.
+          </p>
+          <button
+            type="button"
+            onClick={handleScan}
+            disabled={isScanning}
+            className="text-xs px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-medium disabled:opacity-50 transition-colors"
+          >
+            Re-scan
+          </button>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2.5 rounded-lg ide-surface-pop border ide-border shadow-lg text-sm ide-text" role="status" aria-live="polite">
@@ -166,7 +215,7 @@ export function OverviewSection({ projectId, onNavigateTab }: OverviewSectionPro
           <p className="text-xs font-medium ide-text-muted uppercase tracking-wider mb-1">Health Score</p>
           <p className={`text-3xl font-bold tabular-nums ${scoreColor(healthScore)}`}>{healthScore}</p>
           <p className="text-xs ide-text-muted mt-1">
-            {healthScore >= 70 ? 'Good coverage' : healthScore >= 40 ? 'Moderate coverage' : 'Low coverage'}
+            {healthScore >= 80 ? 'Good coverage' : healthScore >= 50 ? 'Moderate coverage' : 'Low coverage'}
           </p>
         </div>
       </div>

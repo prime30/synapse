@@ -245,6 +245,55 @@ export async function deleteUsagesByToken(tokenId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteUsagesByTokenAndFile(
+  tokenId: string,
+  filePath: string,
+): Promise<void> {
+  const supabase = await getClient();
+  const { error } = await supabase
+    .from('design_token_usages')
+    .delete()
+    .eq('token_id', tokenId)
+    .eq('file_path', filePath);
+  if (error) throw error;
+}
+
+/**
+ * Upsert a token usage. If a usage for this token+file exists, update line_number and context.
+ * Otherwise insert. Uses token_id + file_path as the unique key (design_token_usages has
+ * idx_design_token_usages_token_file).
+ */
+export async function upsertTokenUsage(
+  tokenId: string,
+  filePath: string,
+  lineNumber: number,
+  context?: string | null,
+): Promise<void> {
+  const supabase = await getClient();
+  const { data: existing } = await supabase
+    .from('design_token_usages')
+    .select('id')
+    .eq('token_id', tokenId)
+    .eq('file_path', filePath)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from('design_token_usages')
+      .update({ line_number: lineNumber, context: context ?? null })
+      .eq('token_id', tokenId)
+      .eq('file_path', filePath);
+    if (error) throw error;
+  } else {
+    await createUsage({
+      token_id: tokenId,
+      file_path: filePath,
+      line_number: lineNumber,
+      context: context ?? null,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Version CRUD
 // ---------------------------------------------------------------------------

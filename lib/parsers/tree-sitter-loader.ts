@@ -1,11 +1,10 @@
 /**
- * Tree-sitter WASM loader for Liquid, JavaScript, CSS, and JSON parsing.
- * Uses web-tree-sitter (WASM) for Next.js/serverless compatibility.
+ * Tree-sitter WASM loader for JavaScript, CSS, and JSON parsing.
+ * Liquid parsing is handled by @shopify/liquid-html-parser (pure JS, no WASM).
  */
 
 type TSParser = import('web-tree-sitter').Parser;
 
-let liquidParser: TSParser | null = null;
 let jsParser: TSParser | null = null;
 let cssParser: TSParser | null = null;
 let jsonParser: TSParser | null = null;
@@ -43,14 +42,12 @@ export async function initTreeSitter(): Promise<boolean> {
         }
       };
 
-      liquidParser = await loadGrammar('liquid');
       jsParser = await loadGrammar('javascript');
       cssParser = await loadGrammar('css');
       jsonParser = await loadGrammar('json');
 
       initialized = true;
       const loaded = [
-        liquidParser && 'liquid',
         jsParser && 'javascript',
         cssParser && 'css',
         jsonParser && 'json',
@@ -66,9 +63,7 @@ export async function initTreeSitter(): Promise<boolean> {
   return initialized;
 }
 
-export function getLiquidParser() { return liquidParser; }
 export function getJSParser() { return jsParser; }
 export function getCSSParser() { return cssParser; }
 export function getJSONParser() { return jsonParser; }
 export function isTreeSitterAvailable() { return initialized; }
-export function isLiquidParserAvailable() { return liquidParser !== null; }

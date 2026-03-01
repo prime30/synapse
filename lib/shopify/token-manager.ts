@@ -23,7 +23,12 @@ function getEncryptionKey(): Buffer {
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (serviceKey) {
-    // Derive a stable 32-byte key from the service role key
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[SECURITY] SHOPIFY_ENCRYPTION_KEY is not set. Falling back to SUPABASE_SERVICE_ROLE_KEY-derived key. ' +
+        'Set SHOPIFY_ENCRYPTION_KEY in production to avoid token loss if the service key is rotated.',
+      );
+    }
     return crypto.createHash('sha256').update(serviceKey).digest();
   }
 

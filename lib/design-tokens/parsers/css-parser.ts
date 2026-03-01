@@ -19,7 +19,11 @@ export function resetIdCounter(): void {
 // Patterns
 // ---------------------------------------------------------------------------
 
-/** CSS custom properties in :root or other selectors. */
+/**
+ * CSS custom properties in :root or other selectors.
+ * Matches --color-*, --font-*, --spacing-*, etc. anywhere in the file,
+ * including :root { ... } blocks.
+ */
 const CSS_VAR_DECL = /(--([\w-]+))\s*:\s*([^;]+)/g;
 
 /** Hex colors */
@@ -38,6 +42,7 @@ const PROP_PATTERNS: { prop: RegExp; category: TokenCategory; splitValues?: bool
   { prop: /font-weight\s*:\s*([^;}{]+)/gi, category: 'typography' },
   { prop: /line-height\s*:\s*([^;}{]+)/gi, category: 'typography' },
   { prop: /letter-spacing\s*:\s*([^;}{]+)/gi, category: 'typography' },
+  { prop: /text-transform\s*:\s*([^;}{]+)/gi, category: 'typography' },
   { prop: /(?:margin|padding|gap)\s*:\s*([^;}{]+)/gi, category: 'spacing', splitValues: true },
   { prop: /border-radius\s*:\s*([^;}{]+)/gi, category: 'border' },
   { prop: /border(?:-width|-style|-color)?\s*:\s*([^;}{]+)/gi, category: 'border' },
@@ -45,7 +50,27 @@ const PROP_PATTERNS: { prop: RegExp; category: TokenCategory; splitValues?: bool
   { prop: /text-shadow\s*:\s*([^;}{]+)/gi, category: 'shadow' },
   { prop: /transition\s*:\s*([^;}{]+)/gi, category: 'animation' },
   { prop: /animation\s*:\s*([^;}{]+)/gi, category: 'animation' },
+  { prop: /transition-duration\s*:\s*([^;}{]+)/gi, category: 'animation' },
+  { prop: /transition-timing-function\s*:\s*([^;}{]+)/gi, category: 'animation' },
+  { prop: /transition-property\s*:\s*([^;}{]+)/gi, category: 'animation' },
+  { prop: /transition-delay\s*:\s*([^;}{]+)/gi, category: 'animation' },
+  // Phase 9d: Layout
+  { prop: /max-width\s*:\s*([^;}{]+)/gi, category: 'layout' },
+  { prop: /grid-template-columns\s*:\s*([^;}{]+)/gi, category: 'layout' },
+  { prop: /(?:gap|column-gap|row-gap)\s*:\s*([^;}{]+)/gi, category: 'layout', splitValues: true },
+  // Phase 9e: z-index
+  { prop: /z-index\s*:\s*([^;}{]+)/gi, category: 'zindex' },
+  // Phase 9f: Accessibility
+  { prop: /outline\s*:\s*([^;}{]+)/gi, category: 'a11y' },
+  { prop: /outline-offset\s*:\s*([^;}{]+)/gi, category: 'a11y' },
 ];
+
+const KEYFRAMES_RE = /@keyframes\s+([\w-]+)\s*\{/g;
+const PSEUDO_RULE_RE = /([^{}]+):(hover|focus|focus-visible|active|disabled)\s*\{([^}]+)\}/g;
+
+/** Phase 9c: @media (min-width: Xpx) / (max-width: Xpx) breakpoints */
+const MEDIA_QUERY =
+  /@media\s*[^{]*\(\s*(?:min|max)-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)\s*\)/gi;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,9 +106,13 @@ export function parseCSSTokens(content: string, filePath: string): ExtractedToke
     const re = new RegExp(CSS_VAR_DECL.source, CSS_VAR_DECL.flags);
     let m: RegExpExecArray | null;
     while ((m = re.exec(content)) !== null) {
-      const name = m[2]; // variable name without --
+      const name = m[2];
       const value = clean(m[3]);
       const category = inferCategory(name, value);
+      const stateMatch = name.match(/-(hover|focus|active|disabled)$/);
+      const metadata = stateMatch
+        ? { state: stateMatch[1] as 'hover' | 'focus' | 'active' | 'disabled' }
+        : undefined;
       tokens.push({
         id: nextId(),
         name,
@@ -92,7 +121,112 @@ export function parseCSSTokens(content: string, filePath: string): ExtractedToke
         filePath,
         lineNumber: lineNumberAt(content, m.index),
         context: contextAround(content, m.index),
+        metadata,
       });
+    }
+  }
+
+  // 1b. @keyframes blocks
+  {
+    const re = new RegExp(KEYFRAMES_RE.source, KEYFRAMES_RE.flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const name = m[1];
+      tokens.push({
+        id: nextId(),
+        name,
+        category: 'animation',
+        value: name,
+        filePath,
+        lineNumber: lineNumberAt(content, m.index),
+        context: contextAround(content, m.index),
+        metadata: { keyframes: true, name },
+      });
+    }
+  }
+
+  // 1c. Pseudo-class rule blocks (selector:hover { ... }) — Phase 9f: focus-visible → a11y
+  {
+    const re = new RegExp(PSEUDO_RULE_RE.source, PSEUDO_RULE_RE.flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const blockContent = m[3];
+      const state = m[2] as 'hover' | 'focus' | 'focus-visible' | 'active' | 'disabled';
+      const propMatches = blockContent.matchAll(/([\w-]+)\s*:\s*([^;]+)/g);
+      const a11yProps = ['outline', 'outline-offset', 'box-shadow'];
+      for (const pm of propMatches) {
+        const prop = pm[1];
+        const val = clean(pm[2]);
+        const category =
+          state === 'focus-visible' && a11yProps.includes(prop.toLowerCase())
+            ? 'a11y'
+            : inferCategory(prop, val);
+        tokens.push({
+          id: nextId(),
+          name: null,
+          category,
+          value: val,
+          filePath,
+          lineNumber: lineNumberAt(content, m.index),
+          context: contextAround(content, m.index),
+          metadata: { state },
+        });
+      }
+    }
+  }
+
+  // 1d. Phase 9c: @media breakpoints — deduplicate and sort
+  {
+    const re = new RegExp(MEDIA_QUERY.source, MEDIA_QUERY.flags);
+    const values = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      values.add(m[1] + m[2]);
+    }
+    const sorted = [...values].sort((a, b) => {
+      const aNum = parseFloat(a);
+      const bNum = parseFloat(b);
+      return isNaN(aNum) || isNaN(bNum) ? 0 : aNum - bNum;
+    });
+    for (const value of sorted) {
+      tokens.push({
+        id: nextId(),
+        name: null,
+        category: 'breakpoint',
+        value,
+        filePath,
+        lineNumber: 1,
+        context: `@media breakpoint: ${value}`,
+        metadata: { breakpoint: true },
+      });
+    }
+  }
+
+  // 1e. Phase 9f: @media (prefers-reduced-motion: reduce) — extract a11y tokens
+  {
+    const REDUCED_MOTION_RE =
+      /@media\s*\([^)]*prefers-reduced-motion\s*:\s*reduce[^)]*\)\s*\{([^}]+)\}/gi;
+    const re = new RegExp(REDUCED_MOTION_RE.source, REDUCED_MOTION_RE.flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const blockContent = m[1];
+      const propMatches = blockContent.matchAll(/([\w-]+)\s*:\s*([^;]+)/g);
+      for (const pm of propMatches) {
+        const prop = pm[1].toLowerCase();
+        const val = clean(pm[2]);
+        if (['animation', 'transition', 'transition-duration'].includes(prop)) {
+          tokens.push({
+            id: nextId(),
+            name: null,
+            category: 'a11y',
+            value: val,
+            filePath,
+            lineNumber: lineNumberAt(content, m.index),
+            context: contextAround(content, m.index),
+            metadata: { prefersReducedMotion: true },
+          });
+        }
+      }
     }
   }
 
@@ -201,6 +335,10 @@ function inferCategory(name: string, value: string): TokenCategory {
   if (/shadow/.test(n)) return 'shadow';
   if (/border|radius/.test(n)) return 'border';
   if (/animation|transition|duration|ease|delay/.test(n)) return 'animation';
+  if (/breakpoint|media|screen/.test(n)) return 'breakpoint';
+  if (/container|grid|max-width|layout/.test(n)) return 'layout';
+  if (/z-index|zindex/.test(n)) return 'zindex';
+  if (/outline|focus|a11y|accessibility/.test(n)) return 'a11y';
 
   // Fallback: infer from value
   if (/^#|^rgb|^hsl/.test(value)) return 'color';

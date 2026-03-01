@@ -12,6 +12,25 @@ import {
   formatSSEError,
 } from '../errors';
 
+const RATE_LIMIT_MAX_ATTEMPTS = 3;
+
+async function fetchWithRateLimitRetry(fetchFn: () => Promise<Response>): Promise<Response> {
+  for (let attempt = 0; attempt < RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
+    const res = await fetchFn();
+    if (res.status === 429 && attempt < RATE_LIMIT_MAX_ATTEMPTS - 1) {
+      await res.text();
+      const retryAfter = res.headers.get('Retry-After');
+      const waitMs = retryAfter
+        ? Math.min(parseInt(retryAfter, 10) * 1000, 60_000)
+        : Math.min(2000 * 2 ** attempt, 30_000);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    return res;
+  }
+  throw new Error('fetchWithRateLimitRetry: unreachable');
+}
+
 export function createOpenAIProvider(customApiKey?: string): AIProviderInterface {
   return {
     name: 'openai',
@@ -26,7 +45,7 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
       const model = options?.model ?? 'gpt-4o-mini';
 
       try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchWithRateLimitRetry(() => fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -46,7 +65,7 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
             max_tokens: options?.maxTokens ?? 1024,
             temperature: options?.temperature ?? 0.7,
           }),
-        });
+        }));
 
         const bodyText = await response.text();
         if (!response.ok) {
@@ -83,7 +102,7 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
       if (!apiKey) throw new AIProviderError('AUTH_ERROR', 'OPENAI_API_KEY is not set', 'openai');
 
       const model = options?.model ?? 'gpt-4o-mini';
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetchWithRateLimitRetry(() => fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,10 +122,9 @@ export function createOpenAIProvider(customApiKey?: string): AIProviderInterface
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
           stream: true,
-          // Request usage in stream chunks (OpenAI stream_options)
           stream_options: { include_usage: true },
         }),
-      });
+      }));
 
       if (!response.ok) {
         const err = await response.text();

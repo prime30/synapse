@@ -14,6 +14,7 @@ import {
   writeAllFilesToDisk,
   getLocalThemePath,
 } from '@/lib/sync/disk-sync';
+import { invalidateStyleProfileCache } from '@/lib/ai/style-profile-builder';
 
 function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -84,16 +85,50 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 1. Get user's org to create the project in
-    const { data: membership } = await supabase
+    // 0b. Guard: check theme file count before pulling
+    const MAX_THEME_FILES = 2000;
+    try {
+      const api = await ShopifyAdminAPIFactory.create(connectionId);
+      const assets = await api.listAssets(themeId);
+      if (assets.length > MAX_THEME_FILES) {
+        throw APIError.badRequest(
+          `Theme has ${assets.length} files (limit: ${MAX_THEME_FILES}). ` +
+          'Themes this large may cause performance issues.',
+        );
+      }
+    } catch (err) {
+      if (err instanceof APIError) throw err;
+      // Non-fatal: if we can't count assets, proceed with import
+    }
+
+    // 1. Get user's org to create the project in (auto-create if missing)
+    const { data: memberships } = await supabase
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', userId)
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (!membership) {
-      throw APIError.badRequest('User has no organization. Create one first.');
+    let orgId = memberships?.[0]?.organization_id;
+
+    if (!orgId) {
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .insert({ name: 'Personal', owner_id: userId })
+        .select('id')
+        .single();
+
+      if (orgError || !org) {
+        throw new APIError(
+          `Failed to auto-create organization: ${orgError?.message ?? 'unknown'}`,
+          'ORG_CREATE_FAILED',
+          500,
+        );
+      }
+
+      orgId = org.id;
+      await supabase
+        .from('organization_members')
+        .insert({ organization_id: orgId, user_id: userId, role: 'owner' });
     }
 
     // 2. Auto-create a project named after the theme
@@ -101,7 +136,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const projectInsert: Record<string, unknown> = {
       name: resolvedThemeName,
       description: `Imported from ${connection.store_domain}`,
-      organization_id: membership.organization_id,
+      organization_id: orgId,
       owner_id: userId,
       shopify_connection_id: connectionId,
       shopify_theme_id: String(themeId),
@@ -127,7 +162,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // 3. Pull theme files; optionally start dev theme creation in background (don't block response).
     const syncService = new ThemeSyncService();
-    const result = await syncService.pullTheme(connectionId, themeId, project.id, { textOnly: true });
+    let result: Awaited<ReturnType<ThemeSyncService['pullTheme']>>;
+    try {
+      result = await syncService.pullTheme(connectionId, themeId, project.id, { textOnly: true });
+    } catch (pullError) {
+      await supabase.from('projects').delete().eq('id', project.id);
+      throw pullError;
+    }
 
     // 3b. Write files to local disk if requested (non-blocking).
     let localPath: string | null = null;
@@ -230,6 +271,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               '@/lib/design-tokens/components/theme-ingestion'
             );
             const ingestionResult = await ingestTheme(project.id, ingestionFiles);
+            invalidateStyleProfileCache(project.id);
             console.log(
               `[Theme Ingestion] Project ${project.id}: ${ingestionResult.tokensCreated} tokens created, ` +
               `${ingestionResult.componentsDetected} components detected from ${ingestionResult.totalFilesAnalyzed} files.`,

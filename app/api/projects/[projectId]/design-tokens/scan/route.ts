@@ -3,6 +3,7 @@ import { requireProjectAccess } from '@/lib/middleware/auth';
 import { listProjectFiles, getFile } from '@/lib/services/files';
 import { listByProject, type DesignTokenRow } from '@/lib/design-tokens/models/token-model';
 import type { TokenCategory } from '@/lib/design-tokens/types';
+import { invalidateStyleProfileCache } from '@/lib/ai/style-profile-builder';
 
 /* ------------------------------------------------------------------ */
 /*  SSE helpers                                                        */
@@ -37,6 +38,11 @@ interface CompleteEvent {
       spacing: string[];
       radii: string[];
       shadows: string[];
+      animation: string[];
+      breakpoints: string[];
+      layout: string[];
+      zindex: string[];
+      a11y: string[];
     };
     tokenCount: number;
     fileCount: number;
@@ -69,6 +75,11 @@ function aggregateTokens(rows: DesignTokenRow[]) {
   const spacing: string[] = [];
   const radii: string[] = [];
   const shadows: string[] = [];
+  const animation: string[] = [];
+  const breakpoints: string[] = [];
+  const layout: string[] = [];
+  const zindex: string[] = [];
+  const a11y: string[] = [];
 
   for (const row of rows) {
     const val = row.value;
@@ -89,6 +100,21 @@ function aggregateTokens(rows: DesignTokenRow[]) {
       case 'shadow':
         shadows.push(val);
         break;
+      case 'animation':
+        animation.push(val);
+        break;
+      case 'breakpoint':
+        breakpoints.push(val);
+        break;
+      case 'layout':
+        layout.push(val);
+        break;
+      case 'zindex':
+        zindex.push(val);
+        break;
+      case 'a11y':
+        a11y.push(val);
+        break;
     }
   }
 
@@ -99,6 +125,11 @@ function aggregateTokens(rows: DesignTokenRow[]) {
     spacing: [...new Set(spacing)],
     radii: [...new Set(radii)],
     shadows: [...new Set(shadows)],
+    animation: [...new Set(animation)],
+    breakpoints: [...new Set(breakpoints)],
+    layout: [...new Set(layout)],
+    zindex: [...new Set(zindex)],
+    a11y: [...new Set(a11y)],
   };
 }
 
@@ -154,7 +185,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           send({
             type: 'complete',
             data: {
-              tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+              tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [], animation: [], breakpoints: [], layout: [], zindex: [], a11y: [] },
               tokenCount: 0,
               fileCount: 0,
               tokensCreated: 0,
@@ -214,7 +245,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           send({
             type: 'complete',
             data: {
-              tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [] },
+              tokens: { colors: [], fonts: [], fontSizes: [], spacing: [], radii: [], shadows: [], animation: [], breakpoints: [], layout: [], zindex: [], a11y: [] },
               tokenCount: 0,
               fileCount: files.length,
               tokensCreated: 0,
@@ -291,7 +322,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           '@/lib/design-tokens/components/component-detector'
         );
         const components = detectComponents(
-          ingestionFiles.map((f) => ({ path: f.path, name: f.path.split('/').pop() ?? f.path })),
+          ingestionFiles.map((f) => ({ path: f.path, content: f.content })),
+        );
+
+        const fileToComponent = new Map<string, string>();
+        for (const comp of components) {
+          for (const fp of comp.files) fileToComponent.set(fp, comp.name);
+        }
+
+        const { buildUsageContext } = await import(
+          '@/lib/design-tokens/components/theme-ingestion'
         );
 
         if (abortSignal.aborted) { controller.close(); return; }
@@ -338,11 +378,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             const existingToken = existingByName.get(name)!;
             await deleteUsagesByToken(existingToken.id);
             for (const t of tokens) {
+              const usageContext = buildUsageContext(t, fileToComponent, category, name);
               await createUsage({
                 token_id: existingToken.id,
                 file_path: t.filePath,
                 line_number: t.lineNumber,
-                context: t.context,
+                context: usageContext,
               });
             }
             tokensUpdated++;
@@ -357,11 +398,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               });
               if (created) {
                 for (const t of tokens) {
+                  const usageContext = buildUsageContext(t, fileToComponent, category, name);
                   await createUsage({
                     token_id: created.id,
                     file_path: t.filePath,
                     line_number: t.lineNumber,
-                    context: t.context,
+                    context: usageContext,
                   });
                 }
                 tokensCreated++;
@@ -427,15 +469,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               }
             }
 
+            const previewData: Record<string, unknown> = { files: comp.files };
+            if (comp.buttonTokenSet && Object.keys(comp.buttonTokenSet).length > 0) {
+              previewData.buttonTokenSet = comp.buttonTokenSet;
+            }
+            if (comp.semanticType) {
+              previewData.semanticType = comp.semanticType;
+              if (comp.semanticTokenSet) previewData.semanticTokenSet = comp.semanticTokenSet;
+            }
+            if (comp.iconMetadata) previewData.iconMetadata = comp.iconMetadata;
+
             await supabase.from('design_components').insert({
               project_id: projectId,
               name: comp.name,
               file_path: comp.primaryFile,
               component_type: comp.type,
               tokens_used: Array.from(tokenIds),
-              variants: [],
+              variants: comp.variants ?? [],
               usage_frequency: comp.files.length,
-              preview_data: { files: comp.files },
+              preview_data: previewData,
             });
           }
         } catch {
@@ -445,6 +497,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // ── Phase: complete (100) ────────────────────────────────────
         const finalRows = await listByProject(projectId);
         const finalTokens = aggregateTokens(finalRows);
+
+        invalidateStyleProfileCache(projectId);
 
         send({
           type: 'complete',

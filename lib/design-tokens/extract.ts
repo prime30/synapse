@@ -225,6 +225,11 @@ export function mergeTokens(...tokenSets: DesignTokens[]): DesignTokens {
     merged.spacing.push(...t.spacing);
     merged.radii.push(...t.radii);
     merged.shadows.push(...t.shadows);
+    merged.animation.push(...(t.animation ?? []));
+    merged.breakpoints.push(...(t.breakpoints ?? []));
+    merged.layout.push(...(t.layout ?? []));
+    merged.zindex.push(...(t.zindex ?? []));
+    merged.a11y.push(...(t.a11y ?? []));
   }
   return dedupTokens(merged);
 }
@@ -238,5 +243,10 @@ function dedupTokens(tokens: DesignTokens): DesignTokens {
     spacing: dedup(tokens.spacing),
     radii: dedup(tokens.radii),
     shadows: dedup(tokens.shadows),
+    animation: dedup(tokens.animation ?? []),
+    breakpoints: dedup(tokens.breakpoints ?? []),
+    layout: dedup(tokens.layout ?? []),
+    zindex: dedup(tokens.zindex ?? []),
+    a11y: dedup(tokens.a11y ?? []),
   };
 }

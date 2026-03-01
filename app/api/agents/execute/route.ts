@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/middleware/auth';
+import { requireAuth, requireProjectAccess } from '@/lib/middleware/auth';
 import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import { validateBody } from '@/lib/middleware/validation';
@@ -31,6 +31,10 @@ const executeSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
+
+    const body = await validateBody(executeSchema)(request);
+    await requireProjectAccess(request, body.projectId);
+
     const rateLimit = await checkRateLimit(request, { windowMs: 60000, maxRequests: 10 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -50,8 +54,6 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
-
-    const body = await validateBody(executeSchema)(request);
 
     const serviceClient = createServiceClient();
     const { allFiles: fileContexts } = await loadProjectFiles(body.projectId, serviceClient);

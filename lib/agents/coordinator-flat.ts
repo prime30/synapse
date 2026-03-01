@@ -49,6 +49,8 @@ import { type V2ToolExecutorContext } from './tools/v2-tool-executor';
 import { dispatchToolCall, type UnifiedToolContext } from './tools/dispatcher';
 import { FileStore } from './tools/file-store';
 import { matchKnowledgeModules, buildKnowledgeBlock } from './knowledge/module-matcher';
+import { buildUnifiedStyleProfile } from '@/lib/ai/style-profile-builder';
+import { getFrameworkInstructions } from './theme-map/framework-instructions';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { recordHistogram } from '@/lib/observability/metrics';
 import { createCheckpoint, restoreCheckpoint } from '@/lib/checkpoints/checkpoint-service';
@@ -184,12 +186,15 @@ async function buildFlatContext(
   manifest: string;
   scoutBrief: string;
   knowledgeBlock: string;
+  framework?: string;
+  frameworkInstructions?: string;
 }> {
   const contextEngine = getProjectContextEngine(projectId);
 
   await contextEngine.indexFiles(files);
 
-  const contextResult = contextEngine.selectRelevantFiles(
+  const contextResult = await contextEngine.selectRelevantFilesWithSemantics(
+    projectId,
     userRequest,
     options.recentMessages,
     options.activeFilePath,
@@ -236,24 +241,18 @@ async function buildFlatContext(
 
   // Build scout brief from theme map if available
   let scoutBrief = '';
+  let framework: string | undefined;
   try {
-    const { lookupThemeMap, getThemeMap, indexTheme } = await import('./theme-map');
+    const { lookupThemeMap, formatLookupResult, getThemeMap, indexTheme } = await import('./theme-map');
     let themeMap = getThemeMap(projectId);
     if (!themeMap) {
       themeMap = indexTheme(projectId, files);
     }
     if (themeMap) {
+      framework = themeMap.framework;
       const lookup = lookupThemeMap(themeMap, userRequest);
       if (lookup.targets.length > 0) {
-        scoutBrief = '## Scout Location Index\n\n';
-        for (const target of lookup.targets.slice(0, 10)) {
-          scoutBrief += `- **${target.path}**: ${target.purpose}`;
-          if (target.features.length > 0) {
-            const topFeature = target.features[0];
-            scoutBrief += ` (lines ${topFeature.lines[0]}-${topFeature.lines[1]})`;
-          }
-          scoutBrief += '\n';
-        }
+        scoutBrief = formatLookupResult(lookup);
       }
     }
   } catch {
@@ -272,7 +271,8 @@ async function buildFlatContext(
   );
   const knowledgeBlock = buildKnowledgeBlock(matchedModules);
 
-  return { preloaded, allFiles: files, manifest, scoutBrief, knowledgeBlock };
+  const frameworkInstructions = framework ? getFrameworkInstructions(framework) : '';
+  return { preloaded, allFiles: files, manifest, scoutBrief, knowledgeBlock, framework, frameworkInstructions };
 }
 
 // ── System Prompt Assembly ───────────────────────────────────────────────────
@@ -284,6 +284,9 @@ function buildFlatSystemPrompt(
   knowledgeBlock: string,
   userPreferences: UserPreference[],
   memoryContext?: string,
+  framework?: string,
+  frameworkInstructions?: string,
+  styleProfileContent?: string,
 ): string {
   const identity = `You are a Shopify theme development agent. You have direct access to tools for reading, searching, editing, and validating theme files. Complete the user's request end-to-end.`;
 
@@ -337,9 +340,12 @@ Answer the user's question about Shopify theme development. Read files as needed
     modeOverlay,
     knowledgeBlock ? `\n${knowledgeBlock}` : '',
     scoutBrief ? `\n${scoutBrief}` : '',
+    framework ? `\nTheme framework: ${framework}` : '',
+    frameworkInstructions ? `\nFramework instructions: ${frameworkInstructions}` : '',
     prefBlock,
     memoryBlock,
     `\n## Project Files\n${manifest}`,
+    styleProfileContent ? `\n\n${styleProfileContent}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -415,7 +421,7 @@ export async function streamFlat(
   });
 
   // ── Build context ──────────────────────────────────────────────────
-  const { preloaded, allFiles, manifest, scoutBrief, knowledgeBlock } = await buildFlatContext(
+  const { preloaded, allFiles, manifest, scoutBrief, knowledgeBlock, framework, frameworkInstructions } = await buildFlatContext(
     projectId,
     files,
     userRequest,
@@ -475,7 +481,12 @@ export async function streamFlat(
     } catch { /* no checkpoint — fresh run */ }
   }
 
-  // ── Build system prompt ────────────────────────────────────────────
+  const cssKeywords = /\b(style|css|color|font|spacing|theme|responsive|layout)\b/i;
+  const skipStyleProfile = !cssKeywords.test(userRequest);
+  const styleProfileResult = skipStyleProfile
+    ? { content: '' }
+    : await buildUnifiedStyleProfile(projectId, userId, allFiles).catch(() => ({ content: '' }));
+
   const systemPrompt = buildFlatSystemPrompt(
     intentMode,
     manifest,
@@ -483,6 +494,9 @@ export async function streamFlat(
     knowledgeBlock,
     userPreferences,
     options.memoryContext,
+    framework,
+    frameworkInstructions,
+    styleProfileResult.content,
   );
 
   // ── Select tools ───────────────────────────────────────────────────

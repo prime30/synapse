@@ -23,6 +23,21 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  // CORS preflight for API routes
+  if (pathname.startsWith('/api/') && request.method === 'OPTIONS') {
+    const origin = request.headers.get('origin');
+    const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : '',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+
   // Skip static assets, internal Next.js routes, and all API routes
   // (API routes handle their own auth via requireAuth in lib/middleware/auth.ts)
   if (
@@ -31,7 +46,16 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/') ||
     pathname.startsWith('/.well-known/shopify/')
   ) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    // Add CORS headers to API responses
+    if (pathname.startsWith('/api/')) {
+      const origin = request.headers.get('origin');
+      const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      if (origin === allowedOrigin) {
+        response.headers.set('Access-Control-Allow-Origin', origin);
+      }
+    }
+    return response;
   }
 
   // Create a Supabase client that reads/writes cookies on the response
@@ -54,6 +78,17 @@ export async function middleware(request: NextRequest) {
       },
     }
   );
+
+  // PKCE code exchange: when OAuth redirects back to /auth/confirm with ?code=,
+  // the code must be exchanged server-side (the code_verifier is in an httpOnly cookie).
+  // Without this, the client-side confirm page can't establish a session.
+  if (pathname === '/auth/confirm') {
+    const code = request.nextUrl.searchParams.get('code');
+    if (code) {
+      await supabase.auth.exchangeCodeForSession(code);
+    }
+    return response;
+  }
 
   // Allow public paths through without hitting Supabase auth —
   // except /auth/signin which needs the auth check to redirect logged-in users.

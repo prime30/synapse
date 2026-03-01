@@ -11,6 +11,8 @@ export interface DesignComponent {
   tokens_used: string[];
   token_names: string[];
   usage_frequency: number;
+  variants?: string[];
+  buttonTokenSet?: Record<string, Record<string, string>>;
 }
 
 export interface UseDesignComponentsReturn {

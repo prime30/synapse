@@ -5,6 +5,7 @@
  * matching design token and produce a concrete replacement suggestion.
  */
 
+import { differenceCiede2000, parse } from 'culori';
 import type { TokenCategory } from '../types';
 import type { DriftItem, TokenizationSuggestion } from './types';
 
@@ -129,29 +130,26 @@ function computeConfidence(
 }
 
 // ---------------------------------------------------------------------------
-// Colour comparison (RGB Euclidean distance)
+// Colour comparison (CIEDE2000 perceptual distance)
 // ---------------------------------------------------------------------------
 
 function colorConfidence(
   a: string,
   b: string,
 ): { confidence: number; reason: string } {
-  const rgbA = parseColor(a);
-  const rgbB = parseColor(b);
-  if (!rgbA || !rgbB) return { confidence: 0, reason: '' };
+  const deltaE = differenceCiede2000();
+  const parsedA = parse(a);
+  const parsedB = parse(b);
+  if (!parsedA || !parsedB) return { confidence: 0, reason: '' };
 
-  const distance = Math.sqrt(
-    (rgbA[0] - rgbB[0]) ** 2 +
-    (rgbA[1] - rgbB[1]) ** 2 +
-    (rgbA[2] - rgbB[2]) ** 2,
-  );
+  const d = deltaE(parsedA, parsedB);
+  if (d === undefined) return { confidence: 0, reason: '' };
 
-  // Max possible distance in RGB space ≈ 441.67
-  // We treat anything under 30 as a near-match (within ~7% perceptual difference)
-  if (distance === 0) return { confidence: 1.0, reason: 'Exact color match' };
-  if (distance <= 10) return { confidence: 0.9, reason: `Very similar color (RGB distance ${distance.toFixed(1)})` };
-  if (distance <= 30) return { confidence: 0.7, reason: `Similar color (RGB distance ${distance.toFixed(1)})` };
-  if (distance <= 60) return { confidence: 0.4, reason: `Approximate color (RGB distance ${distance.toFixed(1)})` };
+  // CIEDE2000: ~0 = same, ~6 = barely distinguishable, ~20 = near match
+  if (d === 0) return { confidence: 1.0, reason: 'Exact color match' };
+  if (d <= 6) return { confidence: 0.9, reason: `Very similar color (ΔE ${d.toFixed(1)})` };
+  if (d <= 20) return { confidence: 0.7, reason: `Similar color (ΔE ${d.toFixed(1)})` };
+  if (d <= 40) return { confidence: 0.4, reason: `Approximate color (ΔE ${d.toFixed(1)})` };
   return { confidence: 0, reason: '' };
 }
 

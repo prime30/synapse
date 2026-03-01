@@ -90,3 +90,80 @@ export function detectScalePattern(
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Typographic scale detection (Phase 10a)
+// ---------------------------------------------------------------------------
+
+/** Result of typographic scale detection (modular scale: baseSize * ratio^n). */
+export interface TypographicScaleResult {
+  ratio: number;
+  baseSize: number;
+  values: number[];
+}
+
+/** Known modular scale ratios for typography (order: more specific before similar). */
+const TYPO_RATIOS = [
+  { label: '1.25 (major third)', value: 1.25 },
+  { label: '1.5 (perfect fifth)', value: 1.5 },
+  { label: '1.2 (minor third)', value: 1.2 },
+  { label: '1.333 (perfect fourth)', value: 1.333 },
+  { label: '1.414 (augmented fourth)', value: 1.414 },
+  { label: '1.125 (minor second)', value: 1.125 },
+  { label: '1.618 (golden)', value: 1.618 },
+  { label: '2', value: 2 },
+];
+
+const TYPO_RATIO_TOLERANCE = 0.12;
+
+/**
+ * Detect a typographic (modular) scale from font-size values.
+ * E.g. 1.25 scale: 12, 15, 18.75, 23.4, 29.3
+ *
+ * @param fontSizes Numeric font sizes (px or rem converted to px).
+ * @returns Detected scale or null if no clear pattern.
+ */
+export function detectTypographicScale(
+  fontSizes: number[],
+): TypographicScaleResult | null {
+  const values = [...new Set(fontSizes)]
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
+  if (values.length < 3) return null;
+
+  // Try each known ratio: find base such that values ≈ base * ratio^n
+  for (const known of TYPO_RATIOS) {
+    const ratio = known.value;
+    // Pick smallest value as candidate base
+    const base = values[0];
+    let matches = 0;
+    for (let i = 0; i < values.length; i++) {
+      const expected = base * Math.pow(ratio, i);
+      const actual = values[i];
+      const relErr = Math.abs(actual - expected) / expected;
+      if (relErr < TYPO_RATIO_TOLERANCE) matches++;
+    }
+    if (matches / values.length >= 0.6) {
+      return { ratio, baseSize: base, values };
+    }
+  }
+
+  // Try inferred ratio from consecutive pairs
+  const ratios: number[] = [];
+  for (let i = 1; i < values.length; i++) {
+    ratios.push(values[i] / values[i - 1]);
+  }
+  const sortedRatios = [...ratios].sort((a, b) => a - b);
+  const medianRatio = sortedRatios[Math.floor(sortedRatios.length / 2)];
+  const allClose = ratios.every(
+    (r) => Math.abs(r - medianRatio) / medianRatio < TYPO_RATIO_TOLERANCE,
+  );
+  if (allClose) {
+    return {
+      ratio: Math.round(medianRatio * 1000) / 1000,
+      baseSize: values[0],
+      values,
+    };
+  }
+  return null;
+}

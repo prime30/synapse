@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-import { handleAPIError, APIError } from '@/lib/errors/handler';
+import { APIError } from '@/lib/errors/handler';
 import { ShopifyOAuthService } from '@/lib/shopify/oauth';
 import { ShopifyTokenManager } from '@/lib/shopify/token-manager';
+import { ShopifyAdminAPI } from '@/lib/shopify/admin-api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,7 +62,16 @@ export async function GET(request: NextRequest) {
     const accessToken = tokenResponse.access_token;
     await tokenManager.storeConnection(userId, shop, accessToken, oauth.scopes);
 
+    // Register webhooks (fire-and-forget so we don't block the redirect)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    (async () => {
+      try {
+        const api = new ShopifyAdminAPI(shop, accessToken);
+        await api.registerWebhooks(`${appUrl}/api/shopify/webhooks`);
+      } catch (err) {
+        console.warn('[OAuth Callback] Webhook registration failed:', err);
+      }
+    })();
     const redirectPath = projectId
       ? `/projects/${projectId}?shopify=connected`
       : '/onboarding?step=import&shopify=connected';
@@ -74,6 +84,10 @@ export async function GET(request: NextRequest) {
         `${appUrl}/onboarding?step=connect&shopify_error=${encodeURIComponent(error.message)}`
       );
     }
-    return handleAPIError(error);
+    const message = error instanceof Error ? error.message : 'Unknown error during Shopify authentication';
+    const redirectUrl = new URL('/onboarding', process.env.NEXT_PUBLIC_APP_URL || request.url);
+    redirectUrl.searchParams.set('step', 'connect');
+    redirectUrl.searchParams.set('shopify_error', message);
+    return NextResponse.redirect(redirectUrl);
   }
 }

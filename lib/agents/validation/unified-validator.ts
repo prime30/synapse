@@ -19,7 +19,7 @@ export interface UnifiedValidationIssue {
   severity: 'error' | 'warning' | 'info';
   file: string;
   description: string;
-  category: 'syntax' | 'schema' | 'consistency' | 'design_token' | 'cross_file';
+  category: 'syntax' | 'schema' | 'consistency' | 'design_token' | 'cross_file' | 'companion_css' | 'companion_schema';
   source: string;
 }
 
@@ -51,9 +51,9 @@ const CHANGESET_CATEGORY_MAP: Record<ChangeSetIssue['category'], UnifiedValidati
   asset_reference: 'syntax',
   deprecated_liquid: 'syntax',
   locale_key: 'consistency',
-  companion_css: 'consistency',
+  companion_css: 'companion_css',
   companion_js: 'consistency',
-  companion_schema: 'schema',
+  companion_schema: 'companion_schema',
 };
 
 function mapChangeSetIssue(issue: ChangeSetIssue): UnifiedValidationIssue {

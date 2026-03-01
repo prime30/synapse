@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useFile } from './useFile';
 import { useAutoSave } from './useAutoSave';
-import { emitPreviewSyncComplete } from '@/lib/preview/sync-listener';
+import { emitPreviewSyncComplete, pollForPushCompletion } from '@/lib/preview/sync-listener';
 import { emitFileSaved } from './useThemeHealth';
 
-/** Check if auto-sync is enabled for a project (stored in localStorage). */
-function isAutoSyncEnabled(projectId: string | null): boolean {
-  if (!projectId || typeof window === 'undefined') return false;
-  try { return localStorage.getItem(`synapse-auto-sync-${projectId}`) === '1'; } catch { return false; }
-}
-
+/**
+ * Persist auto-sync preference. The server-side push-queue handles the actual
+ * push; this toggle is kept so the UI checkbox in ShopifyConnectPanel still works.
+ */
 export function setAutoSyncEnabled(projectId: string, enabled: boolean): void {
   if (typeof window === 'undefined') return;
   try {
@@ -54,9 +52,6 @@ export function useFileEditor(fileId: string | null) {
 
   const isDirty = content !== originalContent;
 
-  const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
-
   const save = useCallback(async () => {
     if (!fileId) return;
     const res = await fetch(`/api/files/${fileId}`, {
@@ -74,27 +69,10 @@ export function useFileEditor(fileId: string | null) {
     if (projectId) emitFileSaved(projectId);
 
     if (json.data?.shopifyPushQueued && projectId) {
-      // Push-queue debounce is 800ms + push ~200-400ms; refresh shortly after
-      setTimeout(() => emitPreviewSyncComplete(projectId), 1200);
-    }
-
-    // Auto-sync: debounced push to Shopify after save
-    if (projectId && isAutoSyncEnabled(projectId)) {
-      if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
-      autoSyncTimerRef.current = setTimeout(async () => {
-        try {
-          setIsAutoSyncing(true);
-          const syncRes = await fetch(`/api/projects/${projectId}/shopify/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'push' }),
-          });
-          if (syncRes.ok) {
-            emitPreviewSyncComplete(projectId);
-          }
-        } catch { /* non-blocking */ }
-        finally { setIsAutoSyncing(false); }
-      }, 2000);
+      const saveTs = Date.now();
+      pollForPushCompletion(projectId, saveTs).then(() => {
+        emitPreviewSyncComplete(projectId);
+      });
     }
   }, [fileId, content, clearDraft, refetch]);
 
@@ -110,7 +88,7 @@ export function useFileEditor(fileId: string | null) {
     originalContent,
     isDirty,
     isLoading,
-    isAutoSyncing,
+    isAutoSyncing: false,
     file,
     save,
     cancel,

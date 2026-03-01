@@ -156,6 +156,46 @@ export const RECALL_ROLE_MEMORY_TOOL: ToolDefinition = {
   },
 };
 
+/**
+ * Look up design tokens for this project by category or query.
+ * Returns token names, values, and usage guidance.
+ */
+export const GET_DESIGN_TOKENS_TOOL: ToolDefinition = {
+  name: 'get_design_tokens',
+  description:
+    'Look up design tokens for this project by category or query. Returns token names, values, and usage guidance.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      category: {
+        type: 'string',
+        enum: [
+          'color',
+          'typography',
+          'spacing',
+          'border',
+          'shadow',
+          'animation',
+          'button_system',
+          'all',
+        ],
+        description: 'Token category to retrieve',
+      },
+      query: {
+        type: 'string',
+        description: 'Optional search term to filter tokens',
+      },
+      include_ramps: {
+        type: 'boolean',
+        description:
+          'Include color ramp steps for matched brand colors. Default false.',
+      },
+    },
+    required: ['category'],
+    additionalProperties: false,
+  },
+};
+
 // -- Specialist tool selection -------------------------------------------
 
 type SpecialistType = 'liquid' | 'javascript' | 'css' | 'json' | 'schema' | 'general' | string;
@@ -328,6 +368,7 @@ export function selectV2Tools(
   tools.push(GET_SECOND_OPINION_TOOL);
   tools.push(REFRESH_MEMORY_ANCHOR_TOOL);
   tools.push(RECALL_ROLE_MEMORY_TOOL);
+  tools.push(GET_DESIGN_TOKENS_TOOL);
 
   if (intentMode === 'plan' || intentMode === 'summary') {
     tools.push(PROPOSE_PLAN_TOOL);

@@ -194,6 +194,42 @@ function RelevantFileTabs({ files, onFileClick }: { files: string[]; onFileClick
   );
 }
 
+function SourceThemeBanner({ visible }: { visible: boolean }) {
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return sessionStorage.getItem('synapse-source-preview-dismissed') === '1'; } catch { return false; }
+  });
+
+  if (!visible || dismissed) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-sky-500/10 border-b border-sky-500/20 text-xs text-sky-600 dark:text-sky-400 shrink-0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+      <span className="flex-1">
+        Previewing your <strong>published theme</strong> while the dev theme syncs in the background. Edits will appear once sync completes.
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          setDismissed(true);
+          try { sessionStorage.setItem('synapse-source-preview-dismissed', '1'); } catch { /* ignore */ }
+        }}
+        className="shrink-0 rounded p-0.5 hover:bg-sky-500/10 transition-colors"
+        aria-label="Dismiss"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   function PreviewPanel(
     {
@@ -1221,6 +1257,9 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
           )}
         </div>
       )}
+
+      {/* Source theme info banner */}
+      <SourceThemeBanner visible={!!isSourceThemePreview && !isDetached} />
 
       {isDetached ? (
         /* Detached placeholder */

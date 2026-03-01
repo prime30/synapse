@@ -136,6 +136,13 @@ function featureKeywords(chunk: ASTChunk): string[] {
   if (m.settingType) kw.push(m.settingType);
   if (m.functionName) kw.push(m.functionName);
   if (m.renderTarget) kw.push(m.renderTarget);
+  if (m.renderArgs) kw.push(...m.renderArgs);
+  if (m.filterNames) kw.push(...m.filterNames);
+  if (m.htmlClasses) kw.push(...m.htmlClasses);
+  if (m.conditionExpression) {
+    const vars = m.conditionExpression.match(/\b[a-z][\w.]*\b/g);
+    if (vars) kw.push(...vars.filter(v => v.length > 2));
+  }
   if (m.selector) {
     const classes = m.selector.match(/\.([a-zA-Z_][\w-]*)/g);
     if (classes) kw.push(...classes.map(c => c.slice(1)));
@@ -152,6 +159,18 @@ function extractFileKeywords(path: string, content: string, chunks: ASTChunk[]):
 
   for (const chunk of chunks) {
     for (const k of featureKeywords(chunk)) kw.add(k);
+  }
+
+  for (const chunk of chunks) {
+    if (chunk.metadata.filterNames) {
+      for (const f of chunk.metadata.filterNames) kw.add(f);
+    }
+    if (chunk.metadata.htmlClasses) {
+      for (const c of chunk.metadata.htmlClasses) kw.add(c);
+    }
+    if (chunk.metadata.renderArgs) {
+      for (const a of chunk.metadata.renderArgs) kw.add(a);
+    }
   }
 
   if (path.endsWith('.liquid')) {
@@ -204,6 +223,20 @@ function extractPatterns(chunks: ASTChunk[], content: string, path: string): str
     if (/\{%[-\s]*stylesheet\s*[-\s]*%\}/.test(content)) {
       patterns.push('inline stylesheet');
     }
+    const allFilters = new Set<string>();
+    for (const chunk of chunks) {
+      if (chunk.metadata.filterNames) {
+        for (const f of chunk.metadata.filterNames) allFilters.add(f);
+      }
+    }
+    if (allFilters.size > 0) {
+      const notable = [...allFilters].filter(f =>
+        ['image_url', 'asset_url', 'stylesheet_tag', 'script_tag', 'money', 'money_with_currency', 'json', 'escape', 't'].includes(f),
+      );
+      if (notable.length > 0) {
+        patterns.push(`uses filters: ${notable.join(', ')}`);
+      }
+    }
   }
 
   return patterns;
@@ -232,6 +265,66 @@ function computeEntryPoints(files: Record<string, ThemeMapFile>): string[] {
   return Object.keys(files)
     .filter(p => p.startsWith('layout/') || p.startsWith('templates/'))
     .sort();
+}
+
+// ── Framework detection ─────────────────────────────────────────────────────
+
+interface FrameworkDetection {
+  framework: string;
+  signals: string[];
+}
+
+function detectFramework(
+  files: Record<string, ThemeMapFile>,
+  globalPatterns: string[],
+): FrameworkDetection | null {
+  const paths = Object.keys(files);
+  const signals: string[] = [];
+
+  // T4S (Kalles, Flavor, etc.)
+  const t4sFiles = paths.filter(p => p.includes('t4s-') || p.includes('/t4s'));
+  const hasT4sClasses = globalPatterns.some(p => p.includes('t4s-'));
+  if (t4sFiles.length >= 3 || hasT4sClasses) {
+    signals.push(...t4sFiles.slice(0, 3).map(f => `file: ${f}`));
+    if (hasT4sClasses) signals.push('global pattern: t4s- class prefix');
+    if (paths.some(p => p.includes('product-form-dynamic'))) signals.push('file: product-form-dynamic');
+    return { framework: 'T4S', signals };
+  }
+
+  // Prestige
+  const prestigeFiles = paths.filter(p => p.match(/assets\/prestige[.-]/));
+  if (prestigeFiles.length >= 2) {
+    signals.push(...prestigeFiles.slice(0, 3).map(f => `file: ${f}`));
+    return { framework: 'Prestige', signals };
+  }
+
+  // Turbo
+  const turboFiles = paths.filter(p => p.match(/assets\/turbo[.-]/));
+  const hasIncludeSnippets = paths.filter(p => p.match(/snippets\/include-/)).length >= 3;
+  if (turboFiles.length >= 2 || (turboFiles.length >= 1 && hasIncludeSnippets)) {
+    signals.push(...turboFiles.slice(0, 3).map(f => `file: ${f}`));
+    if (hasIncludeSnippets) signals.push('pattern: snippets/include-* convention');
+    return { framework: 'Turbo', signals };
+  }
+
+  // Debut
+  const isDebut = paths.includes('snippets/product-card.liquid') &&
+    paths.includes('sections/collection-template.liquid');
+  if (isDebut) {
+    signals.push('file: snippets/product-card.liquid', 'file: sections/collection-template.liquid');
+    return { framework: 'Debut', signals };
+  }
+
+  // Dawn (Shopify's reference theme)
+  const hasDawnPattern = paths.filter(p => p.match(/sections\/main-.*\.liquid$/)).length >= 3;
+  const hasProductForm = paths.includes('snippets/product-form.liquid');
+  if (hasDawnPattern && hasProductForm) {
+    signals.push('pattern: sections/main-*.liquid convention');
+    signals.push('file: snippets/product-form.liquid');
+    return { framework: 'Dawn', signals };
+  }
+
+  return null;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -294,7 +387,9 @@ export function indexTheme(
   }
 
   const elapsedMs = Date.now() - startMs;
-  console.log(`[ThemeMap] Programmatic index: ${Object.keys(themeFiles).length} files in ${elapsedMs}ms`);
+  const globalPatterns = computeGlobalPatterns(themeFiles);
+  const frameworkResult = detectFramework(themeFiles, globalPatterns);
+  console.log(`[ThemeMap] Programmatic index: ${Object.keys(themeFiles).length} files in ${elapsedMs}ms${frameworkResult ? ` (framework: ${frameworkResult.framework})` : ''}`);
 
   return {
     projectId,
@@ -303,8 +398,11 @@ export function indexTheme(
     fileCount: indexableFiles.length,
     version: 1,
     files: themeFiles,
-    globalPatterns: computeGlobalPatterns(themeFiles),
+    globalPatterns,
     entryPoints: computeEntryPoints(themeFiles),
+    framework: frameworkResult?.framework,
+    frameworkSignals: frameworkResult?.signals,
+    intelligenceStatus: 'ready' as const,
   };
 }
 

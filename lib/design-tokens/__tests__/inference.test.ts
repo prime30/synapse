@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ExtractedToken } from '../types';
 import { groupSimilarValues } from '../inference/token-grouping';
-import { detectScalePattern } from '../inference/scale-detector';
+import { detectScalePattern, detectTypographicScale } from '../inference/scale-detector';
 import { suggestTokenName } from '../inference/naming-suggester';
 import { inferTokens } from '../inference';
 
@@ -189,6 +189,30 @@ describe('detectScalePattern', () => {
     const scale = detectScalePattern(tokens);
     expect(scale).not.toBeNull();
     expect(scale!.values).toEqual([4, 8, 16]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectTypographicScale (Phase 10a)
+// ---------------------------------------------------------------------------
+
+describe('detectTypographicScale', () => {
+  it('detects 1.25 modular scale from font sizes', () => {
+    const result = detectTypographicScale([12, 15, 18.75, 23.4, 29.3]);
+    expect(result).not.toBeNull();
+    expect(result!.ratio).toBeCloseTo(1.25, 2);
+    expect(result!.baseSize).toBe(12);
+  });
+
+  it('returns null for fewer than 3 values', () => {
+    expect(detectTypographicScale([12, 15])).toBeNull();
+    expect(detectTypographicScale([])).toBeNull();
+  });
+
+  it('detects 1.5 scale', () => {
+    const result = detectTypographicScale([14, 21, 31.5]);
+    expect(result).not.toBeNull();
+    expect(result!.ratio).toBeCloseTo(1.5, 2);
   });
 });
 

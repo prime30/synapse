@@ -15,6 +15,7 @@ import { FileEditor, type FileEditorHandle } from '@/components/features/file-ma
 import { FileUploadModal } from '@/components/features/file-management/FileUploadModal';
 import { ImportThemeModal } from '@/components/features/file-management/ImportThemeModal';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
+import { PreviewOnboarding } from '@/components/preview/PreviewOnboarding';
 import type { PreviewPanelHandle } from '@/components/preview/PreviewPanel';
 // DesignTokenBrowser moved to dedicated Design System page; panel now shows summary + link
 import { SuggestionPanel } from '@/components/features/suggestions/SuggestionPanel';
@@ -24,6 +25,9 @@ import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnec
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
 import { CheckpointPanel } from '@/components/features/checkpoints/CheckpointPanel';
 import { AgentLiveBreakout } from '@/components/features/agents/AgentLiveBreakout';
+import { AgentCodePanes } from '@/components/features/agents/AgentCodePanes';
+import { useAgentCodePanes } from '@/hooks/useAgentCodePanes';
+import type { FileCategory } from '@/hooks/useAgentCodePanes';
 import { useFileTabs, PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
@@ -695,6 +699,9 @@ export default function ProjectPage() {
   const [breakoutContent, setBreakoutContent] = useState<string | null>(null);
   const [breakoutDismissed, setBreakoutDismissed] = useState(false);
 
+  // ── Agent Code Panes (multi-file viewer below preview) ──
+  const codePanes = useAgentCodePanes();
+
   // Phase 4a: Live preview hot-reload
   const [livePreviewState, livePreviewActions] = useLivePreview();
   const handleLiveChange = useCallback((change: { filePath: string; newContent: string }) => {
@@ -1093,6 +1100,13 @@ export default function ProjectPage() {
     }, 1500);
   };
 
+  // ── Refresh Theme Intelligence ───────────────────────────────────────────
+  const handleRefreshThemeIntelligence = useCallback(() => {
+    refreshFiles();
+    setToast('Refreshing theme intelligence...');
+    setTimeout(() => setToast(null), 3000);
+  }, [refreshFiles]);
+
   // ── EPIC 3: Active file content change handler ─────────────────────────────
   const handleContentChange = useCallback((content: string) => {
     setActiveFileContent(content);
@@ -1307,6 +1321,27 @@ export default function ProjectPage() {
     }
   }, [refreshFiles, showToast]);
 
+  // ── Agent Code Panes handlers ──
+
+  const handleApplyCodePane = useCallback(async (category: FileCategory) => {
+    const entry = codePanes.panes.get(category);
+    if (!entry) return;
+    const fileId = resolveFileId(entry.filePath, rawFiles);
+    if (!fileId) {
+      console.warn('[AgentCodePanes] Could not resolve fileId for', entry.filePath);
+      return;
+    }
+    await handleApplyCode(entry.content, fileId, entry.filePath.split('/').pop() ?? entry.filePath);
+    codePanes.dismissPane(category);
+  }, [codePanes, rawFiles, handleApplyCode]);
+
+  const handleRefineCodePane = useCallback((category: FileCategory) => {
+    const entry = codePanes.panes.get(category);
+    if (!entry) return;
+    const fileName = entry.filePath.split('/').pop() ?? entry.filePath;
+    sendMessageRef.current?.(`Refine the ${category} code in ${fileName}. Here is the current version:\n\n\`\`\`${category === 'js' ? 'javascript' : category}\n${entry.content}\n\`\`\``);
+  }, [codePanes]);
+
   // Handle saving a new file from AI response
   const handleSaveCode = useCallback(async (code: string, fileName: string) => {
     try {
@@ -1459,6 +1494,7 @@ export default function ProjectPage() {
     { id: 'pull-shopify', category: 'command', label: 'Pull from Shopify', action: () => {} },
     { id: 'export-theme', category: 'command', label: 'Export Theme ZIP', action: () => {} },
     { id: 'memory', category: 'command', label: 'Open Memory Panel', action: () => setMemoryOpen(true) },
+    { id: 'refresh-theme-intelligence', category: 'command', label: 'Refresh Theme Intelligence', action: handleRefreshThemeIntelligence },
 
     // Navigation
     { id: 'nav-files', category: 'navigation', label: 'Go to Files', action: () => { setActiveActivity('files'); setFilesNav('files'); } },
@@ -1476,7 +1512,7 @@ export default function ProjectPage() {
     { id: 'account-usage', category: 'account', label: 'Open Usage', action: () => window.open('/account/usage', '_blank') },
     { id: 'account-billing', category: 'account', label: 'Open Billing', action: () => window.open('/account/billing', '_blank') },
     { id: 'account-settings', category: 'account', label: 'Open Settings', action: () => window.open('/account/settings', '_blank') },
-  ], []);
+  ], [handleRefreshThemeIntelligence]);
 
   // ── EPIC 3: File list for command palette ─────────────────────────────────
   const commandPaletteFiles = useMemo(
@@ -2040,54 +2076,58 @@ export default function ProjectPage() {
                   style={tabs.activeFileId !== PREVIEW_TAB_ID ? { position: 'absolute', width: 0, height: 0, overflow: 'hidden' } : undefined}
                 >
                   {showPreview && previewThemeId ? (
-                    <div className="flex-1 min-h-0 overflow-hidden">
-                      <PreviewPanel
-                        ref={previewRef}
-                        storeDomain={connection!.store_domain}
-                        themeId={previewThemeId}
-                        projectId={projectId}
-                        path={previewPathOverride ?? previewPathFromFile(activeFilePath)}
-                        syncStatus={connection!.sync_status}
-                        isSourceThemePreview={isPreviewUsingSourceTheme}
-                        fill
-                        themeFiles={rawFiles.map((f) => ({ id: f.id, path: f.path }))}
-                        onFilesRefresh={() => queryClient.invalidateQueries({ queryKey: ['project-files', projectId] })}
-                        onRelevantFileClick={(filePath) => {
-                          const fileId = resolveFileId(filePath, rawFiles);
-                          if (fileId) tabs.openTab(fileId);
-                        }}
-                        onElementSelected={(el) => {
-                          setSelectedElement(el);
-                          agentChatRef.current?.querySelector('textarea')?.focus();
-                        }}
-                        liveChangeCount={livePreviewState.changeCount}
-                        onAnnotation={(data) => {
-                          setPendingAnnotation(data);
-                          // Pre-fill the chat input with the annotation note
-                          const textarea = agentChatRef.current?.querySelector('textarea');
-                          if (textarea && data.note) {
-                            textarea.value = data.note;
-                            textarea.focus();
-                            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                          } else if (textarea) {
-                            textarea.focus();
-                          }
-                        }}
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div className={`min-h-0 overflow-hidden transition-all duration-300 ${codePanes.visible ? 'flex-1 min-h-[200px]' : 'flex-1'}`}>
+                        <PreviewPanel
+                          ref={previewRef}
+                          storeDomain={connection!.store_domain}
+                          themeId={previewThemeId}
+                          projectId={projectId}
+                          path={previewPathOverride ?? previewPathFromFile(activeFilePath)}
+                          syncStatus={connection!.sync_status}
+                          isSourceThemePreview={isPreviewUsingSourceTheme}
+                          fill
+                          themeFiles={rawFiles.map((f) => ({ id: f.id, path: f.path }))}
+                          onFilesRefresh={() => queryClient.invalidateQueries({ queryKey: ['project-files', projectId] })}
+                          onRelevantFileClick={(filePath) => {
+                            const fileId = resolveFileId(filePath, rawFiles);
+                            if (fileId) tabs.openTab(fileId);
+                          }}
+                          onElementSelected={(el) => {
+                            setSelectedElement(el);
+                            agentChatRef.current?.querySelector('textarea')?.focus();
+                          }}
+                          liveChangeCount={livePreviewState.changeCount}
+                          onAnnotation={(data) => {
+                            setPendingAnnotation(data);
+                            const textarea = agentChatRef.current?.querySelector('textarea');
+                            if (textarea && data.note) {
+                              textarea.value = data.note;
+                              textarea.focus();
+                              textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                            } else if (textarea) {
+                              textarea.focus();
+                            }
+                          }}
+                        />
+                      </div>
+                      <AgentCodePanes
+                        panes={codePanes.panes}
+                        visible={codePanes.visible}
+                        onApply={handleApplyCodePane}
+                        onRefine={handleRefineCodePane}
+                        onDismiss={codePanes.dismissAll}
                       />
                     </div>
                   ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                      <div className="w-14 h-14 mb-3 rounded-xl ide-surface-inset border ide-border flex items-center justify-center">
-                        <svg className="w-7 h-7 ide-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
-                        </svg>
-                      </div>
-                      <p className="text-sm ide-text-muted font-medium">
-                        {connected && !previewThemeId
-                          ? 'Setting up preview theme…'
-                          : 'Import a theme or connect Shopify to see preview'}
-                      </p>
-                    </div>
+                    <PreviewOnboarding
+                      connected={connected}
+                      hasThemeId={!!previewThemeId}
+                      hasFiles={hasFiles}
+                      syncStatus={connection?.sync_status ?? null}
+                      onConnectStore={() => setActiveActivity('store')}
+                      onImportTheme={() => setImportModalOpen(true)}
+                    />
                   )}
                 </div>
               )}
@@ -2449,6 +2489,8 @@ export default function ProjectPage() {
               onOpenFiles={handleOpenFiles}
               onScrollToEdit={handleScrollToEdit}
               onAgentActivity={handleAgentActivity}
+              onCodePaneUpdate={(u) => codePanes.updatePane(u.filePath, u.content, u.originalContent)}
+              onCodePaneReset={codePanes.reset}
               onOpenMemory={() => setMemoryOpen(true)}
               isMemoryOpen={memoryOpen}
               pendingAttachedFile={pendingAttachedFile}
@@ -2473,15 +2515,27 @@ export default function ProjectPage() {
         cacheBackend={process.env.NEXT_PUBLIC_CACHE_BACKEND as 'redis' | 'memory' | undefined ?? undefined}
         loadingProgress={projectLoading.allDone ? null : { done: projectLoading.items.filter(i => i.status === 'done').length, total: projectLoading.items.length }}
       >
-        {rawFiles.length > 0 && (
-          <span
-            className="inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400"
-            title={`Theme index: ${rawFiles.length} files tracked`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-500 dark:bg-green-400" />
-            {rawFiles.length} indexed
-          </span>
-        )}
+        {rawFiles.length > 0 && (() => {
+          const status = rawFiles.length > 0 ? 'ready' : 'pending';
+          const statusConfig: { dot: string; text: string } = {
+            pending: { dot: 'bg-stone-400 dark:bg-stone-500', text: 'Pending' },
+            indexing: { dot: 'bg-sky-500 dark:bg-sky-400 motion-safe:animate-pulse', text: 'Indexing...' },
+            ready: { dot: 'bg-emerald-500 dark:bg-emerald-400', text: `${rawFiles.length} indexed` },
+            enriching: { dot: 'bg-sky-500 dark:bg-sky-400', text: 'Enriching...' },
+            stale: { dot: 'bg-amber-500 dark:bg-amber-400', text: 'Refresh needed' },
+          }[status] ?? { dot: 'bg-emerald-500 dark:bg-emerald-400', text: `${rawFiles.length} indexed` };
+          return (
+            <button
+              type="button"
+              onClick={handleRefreshThemeIntelligence}
+              className="inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 transition-colors"
+              title="Click to refresh theme intelligence"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusConfig.dot}`} />
+              {statusConfig.text}
+            </button>
+          );
+        })()}
         <LocalSyncIndicator projectId={projectId} />
         <BinarySyncIndicator projectId={projectId} />
       </StatusBar>
@@ -2591,8 +2645,8 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* Agent Live Breakout — floating PiP panel showing live edits */}
-      {!breakoutDismissed && breakoutAgent && (
+      {/* Agent Live Breakout — floating PiP panel showing live edits (suppressed when code panes visible in preview) */}
+      {!breakoutDismissed && breakoutAgent && !(codePanes.visible && tabs.activeFileId === PREVIEW_TAB_ID) && (
         <AgentLiveBreakout
           agentType={breakoutAgent}
           filePath={breakoutFile}

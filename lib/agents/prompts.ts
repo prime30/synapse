@@ -262,6 +262,8 @@ If the PM provides specific line ranges in your task description (from the STRUC
 
 You may ONLY modify .liquid files.
 
+Before creating new markup, search existing snippets for reusable components. Prefer {% render 'existing-snippet' %} over duplicating markup.
+
 You do NOT:
 - Modify JavaScript, CSS, or other non-Liquid files
 - Make changes beyond the delegated task scope
@@ -438,6 +440,8 @@ If the PM provides specific line ranges in your task description (from the STRUC
 
 You may ONLY modify .js and .ts files.
 
+Before creating new markup, search existing snippets for reusable components. Prefer {% render 'existing-snippet' %} over duplicating markup.
+
 You do NOT:
 - Modify Liquid, CSS, or other non-JavaScript files
 - Make changes beyond the delegated task scope
@@ -579,6 +583,8 @@ If the PM provides specific line ranges in your task description (from the STRUC
 - Do NOT search for CSS that doesn't exist yet — find a nearby anchor point.
 
 You may ONLY modify .css and .scss files.
+
+Before creating new markup, search existing snippets for reusable components. Prefer {% render 'existing-snippet' %} over duplicating markup.
 
 You do NOT:
 - Modify Liquid, JavaScript, or other non-CSS files

@@ -28,6 +28,12 @@ export interface ThemeMapFile {
   renderedBy: string[];
   /** Notable patterns or conventions in this file */
   patterns: string[];
+  /** LLM-generated functional summary */
+  llmSummary?: string;
+  /** SHA-256 of content when summary was generated */
+  summaryContentHash?: string;
+  /** SHA-256 of current content for fingerprint gate */
+  contentHash?: string;
 }
 
 export interface ThemeMap {
@@ -44,6 +50,14 @@ export interface ThemeMap {
   globalPatterns: string[];
   /** Theme-wide dependency graph summary */
   entryPoints: string[];
+  /** Schema version (2 = supports summaries) */
+  schemaVersion?: number;
+  /** Detected theme framework */
+  framework?: string;
+  /** Signals that led to framework detection */
+  frameworkSignals?: string[];
+  /** Indexing status for UI feedback */
+  intelligenceStatus?: 'pending' | 'indexing' | 'ready' | 'enriching' | 'stale';
 }
 
 export interface ThemeMapLookupResult {
@@ -56,9 +70,12 @@ export interface ThemeMapLookupResult {
       lines: [number, number];
       description: string;
     }>;
+    patterns: string[];
   }>;
   /** Related files the agent may need to read */
   related: string[];
   /** Whether the map had a confident match */
   confident: boolean;
+  /** Theme-wide conventions (from globalPatterns) */
+  conventions: string[];
 }

@@ -11,10 +11,10 @@
  *   4. Generate replacement suggestions via `generateSuggestions`
  */
 
+import { differenceCiede2000, parse } from 'culori';
 import { TokenExtractor } from '../token-extractor';
 import { listByProject } from '../models/token-model';
 import type { DesignTokenRow } from '../models/token-model';
-import { parseColor } from './suggestion-generator';
 import { generateSuggestions, type StoredTokenSummary } from './suggestion-generator';
 import type { DriftResult, DriftItem } from './types';
 
@@ -22,8 +22,8 @@ import type { DriftResult, DriftItem } from './types';
 // Thresholds
 // ---------------------------------------------------------------------------
 
-/** Maximum RGB Euclidean distance to classify as "near match". */
-const COLOR_NEAR_MATCH_THRESHOLD = 30;
+/** CIEDE2000 deltaE ~20 = near match (perceptually similar). */
+const COLOR_NEAR_MATCH_THRESHOLD = 20;
 
 /** Maximum percentage difference to classify a numeric value as "near match". */
 const NUMERIC_NEAR_MATCH_RATIO = 0.15;
@@ -143,17 +143,16 @@ function findNearMatch(
   category: string,
   stored: DesignTokenRow[],
 ): DesignTokenRow | null {
+  const deltaE = differenceCiede2000();
   for (const token of stored) {
     if (token.category !== category) continue;
 
     if (category === 'color') {
-      const a = parseColor(value);
-      const b = parseColor(token.value);
+      const a = parse(value);
+      const b = parse(token.value);
       if (a && b) {
-        const dist = Math.sqrt(
-          (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2,
-        );
-        if (dist > 0 && dist <= COLOR_NEAR_MATCH_THRESHOLD) return token;
+        const d = deltaE(a, b);
+        if (d !== undefined && d > 0 && d <= COLOR_NEAR_MATCH_THRESHOLD) return token;
       }
     } else if (
       category === 'spacing' ||

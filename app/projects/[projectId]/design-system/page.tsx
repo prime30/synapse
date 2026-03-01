@@ -6,6 +6,8 @@ import { OverviewSection } from '@/components/features/design-system/OverviewSec
 import { TokensSection } from '@/components/features/design-system/TokensSection';
 import { ComponentsSection } from '@/components/features/design-system/ComponentsSection';
 import { CleanupSection } from '@/components/features/design-system/CleanupSection';
+import { StandardizationWizard } from '@/components/features/design-system/StandardizationWizard';
+import { RulesSection } from '@/components/features/design-system/RulesSection';
 import { HistorySection } from '@/components/features/design-system/HistorySection';
 
 /* ------------------------------------------------------------------ */
@@ -16,7 +18,9 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'components', label: 'Components' },
+  { id: 'rules', label: 'Rules' },
   { id: 'cleanup', label: 'Cleanup' },
+  { id: 'standardize', label: 'Standardize' },
   { id: 'history', label: 'History' },
 ] as const;
 
@@ -114,8 +118,17 @@ function DesignSystemInner() {
             }}
           />
         )}
+        {activeTab === 'rules' && (
+          <RulesSection projectId={projectId} />
+        )}
         {activeTab === 'cleanup' && (
           <CleanupSection projectId={projectId} />
+        )}
+        {activeTab === 'standardize' && (
+          <StandardizationWizard
+            projectId={projectId}
+            onComplete={() => setTab('overview')}
+          />
         )}
         {activeTab === 'history' && (
           <HistorySection projectId={projectId} />

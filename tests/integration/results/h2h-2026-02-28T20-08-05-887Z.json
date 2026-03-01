@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-02-28T20:08:05.887Z",
+  "prompt": "What accessibility issues exist in the product-thumbnail.liquid snippet? What specific changes would improve it?",
+  "scores": [
+    {
+      "pipeline": "executeSolo (v1 legacy)",
+      "success": true,
+      "totalTimeMs": 41337,
+      "timeToFirstChunkMs": 41337,
+      "responseLength": 5779,
+      "changesProduced": 0,
+      "toolCallCount": 0,
+      "toolsUsed": [],
+      "inputTokens": 6945,
+      "outputTokens": 2008,
+      "estimatedCostUSD": 0.050955,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "pipeline": "streamAgentLoop (v1 streaming)",
+      "success": true,
+      "totalTimeMs": 67775,
+      "timeToFirstChunkMs": 928,
+      "responseLength": 11360,
+      "changesProduced": 0,
+      "toolCallCount": 3,
+      "toolsUsed": [
+        "read_file",
+        "check_lint"
+      ],
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "estimatedCostUSD": 0,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "pipeline": "streamV2 (v2 architecture)",
+      "success": true,
+      "totalTimeMs": 33398,
+      "timeToFirstChunkMs": 1808,
+      "responseLength": 5718,
+      "changesProduced": 0,
+      "toolCallCount": 0,
+      "toolsUsed": [],
+      "inputTokens": 3,
+      "outputTokens": 1671,
+      "estimatedCostUSD": 0.025074,
+      "tier": "SIMPLE",
+      "model": "claude-sonnet-4-6"
+    }
+  ]
+}

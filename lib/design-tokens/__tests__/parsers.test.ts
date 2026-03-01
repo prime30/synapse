@@ -43,11 +43,12 @@ describe('parseCSSTokens', () => {
     expect(tokens.some((t) => t.value === 'rgba(0, 0, 0, 0.5)')).toBe(true);
   });
 
-  it('extracts font-family, font-size, and spacing declarations', () => {
-    const css = `body { font-family: Inter, sans-serif; font-size: 16px; margin: 10px 20px; }`;
+  it('extracts font-family, font-size, text-transform, and spacing declarations', () => {
+    const css = `body { font-family: Inter, sans-serif; font-size: 16px; text-transform: uppercase; margin: 10px 20px; }`;
     const tokens = parseCSSTokens(css, 'test.css');
     expect(tokens.some((t) => t.category === 'typography' && t.value.includes('Inter'))).toBe(true);
     expect(tokens.some((t) => t.category === 'typography' && t.value === '16px')).toBe(true);
+    expect(tokens.some((t) => t.category === 'typography' && t.value === 'uppercase')).toBe(true);
     expect(tokens.some((t) => t.category === 'spacing' && t.value === '10px')).toBe(true);
     expect(tokens.some((t) => t.category === 'spacing' && t.value === '20px')).toBe(true);
   });

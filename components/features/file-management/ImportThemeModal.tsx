@@ -173,9 +173,10 @@ export function ImportThemeModal({
       const count = result.data?.imported ?? 0;
       dismiss(uploadingToastId);
       toast({ message: `Imported ${count} file${count !== 1 ? 's' : ''} from ${zipFile.name}`, type: 'success' });
+      toast({ message: 'Building theme intelligence...', type: 'info', duration: 120_000 });
       setImportSuccess(`Imported ${count} file${count !== 1 ? 's' : ''} from ${zipFile.name}`);
+      setSuccessProjectId(projectId);
       onImportSuccess?.();
-      setTimeout(() => onClose(), 1500);
     } catch (err) {
       dismiss(uploadingToastId);
       const msg = err instanceof Error ? err.message : 'Upload failed';
@@ -278,6 +279,11 @@ export function ImportThemeModal({
         message: successMsg,
         type: result.errors.length > 0 ? 'warning' : 'success',
         duration: 8_000,
+      });
+      toast({
+        message: 'Building theme intelligence...',
+        type: 'info',
+        duration: 120_000,
       });
       setImportSuccess(successMsg);
 
@@ -401,6 +407,7 @@ export function ImportThemeModal({
             <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-sm space-y-2">
               <p>{importSuccess}</p>
               <p className="ide-text-muted text-xs">Design tokens are being extracted in the background.</p>
+              <p className="ide-text-muted text-xs">Images and fonts will sync in the background.</p>
               {successProjectId && (
                 <button
                   onClick={() => {

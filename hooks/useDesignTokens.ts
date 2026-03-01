@@ -14,13 +14,37 @@ export interface DesignTokensResponse {
   spacing: string[];
   radii: string[];
   shadows: string[];
+  animation: string[];
+  breakpoints: string[];
+  layout: string[];
+  zindex: string[];
+  a11y: string[];
+}
+
+export interface ColorRampEntry {
+  step: number;
+  hex: string;
+  contrastOnWhite: number;
+  contrastOnBlack: number;
+}
+
+export interface DriftEvent {
+  projectId: string;
+  filePath: string;
+  hardcodedValue: string;
+  expectedToken?: string;
+  count: number;
+  lastSeen: number;
 }
 
 export interface DesignTokensData {
   tokens: DesignTokensResponse;
+  ramps?: Record<string, ColorRampEntry[]>;
   tokenCount: number;
   fileCount: number;
   analyzedFiles: string[];
+  stale?: boolean;
+  driftEvents?: DriftEvent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -49,11 +73,21 @@ export interface ScanProgress {
 // Hook return type
 // ---------------------------------------------------------------------------
 
+export interface UseDesignTokensOptions {
+  /**
+   * When enabled, poll every 2s for up to 30s until tokens.length > 0.
+   * Useful for the onboarding step and design system page opened right after import.
+   */
+  pollUntilReady?: boolean;
+}
+
 export interface UseDesignTokensReturn {
   data: DesignTokensData | null;
   tokens: DesignTokensResponse | null;
   isLoading: boolean;
   isScanning: boolean;
+  /** True while pollUntilReady is actively polling */
+  isPolling: boolean;
   scanProgress: ScanProgress | null;
   error: string | null;
   refetch: () => Promise<void>;
@@ -74,11 +108,13 @@ export interface UseDesignTokensReturn {
  * When rendered outside the provider (e.g. standalone), scan operations
  * fall back to a local AbortController that aborts on unmount.
  */
-export function useDesignTokens(projectId: string): UseDesignTokensReturn {
+export function useDesignTokens(projectId: string, options?: UseDesignTokensOptions): UseDesignTokensReturn {
   const [data, setData] = useState<DesignTokensData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Context-backed scan (survives navigation) ────────────────────────
   const ctx = useDesignScan();
@@ -165,6 +201,46 @@ export function useDesignTokens(projectId: string): UseDesignTokensReturn {
     };
   }, [fetchTokens]);
 
+  // ── Poll until tokens are ready (optional) ──────────────────────────
+
+  const pollUntilReady = options?.pollUntilReady ?? false;
+  const POLL_INTERVAL = 2000;
+  const MAX_POLL_TIME = 30000;
+
+  useEffect(() => {
+    if (!pollUntilReady || !projectId) return;
+
+    const hasTokens = (data?.tokenCount ?? 0) > 0;
+    if (hasTokens) {
+      setIsPolling(false);
+      return;
+    }
+
+    setIsPolling(true);
+    const startTime = Date.now();
+    let cancelled = false;
+
+    async function doPoll() {
+      if (cancelled) return;
+      if (Date.now() - startTime > MAX_POLL_TIME) {
+        setIsPolling(false);
+        return;
+      }
+      await fetchTokens();
+      if (!cancelled) {
+        pollTimerRef.current = setTimeout(doPoll, POLL_INTERVAL);
+      }
+    }
+
+    pollTimerRef.current = setTimeout(doPoll, POLL_INTERVAL);
+
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      setIsPolling(false);
+    };
+  }, [pollUntilReady, projectId, data?.tokenCount, fetchTokens]);
+
   // ── Merge context scan state with local state ────────────────────────
 
   const isScanning = ctx?.isScanning ?? false;
@@ -176,6 +252,7 @@ export function useDesignTokens(projectId: string): UseDesignTokensReturn {
     tokens: data?.tokens ?? null,
     isLoading,
     isScanning,
+    isPolling,
     scanProgress,
     error: combinedError,
     refetch: fetchTokens,

@@ -24,29 +24,27 @@ export function EmptyStateCoaching({
     [onSelect]
   );
 
-  const displaySuggestions = suggestions.slice(0, 3);
+  const displaySuggestions = suggestions.slice(0, 4);
 
   if (displaySuggestions.length === 0) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1 px-4 py-8">
-      <h2 className="text-lg font-semibold text-stone-900 dark:text-white mb-4">
-        Try asking...
-      </h2>
-      <div className="w-full max-w-md space-y-2">
+    <div className="w-full max-w-[320px] mt-4">
+      <p className="text-xs ide-text-muted mb-2 text-center">Try asking&hellip;</p>
+      <div className="space-y-1.5">
         {displaySuggestions.map((suggestion) => (
           <button
             key={suggestion.prompt}
             type="button"
             onClick={() => handleClick(suggestion.prompt)}
             className="
-              w-full px-4 py-3
-              bg-stone-50 dark:bg-[#141414]
-              border border-stone-200 dark:border-[#2a2a2a]
+              w-full px-3 py-2
+              ide-surface
+              border ide-border-subtle
               rounded-lg cursor-pointer
-              hover:bg-stone-100 dark:hover:bg-[#1e1e1e]
+              hover:ide-hover
               transition-colors text-left
-              flex items-center gap-3
+              flex items-center gap-2
             "
           >
             {suggestion.icon && (
@@ -54,7 +52,7 @@ export function EmptyStateCoaching({
                 {suggestion.icon}
               </span>
             )}
-            <span className="text-sm text-stone-700 dark:text-stone-300">
+            <span className="text-sm ide-text-2">
               {suggestion.label}
             </span>
           </button>

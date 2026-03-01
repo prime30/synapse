@@ -8,6 +8,7 @@ const V2_TOOLS = new Set([
   'get_second_opinion',
   'refresh_memory_anchor',
   'recall_role_memory',
+  'get_design_tokens',
   'create_plan',
   'update_plan',
   'read_plan',

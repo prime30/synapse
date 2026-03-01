@@ -1,0 +1,43 @@
+# Shopify Theme Coding Standards
+
+## Liquid
+- Use `{% liquid %}` for multiline logic blocks
+- Use `{% render %}` never `{% include %}`
+- Use `| image_url: width: N` never `| img_url`
+- Use `{% comment %}` or `{% # %}` for comments
+- Server-side render with Liquid first; use JS only when necessary
+- Use `| t` for all user-facing text (locale translations)
+- Scope variables with `{% capture %}` to avoid polluting global scope
+
+## CSS
+- BEM naming: `.block__element--modifier` with dashes between words
+- Max specificity `0 4 0` (four classes). Prefer `0 1 0` (single class)
+- Never use IDs as selectors
+- Never use `!important` — if unavoidable, comment why
+- CSS variables for all values; never hardcode colors
+- Mobile-first (`min-width` media queries)
+- No nesting beyond first level (exception: media queries, parent-state children)
+- No `&` operator in nesting
+
+## JavaScript
+- No external dependencies; use native browser APIs first
+- `const` over `let`; never `var`
+- Module pattern with `#` private methods
+- `for...of` over `.forEach()`
+- Use `<details>`/`<summary>`, `popover` over JS toggles
+- Blank line before new code blocks (anything with `{` `}`)
+
+## HTML
+- Semantic elements (`<nav>`, `<main>`, `<article>`, `<section>`, `<aside>`)
+- CamelCase IDs, append `-{{ section.id }}` or `-{{ block.id }}`
+- All interactive elements must be focusable
+- Use `tabindex="0"` only (never positive values)
+- Proper ARIA labels and roles on custom controls
+- `loading="lazy"` below fold; `fetchpriority="high"` on LCP images
+
+## Schema Settings
+- Order settings to match visual order (top-to-bottom, left-to-right)
+- Resource pickers first, then customization settings
+- Group related settings under headings (Layout, Typography, Colors, Padding)
+- Checkbox labels as nouns not verbs ("Language selector" not "Enable language selector")
+- Always provide sensible `default` values

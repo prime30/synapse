@@ -5,14 +5,55 @@
  * to produce enriched `InferredToken[]` from raw `ExtractedToken[]`.
  */
 
-import type { ExtractedToken, InferredToken } from '../types';
-import { groupSimilarValues, hexToRgb, rgbStringToRgb, colorDistance } from './token-grouping';
-import { detectScalePattern } from './scale-detector';
+import { differenceCiede2000, parse } from 'culori';
+import type { ExtractedToken, InferredToken, TokenTier } from '../types';
+import { groupSimilarValues, extractNumericValue } from './token-grouping';
+import { detectScalePattern, detectTypographicScale } from './scale-detector';
 import { suggestTokenName } from './naming-suggester';
+
+// ---------------------------------------------------------------------------
+// Tier classification (primitive | semantic | component)
+// ---------------------------------------------------------------------------
+
+const COMPONENT_KEYWORDS = [
+  'button',
+  'card',
+  'nav',
+  'header',
+  'footer',
+  'modal',
+  'form',
+];
+const SEMANTIC_KEYWORDS = [
+  'primary',
+  'secondary',
+  'accent',
+  'error',
+  'success',
+  'warning',
+  'background',
+  'foreground',
+  'text',
+  'heading',
+  'body',
+];
+
+function inferTier(token: ExtractedToken & { suggestedName?: string }): TokenTier {
+  const name = (token.name ?? '').toLowerCase();
+  const checkName = (token.suggestedName ?? name).toLowerCase();
+  if (!checkName) return 'primitive';
+
+  const parts = checkName.split(/[-_.]/);
+  for (const part of parts) {
+    if (COMPONENT_KEYWORDS.includes(part)) return 'component';
+    if (SEMANTIC_KEYWORDS.includes(part)) return 'semantic';
+  }
+  return 'primitive';
+}
 
 // Re-export sub-modules for convenience
 export { groupSimilarValues } from './token-grouping';
-export { detectScalePattern } from './scale-detector';
+export { detectScalePattern, detectTypographicScale } from './scale-detector';
 export { suggestTokenName } from './naming-suggester';
 
 // ---------------------------------------------------------------------------
@@ -72,12 +113,11 @@ function detectInconsistencies(
   return issues;
 }
 
-/** Check if two colour strings are very close (Euclidean distance < 15 in RGB). */
+/** Check if two colour strings are very close (CIEDE2000 deltaE ~6 = same color). */
 function areSimilarColors(a: string, b: string): boolean {
-  const rgbA = hexToRgb(a) ?? rgbStringToRgb(a);
-  const rgbB = hexToRgb(b) ?? rgbStringToRgb(b);
-  if (!rgbA || !rgbB) return false;
-  return colorDistance(rgbA, rgbB) < 15;
+  const deltaE = differenceCiede2000();
+  const d = deltaE(parse(a), parse(b));
+  return d !== undefined && d < 6;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +152,20 @@ export function inferTokens(extractedTokens: ExtractedToken[]): InferredToken[] 
     }
   }
 
+  // 2b. Detect typographic scale (font sizes)
+  const typoTokens = extractedTokens.filter((t) => t.category === 'typography');
+  const fontSizes = typoTokens
+    .map((t) => extractNumericValue(t.value))
+    .filter((n): n is number => n !== null && n > 0);
+  const typoScale = detectTypographicScale(fontSizes);
+  if (typoScale) {
+    for (const g of groups) {
+      if (g.category === 'typography') {
+        g.pattern += ` (typographic scale: base=${typoScale.baseSize}px, ratio=${typoScale.ratio})`;
+      }
+    }
+  }
+
   // 3. Build token → groupId lookup
   const tokenGroupMap = new Map<string, string>();
   for (const g of groups) {
@@ -131,12 +185,14 @@ export function inferTokens(extractedTokens: ExtractedToken[]): InferredToken[] 
     const suggestion = suggestTokenName(token, existingNames);
     existingNames.push(suggestion.name);
 
+    const tokenWithSuggestion = { ...token, suggestedName: suggestion.name };
     inferred.push({
       ...token,
       suggestedName: suggestion.name,
       confidence: suggestion.confidence,
       groupId: tokenGroupMap.get(token.id) ?? 'ungrouped',
       inconsistencies: inconsistencies.get(token.id) ?? [],
+      tier: inferTier(tokenWithSuggestion),
     });
   }
 

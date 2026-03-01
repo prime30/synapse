@@ -78,9 +78,10 @@ export function getStripePriceId(
 
   if (envValue) return envValue;
 
-  // Placeholder – will cause a Stripe error if actually used, which is the
-  // desired behaviour during development so it's obvious the env var is missing.
-  return `price_placeholder_${plan}_${interval.toLowerCase()}`;
+  throw new Error(
+    `Missing Stripe price env var: ${envKey}. ` +
+    `Create the price in the Stripe Dashboard and set ${envKey} in your environment.`,
+  );
 }
 
 /**

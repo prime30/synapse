@@ -223,7 +223,7 @@ function createMainWindow() {
   });
 
   const port = IS_DEV ? DEV_PORT : PROD_PORT;
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  mainWindow.loadURL(`http://127.0.0.1:${port}/projects`);
 
   mainWindow.once('ready-to-show', () => {
     if (splashWindow) {
@@ -243,6 +243,18 @@ function createMainWindow() {
       shell.openExternal(url);
     }
     return { action: 'deny' };
+  });
+
+  // Block navigation to marketing pages — desktop app should only show the IDE.
+  const MARKETING_PATHS = ['/', '/pricing', '/features', '/about', '/contact', '/blog', '/docs', '/careers', '/changelog', '/roadmap', '/terms', '/privacy', '/security', '/examples', '/download', '/benchmarks', '/architecture', '/welcome', '/v2'];
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === '127.0.0.1' && MARKETING_PATHS.includes(parsed.pathname)) {
+        event.preventDefault();
+        mainWindow.loadURL(`http://127.0.0.1:${port}/projects`);
+      }
+    } catch { /* allow navigation */ }
   });
 
   if (IS_DEV) {

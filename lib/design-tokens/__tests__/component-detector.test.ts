@@ -4,9 +4,9 @@ import { detectComponents } from '../components/component-detector';
 describe('detectComponents', () => {
   it('groups cart.liquid + cart.css + cart.js into a Cart component', () => {
     const files = [
-      { path: 'sections/cart.liquid', name: 'cart.liquid' },
-      { path: 'assets/cart.css', name: 'cart.css' },
-      { path: 'assets/cart.js', name: 'cart.js' },
+      { path: 'sections/cart.liquid', content: '' },
+      { path: 'assets/cart.css', content: '' },
+      { path: 'assets/cart.js', content: '' },
     ];
     const components = detectComponents(files);
     const cart = components.find((c) => c.name === 'Cart');
@@ -32,8 +32,8 @@ describe('detectComponents', () => {
 
   it('creates a component for a standalone Liquid section', () => {
     const files = [
-      { path: 'sections/header.liquid', name: 'header.liquid' },
-      { path: 'sections/footer.liquid', name: 'footer.liquid' },
+      { path: 'sections/header.liquid', content: '' },
+      { path: 'sections/footer.liquid', content: '' },
     ];
     const components = detectComponents(files);
     // Each is a standalone component (liquid file alone counts)
@@ -43,8 +43,8 @@ describe('detectComponents', () => {
 
   it('strips section- prefix from asset filenames for matching', () => {
     const files = [
-      { path: 'sections/hero.liquid', name: 'hero.liquid' },
-      { path: 'assets/section-hero.css', name: 'section-hero.css' },
+      { path: 'sections/hero.liquid', content: '' },
+      { path: 'assets/section-hero.css', content: '' },
     ];
     const components = detectComponents(files);
     const hero = components.find((c) => c.name === 'Hero');
@@ -55,8 +55,8 @@ describe('detectComponents', () => {
 
   it('groups assets with same base name even without Liquid', () => {
     const files = [
-      { path: 'assets/modal.css', name: 'modal.css' },
-      { path: 'assets/modal.js', name: 'modal.js' },
+      { path: 'assets/modal.css', content: '' },
+      { path: 'assets/modal.js', content: '' },
     ];
     const components = detectComponents(files);
     const modal = components.find((c) => c.name === 'Modal');
@@ -66,7 +66,7 @@ describe('detectComponents', () => {
 
   it('does not create a component for a single non-Liquid file', () => {
     const files = [
-      { path: 'assets/base.css', name: 'base.css' },
+      { path: 'assets/base.css', content: '' },
     ];
     const components = detectComponents(files);
     // Single CSS file with no matching Liquid = no component
@@ -75,16 +75,16 @@ describe('detectComponents', () => {
 
   it('handles a full Dawn-like theme with many components', () => {
     const files = [
-      { path: 'sections/header.liquid', name: 'header.liquid' },
-      { path: 'sections/footer.liquid', name: 'footer.liquid' },
-      { path: 'sections/cart-drawer.liquid', name: 'cart-drawer.liquid' },
-      { path: 'assets/cart-drawer.css', name: 'cart-drawer.css' },
-      { path: 'assets/cart-drawer.js', name: 'cart-drawer.js' },
-      { path: 'snippets/product-card.liquid', name: 'product-card.liquid' },
-      { path: 'assets/product-card.css', name: 'product-card.css' },
-      { path: 'assets/base.css', name: 'base.css' },
-      { path: 'assets/constants.js', name: 'constants.js' },
-      { path: 'config/settings_schema.json', name: 'settings_schema.json' },
+      { path: 'sections/header.liquid', content: '' },
+      { path: 'sections/footer.liquid', content: '' },
+      { path: 'sections/cart-drawer.liquid', content: '' },
+      { path: 'assets/cart-drawer.css', content: '' },
+      { path: 'assets/cart-drawer.js', content: '' },
+      { path: 'snippets/product-card.liquid', content: '' },
+      { path: 'assets/product-card.css', content: '' },
+      { path: 'assets/base.css', content: '' },
+      { path: 'assets/constants.js', content: '' },
+      { path: 'config/settings_schema.json', content: '' },
     ];
     const components = detectComponents(files);
 
@@ -104,11 +104,34 @@ describe('detectComponents', () => {
 
   it('sorts components alphabetically', () => {
     const files = [
-      { path: 'sections/zebra.liquid', name: 'zebra.liquid' },
-      { path: 'sections/alpha.liquid', name: 'alpha.liquid' },
+      { path: 'sections/zebra.liquid', content: '' },
+      { path: 'sections/alpha.liquid', content: '' },
     ];
     const components = detectComponents(files);
     expect(components[0].name).toBe('Alpha');
     expect(components[1].name).toBe('Zebra');
+  });
+
+  it('detects button components and extracts variants from CSS', () => {
+    const files = [
+      { path: 'snippets/button.liquid', content: '<button class="btn btn--primary">' },
+      {
+        path: 'assets/button.css',
+        content: `
+          .btn { padding: 0.75rem 1.5rem; border-radius: 4px; }
+          .btn--primary { background: #333; color: #fff; }
+          .btn--secondary { background: transparent; border-color: #333; }
+        `,
+      },
+    ];
+    const components = detectComponents(files);
+    const btn = components.find((c) => c.name === 'Button');
+    expect(btn).toBeDefined();
+    expect(btn!.variants).toContain('default');
+    expect(btn!.variants).toContain('primary');
+    expect(btn!.variants).toContain('secondary');
+    expect(btn!.buttonTokenSet?.default?.padding).toBe('0.75rem 1.5rem');
+    expect(btn!.buttonTokenSet?.primary?.background).toBe('#333');
+    expect(btn!.buttonTokenSet?.primary?.color).toBe('#fff');
   });
 });

@@ -1,0 +1,28 @@
+# Engineering Report Maintenance (HARD RULE)
+
+## When This Applies
+
+Any time you make changes to the agent system — tools, prompts, coordinator, tool-executor, specialists, knowledge modules, model routing, billing, or feature flags.
+
+## Procedure
+
+After completing agent-related changes, update the engineering report at:
+`.cursor/plans/agent_architecture_engineering_report_ca2dc7e9.plan.md`
+
+Sections to check and update:
+1. **Tool count** in Section 5 header if tools were added/removed
+2. **Tool tables** in Section 5 if tool definitions changed
+3. **Limits table** in Section 4 if iteration limits, thresholds, or budgets changed
+4. **Enforcement layers** in Section 7 if guards were added/modified
+5. **Escalation chain** in Section 8 if escalation logic changed
+6. **Model routing** in Section 13 if models or routing rules changed
+7. **Feature flags** in Section 17 if flags were added/changed
+8. **Known gaps** in Section 19 if gaps were closed or new ones found
+9. **Files modified** in Section 12 for the changelog
+10. **Date** in the header (update "last updated" date)
+
+## Never
+
+- Never skip this update when agent architecture changes
+- Never leave the tool count or limits table stale after changes
+- Never add a tool without adding it to the report

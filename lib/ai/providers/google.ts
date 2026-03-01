@@ -55,6 +55,29 @@ function mapThinkingLevel(effort?: string): 'minimal' | 'low' | 'medium' | 'high
   }
 }
 
+// ── Retry for rate-limited SDK calls ────────────────────────────────────────
+
+const RATE_LIMIT_MAX_ATTEMPTS = 3;
+
+async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const isRateLimited = msg.toLowerCase().includes('resource_exhausted') ||
+        msg.includes('429') || msg.toLowerCase().includes('rate');
+      if (isRateLimited && attempt < RATE_LIMIT_MAX_ATTEMPTS - 1) {
+        const waitMs = Math.min(2000 * 2 ** attempt, 30_000);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('withRateLimitRetry: unreachable');
+}
+
 // ── Vertex AI / Google AI client resolution ────────────────────────────────
 
 type GenAIOptions =
@@ -299,11 +322,11 @@ export function createGoogleProvider(customApiKey?: string): AIToolProviderInter
 
       let result;
       try {
-        result = await ai.models.generateContent({
+        result = await withRateLimitRetry(() => ai.models.generateContent({
           model,
           contents: contents as Parameters<typeof ai.models.generateContent>[0]['contents'],
           config,
-        });
+        }));
       } catch (error) {
         throw classifyGoogleError(error);
       }
@@ -342,12 +365,11 @@ export function createGoogleProvider(customApiKey?: string): AIToolProviderInter
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let streamResponse: AsyncIterable<any>;
       try {
-        const result = await ai.models.generateContentStream({
+        streamResponse = await withRateLimitRetry(() => ai.models.generateContentStream({
           model,
           contents: contents as Parameters<typeof ai.models.generateContentStream>[0]['contents'],
           config,
-        });
-        streamResponse = result;
+        }));
       } catch (error) {
         throw classifyGoogleError(error);
       }
@@ -398,11 +420,11 @@ export function createGoogleProvider(customApiKey?: string): AIToolProviderInter
 
       let result;
       try {
-        result = await ai.models.generateContent({
+        result = await withRateLimitRetry(() => ai.models.generateContent({
           model,
           contents: contents as Parameters<typeof ai.models.generateContent>[0]['contents'],
           config,
-        });
+        }));
       } catch (error) {
         throw classifyGoogleError(error);
       }
@@ -476,12 +498,11 @@ export function createGoogleProvider(customApiKey?: string): AIToolProviderInter
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let streamResponse: AsyncIterable<any>;
       try {
-        const result = await ai.models.generateContentStream({
+        streamResponse = await withRateLimitRetry(() => ai.models.generateContentStream({
           model,
           contents: contents as Parameters<typeof ai.models.generateContentStream>[0]['contents'],
           config,
-        });
-        streamResponse = result;
+        }));
       } catch (error) {
         throw classifyGoogleError(error);
       }

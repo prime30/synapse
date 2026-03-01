@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { MarketingShell } from "@/components/marketing/MarketingShell";
+import { DesktopMarketingRedirect } from "@/components/features/desktop/DesktopMarketingRedirect";
 
 export const metadata: Metadata = {
   title: "Synapse - AI-Powered Shopify Development",
@@ -18,6 +19,7 @@ export default function MarketingLayout({
     <div
       className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased bg-[oklch(0.985_0.001_106)] text-stone-900 min-h-screen`}
     >
+      <DesktopMarketingRedirect />
       <MarketingShell>{children}</MarketingShell>
     </div>
   );

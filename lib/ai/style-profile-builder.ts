@@ -6,7 +6,10 @@
  * for agent system prompts.
  */
 
-import { DesignSystemContextProvider } from '@/lib/design-tokens/agent-integration/context-provider';
+import {
+  DesignSystemContextProvider,
+  getProjectDesignRules,
+} from '@/lib/design-tokens/agent-integration/context-provider';
 import { detectStyle, formatStyleGuide } from '@/lib/ai/style-detector';
 import type { StyleProfile } from '@/lib/ai/style-detector';
 import {
@@ -76,8 +79,15 @@ export async function buildUnifiedStyleProfile(
 
   const sections: string[] = ['## Project Style Profile\n'];
 
-  // 1. Design tokens
-  const designContext = await fetchDesignTokens(projectId);
+  // 1–4. Parallelize design tokens, rules, patterns, and developer memory
+  const sampledFiles = sampleFiles(files, MAX_STYLE_DETECTION_FILES);
+  const [designContext, patterns, { formatted: memoryFormatted, count: memoryCount }] =
+    await Promise.all([
+      fetchDesignTokens(projectId),
+      fetchLearnedPatterns(userId),
+      fetchDeveloperMemory(projectId, userId),
+    ]);
+
   if (designContext) {
     sections.push('### Design System Tokens');
     sections.push(designContext);
@@ -85,8 +95,19 @@ export async function buildUnifiedStyleProfile(
     stats.tokenCount = (designContext.match(/^- /gm) ?? []).length;
   }
 
+  // 1b. Project-specific design rules (derived from tokens + components)
+  try {
+    const { rules } = await getProjectDesignRules(projectId);
+    if (rules) {
+      sections.push('### Project Design Rules');
+      sections.push(rules);
+      sections.push('');
+    }
+  } catch (err) {
+    console.warn('[StyleProfileBuilder] Project design rules failed:', err);
+  }
+
   // 2. Code style detection
-  const sampledFiles = sampleFiles(files, MAX_STYLE_DETECTION_FILES);
   let detectedProfile: StyleProfile | null = null;
   let styleGuide = '';
   try {
@@ -101,13 +122,7 @@ export async function buildUnifiedStyleProfile(
     console.warn('[StyleProfileBuilder] Style detection failed:', err);
   }
 
-  // 3. Learned patterns
-  const patterns = await fetchLearnedPatterns(userId);
   stats.patternCount = patterns.length;
-
-  // 4. Developer memory
-  const { formatted: memoryFormatted, count: memoryCount } =
-    await fetchDeveloperMemory(projectId, userId);
   stats.memoryCount = memoryCount;
 
   // 5. Conflict resolution — learned patterns override detected style

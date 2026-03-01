@@ -362,7 +362,7 @@ export function FileList({
               <button
                 type="button"
                 onClick={onAddFile}
-                className="px-3 py-1.5 bg-sky-500 text-white text-sm rounded hover:bg-sky-600"
+                className="px-3 py-1.5 bg-sky-500 dark:bg-sky-400 text-white text-sm rounded hover:bg-sky-600 dark:hover:bg-sky-300"
               >
                 Upload Your First File
               </button>

@@ -587,6 +587,10 @@ interface AgentPromptPanelProps {
     filePath: string | null;
     liveContent: string | null;
   }) => void;
+  /** Push a file edit to the multi-pane code viewer below the preview. */
+  onCodePaneUpdate?: (update: { filePath: string; content: string; originalContent: string }) => void;
+  /** Reset the multi-pane code viewer (called at stream start). */
+  onCodePaneReset?: () => void;
   /** Open Developer Memory panel (rendered by page shell). */
   onOpenMemory?: () => void;
   /** Whether Developer Memory panel is currently open. */
@@ -595,6 +599,8 @@ interface AgentPromptPanelProps {
   pendingAttachedFile?: { id: string; name: string; path: string; nonce: number } | null;
   /** Portal target for the session sidebar — rendered outside the chat column on the far right edge. */
   sessionSidebarPortalRef?: React.RefObject<HTMLDivElement | null>;
+  /** Theme intelligence indexing status for non-blocking banner in ChatInterface. */
+  intelligenceStatus?: 'pending' | 'indexing' | 'ready' | 'enriching' | 'stale';
 }
 
 export function AgentPromptPanel({
@@ -632,10 +638,13 @@ export function AgentPromptPanel({
   onOpenFiles,
   onScrollToEdit,
   onAgentActivity,
+  onCodePaneUpdate,
+  onCodePaneReset,
   onOpenMemory,
   isMemoryOpen = false,
   pendingAttachedFile = null,
   sessionSidebarPortalRef,
+  intelligenceStatus,
 }: AgentPromptPanelProps) {
   const {
     messages,
@@ -1429,6 +1438,8 @@ export function AgentPromptPanel({
         let accumulatedShopifyOps: Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }> = [];
         let hasClarificationCardForRun = false;
 
+        onCodePaneReset?.();
+
         // Start stall detection timer (checks every 10s)
         stallTimerRef.current = setInterval(() => {
           const elapsed = (Date.now() - lastSSEEventTimeRef.current) / 1000;
@@ -1879,6 +1890,15 @@ export function AgentPromptPanel({
                       agentType: null,
                       filePath: editFilePath,
                       liveContent: editNewContent,
+                    });
+                  }
+
+                  // Multi-pane code viewer: push edit to categorized panes
+                  if (onCodePaneUpdate && editFilePath) {
+                    onCodePaneUpdate({
+                      filePath: editFilePath,
+                      content: editNewContent,
+                      originalContent: originalFileContent ?? '',
                     });
                   }
 
@@ -2778,7 +2798,7 @@ export function AgentPromptPanel({
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, useFlatPipeline, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents, onBatchDiff]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, useFlatPipeline, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, onCodePaneUpdate, onCodePaneReset, setMaxAgents, onBatchDiff]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -3279,6 +3299,7 @@ export function AgentPromptPanel({
           onOpenTraining={() => setTrainingPanelOpen((v) => !v)}
           contextPressure={contextPressure}
           onContinueInNewChat={continueInNewChat}
+          intelligenceStatus={intelligenceStatus}
         />
       </div>
       {bugReportOpen && (
