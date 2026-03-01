@@ -1,6 +1,6 @@
 {
   "name": "synapse-desktop",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Synapse — AI-Powered Shopify Development",
   "main": "main.js",
   "private": true,
