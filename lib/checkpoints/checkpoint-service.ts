@@ -20,27 +20,35 @@ const MAX_CHECKPOINTS_PER_PROJECT = 20;
  * Create a checkpoint by snapshotting the current content of specified files.
  * Stores in the 'checkpoints' Supabase table (JSONB file_snapshots column).
  * Auto-prunes oldest checkpoints beyond the retention limit.
+ *
+ * When `preloadedSnapshots` is provided, the DB query for file content is
+ * skipped entirely — useful when the caller already has the content in memory.
  */
 export async function createCheckpoint(
   projectId: string,
   label: string,
   fileIds: string[],
+  preloadedSnapshots?: FileSnapshot[],
 ): Promise<Checkpoint | null> {
   const supabase = await createClient();
+  let snapshots: FileSnapshot[];
 
-  // Fetch current content for the files being changed
-  const { data: files } = await supabase
-    .from('files')
-    .select('id, name, content')
-    .in('id', fileIds);
+  if (preloadedSnapshots) {
+    snapshots = preloadedSnapshots;
+  } else {
+    const { data: files } = await supabase
+      .from('files')
+      .select('id, name, content')
+      .in('id', fileIds);
 
-  if (!files || files.length === 0) return null;
+    if (!files || files.length === 0) return null;
 
-  const snapshots: FileSnapshot[] = files.map(f => ({
-    fileId: f.id,
-    fileName: f.name,
-    content: f.content ?? '',
-  }));
+    snapshots = files.map(f => ({
+      fileId: f.id,
+      fileName: f.name,
+      content: f.content ?? '',
+    }));
+  }
 
   // Insert checkpoint
   const { data: checkpoint, error } = await supabase

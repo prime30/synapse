@@ -28,6 +28,16 @@ export interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'full';
   children: ReactNode;
   className?: string;
+  /** Custom header slot — overrides built-in title + close button when provided. */
+  header?: ReactNode;
+  /** Footer slot rendered below children, outside the scroll area. */
+  footer?: ReactNode;
+  /** Suppress the built-in header entirely (no title bar, no close button in header). */
+  hideHeader?: boolean;
+  /** Override the default body padding (`px-6 py-4`). */
+  bodyClassName?: string;
+  /** Escape hatch for non-standard widths, e.g. `max-w-[720px]`. Overrides `size`. */
+  customMaxWidth?: string;
 }
 
 export function Modal({
@@ -37,6 +47,11 @@ export function Modal({
   size = 'md',
   children,
   className = '',
+  header,
+  footer,
+  hideHeader = false,
+  bodyClassName,
+  customMaxWidth,
 }: ModalProps) {
   const lastFocusedRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -109,7 +124,13 @@ export function Modal({
   useEffect(() => {
     if (!isOpen) return;
     const timer = requestAnimationFrame(() => {
-      closeButtonRef.current?.focus();
+      if (closeButtonRef.current) {
+        closeButtonRef.current.focus();
+      } else {
+        const el = contentRef.current;
+        const first = el?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+        first?.focus();
+      }
     });
     return () => cancelAnimationFrame(timer);
   }, [isOpen]);
@@ -154,10 +175,10 @@ export function Modal({
           <motion.div
             ref={contentRef}
             className={`
-              relative z-40 mx-4 max-h-[85vh] w-full overflow-auto
+              relative z-40 mx-4 max-h-[85vh] w-full overflow-hidden flex flex-col
               rounded-xl border border-stone-200 bg-white shadow-2xl
               dark:border-[#2a2a2a] dark:bg-[oklch(0.21_0_0)]
-              ${SIZE_CLASSES[size]}
+              ${customMaxWidth ?? SIZE_CLASSES[size]}
               ${className}
             `}
             variants={contentVariants}
@@ -167,25 +188,34 @@ export function Modal({
             transition={contentTransition}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 dark:border-[#2a2a2a]">
-              {title != null && title !== '' ? (
-                <h2 className="font-semibold text-stone-900 dark:text-white">
-                  {title}
-                </h2>
-              ) : (
-                <span />
-              )}
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={handleClose}
-                className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-white/5 dark:hover:text-stone-300"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="px-6 py-4">{children}</div>
+            {!hideHeader && (
+              header ?? (
+                <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 dark:border-[#2a2a2a]">
+                  {title != null && title !== '' ? (
+                    <h2 className="font-semibold text-stone-900 dark:text-white">
+                      {title}
+                    </h2>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    ref={closeButtonRef}
+                    type="button"
+                    onClick={handleClose}
+                    className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-white/5 dark:hover:text-stone-300"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )
+            )}
+            <div className={`overflow-auto flex-1 ${bodyClassName ?? 'px-6 py-4'}`}>{children}</div>
+            {footer && (
+              <div className="border-t border-stone-200 px-6 py-4 dark:border-[#2a2a2a]">
+                {footer}
+              </div>
+            )}
           </motion.div>
         </div>
       )}

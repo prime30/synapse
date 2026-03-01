@@ -145,10 +145,9 @@ describe('Live agent API (real Anthropic)', () => {
   );
 
   it.skipIf(!runLive)(
-    'coordinator executeSolo with real provider completes or returns API error (no auth failure)',
+    'V2 coordinator with real provider completes or returns API error (no auth failure)',
     async () => {
-      const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-      const coordinator = new AgentCoordinator();
+      const { streamV2 } = await import('@/lib/agents/coordinator-v2');
       const executionId = 'live-exec-' + Date.now();
       const projectId = '00000000-0000-0000-0000-000000000001';
       const userId = 'live-user';
@@ -161,14 +160,14 @@ describe('Live agent API (real Anthropic)', () => {
           content: '<div>{{ product.title }}</div>',
         },
       ];
-      const result = await coordinator.executeSolo(
+      const result = await streamV2(
         executionId,
         projectId,
         userId,
         'Add a one-line comment at the top of this file saying LIVE_SOLO_OK.',
         files,
         [],
-        { tier: 'SIMPLE', autoRoute: false }
+        { intentMode: 'code' }
       );
       expect(result).toBeDefined();
       expect(typeof result.success).toBe('boolean');

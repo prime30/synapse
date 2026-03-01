@@ -23,8 +23,6 @@ vi.mock('@/lib/ai/feature-flags', () => ({
     citations: false,
     batchProcessing: false,
     pmExplorationTools: false,
-    conditionalSummary: false,
-    v2Agent: false,
     programmaticToolCalling: false,
   },
 }));

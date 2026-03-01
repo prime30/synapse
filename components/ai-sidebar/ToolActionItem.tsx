@@ -446,7 +446,6 @@ function renderCardContent(block: ToolActionBlock, handlers: CardHandlers): Reac
         />
       );
     }
-    case 'preview_nav':
     default:
       return null;
   }

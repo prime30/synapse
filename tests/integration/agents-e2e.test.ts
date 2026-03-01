@@ -1,6 +1,6 @@
 /**
  * Full E2E test for Synapse agents pipeline.
- * Proves that when the model returns valid output, the coordinator completes
+ * Proves that when the model returns valid output, the V2 coordinator completes
  * a task: success and at least one code change. Uses mocked AI provider.
  */
 
@@ -55,17 +55,16 @@ describe('Agents E2E: task accomplishment', () => {
     vi.restoreAllMocks();
   });
 
-  it('solo pipeline completes and returns success with code changes', async () => {
-    const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-    const coordinator = new AgentCoordinator();
+  it('V2 pipeline completes and returns success with code changes', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
     const executionId = 'e2e-exec-' + Date.now();
     const projectId = '00000000-0000-0000-0000-000000000001';
     const userId = 'e2e-user';
     const userRequest = 'Add a comment at the top of snippets/test.liquid that says E2E_TASK_ACCOMPLISHED.';
     const files = minimalFileContexts();
-    const progressEvents: Array<{ phase: string; label: string }> = [];
+    const progressEvents: Array<{ phase?: string; label?: string }> = [];
 
-    const result = await coordinator.executeSolo(
+    const result = await streamV2(
       executionId,
       projectId,
       userId,
@@ -73,10 +72,9 @@ describe('Agents E2E: task accomplishment', () => {
       files,
       [],
       {
-        tier: 'SIMPLE',
-        autoRoute: false,
+        intentMode: 'code',
         onProgress: (ev) => {
-          if (ev.type === 'thinking') progressEvents.push({ phase: ev.phase ?? '', label: ev.label ?? '' });
+          if (ev.type === 'thinking') progressEvents.push({ phase: ev.phase as string, label: ev.label as string });
         },
       }
     );
@@ -90,19 +88,17 @@ describe('Agents E2E: task accomplishment', () => {
     const change = result.changes!.find((c) => c.fileName === 'snippets/test.liquid');
     expect(change).toBeDefined();
     expect(change!.proposedContent).toContain(TASK_MARKER);
-    expect(change!.agentType).toBe('project_manager');
   });
 
-  it('progress events are emitted during solo run', async () => {
-    const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-    const coordinator = new AgentCoordinator();
+  it('progress events are emitted during V2 run', async () => {
+    const { streamV2 } = await import('@/lib/agents/coordinator-v2');
     const executionId = 'e2e-exec-progress-' + Date.now();
     const projectId = '00000000-0000-0000-0000-000000000002';
     const userId = 'e2e-user';
     const userRequest = 'Add a comment at the top of snippets/test.liquid.';
-    const progressEvents: Array<{ phase: string; label: string }> = [];
+    const progressEvents: Array<{ phase?: string; label?: string }> = [];
 
-    await coordinator.executeSolo(
+    await streamV2(
       executionId,
       projectId,
       userId,
@@ -110,20 +106,15 @@ describe('Agents E2E: task accomplishment', () => {
       minimalFileContexts(),
       [],
       {
-        tier: 'SIMPLE',
-        autoRoute: false,
+        intentMode: 'code',
         onProgress: (ev) => {
-          if (ev.type === 'thinking') progressEvents.push({ phase: ev.phase ?? '', label: ev.label ?? '' });
+          if (ev.type === 'thinking') progressEvents.push({ phase: ev.phase as string, label: ev.label as string });
         },
       }
     );
 
     expect(progressEvents.length).toBeGreaterThanOrEqual(1);
-    const hasAnalyzing = progressEvents.some(
-      (e) =>
-        e.phase === 'analyzing' &&
-        (e.label.includes('Solo mode') || e.label.includes('Quick edit') || e.label.includes('Single agent'))
-    );
+    const hasAnalyzing = progressEvents.some((e) => e.phase === 'analyzing');
     expect(hasAnalyzing).toBe(true);
   });
 });

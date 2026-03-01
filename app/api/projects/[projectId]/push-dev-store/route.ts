@@ -70,6 +70,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const api = await ShopifyAdminAPIFactory.create(project.preview_connection_id);
 
+    const fileList = files!;
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -82,13 +83,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         let pushed = 0;
         const errors: { path: string; error: string }[] = [];
 
-        send({ type: 'start', total: files.length });
+        send({ type: 'start', total: fileList.length });
 
         async function pushFile(file: { path: string; content: string }) {
           try {
             await api.putAsset(themeId, file.path, file.content);
             pushed++;
-            send({ type: 'progress', pushed, total: files.length, current: file.path });
+            send({ type: 'progress', pushed, total: fileList.length, current: file.path });
           } catch (err) {
             errors.push({
               path: file.path,
@@ -98,8 +99,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           }
         }
 
-        for (let i = 0; i < files.length; i += CONCURRENCY) {
-          const chunk = files.slice(i, i + CONCURRENCY);
+        for (let i = 0; i < fileList.length; i += CONCURRENCY) {
+          const chunk = fileList.slice(i, i + CONCURRENCY);
           await Promise.all(chunk.map(pushFile));
         }
 
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           type: 'complete',
           pushed,
           errors,
-          total: files.length,
+          total: fileList.length,
           duration_ms,
         });
 

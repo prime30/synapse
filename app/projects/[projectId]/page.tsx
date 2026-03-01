@@ -51,7 +51,6 @@ import { LocalSyncIndicator } from '@/components/features/sync/LocalSyncIndicato
 import { ProjectLoadingOverlay } from '@/components/editor/ProjectLoadingOverlay';
 import { useProjectLoadingState } from '@/hooks/useProjectLoadingState';
 import { useLocalSync } from '@/hooks/useLocalSync';
-import { UndoToast } from '@/components/ui/UndoToast';
 import { HomeModal } from '@/components/features/home/HomeModal';
 import { CommandPalette } from '@/components/editor/CommandPalette';
 import { KeyboardCheatsheet } from '@/components/editor/KeyboardCheatsheet';
@@ -234,7 +233,7 @@ export default function ProjectPage() {
 
   // A7: Agent workflow modal state
   const [planApproval, setPlanApproval] = useState<{ steps: Array<{ number: number; description: string; complexity?: 'simple' | 'moderate' | 'complex' }> } | null>(null);
-  const [batchDiff, setBatchDiff] = useState<{ title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }> } | null>(null);
+  const [batchDiff, setBatchDiff] = useState<{ title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }>; checkpointId?: string } | null>(null);
   const [themeReview, setThemeReview] = useState<ThemeReviewReportData | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [pendingAttachedFile, setPendingAttachedFile] = useState<{
@@ -753,16 +752,6 @@ export default function ProjectPage() {
 
   // ── Auto-reconcile on mount (once per browser session) ────────────────────
   const reconcileTriggeredRef = useRef(false);
-  const [undoToast, setUndoToast] = useState<{
-    message: string;
-    archivedIds: string[];
-  } | null>(null);
-  const [applyUndoToast, setApplyUndoToast] = useState<{
-    message: string;
-    fileId: string;
-    previousContent: string;
-  } | null>(null);
-
   useEffect(() => {
     if (!connected || isLoadingProjects || reconcileTriggeredRef.current) return;
     // Once per session guard
@@ -783,9 +772,25 @@ export default function ProjectPage() {
             result.archivedProjectNames.length > 0
               ? result.archivedProjectNames.join(', ')
               : `${result.archived} theme(s)`;
-          setUndoToast({
+          const archivedIds = result.archivedProjectIds;
+          showToast({
             message: `${names} archived — dev themes removed from Shopify`,
-            archivedIds: result.archivedProjectIds,
+            type: 'info',
+            duration: 10_000,
+            countdown: 10_000,
+            action: {
+              label: 'Undo',
+              onClick: async () => {
+                for (const id of archivedIds) {
+                  try {
+                    await restoreProject(id);
+                    fetch(`/api/projects/${id}/sync-dev-theme`, { method: 'POST' }).catch(() => {});
+                  } catch {
+                    // Continue with remaining
+                  }
+                }
+              },
+            },
           });
 
           // If current project was just archived, redirect to first active
@@ -809,23 +814,7 @@ export default function ProjectPage() {
       .catch(() => {
         // Reconcile failure is non-critical
       });
-  }, [connected, isLoadingProjects, reconcile, projectId, activeProjects, router]);
-
-  // Handle undo of archive (set projects back to active)
-  const handleUndoArchive = useCallback(async () => {
-    if (!undoToast) return;
-    // Undo: restore each archived project, then trigger background file push
-    for (const id of undoToast.archivedIds) {
-      try {
-        await restoreProject(id);
-        // Trigger background dev theme push (fire-and-forget)
-        fetch(`/api/projects/${id}/sync-dev-theme`, { method: 'POST' }).catch(() => {});
-      } catch {
-        // Continue with remaining
-      }
-    }
-    setUndoToast(null);
-  }, [undoToast, restoreProject]);
+  }, [connected, isLoadingProjects, reconcile, projectId, activeProjects, router, showToast, restoreProject]);
 
   // Is the current project archived?
   const isProjectArchived = currentProject?.status === 'archived';
@@ -885,22 +874,6 @@ export default function ProjectPage() {
   const refreshFiles = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['project-files', projectId] });
   }, [projectId, queryClient]);
-
-  // Handle undo of code apply (restore previous content)
-  const handleUndoApply = useCallback(async () => {
-    if (!applyUndoToast) return;
-    try {
-      await fetch(`/api/files/${applyUndoToast.fileId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: applyUndoToast.previousContent }),
-      });
-      refreshFiles();
-    } catch {
-      // Undo failure is non-critical
-    }
-    setApplyUndoToast(null);
-  }, [applyUndoToast, refreshFiles]);
 
   // ── Smart file opening: related files map ──────────────────────────────
   const relatedFilesMap = useMemo(() => {
@@ -1244,15 +1217,33 @@ export default function ProjectPage() {
       });
 
       // 5. Show undo toast
-      setApplyUndoToast({
+      const capturedFileId = fileId;
+      const capturedOldContent = oldContent;
+      showToast({
         message: `Applied changes to ${fileName}`,
-        fileId,
-        previousContent: oldContent,
+        type: 'success',
+        duration: 8_000,
+        countdown: 8_000,
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              await fetch(`/api/files/${capturedFileId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: capturedOldContent }),
+              });
+              refreshFiles();
+            } catch {
+              // Undo failure is non-critical
+            }
+          },
+        },
       });
     } catch (err) {
       console.error('[handleApplyCode] Error:', err);
     }
-  }, [refreshFiles]);
+  }, [refreshFiles, showToast]);
 
   // Handle saving a new file from AI response
   const handleSaveCode = useCallback(async (code: string, fileName: string) => {
@@ -2361,6 +2352,17 @@ export default function ProjectPage() {
               onConfirmFileCreate={handleConfirmFileCreate}
               captureBeforeSnapshot={captureBeforeSnapshot}
               verifyPreview={verifyPreview}
+              onBatchDiff={(data) => setBatchDiff({ title: data.title, entries: data.entries, checkpointId: data.checkpointId })}
+              onUndoCheckpoint={async (checkpointId) => {
+                try {
+                  const res = await fetch(`/api/projects/${projectId}/checkpoints/${checkpointId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'restore' }),
+                  });
+                  if (res.ok) window.location.reload();
+                } catch { /* restore failed */ }
+              }}
               pendingAnnotation={pendingAnnotation}
               onClearAnnotation={() => setPendingAnnotation(null)}
               onLiveChange={handleLiveChange}
@@ -2483,6 +2485,19 @@ export default function ProjectPage() {
           title={batchDiff.title}
           entries={batchDiff.entries}
           onApplyAll={() => setBatchDiff(null)}
+          onUndoAll={batchDiff.checkpointId ? async () => {
+            try {
+              const res = await fetch(`/api/projects/${projectId}/checkpoints/${batchDiff.checkpointId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'restore' }),
+              });
+              if (res.ok) {
+                setBatchDiff(null);
+                window.location.reload();
+              }
+            } catch { /* restore failed silently */ }
+          } : undefined}
           onClose={() => setBatchDiff(null)}
         />
       )}
@@ -2508,26 +2523,6 @@ export default function ProjectPage() {
             setBreakoutDismissed(true);
             setBreakoutAgent(null);
           }}
-        />
-      )}
-
-      {/* Auto-reconcile UndoToast */}
-      {undoToast && (
-        <UndoToast
-          message={undoToast.message}
-          duration={10000}
-          onUndo={handleUndoArchive}
-          onDismiss={() => setUndoToast(null)}
-        />
-      )}
-
-      {/* Code apply UndoToast */}
-      {applyUndoToast && (
-        <UndoToast
-          message={applyUndoToast.message}
-          duration={8000}
-          onUndo={handleUndoApply}
-          onDismiss={() => setApplyUndoToast(null)}
         />
       )}
 

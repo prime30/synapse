@@ -1,12 +1,11 @@
-import { AgentCoordinator } from '@/lib/agents/coordinator';
 import { streamV2 } from '@/lib/agents/coordinator-v2';
 import type { AgentResult, FileContext } from '@/lib/types/agent';
 
-type HarnessMode = 'v1' | 'v2';
+type HarnessMode = 'v2';
 type IntentMode = 'ask' | 'code' | 'plan' | 'debug';
 
 export interface HarnessRunInput {
-  mode: HarnessMode;
+  mode?: HarnessMode;
   prompt: string;
   files: FileContext[];
   intentMode?: IntentMode;
@@ -84,11 +83,10 @@ function hasCompletionFormat(text: string): boolean {
 }
 
 export async function runSynapseHarness(input: HarnessRunInput): Promise<HarnessRunOutput> {
-  const mode: HarnessMode = input.mode;
   const intentMode: IntentMode = input.intentMode ?? 'code';
   const projectId = input.projectId ?? '00000000-0000-0000-0000-00000000a001';
   const userId = input.userId ?? 'harness-user';
-  const executionId = `harness-${mode}-${Date.now()}`;
+  const executionId = `harness-v2-${Date.now()}`;
 
   const progressEvents: Array<{ type?: string; label?: string }> = [];
   const toolEvents: Array<{ type: string; name: string; id?: string }> = [];
@@ -103,29 +101,15 @@ export async function runSynapseHarness(input: HarnessRunInput): Promise<Harness
     onToolEvent: (ev: { type: string; name: string; id?: string }) => toolEvents.push(ev),
   };
 
-  let result: AgentResult;
-  if (mode === 'v2') {
-    result = await streamV2(
-      executionId,
-      projectId,
-      userId,
-      input.prompt,
-      input.files,
-      [],
-      baseOptions,
-    );
-  } else {
-    const coordinator = new AgentCoordinator();
-    result = await coordinator.streamAgentLoop(
-      executionId,
-      projectId,
-      userId,
-      input.prompt,
-      input.files,
-      [],
-      baseOptions,
-    );
-  }
+  const result: AgentResult = await streamV2(
+    executionId,
+    projectId,
+    userId,
+    input.prompt,
+    input.files,
+    [],
+    baseOptions,
+  );
 
   const elapsedMs = Date.now() - t0;
   const analysisText = [result.analysis ?? '', chunks.join('')].join('\n');

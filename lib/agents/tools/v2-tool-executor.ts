@@ -765,7 +765,7 @@ export async function executeV2Tool(
           `[V2ToolExecutor] Running review -- ${changesToReview.length} change(s), scope="${scope}"`,
         );
 
-        // Use Codex packager (same as v1 coordinator) for review context when we have proposed changes
+        // Use Codex packager for review context when we have proposed changes
         const proposedChanges = changesToReview.map((c) => ({
           fileId: c.fileId,
           fileName: c.fileName,

@@ -25,12 +25,6 @@ export const AI_FEATURES = {
   /** PM exploration tools phase: PM uses read_file, search, grep before JSON decision. */
   pmExplorationTools: process.env.ENABLE_PM_EXPLORATION_TOOLS === 'true',
 
-  /** Conditional summary: skip/thin the Summary LLM call when PM already used tools. */
-  conditionalSummary: process.env.ENABLE_CONDITIONAL_SUMMARY === 'true',
-
-  /** V2 agent architecture: single-stream tool-calling loop (no Summary phase). */
-  v2Agent: process.env.ENABLE_V2_AGENT === 'true',
-
   /** Programmatic Tool Calling: let Claude batch read-only tools in a Python sandbox.
    *  DISABLED: PTC causes broken tool calls (empty patterns, wrong async signatures).
    *  Direct tool calling is more reliable. Re-enable when Anthropic improves PTC stability. */

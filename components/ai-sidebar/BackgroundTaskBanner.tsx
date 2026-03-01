@@ -166,7 +166,7 @@ export function BackgroundTaskBanner({
         )}
       </div>
 
-      {resultSummary && status !== 'dismissed' && (
+      {resultSummary && (
         <p className="mt-1.5 text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
           {resultSummary}
         </p>

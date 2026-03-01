@@ -152,8 +152,8 @@ export class FileStore {
           content = hydrated[0].content;
           file.content = content;
         }
-      } catch {
-        // Fall back to what we have
+      } catch (err) {
+        console.error(`[FileStore] loadContent failed for file ${file.fileId}:`, err);
       }
     }
 
@@ -291,8 +291,9 @@ export class FileStore {
   /**
    * Wait for all pending background DB writes to complete.
    * Call before session ends to ensure Supabase is consistent.
+   * Returns an array of file IDs that failed to save (empty = all succeeded).
    */
-  async flush(): Promise<void> {
+  async flush(): Promise<{ failedFileIds: string[] }> {
     for (const [fileId, entry] of this.writeQueue) {
       if (entry.timer !== null) clearTimeout(entry.timer);
       entry.timer = null;
@@ -300,9 +301,25 @@ export class FileStore {
     }
     this.writeQueue.clear();
 
-    if (this.flushPromises.length === 0) return;
-    await Promise.allSettled(this.flushPromises);
+    if (this.flushPromises.length === 0) return { failedFileIds: [] };
+    const results = await Promise.allSettled(this.flushPromises);
     this.flushPromises = [];
+
+    const failedFileIds: string[] = [];
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        const reason = result.reason;
+        const fileId = typeof reason === 'object' && reason?.fileId ? String(reason.fileId) : 'unknown';
+        failedFileIds.push(fileId);
+        console.error(`[FileStore] Flush failed for file ${fileId}:`, reason);
+      }
+    }
+
+    if (failedFileIds.length > 0) {
+      console.error(`[FileStore] ${failedFileIds.length} file(s) failed to save during flush`);
+    }
+
+    return { failedFileIds };
   }
 
   // ── Private helpers ──────────────────────────────────────────────────
@@ -418,7 +435,11 @@ export class FileStore {
         await incrementWriteAttempts(this.projectId, fileId);
       } catch { /* non-blocking */ }
     }
-    console.error(`[FileStore] DB write failed after ${DB_WRITE_MAX_RETRIES + 1} attempts for file ${fileId}`);
+    const msg = `DB write failed after ${DB_WRITE_MAX_RETRIES + 1} attempts for file ${fileId}`;
+    console.error(`[FileStore] ${msg}`);
+    const err = new Error(msg);
+    (err as Error & { fileId: string }).fileId = fileId;
+    throw err;
   }
 }
 

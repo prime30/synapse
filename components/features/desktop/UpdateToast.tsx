@@ -16,12 +16,12 @@ export function UpdateToast() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
-    if (!isDesktop()) return;
+    if (!isDesktop() || !window.electron) return;
 
     const removeAvailable = window.electron.on(
       'app:update-available',
-      (payload: UpdateInfo) => {
-        setInfo(payload);
+      (...args: unknown[]) => {
+        setInfo(args[0] as UpdateInfo);
         setState('available');
       },
     );
@@ -40,11 +40,11 @@ export function UpdateToast() {
 
   const handleDownload = async () => {
     setState('downloading');
-    await window.electron.startUpdateDownload();
+    await window.electron?.startUpdateDownload();
   };
 
   const handleRestart = async () => {
-    await window.electron.restartToUpdate();
+    await window.electron?.restartToUpdate();
   };
 
   const handleDismiss = () => {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useActiveStore } from '@/hooks/useActiveStore';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { Modal } from '@/components/ui/Modal';
 
 function generateUUID(): string {
   return crypto.randomUUID();
@@ -316,57 +317,85 @@ export function ImportThemeModal({
     }
   };
 
-  if (!isOpen) return null;
-
   const themes = themesQuery.data ?? [];
   const isLoadingThemes = themesQuery.isLoading;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center ide-overlay">
-      <div className="ide-surface-pop rounded-lg shadow-xl w-full max-w-lg mx-4 border ide-border">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b ide-border">
-          <h2 className="text-lg font-medium ide-text">Import Theme</h2>
+  const footerContent = (
+    <div>
+      <p className="text-xs ide-text-muted mb-3">
+        Importing a theme creates a new project automatically.
+      </p>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors"
+        >
+          Cancel
+        </button>
+        {activeTab === 'zip' && (
           <button
             type="button"
-            onClick={onClose}
-            className="ide-text-muted hover:ide-text transition-colors"
-            aria-label="Close"
+            onClick={handleZipImport}
+            disabled={!zipFile || isUploading || !projectId}
+            className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            x
+            {isUploading ? 'Importing...' : 'Import Theme'}
           </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b ide-border">
-          {connection && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('store')}
-              className={`px-4 py-2 text-sm ${
-                activeTab === 'store'
-                  ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400'
-                  : 'ide-text-muted hover:ide-text-2'
-              }`}
-            >
-              From Store
-            </button>
-          )}
+        )}
+        {activeTab === 'store' && (
           <button
             type="button"
-            onClick={() => setActiveTab('zip')}
+            onClick={handleStoreImport}
+            disabled={!selectedThemeId || isImporting || importProgress === 'importing'}
+            className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {importProgress === 'importing' || isImporting ? 'Importing...' : 'Import Theme'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Import Theme"
+      size="md"
+      bodyClassName="p-0"
+      footer={footerContent}
+    >
+      {/* Tabs */}
+      <div className="flex border-b ide-border">
+        {connection && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('store')}
             className={`px-4 py-2 text-sm ${
-              activeTab === 'zip'
+              activeTab === 'store'
                 ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400'
                 : 'ide-text-muted hover:ide-text-2'
             }`}
           >
-            Upload ZIP
+            From Store
           </button>
-        </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('zip')}
+          className={`px-4 py-2 text-sm ${
+            activeTab === 'zip'
+              ? 'border-b-2 border-sky-500 text-sky-500 dark:text-sky-400'
+              : 'ide-text-muted hover:ide-text-2'
+          }`}
+        >
+          Upload ZIP
+        </button>
+      </div>
 
-        {/* Tab content */}
-        <div className="p-4 space-y-4">
+      {/* Tab content */}
+      <div className="p-4 space-y-4">
           {/* Success banner */}
           {importSuccess && (
             <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-sm space-y-2">
@@ -576,46 +605,6 @@ export function ImportThemeModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="px-4 pb-3">
-          <p className="text-xs ide-text-muted mb-3">
-            Importing a theme creates a new project automatically.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t ide-border">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded ide-surface-panel ide-text-2 ide-hover transition-colors"
-          >
-            Cancel
-          </button>
-
-          {activeTab === 'zip' && (
-            <button
-              type="button"
-              onClick={handleZipImport}
-              disabled={!zipFile || isUploading || !projectId}
-              className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isUploading ? 'Importing...' : 'Import Theme'}
-            </button>
-          )}
-
-          {activeTab === 'store' && (
-            <button
-              type="button"
-              onClick={handleStoreImport}
-              disabled={!selectedThemeId || isImporting || importProgress === 'importing'}
-              className="px-4 py-1.5 text-sm rounded bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {importProgress === 'importing' || isImporting ? 'Importing...' : 'Import Theme'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

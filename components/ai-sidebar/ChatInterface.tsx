@@ -27,7 +27,6 @@ import { FileCreateCard } from './FileCreateCard';
 import { FileOperationToast } from './FileOperationToast';
 import { ShopifyOperationCard } from './ShopifyOperationCard';
 import { ScreenshotCard } from './ScreenshotCard';
-import { CitationsBlock } from './CitationsBlock';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { Square, Search, Paperclip, ChevronDown, Pin, ClipboardCopy, X, Trash2, ImageIcon, Upload, Pencil, RotateCcw, BookOpen, GitBranch, ArrowUp, ArrowRightCircle, Code2, CircleHelp, ClipboardList, Brain, Bug, ListOrdered } from 'lucide-react';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
@@ -239,7 +238,7 @@ export type ContentBlock =
       label: string; subtitle?: string;
       status: 'loading' | 'done' | 'error';
       cardType?: 'plan' | 'code_edit' | 'clarification' | 'file_create' |
-                 'preview_nav' | 'file_op' | 'shopify_op' | 'screenshot' |
+                 'file_op' | 'shopify_op' | 'screenshot' |
                  'screenshot_comparison' | 'change_preview' | 'theme_artifact' |
                  'grep_results' | 'lint_results' | 'terminal' | 'file_read';
       cardData?: unknown; error?: string; validationSuggestions?: string[];
@@ -284,8 +283,6 @@ export interface ChatMessage {
   fileCreates?: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled'; confidence?: number }>;
   /** Currently active tool call (loading state). */
   activeToolCall?: { name: string; id: string };
-  /** Citation references from the citations API. */
-  citations?: Array<{ citedText: string; documentTitle: string; startIndex?: number; endIndex?: number }>;
 
   // ── Agent Power Tools card metadata (Phase 7) ──────────────────────
   /** File mutation operations (write, delete, rename) from agent tools. */
@@ -322,6 +319,9 @@ export interface ChatMessage {
     checkedFiles: string[];
     totalCheckTimeMs: number;
   };
+
+  /** Auto-checkpoint ID for rollback (set when agent creates a pre-edit checkpoint). */
+  checkpointId?: string;
 
   /** Attached image data URLs (base64) displayed as thumbnails in user messages. */
   imageUrls?: string[];
@@ -443,8 +443,12 @@ interface ChatInterfaceProps {
   editorSelection?: string | null;
   /** Current AI action for context-specific loading label */
   currentAction?: string;
+  /** Current coordinator phase (e.g. 'verifying', 'self_correcting') */
+  currentPhase?: string;
   /** Number of files being reviewed (used when currentAction is 'review') */
   reviewFileCount?: number;
+  /** Called when user clicks "Undo all changes" — restores from checkpoint. */
+  onUndoCheckpoint?: (checkpointId: string) => void;
   /** Called when user clicks Clear chat — clears all messages */
   onClearChat?: () => void;
   /** Called with generated session summary text when chat is cleared */
@@ -949,7 +953,9 @@ export function ChatInterface({
   onSaveCode,
   editorSelection,
   currentAction,
+  currentPhase,
   reviewFileCount,
+  onUndoCheckpoint,
   onClearChat,
   onSessionSummary,
   showRetryChip = false,
@@ -2146,10 +2152,6 @@ export function ChatInterface({
                           );
                         });
                       })()}
-                      {/* Citations (Phase 6) */}
-                      {m.citations && m.citations.length > 0 && (
-                        <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
-                      )}
                       {/* Mode-switch inline button */}
                       {(() => {
                         const suggested = detectModeSwitchSuggestion(m.content, intentMode);
@@ -2304,9 +2306,6 @@ export function ChatInterface({
                           />
                         )}
                       </div>
-                      {m.citations && m.citations.length > 0 && (
-                        <CitationsBlock citations={m.citations} onOpenFile={onOpenFile} />
-                      )}
                       {/* Mode-switch inline button (legacy path) */}
                       {(() => {
                         const suggested = detectModeSwitchSuggestion(m.content, intentMode);
@@ -2351,6 +2350,15 @@ export function ChatInterface({
                   >
                     {outcomeBadgeConfig(m.executionOutcome).label}
                   </span>
+                )}
+                {m.executionOutcome === 'applied' && m.checkpointId && onUndoCheckpoint && (
+                  <button
+                    type="button"
+                    onClick={() => onUndoCheckpoint(m.checkpointId!)}
+                    className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+                  >
+                    Undo all changes
+                  </button>
                 )}
                 {m.rateLimitHit && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 dark:text-amber-400">
@@ -2474,6 +2482,7 @@ export function ChatInterface({
           <EnhancedTypingIndicator
             activeTools={activeTools}
             thinkingLabel={getThinkingLabel(currentAction, reviewFileCount, intentMode)}
+            phase={currentPhase}
             isStreaming={!!isLoading}
           />
         ) : (

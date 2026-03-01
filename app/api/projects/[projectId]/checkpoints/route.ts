@@ -1,13 +1,12 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/middleware/auth';
 import { validateBody } from '@/lib/middleware/validation';
-import { successResponse } from '@/lib/api/response';
 import { handleAPIError } from '@/lib/errors/handler';
 import {
   createCheckpoint,
   listCheckpoints,
-} from '@/lib/services/checkpoints';
+} from '@/lib/checkpoints/checkpoint-service';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -16,22 +15,21 @@ interface RouteParams {
 /**
  * GET /api/projects/[projectId]/checkpoints
  *
- * List checkpoints for the project. Optional `?sessionId=` filter.
+ * List checkpoints for the project, newest first.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     await requireAuth(request);
     const { projectId } = await params;
 
-    const sessionId = request.nextUrl.searchParams.get('sessionId') ?? undefined;
-    const checkpoints = listCheckpoints(projectId, sessionId);
+    const checkpoints = await listCheckpoints(projectId);
 
-    return successResponse({
+    return NextResponse.json({
       checkpoints: checkpoints.map((cp) => ({
         id: cp.id,
         label: cp.label,
-        createdAt: cp.createdAt,
-        fileCount: cp.files.size,
+        createdAt: cp.created_at,
+        fileCount: cp.file_snapshots?.length ?? 0,
       })),
     });
   } catch (error) {
@@ -48,13 +46,14 @@ const createSchema = z.object({
       path: z.string().min(1),
       content: z.string(),
     }),
-  ).min(1),
+  ).default([]),
 });
 
 /**
  * POST /api/projects/[projectId]/checkpoints
  *
- * Create a checkpoint snapshot of the supplied files.
+ * Create a checkpoint. If `files` are provided they are stored as snapshots;
+ * otherwise an empty checkpoint (named marker) is created.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -62,14 +61,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     const body = await validateBody(createSchema)(request);
 
-    const cp = createCheckpoint(projectId, body.sessionId, body.label, body.files);
+    const preloaded = body.files.map((f) => ({
+      fileId: f.fileId,
+      fileName: f.path,
+      content: f.content,
+    }));
 
-    return successResponse({
+    const cp = await createCheckpoint(
+      projectId,
+      body.label,
+      body.files.map((f) => f.fileId),
+      preloaded,
+    );
+
+    if (!cp) {
+      return NextResponse.json(
+        { error: 'Failed to create checkpoint' },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
       checkpoint: {
         id: cp.id,
         label: cp.label,
-        createdAt: cp.createdAt,
-        fileCount: cp.files.size,
+        createdAt: cp.created_at,
+        fileCount: cp.file_snapshots?.length ?? 0,
       },
     });
   } catch (error) {

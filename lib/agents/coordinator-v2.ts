@@ -4,7 +4,7 @@
  * Replaces the two-phase pipeline (PM analysis → Summary) with a single
  * tool-using agent loop: think → tool → observe → repeat.
  *
- * Key differences from v1 (streamAgentLoop in coordinator.ts):
+ * Key differences from the removed v1 coordinator:
  *   - Single streaming loop — no separate summary phase
  *   - Uses v2 tool definitions (includes `run_specialist` and `run_review`)
  *   - Uses v2 PM prompt (tool-enabled, natural-language output)
@@ -33,7 +33,7 @@ import type {
   ToolCall as AIToolCall,
 } from '@/lib/ai/types';
 import { AI_FEATURES } from '@/lib/ai/feature-flags';
-import { AIProviderError } from '@/lib/ai/errors';
+import { AIProviderError, classifyNetworkError } from '@/lib/ai/errors';
 import { ContextEngine, getProjectContextEngine, contextBudgetMultiplier } from '@/lib/ai/context-engine';
 import { SymbolGraphCache } from '@/lib/context/symbol-graph-cache';
 import { DependencyGraphCache } from '@/lib/context/dependency-graph-cache';
@@ -568,7 +568,7 @@ You have ONE turn to complete this task. The target file is pre-loaded in your c
 /**
  * File Context Rule: Reject code changes to files not loaded in context.
  * Prevents agents from hallucinating changes to files they have not seen.
- * Ported from coordinator.ts for v2 use.
+ * Originally from the v1 coordinator, now lives here.
  */
 function enforceFileContextRule(
   changes: CodeChange[],
@@ -1467,14 +1467,16 @@ export async function streamV2(
                   if (hydrated.length > 0 && hydrated[0].content) {
                     f.content = hydrated[0].content;
                   }
-                } catch { /* best-effort */ }
+                } catch (err) {
+                  console.error(`[V2] Checkpoint resume hydration failed for file ${f.fileId}:`, err);
+                }
               }
             }
           }
         }
       }
-    } catch {
-      // Checkpoint retrieval failed -- proceed fresh
+    } catch (err) {
+      console.error(`[V2] Checkpoint retrieval failed for execution ${executionId}, proceeding fresh:`, err);
     }
   }
 
@@ -2416,7 +2418,9 @@ export async function streamV2(
       try {
         const { createServiceClient } = await import('@/lib/supabase/admin');
         pmSupabase = createServiceClient();
-      } catch { /* unavailable */ }
+      } catch (err) {
+        console.error('[V2] Supabase service client init failed — PM file writes will be unavailable:', err);
+      }
       return pmSupabase;
     };
 
@@ -2569,7 +2573,7 @@ export async function streamV2(
         orchestrationSignals.push(signal);
 
         // Checkpoint after specialist and review completions (fire-and-forget)
-        if (isBackgroundResumeEnabled()) {
+        if (isBackgroundResumeEnabled() && fileStore) {
           const dirtyIds = [...fileStore.getDirtyFileIds()];
           if (signal.type === 'specialist_completed') {
             checkpointSaveAfterSpecialist(
@@ -2635,7 +2639,9 @@ export async function streamV2(
         try {
           const hydrated = await options.loadContent([...allHydrationIds]);
           batchHydratedMap = new Map(hydrated.map((f: FileContext) => [f.fileId, f]));
-        } catch { /* best-effort hydration */ }
+        } catch (err) {
+          console.error(`[V2] Batch content hydration failed for ${allHydrationIds.size} files:`, err);
+        }
       }
 
       for (const ref of refSections) {
@@ -3114,7 +3120,9 @@ export async function streamV2(
                   try {
                     const hydrated = await fileStore.read(matchedFile.fileId);
                     if (hydrated?.content) fileContent = hydrated.content;
-                  } catch { /* fall through to block */ }
+                  } catch (err) {
+                    console.error(`[V2] FileStore read failed for file ${matchedFile.fileId} during search_replace conversion:`, err);
+                  }
                 }
                 const lineCount = fileContent ? fileContent.split('\n').length : 0;
 
@@ -4247,20 +4255,14 @@ export async function streamV2(
         if ((usage.cacheReadInputTokens ?? 0) > 0) {
           console.log(`[V2] Cache hit: ${usage.cacheReadInputTokens} tokens read from cache (iter ${iteration})`);
         }
-        // Emit context pressure events so the UI can warn the user
-        const cumulativeTokens = totalInputTokens + totalOutputTokens;
-        const modelContextLimit = model.includes('claude') ? 200_000 : model.includes('gpt') ? 128_000 : 131_072;
-        const pressurePercent = Math.round((cumulativeTokens / modelContextLimit) * 100);
-        if (pressurePercent >= 80) {
-          onProgress?.({
-            type: 'context_pressure',
-            usedTokens: cumulativeTokens,
-            maxTokens: modelContextLimit,
-            percentage: pressurePercent,
-            level: pressurePercent >= 92 ? 'critical' : 'warning',
-          });
-        }
       } catch { /* getUsage may fail if stream errored */ }
+
+      onProgress?.({
+        type: 'token_budget_update',
+        used: totalInputTokens + totalOutputTokens,
+        remaining: Math.max(0, MAX_ITERATIONS * 4096 - (totalInputTokens + totalOutputTokens)),
+        iteration,
+      });
 
       // Treat provider stream interruptions as incomplete execution, never as normal completion.
       const terminalStreamError = await streamResult.getTerminalError?.();
@@ -5290,11 +5292,17 @@ export async function streamV2(
       .map(s => s.details as unknown as import('./model-router').AgentCostEvent);
     const costSummary = costEvents.length > 0 ? {
       totalCostCents: costEvents.reduce((sum, e) => sum + (e.costCents ?? 0), 0),
-      byPhase: {
-        pm: costEvents.filter(e => e.phase === 'pm'),
-        specialist: costEvents.filter(e => e.phase === 'specialist'),
-        review: costEvents.filter(e => e.phase === 'review'),
-      },
+      byPhase: (['pm', 'specialist', 'review'] as const).reduce<Record<string, { totalCostCents: number; calls: number; models: string[] }>>((acc, phase) => {
+        const phaseEvents = costEvents.filter(e => e.phase === phase);
+        if (phaseEvents.length > 0) {
+          acc[phase] = {
+            totalCostCents: phaseEvents.reduce((sum, e) => sum + (e.costCents ?? 0), 0),
+            calls: phaseEvents.length,
+            models: [...new Set(phaseEvents.map(e => e.modelId).filter(Boolean) as string[])],
+          };
+        }
+        return acc;
+      }, {}),
     } : undefined;
 
     // Emit cost summary to client
@@ -5353,7 +5361,10 @@ export async function streamV2(
     console.error('[V2] Fatal error:', error);
 
     // Flush pending writes even on error — partial edits are already committed locally
-    await fileStore?.flush().catch(() => {});
+    const v2FlushResult = await fileStore?.flush().catch(() => ({ failedFileIds: [] as string[] }));
+    if (v2FlushResult && v2FlushResult.failedFileIds.length > 0) {
+      console.error(`[V2] ${v2FlushResult.failedFileIds.length} file(s) failed to save during error flush`);
+    }
 
     const classifiedError = error instanceof AIProviderError
       ? error
@@ -5371,10 +5382,10 @@ export async function streamV2(
             {
               agentType: 'project_manager',
               success: false,
-              analysis: fullText || `Interrupted: ${classifiedError.message}`,
+              analysis: `Interrupted: ${classifiedError.message}`,
             },
             dirtyIds,
-            [...accumulatedChanges],
+            [],
           );
         }
         onProgress?.({
@@ -5403,20 +5414,10 @@ export async function streamV2(
         return {
           agentType: 'project_manager',
           success: true,
-          analysis: fullText || 'Execution interrupted and resumed in background.',
-          changes: accumulatedChanges.length > 0 ? accumulatedChanges : undefined,
+          analysis: 'Execution interrupted and resumed in background.',
           needsClarification: false,
           directStreamed: true,
           checkpointed: true,
-          usage: {
-            totalInputTokens,
-            totalOutputTokens,
-            totalCacheReadTokens,
-            totalCacheWriteTokens,
-            model,
-            provider: providerName,
-            tier,
-          },
         };
       } catch (checkpointErr) {
         console.error('[V2] Failed to checkpoint interrupted execution:', checkpointErr);

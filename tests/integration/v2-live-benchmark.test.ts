@@ -40,7 +40,6 @@ if (fs.existsSync(benchEnvPath)) {
   dotenv.config({ path: benchEnvPath, override: true });
 }
 
-process.env.ENABLE_V2_AGENT = 'true';
 process.env.ENABLE_PROMPT_CACHING = 'true';
 process.env.PROMPT_CACHE_TTL = '1h';
 process.env.ENABLE_ADAPTIVE_THINKING = 'true';

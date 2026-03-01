@@ -13,6 +13,8 @@ export interface KnowledgeModule {
   content: string;
   tokenEstimate: number;
   alwaysLoad?: boolean;
+  /** File types that boost this module's score when present in the active context */
+  fileTypeAffinity?: Array<'liquid' | 'css' | 'javascript'>;
 }
 
 import { LIQUID_CORE, LIQUID_CORE_KEYWORDS, LIQUID_CORE_TOKENS } from './liquid-core';
@@ -25,6 +27,8 @@ import { DIAGNOSTIC_STRATEGY, DIAGNOSTIC_STRATEGY_KEYWORDS, DIAGNOSTIC_STRATEGY_
 import { CX_PATTERNS_SUMMARY, CX_PATTERNS_SUMMARY_KEYWORDS, CX_PATTERNS_SUMMARY_TOKENS } from './cx-patterns-summary';
 import { PERFORMANCE_PATTERNS, PERFORMANCE_PATTERNS_KEYWORDS, PERFORMANCE_PATTERNS_TOKENS } from './performance-patterns';
 import { VARIANT_PATTERNS, VARIANT_PATTERNS_KEYWORDS, VARIANT_PATTERNS_TOKENS } from './variant-patterns';
+import { MOTION_PATTERNS, MOTION_PATTERNS_KEYWORDS, MOTION_PATTERNS_TOKENS } from './motion-patterns';
+import { LIQUID_EDITING_PATTERNS, LIQUID_EDITING_PATTERNS_KEYWORDS, LIQUID_EDITING_PATTERNS_TOKENS } from './liquid-editing-patterns';
 
 const MODULES: KnowledgeModule[] = [
   {
@@ -39,12 +43,21 @@ const MODULES: KnowledgeModule[] = [
     keywords: LIQUID_FILTERS_KEYWORDS,
     content: LIQUID_FILTERS,
     tokenEstimate: LIQUID_FILTERS_TOKENS,
+    fileTypeAffinity: ['liquid'],
   },
   {
     id: 'liquid-objects',
     keywords: LIQUID_OBJECTS_KEYWORDS,
     content: LIQUID_OBJECTS,
     tokenEstimate: LIQUID_OBJECTS_TOKENS,
+    fileTypeAffinity: ['liquid'],
+  },
+  {
+    id: 'liquid-editing-patterns',
+    keywords: LIQUID_EDITING_PATTERNS_KEYWORDS,
+    content: LIQUID_EDITING_PATTERNS,
+    tokenEstimate: LIQUID_EDITING_PATTERNS_TOKENS,
+    fileTypeAffinity: ['liquid'],
   },
   {
     id: 'a11y-patterns',
@@ -57,6 +70,14 @@ const MODULES: KnowledgeModule[] = [
     keywords: CSS_JS_STANDARDS_KEYWORDS,
     content: CSS_JS_STANDARDS,
     tokenEstimate: CSS_JS_STANDARDS_TOKENS,
+    fileTypeAffinity: ['css', 'javascript'],
+  },
+  {
+    id: 'motion-patterns',
+    keywords: MOTION_PATTERNS_KEYWORDS,
+    content: MOTION_PATTERNS,
+    tokenEstimate: MOTION_PATTERNS_TOKENS,
+    fileTypeAffinity: ['css', 'javascript', 'liquid'],
   },
   {
     id: 'diagnostic-strategy',
@@ -96,13 +117,18 @@ const MODULES: KnowledgeModule[] = [
  * When projectDir is provided, custom SKILL.md files from projectDir/skills/
  * are also included. When marketplaceModules is provided, installed marketplace
  * skills are included. Disabled skill IDs are excluded from matching.
+ *
+ * activeFileTypes: file types present in the user's active context (e.g. ['liquid', 'css']).
+ * Modules with matching fileTypeAffinity get a score boost even if the user message
+ * doesn't explicitly mention those file types.
  */
 export function matchKnowledgeModules(
   userMessage: string,
   maxTokenBudget: number = 2500,
   projectDir?: string,
   disabledSkillIds?: Set<string>,
-  marketplaceModules?: KnowledgeModule[]
+  marketplaceModules?: KnowledgeModule[],
+  activeFileTypes?: string[],
 ): KnowledgeModule[] {
   const allModules = [...MODULES];
   if (projectDir) {
@@ -119,6 +145,10 @@ export function matchKnowledgeModules(
   const lower = userMessage.toLowerCase();
   const vocabulary = buildVocabulary(filtered);
 
+  const activeTypes = activeFileTypes
+    ? new Set(activeFileTypes.map((t) => t.toLowerCase()))
+    : undefined;
+
   const scored = filtered
     .map((m) => {
       const keywordScore = m.alwaysLoad ? 100 : m.keywords.filter((kw) => lower.includes(kw)).length;
@@ -129,10 +159,17 @@ export function matchKnowledgeModules(
         const semScore = semanticScore(userMessage, m, vocabulary);
         score =
           keywordScore > 0
-            ? keywordScore + semScore * 2 // Boost if keywords also match
-            : semScore * 3; // Semantic-only match (catches "make it look better" → cx-patterns)
+            ? keywordScore + semScore * 2
+            : semScore * 3;
       } else {
         score = keywordScore;
+      }
+
+      if (activeTypes && m.fileTypeAffinity?.length) {
+        const affinityMatch = m.fileTypeAffinity.some((ft) => activeTypes.has(ft));
+        if (affinityMatch) {
+          score = Math.max(score, 0.5) + 2;
+        }
       }
 
       return { module: m, score };

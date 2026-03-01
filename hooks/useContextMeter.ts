@@ -83,7 +83,7 @@ export function useContextMeter(
   budgetTruncated?: boolean,
   /** Per-agent token usage breakdown */
   perAgentUsage?: Array<{ agentType: string; inputTokens: number; outputTokens: number }>,
-  /** Actual loaded file tokens from context_stats SSE event (overrides estimate) */
+  /** Actual loaded file tokens from context_file_loaded SSE event (overrides estimate) */
   loadedFileTokens?: number,
 ): ContextMeterState {
   return useMemo(() => {

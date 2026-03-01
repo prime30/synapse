@@ -2,6 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+/**
+ * @deprecated Use the shared ToastProvider's `toast()` function instead.
+ *
+ * Example migration:
+ * ```
+ * const { toast } = useToast();
+ * toast({
+ *   message: 'Applied changes',
+ *   type: 'success',
+ *   action: { label: 'Undo', onClick: handleUndo },
+ *   secondaryAction: { label: 'View issues', onClick: showIssues },
+ * });
+ * ```
+ */
 export interface DiagnosticsToastData {
   id: string;
   type: 'success' | 'error' | 'warning';

@@ -62,25 +62,20 @@ interface SSEDoneEvent {
   type: 'done';
 }
 
-interface SSEContextStatsEvent {
-  type: 'context_stats';
-  loadedFiles: number;
-  loadedTokens: number;
-  totalFiles: number;
-}
-
-interface SSEContextPressureEvent {
-  type: 'context_pressure';
-  percentage: number;
-  level: 'warning' | 'critical';
-  usedTokens: number;
-  maxTokens: number;
+interface SSETokenBudgetUpdateEvent {
+  type: 'token_budget_update';
+  used: number;
+  remaining: number;
+  iteration: number;
 }
 
 interface SSEContextFileLoadedEvent {
   type: 'context_file_loaded';
-  path: string;
-  tokenCount: number;
+  path?: string;
+  tokenCount?: number;
+  loadedFiles?: number;
+  loadedTokens?: number;
+  totalFiles?: number;
 }
 
 interface SSEContentChunkEvent {
@@ -145,21 +140,6 @@ interface SSEToolProgressEvent {
   };
 }
 
-interface SSECacheStatsEvent {
-  type: 'cache_stats';
-  cacheCreationInputTokens: number;
-  cacheReadInputTokens: number;
-  cacheHit: boolean;
-}
-
-interface SSECitationEvent {
-  type: 'citation';
-  citedText: string;
-  documentTitle: string;
-  startIndex?: number;
-  endIndex?: number;
-}
-
 interface SSEDiagnosticsEvent {
   type: 'diagnostics';
   file?: string;
@@ -199,6 +179,7 @@ interface SSEChangePreviewEvent {
   executionId: string;
   sessionId?: string | null;
   projectId: string;
+  checkpointId?: string;
   changes: {
     fileId: string;
     fileName: string;
@@ -229,7 +210,12 @@ interface SSEShopifyPushEvent {
   status: string;
 }
 
-type SSEEvent = SSEShopifyPushEvent | SSEErrorEvent | SSEDoneEvent | SSEContentChunkEvent | SSEThinkingEvent | SSEContextStatsEvent | SSEContextPressureEvent | SSEContextFileLoadedEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSEToolResultEvent | SSEToolProgressEvent | SSECacheStatsEvent | SSECitationEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent | SSEWorktreeStatusEvent;
+interface SSECheckpointedEvent {
+  type: 'checkpointed';
+  metadata?: { executionId?: string; iteration?: number };
+}
+
+type SSEEvent = SSEShopifyPushEvent | SSEErrorEvent | SSEDoneEvent | SSEContentChunkEvent | SSEThinkingEvent | SSETokenBudgetUpdateEvent | SSEContextFileLoadedEvent | SSEToolStartEvent | SSEToolCallEvent | SSEToolErrorEvent | SSEToolResultEvent | SSEToolProgressEvent | SSEDiagnosticsEvent | SSEWorkerProgressEvent | SSEReasoningEvent | SSEActiveModelEvent | SSERateLimitedEvent | SSEChangePreviewEvent | SSEExecutionOutcomeEvent | SSEWorktreeStatusEvent | SSECheckpointedEvent;
 
 /** User-friendly error messages mapped from error codes (client-side). */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
@@ -568,6 +554,12 @@ interface AgentPromptPanelProps {
   /** Run preview verification after changes are applied. Returns regression result. */
   verifyPreview?: (projectId: string) => Promise<import('@/lib/agents/preview-verifier').PreviewVerificationResult | null>;
 
+  // ── Quality gates: batch diff callback ──────────────────────────────
+  /** Called with change data when agent completes with file changes, for BatchDiffModal. */
+  onBatchDiff?: (data: { title: string; entries: Array<{ fileId: string; fileName: string; originalContent: string; newContent: string; description?: string }>; checkpointId?: string }) => void;
+  /** Called when user clicks "Undo all changes" — restores from auto-checkpoint. */
+  onUndoCheckpoint?: (checkpointId: string) => void;
+
   // ── Phase 3a: Preview annotation ────────────────────────────────────
   /** Pending annotation from the preview panel (region + note) */
   pendingAnnotation?: import('@/components/preview/PreviewAnnotator').AnnotationData | null;
@@ -629,6 +621,8 @@ export function AgentPromptPanel({
   onConfirmFileCreate,
   captureBeforeSnapshot,
   verifyPreview,
+  onBatchDiff,
+  onUndoCheckpoint,
   pendingAnnotation,
   onClearAnnotation,
   onLiveChange,
@@ -692,6 +686,7 @@ export function AgentPromptPanel({
   const arcRef = useRef(new ConversationArc());
   const explicitSelectionRef = useRef(false);
   const [currentAction, setCurrentAction] = useState<string | undefined>();
+  const [currentPhase, setCurrentPhase] = useState<string | undefined>();
   const [lastTrimmedCount, setLastTrimmedCount] = useState(0);
   const [lastHistorySummary, setLastHistorySummary] = useState<string | undefined>();
   const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
@@ -1006,7 +1001,6 @@ export function AgentPromptPanel({
       search_replace: 'code_edit',
       ask_clarification: 'clarification',
       create_file: 'file_create',
-      navigate_preview: 'preview_nav',
       write_file: 'file_op',
       delete_file: 'file_op',
       rename_file: 'file_op',
@@ -1355,10 +1349,7 @@ export function AgentPromptPanel({
         // Extract element hint for smart file auto-selection on the server
         const elementHint = extractElementHint(selectedElement);
 
-        // V2 agent architecture: single-stream tool-calling loop (no Summary phase)
-        // Default to v2 unless explicitly disabled.
-        const useV2 = process.env.NEXT_PUBLIC_ENABLE_V2_AGENT !== 'false';
-        const streamEndpoint = useV2 ? '/api/agents/stream/v2' : '/api/agents/stream';
+        const streamEndpoint = '/api/agents/stream/v2';
 
         // Capture and clear pending image for this request
         const imageForRequest = pendingImageRef.current;
@@ -1432,7 +1423,6 @@ export function AgentPromptPanel({
         // Local accumulators for tool card data (avoids reading message state mid-stream)
         let accumulatedCodeEdits: Array<{ filePath: string; reasoning?: string; newContent: string; originalContent?: string; status: 'pending' | 'applied' | 'rejected'; confidence?: number }> = [];
         let accumulatedFileCreates: Array<{ fileName: string; content: string; reasoning?: string; status: 'pending' | 'confirmed' | 'cancelled'; confidence?: number }> = [];
-        let accumulatedCitations: Array<{ citedText: string; documentTitle: string; startIndex?: number; endIndex?: number }> = [];
         // Agent Power Tools accumulators (Phase 7)
         let accumulatedFileOps: Array<{ type: 'write' | 'delete' | 'rename'; fileName: string; success: boolean; error?: string; newFileName?: string }> = [];
         let accumulatedShopifyOps: Array<{ type: 'push' | 'pull' | 'list_themes' | 'list_resources' | 'get_asset'; status: 'pending' | 'success' | 'error'; summary: string; detail?: string; error?: string }> = [];
@@ -1518,6 +1508,22 @@ export function AgentPromptPanel({
                     changes: sseEvent.changes,
                   },
                 });
+
+                // Surface change_preview to BatchDiffModal for unified review
+                if (onBatchDiff && sseEvent.changes.length > 0) {
+                  onBatchDiff({
+                    title: `${sseEvent.changes.length} file${sseEvent.changes.length !== 1 ? 's' : ''} changed`,
+                    entries: sseEvent.changes.map(c => ({
+                      fileId: c.fileId,
+                      fileName: c.fileName,
+                      originalContent: c.originalContent,
+                      newContent: c.proposedContent,
+                      description: c.reasoning,
+                    })),
+                    checkpointId: sseEvent.checkpointId,
+                  });
+                }
+
                 updateMessage(assistantMsgId, streamedContent, {
                   blocks: [...blocksRef.current],
                 });
@@ -1628,6 +1634,7 @@ export function AgentPromptPanel({
                   streamedContent += summaryBlock;
                 }
 
+                const sseCheckpointId = (sseEvent as { checkpointId?: string }).checkpointId;
                 const failureMeta = {
                   failureReason: (sseEvent as { failureReason?: string }).failureReason ?? undefined,
                   suggestedAction: (sseEvent as { suggestedAction?: string }).suggestedAction ?? undefined,
@@ -1637,6 +1644,7 @@ export function AgentPromptPanel({
                   referentialReplayFailed,
                   verificationEvidence: ((sseEvent as unknown as Record<string, unknown>).verificationEvidence) as { syntaxCheck: { passed: boolean; errorCount: number; warningCount: number }; themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number }; checkedFiles: string[]; totalCheckTimeMs: number } | undefined,
                   validationIssues: sseValidationIssues,
+                  checkpointId: sseCheckpointId,
                 };
 
                 // Only show clarification card when the agent explicitly asked
@@ -1687,35 +1695,37 @@ export function AgentPromptPanel({
                 }
                 continue;
               }
-              // Handle context_stats SSE event for accurate ContextMeter
-              if (sseEvent.type === 'context_stats') {
-                updateMessage(assistantMsgId, streamedContent, {
-                  contextStats: {
-                    loadedFiles: sseEvent.loadedFiles,
-                    loadedTokens: sseEvent.loadedTokens,
-                    totalFiles: sseEvent.totalFiles,
-                  },
-                });
-                continue;
-              }
-              if (sseEvent.type === 'context_pressure') {
+              if (sseEvent.type === 'token_budget_update') {
+                const total = sseEvent.used + sseEvent.remaining;
+                const ratio = total > 0 ? sseEvent.used / total : 0;
                 setContextPressure({
-                  percentage: sseEvent.percentage,
-                  level: sseEvent.level,
-                  usedTokens: sseEvent.usedTokens,
-                  maxTokens: sseEvent.maxTokens,
+                  usedTokens: sseEvent.used,
+                  maxTokens: total,
+                  percentage: Math.round(ratio * 100),
+                  level: ratio > 0.9 ? 'critical' : ratio > 0.7 ? 'warning' : 'warning',
                 });
                 continue;
               }
               if (sseEvent.type === 'context_file_loaded') {
-                const currentMsg = messages.find(m => m.id === assistantMsgId);
-                updateMessage(assistantMsgId, streamedContent, {
-                  contextStats: {
-                    ...currentMsg?.contextStats,
-                    loadedFiles: (currentMsg?.contextStats?.loadedFiles ?? 0) + 1,
-                    loadedTokens: (currentMsg?.contextStats?.loadedTokens ?? 0) + sseEvent.tokenCount,
-                  },
-                });
+                if (sseEvent.loadedFiles != null) {
+                  updateMessage(assistantMsgId, streamedContent, {
+                    contextStats: {
+                      loadedFiles: sseEvent.loadedFiles,
+                      loadedTokens: sseEvent.loadedTokens ?? 0,
+                      totalFiles: sseEvent.totalFiles ?? 0,
+                    },
+                  });
+                } else {
+                  const currentMsg = messages.find(m => m.id === assistantMsgId);
+                  updateMessage(assistantMsgId, streamedContent, {
+                    contextStats: {
+                      totalFiles: currentMsg?.contextStats?.totalFiles ?? 0,
+                      ...currentMsg?.contextStats,
+                      loadedFiles: (currentMsg?.contextStats?.loadedFiles ?? 0) + 1,
+                      loadedTokens: (currentMsg?.contextStats?.loadedTokens ?? 0) + (sseEvent.tokenCount ?? 0),
+                    },
+                  });
+                }
                 continue;
               }
               // Handle tool_start: show loading skeleton
@@ -2134,11 +2144,6 @@ export function AgentPromptPanel({
                 }
                 continue;
               }
-              // Handle cache_stats event
-              if (sseEvent.type === 'cache_stats') {
-                // Cache stats are informational; no UI update needed yet
-                continue;
-              }
               // F1: Virtual worktree status for parallel agent isolation
               if (sseEvent.type === 'worktree_status') {
                 updateMessage(assistantMsgId, streamedContent, {
@@ -2146,22 +2151,6 @@ export function AgentPromptPanel({
                     worktrees: sseEvent.worktrees ?? [],
                     conflicts: sseEvent.conflicts ?? [],
                   },
-                });
-                continue;
-              }
-              // Handle citation events
-              if (sseEvent.type === 'citation') {
-                accumulatedCitations = [
-                  ...accumulatedCitations,
-                  {
-                    citedText: sseEvent.citedText,
-                    documentTitle: sseEvent.documentTitle,
-                    startIndex: sseEvent.startIndex,
-                    endIndex: sseEvent.endIndex,
-                  },
-                ];
-                updateMessage(assistantMsgId, streamedContent, {
-                  citations: [...accumulatedCitations],
                 });
                 continue;
               }
@@ -2327,6 +2316,7 @@ export function AgentPromptPanel({
 
                 thinkingStepsRef.current = steps;
                 if (sseEvent.label) setCurrentAction(sseEvent.label);
+                setCurrentPhase(sseEvent.phase);
                 if (sseEvent.phase === 'complete') thinkingComplete = true;
 
                 // B2: Clarification event — append a clarification message to the chat
@@ -2785,7 +2775,7 @@ export function AgentPromptPanel({
         onLiveSessionEnd?.();
       }
     },
-    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, useFlatPipeline, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents]
+    [projectId, messages, appendMessage, addLocalMessage, updateMessage, finalizeMessage, context.filePath, context.fileLanguage, context.selection, getPreviewSnapshot, getActiveFileContent, onTokenUsage, maxAgents, specialistMode, model, intentMode, useFlatPipeline, getPassiveContext, contextSuggestions, responseSuggestionsWithRetry, onOpenFile, openTabIds, selectedElement, resolveFileContent, captureBeforeSnapshot, verifyPreview, pendingAnnotation, onClearAnnotation, onLiveChange, onLiveSessionStart, onLiveSessionEnd, pinnedPrefs, styleGuide, onOpenFiles, onScrollToEdit, onAgentActivity, setMaxAgents, onBatchDiff]
   );
 
   // EPIC 5: Expose onSend for QuickActions/Fix with AI
@@ -3223,6 +3213,8 @@ export function AgentPromptPanel({
           onSaveCode={onSaveCode}
           editorSelection={context.selection}
           currentAction={currentAction}
+          currentPhase={currentPhase}
+          onUndoCheckpoint={onUndoCheckpoint}
           onClearChat={handleClearChat}
           showRetryChip={showRetryChip}
           outputMode={outputMode}

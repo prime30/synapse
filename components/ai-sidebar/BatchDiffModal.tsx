@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { DiffPreview } from '@/components/features/suggestions/DiffPreview';
+import { Modal } from '@/components/ui/Modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +29,8 @@ interface BatchDiffModalProps {
   onApplyAll: (selectedEntries: BatchDiffEntry[]) => void;
   /** Called to undo all applied changes (batch undo). */
   onUndoAll?: (entries: BatchDiffEntry[]) => void;
+  /** Called to undo a single file (reverts to original content). */
+  onUndoFile?: (entry: BatchDiffEntry) => void;
   /** Called when user closes/cancels the modal. */
   onClose: () => void;
   className?: string;
@@ -43,12 +46,14 @@ function FileEntryItem({
   isExpanded,
   onToggleSelect,
   onToggleExpand,
+  onUndo,
 }: {
   entry: BatchDiffEntry;
   isSelected: boolean;
   isExpanded: boolean;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
+  onUndo?: () => void;
 }) {
   return (
     <div className="border-b ide-border-subtle last:border-b-0">
@@ -101,6 +106,17 @@ function FileEntryItem({
             {entry.description}
           </span>
         )}
+
+        {/* Per-file undo */}
+        {onUndo && (
+          <button
+            type="button"
+            onClick={onUndo}
+            className="flex-shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors"
+          >
+            Undo
+          </button>
+        )}
       </div>
 
       {/* Diff preview (collapsible) */}
@@ -134,6 +150,7 @@ export function BatchDiffModal({
   entries,
   onApplyAll,
   onUndoAll,
+  onUndoFile,
   onClose,
   className = '',
 }: BatchDiffModalProps) {
@@ -215,155 +232,144 @@ export function BatchDiffModal({
   const selectedCount = selectedIds.size;
   const totalCount = entries.length;
 
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      {/* Backdrop */}
-      <div
-        className="ide-overlay backdrop-blur-sm"
+  const headerContent = (
+    <div className="flex items-center justify-between px-5 py-3 border-b ide-border-subtle">
+      <div>
+        <h2 className="text-sm font-semibold ide-text">{title}</h2>
+        <p className="text-[10px] ide-text-3 mt-0.5">
+          {selectedCount} of {totalCount} file{totalCount !== 1 ? 's' : ''} selected
+        </p>
+      </div>
+      <button
+        type="button"
         onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div
-        className={`
-          relative flex flex-col ide-surface ide-border
-          rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh]
-          ${className}
-        `}
+        className="rounded p-1 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
+        aria-label="Close"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b ide-border-subtle flex-shrink-0">
-          <div>
-            <h2 className="text-sm font-semibold ide-text">{title}</h2>
-            <p className="text-[10px] ide-text-3 mt-0.5">
-              {selectedCount} of {totalCount} file{totalCount !== 1 ? 's' : ''} selected
-            </p>
-          </div>
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+
+  const footerContent = (
+    <div className="flex flex-col">
+      {appliedEntries && (
+        <div className="flex items-center justify-between gap-2 px-5 py-2 bg-emerald-500/10 border-b ide-border-subtle">
+          <span className="text-xs ide-text-2">
+            Applied {appliedEntries.length} file{appliedEntries.length !== 1 ? 's' : ''}
+          </span>
+          {onUndoAll && (
+            <button
+              type="button"
+              onClick={handleUndoAll}
+              className="text-xs font-medium text-emerald-500 hover:text-emerald-400 transition-colors"
+            >
+              Undo all
+            </button>
+          )}
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-3 px-5 py-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded px-4 py-1.5 text-xs font-medium ide-text-muted ide-hover hover:ide-text transition-colors"
+        >
+          {appliedEntries ? 'Done' : 'Cancel'}
+        </button>
+        {!appliedEntries && (
           <button
             type="button"
-            onClick={onClose}
-            className="rounded p-1 ide-text-3 ide-hover hover:ide-text-2 transition-colors"
-            aria-label="Close"
+            onClick={handleApplyAll}
+            disabled={selectedCount === 0}
+            className={`
+              rounded px-4 py-1.5 text-xs font-medium transition-colors
+              ${
+                selectedCount > 0
+                  ? 'text-white bg-[#28CD56] hover:bg-[#22b84c]'
+                  : 'ide-text-3 ide-surface-inset cursor-not-allowed'
+              }
+            `}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            Apply {selectedCount} file{selectedCount !== 1 ? 's' : ''}
           </button>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex items-center gap-3 px-5 py-2 border-b ide-border-subtle flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
-            >
-              Select all
-            </button>
-            <span className="ide-text-3">|</span>
-            <button
-              type="button"
-              onClick={selectNone}
-              className="text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
-            >
-              Select none
-            </button>
-          </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <button
-              type="button"
-              onClick={expandAll}
-              className="ide-text-muted hover:ide-text-2 transition-colors"
-            >
-              Expand all
-            </button>
-            <span className="ide-text-3">|</span>
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="ide-text-muted hover:ide-text-2 transition-colors"
-            >
-              Collapse all
-            </button>
-          </div>
-        </div>
-
-        {/* File list */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {entries.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-xs ide-text-3">
-              No file changes to review
-            </div>
-          ) : (
-            entries.map((entry) => (
-              <FileEntryItem
-                key={entry.fileId}
-                entry={entry}
-                isSelected={selectedIds.has(entry.fileId)}
-                isExpanded={expandedIds.has(entry.fileId)}
-                onToggleSelect={() => toggleSelect(entry.fileId)}
-                onToggleExpand={() => toggleExpand(entry.fileId)}
-              />
-            ))
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex flex-col border-t ide-border-subtle flex-shrink-0">
-          {/* Applied toast */}
-          {appliedEntries && (
-            <div className="flex items-center justify-between gap-2 px-5 py-2 bg-emerald-500/10 border-b ide-border-subtle">
-              <span className="text-xs ide-text-2">
-                Applied {appliedEntries.length} file{appliedEntries.length !== 1 ? 's' : ''}
-              </span>
-              {onUndoAll && (
-                <button
-                  type="button"
-                  onClick={handleUndoAll}
-                  className="text-xs font-medium text-emerald-500 hover:text-emerald-400 transition-colors"
-                >
-                  Undo all
-                </button>
-              )}
-            </div>
-          )}
-          <div className="flex items-center justify-end gap-3 px-5 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded px-4 py-1.5 text-xs font-medium ide-text-muted ide-hover hover:ide-text transition-colors"
-            >
-              {appliedEntries ? 'Done' : 'Cancel'}
-            </button>
-            {!appliedEntries && (
-              <button
-                type="button"
-                onClick={handleApplyAll}
-                disabled={selectedCount === 0}
-                className={`
-                  rounded px-4 py-1.5 text-xs font-medium transition-colors
-                  ${
-                    selectedCount > 0
-                      ? 'text-white bg-sky-600 hover:bg-sky-500'
-                      : 'ide-text-3 ide-surface-inset cursor-not-allowed'
-                  }
-                `}
-              >
-                Apply {selectedCount} file{selectedCount !== 1 ? 's' : ''}
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
+  );
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      header={headerContent}
+      footer={footerContent}
+      size="lg"
+      customMaxWidth="max-w-3xl"
+      bodyClassName="p-0 flex flex-col min-h-0"
+      className={className}
+    >
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 px-5 py-2 border-b ide-border-subtle flex-shrink-0">
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <button
+            type="button"
+            onClick={selectAll}
+            className="text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
+          >
+            Select all
+          </button>
+          <span className="ide-text-3">|</span>
+          <button
+            type="button"
+            onClick={selectNone}
+            className="text-sky-500 dark:text-sky-400 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
+          >
+            Select none
+          </button>
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="ide-text-muted hover:ide-text-2 transition-colors"
+          >
+            Expand all
+          </button>
+          <span className="ide-text-3">|</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="ide-text-muted hover:ide-text-2 transition-colors"
+          >
+            Collapse all
+          </button>
+        </div>
+      </div>
+
+      {/* File list */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {entries.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-xs ide-text-3">
+            No file changes to review
+          </div>
+        ) : (
+          entries.map((entry) => (
+            <FileEntryItem
+              key={entry.fileId}
+              entry={entry}
+              isSelected={selectedIds.has(entry.fileId)}
+              isExpanded={expandedIds.has(entry.fileId)}
+              onToggleSelect={() => toggleSelect(entry.fileId)}
+              onToggleExpand={() => toggleExpand(entry.fileId)}
+              onUndo={onUndoFile ? () => onUndoFile(entry) : undefined}
+            />
+          ))
+        )}
+      </div>
+    </Modal>
   );
 }

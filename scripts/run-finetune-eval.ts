@@ -5,12 +5,12 @@
  * and the tuned model, scoring each with the full eval dimensions from behavior spec.
  *
  * Usage:
- *   npx tsx scripts/run-finetune-eval.ts [--mode v1|v2|bugs]
+ *   npx tsx scripts/run-finetune-eval.ts [--mode v2|bugs]
  *     [--json-file <path>] [--fail-on-regression]
  *
  * Modes:
- *   v1, v2 - CX scenarios (mode inference, conversation quality, etc.)
- *   bugs   - Real-bug eval suite (10 scenarios, fix correctness scoring)
+ *   v2   - CX scenarios (mode inference, conversation quality, etc.)
+ *   bugs - Real-bug eval suite (10 scenarios, fix correctness scoring)
  *
  * Outputs a comparison summary showing where the tuned model improves or regresses.
  */
@@ -54,7 +54,7 @@ function hasFlag(name: string): boolean {
   return process.argv.includes(`--${name}`);
 }
 
-type Mode = 'v1' | 'v2' | 'bugs';
+type Mode = 'v2' | 'bugs';
 
 function inferIntent(prompt: string): IntentMode {
   const p = prompt.toLowerCase();
@@ -129,7 +129,7 @@ const EVAL_SCENARIOS: EvalScenario[] = [
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function runEvalScenario(
-  mode: 'v1' | 'v2',
+  mode: 'v2',
   contender: string,
   scenario: EvalScenario,
 ): Promise<FinetuneEvalResult | null> {
@@ -207,7 +207,7 @@ function fixtureToFileContext(files: Array<{ path: string; content: string }>): 
 }
 
 async function runBugScenario(
-  mode: 'v1' | 'v2',
+  mode: 'v2',
   scenario: (typeof BUG_SCENARIOS)[number],
 ): Promise<BugFixScore> {
   const fixture = generateThemeFixture(scenario);
@@ -299,7 +299,7 @@ async function main() {
     return;
   }
 
-  const harnessMode = mode as 'v1' | 'v2';
+  const harnessMode = mode as 'v2';
   console.log(`Running finetune evaluation suite in ${harnessMode} mode...`);
 
   const contender = 'baseline';

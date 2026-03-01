@@ -479,7 +479,7 @@ export async function POST(req: NextRequest) {
               metadata: { executionId },
             });
             emitEvent({
-              type: 'context_stats',
+              type: 'context_file_loaded',
               loadedFiles: fileContexts.filter((f) => !f.content.startsWith('[')).length,
               loadedTokens: Math.ceil(
                 fileContexts
@@ -544,6 +544,7 @@ export async function POST(req: NextRequest) {
               executionId,
               sessionId: body.sessionId ?? null,
               projectId: body.projectId,
+              checkpointId: result.checkpointId,
               changes: result.changes.map((c) => ({
                 fileId: c.fileId ?? '',
                 fileName: c.fileName,
@@ -694,10 +695,11 @@ export async function POST(req: NextRequest) {
             failedTool: result.failedTool ?? undefined,
             failedFilePath: result.failedFilePath ?? undefined,
             validationIssues: result.validationIssues ?? undefined,
+            checkpointId: result.checkpointId ?? undefined,
           });
 
           emitEvent({
-            type: 'context_stats',
+            type: 'context_file_loaded',
             loadedFiles: fileContexts.filter((f) => !f.content.startsWith('[')).length,
             loadedTokens: Math.ceil(
               fileContexts

@@ -500,25 +500,17 @@ function checkCompanionCoverage(
  * Validate a change set for cross-file consistency.
  * Runs before the review agent to catch structural breakage.
  */
-export function validateChangeSet(
+function issueKey(i: ValidationIssue): string {
+  return `${i.severity}:${i.category}:${i.file}:${i.description}`;
+}
+
+function runChecks(
+  mergedMap: Map<string, MergedEntry>,
+  fileSet: Set<string>,
+  localeKeys: Set<string>,
   changes: CodeChange[],
-  projectFiles: FileContext[]
-): ValidationResult {
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const mergedMap = buildMergedFileMap(changes, projectFiles);
-  const localeKeys = new Set<string>();
-
-  for (const [path, entry] of mergedMap) {
-    if (!path.startsWith('locales/') || !path.endsWith('.json')) continue;
-    try {
-      const parsed = JSON.parse(entry.content) as unknown;
-      for (const k of flattenLocaleKeys(parsed)) localeKeys.add(k);
-    } catch {
-      // JSON parse issues are handled by other validators.
-    }
-  }
-
-  const fileSet = new Set<string>(mergedMap.keys());
 
   for (const [filePath, { content, fileType }] of mergedMap) {
     if (fileType === 'liquid' || filePath.endsWith('.liquid')) {
@@ -536,10 +528,48 @@ export function validateChangeSet(
   }
 
   issues.push(...checkCompanionCoverage(changes, mergedMap));
+  return issues;
+}
 
-  const hasErrors = issues.some((i) => i.severity === 'error');
+function collectLocaleKeys(mergedMap: Map<string, MergedEntry>): Set<string> {
+  const keys = new Set<string>();
+  for (const [path, entry] of mergedMap) {
+    if (!path.startsWith('locales/') || !path.endsWith('.json')) continue;
+    try {
+      const parsed = JSON.parse(entry.content) as unknown;
+      for (const k of flattenLocaleKeys(parsed)) keys.add(k);
+    } catch { /* handled elsewhere */ }
+  }
+  return keys;
+}
+
+export function validateChangeSet(
+  changes: CodeChange[],
+  projectFiles: FileContext[]
+): ValidationResult {
+  // Run checks on the PROPOSED state (after edits)
+  const mergedMap = buildMergedFileMap(changes, projectFiles);
+  const localeKeys = collectLocaleKeys(mergedMap);
+  const fileSet = new Set<string>(mergedMap.keys());
+  const afterIssues = runChecks(mergedMap, fileSet, localeKeys, changes);
+
+  // Build a BASELINE: use original content for changed files to count pre-existing issues
+  const baselineChanges: CodeChange[] = changes.map(c => ({
+    ...c,
+    proposedContent: c.originalContent || '',
+  }));
+  const baselineMap = buildMergedFileMap(baselineChanges, projectFiles);
+  const baselineLocaleKeys = collectLocaleKeys(baselineMap);
+  const baselineFileSet = new Set<string>(baselineMap.keys());
+  const beforeIssues = runChecks(baselineMap, baselineFileSet, baselineLocaleKeys, baselineChanges);
+
+  // Diff: only keep issues that are NEW (not in the baseline)
+  const baselineSet = new Set(beforeIssues.map(issueKey));
+  const regressions = afterIssues.filter(i => !baselineSet.has(issueKey(i)));
+
+  const hasErrors = regressions.some((i) => i.severity === 'error');
   return {
     valid: !hasErrors,
-    issues,
+    issues: regressions,
   };
 }

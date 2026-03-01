@@ -214,7 +214,7 @@ export function PreviewSessionModal({
                 <button
                   type="button"
                   onClick={handleConnect}
-                  disabled={!tkaPassword.trim() || status === 'connecting'}
+                  disabled={!tkaPassword.trim()}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#28CD56] hover:bg-[#22b84c] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Connect

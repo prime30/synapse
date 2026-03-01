@@ -62,13 +62,18 @@ export async function POST(request: NextRequest) {
           model: options?.model as string | undefined,
           strategy: useFlatPipeline ? undefined : ('GOD_MODE' as import('@/lib/types/agent').ExecutionStrategy),
           deadlineMs: Date.now(),
-          loadContent: async (fileId: string) => {
+          loadContent: async (fileIds: string[]) => {
             const { data } = await serviceClient
               .from('project_files')
-              .select('content')
-              .eq('id', fileId)
-              .single();
-            return data?.content ?? null;
+              .select('id, path, content')
+              .in('id', fileIds);
+            return (data ?? []).map((row) => ({
+              fileId: row.id as string,
+              fileName: (row.path as string)?.split('/').pop() ?? row.id,
+              fileType: 'other' as const,
+              content: (row.content as string) ?? '',
+              path: row.path as string,
+            }));
           },
         },
       );

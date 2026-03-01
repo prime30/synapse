@@ -7,6 +7,7 @@ import { useChromaticSettings } from '@/hooks/useChromaticSettings';
 import { loadKeybindings, saveKeybindings, resetKeybindings, getEffectiveKey, type KeyBinding } from '@/lib/editor/keyboard-config';
 import { SkillBrowser } from '@/components/editor/SkillBrowser';
 import { LambdaDots } from '@/components/ui/LambdaDots';
+import { Modal } from '@/components/ui/Modal';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -290,16 +291,6 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
     return () => { cancelled = true; };
   }, [activeTab, isOpen]);
 
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !recordingId) onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [isOpen, onClose, recordingId]);
-
   const handleAddProvider = async () => {
     setProviderSaving(true);
     setProviderError(null);
@@ -365,35 +356,17 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
     setHealthCheckingId(null);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center ide-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Settings"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Settings"
+      customMaxWidth="max-w-[720px]"
+      bodyClassName="p-0"
+      className="h-[min(85vh,640px)]"
     >
-      <div className="ide-surface-pop rounded-xl shadow-2xl w-full max-w-[720px] mx-4 border ide-border flex flex-col" style={{ height: 'min(85vh, 640px)' }}>
-        {/* ── Header ──────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b ide-border-subtle shrink-0">
-          <h2 className="text-base font-semibold ide-text">Settings</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-md ide-text-3 hover:ide-text ide-hover transition-colors"
-            aria-label="Close"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* ── Body: sidebar + content ─────────────────────────────── */}
-        <div className="flex flex-1 min-h-0">
+      {/* ── Body: sidebar + content ─────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 h-full">
           {/* Sidebar nav */}
           <nav className="w-44 shrink-0 border-r ide-border-subtle py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
             {TABS.filter((tab) => (tab.id === 'skills' ? !!projectId : true)).map((tab) => {
@@ -916,7 +889,6 @@ export function SettingsModal({ isOpen, onClose, projectId }: SettingsModalProps
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

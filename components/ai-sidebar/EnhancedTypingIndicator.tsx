@@ -1,12 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { FileText, Search, FileEdit, FilePlus, List, Wrench } from 'lucide-react';
+import { FileText, Search, FileEdit, FilePlus, List, Wrench, ShieldCheck, RefreshCw } from 'lucide-react';
 import type { ToolProgressState } from '@/hooks/useToolProgress';
 
 interface EnhancedTypingIndicatorProps {
   activeTools: Map<string, ToolProgressState>;
   thinkingLabel?: string;
+  /** Current coordinator phase (e.g. 'verifying', 'self_correcting') */
+  phase?: string;
   isStreaming: boolean;
 }
 
@@ -40,17 +42,27 @@ function getToolLabel(state: ToolProgressState): string {
   }
 }
 
+const PHASE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  verifying: ShieldCheck,
+  self_correcting: RefreshCw,
+};
+
 export function EnhancedTypingIndicator({
   activeTools,
   thinkingLabel,
+  phase,
   isStreaming,
 }: EnhancedTypingIndicatorProps) {
   if (!isStreaming) return null;
 
   const tools = Array.from(activeTools.values());
   const mostRecent = tools[tools.length - 1];
-  const Icon = mostRecent ? TOOL_ICONS[mostRecent.name] ?? Wrench : null;
-  const label = mostRecent ? getToolLabel(mostRecent) : thinkingLabel ?? 'Thinking...';
+
+  const PhaseIcon = phase ? PHASE_ICONS[phase] : null;
+  const Icon = PhaseIcon ?? (mostRecent ? TOOL_ICONS[mostRecent.name] ?? Wrench : null);
+  const label = PhaseIcon
+    ? (thinkingLabel ?? 'Verifying...')
+    : (mostRecent ? getToolLabel(mostRecent) : thinkingLabel ?? 'Thinking...');
 
   return (
     <motion.div
@@ -64,9 +76,9 @@ export function EnhancedTypingIndicator({
         <Icon className="h-3.5 w-3.5 shrink-0 text-sky-500 dark:text-sky-400" aria-hidden />
       ) : (
         <span className="inline-flex gap-0.5" aria-hidden>
-          <span className="w-1 h-1 rounded-full bg-stone-400 animate-pulse" style={{ animationDelay: '0ms' }} />
-          <span className="w-1 h-1 rounded-full bg-stone-400 animate-pulse" style={{ animationDelay: '150ms' }} />
-          <span className="w-1 h-1 rounded-full bg-stone-400 animate-pulse" style={{ animationDelay: '300ms' }} />
+          <span className="w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse" style={{ animationDelay: '0ms' }} />
+          <span className="w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse" style={{ animationDelay: '150ms' }} />
+          <span className="w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse" style={{ animationDelay: '300ms' }} />
         </span>
       )}
       <span>{label}</span>

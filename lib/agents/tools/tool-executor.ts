@@ -657,7 +657,7 @@ export async function executeToolCall(
         // 9-tier matching cascade (ported from OpenCode)
         try {
           const { replace: cascadeReplace } = await import('./replacer');
-          const result = cascadeReplace(searchContent, oldText, newText, replaceAll);
+          const result = cascadeReplace(searchContent, oldText, newText, replaceAll, file.fileName);
 
           // Reconstruct full content if nearLine scoped the search
           let rawUpdated: string;

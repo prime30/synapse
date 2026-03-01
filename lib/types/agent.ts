@@ -4,6 +4,9 @@ export type AgentType = 'project_manager' | 'liquid' | 'javascript' | 'css' | 'j
 /** Routing tier for smart request classification */
 export type RoutingTier = 'TRIVIAL' | 'SIMPLE' | 'COMPLEX' | 'ARCHITECTURAL';
 
+/** Execution strategy for agent pipelines */
+export type ExecutionStrategy = 'SIMPLE' | 'HYBRID' | 'GOD_MODE';
+
 /** Message types exchanged between agents via the coordinator */
 export type MessageType = 'task' | 'result' | 'error' | 'question';
 
@@ -22,7 +25,8 @@ export type OrchestrationSignalType =
   | 'specialist_reaction'
   | 'specialist_escalated'
   | 'review_started'
-  | 'review_completed';
+  | 'review_completed'
+  | 'cost_event';
 
 /** Typed activity signal used for PM decisions and UI telemetry. */
 export interface OrchestrationActivitySignal {
@@ -250,6 +254,7 @@ export interface AgentResult {
   verificationEvidence?: {
     syntaxCheck: { passed: boolean; errorCount: number; warningCount: number };
     themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number };
+    structuralCheck?: { passed: boolean; errorCount: number; issues: string[] };
     checkedFiles: string[];
     totalCheckTimeMs: number;
   };
@@ -266,6 +271,8 @@ export interface AgentResult {
   }[];
   /** True when the agent was checkpointed mid-run for background continuation. */
   checkpointed?: boolean;
+  /** Auto-checkpoint ID created before agent edits, for rollback via checkpoint-service. */
+  checkpointId?: string;
   /** Aggregated cost summary from per-phase AgentCostEvents. */
   costSummary?: {
     totalCostCents: number;
@@ -357,4 +364,41 @@ export interface AgentExecution {
   started_at: string;
   completed_at: string | null;
   created_at: string;
+}
+
+// ── Coordinator event types (shared across V2 coordinator and routes) ────
+
+export interface ThinkingEvent {
+  type: 'thinking' | 'diagnostics' | 'worker_progress';
+  phase?: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'validating' | 'fixing' | 'change_ready' | 'clarification' | 'budget_warning' | 'reasoning' | 'complete';
+  label?: string;
+  detail?: string;
+  agent?: string;
+  analysis?: string;
+  summary?: string;
+  subPhase?: import('@/lib/agents/phase-mapping').SubPhase;
+  metadata?: Record<string, unknown>;
+  file?: string;
+  errorCount?: number;
+  warningCount?: number;
+  severity?: string;
+  message?: string;
+  category?: string;
+  workerId?: string;
+  status?: 'running' | 'complete' | 'error';
+}
+
+export type ProgressCallback = (event: ThinkingEvent) => void;
+
+/** Tool event emitted from the streaming agent loop to the client via SSE. */
+export interface AgentToolEvent {
+  type: 'tool_start' | 'tool_call' | 'tool_progress';
+  name: string;
+  id?: string;
+  toolCallId?: string;
+  input?: Record<string, unknown>;
+  result?: unknown;
+  isError?: boolean;
+  progress?: ToolProgressEvent['progress'];
+  reasoning?: string;
 }

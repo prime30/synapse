@@ -633,7 +633,7 @@ function rewriteSetCookieHeaders(shopifyRes: Response, headers: Headers): void {
 async function fetchWithManualRedirects(
   url: string,
   headers: Record<string, string>,
-  themeId: string,
+  themeId: string | undefined,
   opts?: { isTKA?: boolean },
   maxRedirects = 5,
 ): Promise<Response> {
@@ -662,7 +662,7 @@ async function fetchWithManualRedirects(
       return new Response('Theme Access password not accepted by Shopify', { status: 401 });
     }
 
-    if (!nextUrl.searchParams.has('preview_theme_id')) {
+    if (themeId && !nextUrl.searchParams.has('preview_theme_id')) {
       nextUrl.searchParams.set('preview_theme_id', themeId);
     }
     console.log(`[Preview Fetch] Redirect → ${nextUrl.toString()}`);

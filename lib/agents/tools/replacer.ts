@@ -22,7 +22,45 @@
  *   9. MultiOccurrence (yields all exact matches for replaceAll)
  */
 
+import { incrementCounter } from '@/lib/observability/metrics';
+
 export type Replacer = (content: string, find: string) => Generator<string>;
+
+const TIER_LOG_NAMES = [
+  'tier1_exact',
+  'tier2_line_trimmed',
+  'tier3_whitespace_norm',
+  'tier4_indent_flex',
+  'tier5_escape_norm',
+  'tier6_trimmed_boundary',
+  'tier7_context_aware',
+  'tier8_block_anchor',
+  'tier9_multi_occurrence',
+] as const;
+
+const FUZZY_TIER_INDICES = new Set([6, 7]);
+
+function emitReplacerTelemetry(
+  tierIdx: number,
+  tierName: string,
+  fileName: string | undefined,
+  matchCount: number,
+  isReplaceAll: boolean,
+): void {
+  const isFuzzy = FUZZY_TIER_INDICES.has(tierIdx);
+  console.info('[Replacer]', {
+    tier: TIER_LOG_NAMES[tierIdx],
+    tierName,
+    file: fileName ?? '<unknown>',
+    fuzzy: isFuzzy,
+    matchCount,
+    replaceAll: isReplaceAll,
+  });
+  incrementCounter(`replacer.tier.${TIER_LOG_NAMES[tierIdx]}`).catch(() => {});
+  if (isFuzzy) {
+    incrementCounter('replacer.fuzzy_matches').catch(() => {});
+  }
+}
 
 // ── 1. SimpleReplacer ────────────────────────────────────────────────────────
 
@@ -377,6 +415,7 @@ export function replace(
   oldString: string,
   newString: string,
   replaceAll = false,
+  fileName?: string,
 ): ReplaceResult {
   if (oldString === newString) {
     throw new Error('No changes to apply: oldString and newString are identical.');
@@ -397,6 +436,7 @@ export function replace(
 
       if (replaceAll) {
         const matchCount = content.split(search).length - 1;
+        emitReplacerTelemetry(r, replacerNames[r], fileName, matchCount, true);
         return {
           content: content.replaceAll(search, newString),
           replacerUsed: replacerNames[r],
@@ -407,6 +447,7 @@ export function replace(
       const lastIndex = content.lastIndexOf(search);
       if (index !== lastIndex) continue;
 
+      emitReplacerTelemetry(r, replacerNames[r], fileName, 1, false);
       return {
         content: content.substring(0, index) + newString + content.substring(index + search.length),
         replacerUsed: replacerNames[r],

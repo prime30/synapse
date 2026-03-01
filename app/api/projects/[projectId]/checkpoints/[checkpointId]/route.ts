@@ -1,88 +1,36 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
-import { validateBody } from '@/lib/middleware/validation';
-import { successResponse } from '@/lib/api/response';
-import { handleAPIError, APIError } from '@/lib/errors/handler';
-import {
-  getCheckpoint,
-  revertToCheckpoint,
-  deleteCheckpoint,
-} from '@/lib/services/checkpoints';
+import { handleAPIError } from '@/lib/errors/handler';
+import { restoreCheckpoint, deleteCheckpoint } from '@/lib/checkpoints/checkpoint-service';
 
 interface RouteParams {
   params: Promise<{ projectId: string; checkpointId: string }>;
 }
 
 /**
- * GET /api/projects/[projectId]/checkpoints/[checkpointId]
- *
- * Get full checkpoint details including file list.
- */
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
-    await requireAuth(request);
-    const { checkpointId } = await params;
-
-    const cp = getCheckpoint(checkpointId);
-    if (!cp) throw APIError.notFound('Checkpoint not found');
-
-    return successResponse({
-      checkpoint: {
-        id: cp.id,
-        label: cp.label,
-        createdAt: cp.createdAt,
-        sessionId: cp.sessionId,
-        files: Array.from(cp.files.values()).map((f) => ({
-          fileId: f.fileId,
-          path: f.path,
-        })),
-      },
-    });
-  } catch (error) {
-    return handleAPIError(error);
-  }
-}
-
-const revertSchema = z.object({
-  action: z.literal('revert'),
-});
-
-/**
  * POST /api/projects/[projectId]/checkpoints/[checkpointId]
  *
- * Perform an action on a checkpoint. Currently supports `{ action: 'revert' }`.
- * Returns the full file contents so the caller can restore them.
+ * Restore or delete a checkpoint.
+ * Body: { action: 'restore' | 'delete' }
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await requireAuth(request);
     const { checkpointId } = await params;
-    await validateBody(revertSchema)(request);
+    const body = await request.json();
+    const action = body?.action;
 
-    const files = revertToCheckpoint(checkpointId);
-    if (!files) throw APIError.notFound('Checkpoint not found');
+    if (action === 'restore' || action === 'revert') {
+      const result = await restoreCheckpoint(checkpointId);
+      return NextResponse.json({ success: result.errors.length === 0, restored: result.restored, errors: result.errors });
+    }
 
-    return successResponse({ files });
-  } catch (error) {
-    return handleAPIError(error);
-  }
-}
+    if (action === 'delete') {
+      const ok = await deleteCheckpoint(checkpointId);
+      return NextResponse.json({ success: ok });
+    }
 
-/**
- * DELETE /api/projects/[projectId]/checkpoints/[checkpointId]
- *
- * Remove a checkpoint from memory.
- */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
-    await requireAuth(request);
-    const { checkpointId } = await params;
-
-    const deleted = deleteCheckpoint(checkpointId);
-    if (!deleted) throw APIError.notFound('Checkpoint not found');
-
-    return successResponse({ deleted: true });
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     return handleAPIError(error);
   }

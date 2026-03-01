@@ -41,7 +41,7 @@ import { BaselineAgent } from './baseline-agent';
 import { loadCursorCapture } from './cursor-captures/loader';
 import type { CursorCapture } from './cursor-captures/types';
 import type { FileContext } from '@/lib/types/agent';
-import type { AgentToolEvent } from '@/lib/agents/coordinator';
+import type { AgentToolEvent } from '@/lib/types/agent';
 import type { ToolDefinition } from '@/lib/ai/types';
 
 // ── Gate ─────────────────────────────────────────────────────────────────────
@@ -358,8 +358,7 @@ async function runSynapse(
   model: string,
   label: string,
 ): Promise<ContenderResult> {
-  const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-  const coordinator = new AgentCoordinator();
+  const { streamV2 } = await import('@/lib/agents/coordinator-v2');
 
   const contentChunks: string[] = [];
   const toolEvents: AgentToolEvent[] = [];
@@ -368,7 +367,7 @@ async function runSynapse(
   console.log(`  [${label}] Running...`);
   const t0 = Date.now();
 
-  const result = await coordinator.streamAgentLoop(
+  const result = await streamV2(
     `h2h-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`,
     '00000000-0000-0000-0000-000000000099',
     'h2h-user',
@@ -378,16 +377,16 @@ async function runSynapse(
     {
       intentMode: scenario.intentMode,
       model,
-      onProgress: (ev) => {
+      onProgress: (ev: Record<string, unknown>) => {
         if (ev.type === 'thinking' && ev.label) {
           console.log(`    [progress] ${ev.label}`);
         }
       },
-      onContentChunk: (chunk) => {
+      onContentChunk: (chunk: string) => {
         if (contentChunks.length === 0) firstChunkAt = Date.now() - t0;
         contentChunks.push(chunk);
       },
-      onToolEvent: (ev) => {
+      onToolEvent: (ev: AgentToolEvent) => {
         toolEvents.push(ev);
         if (ev.type === 'tool_start') console.log(`    [tool] ${ev.name}`);
       },
@@ -411,7 +410,7 @@ async function runSynapse(
     toolCallCount: toolCallEvents.length,
     toolsUsed: [...new Set(toolCallEvents.map(e => e.name))],
     toolSequence: toolCallEvents.map(e => e.name),
-    inputTokens: 0, // Usage is internal to coordinator
+    inputTokens: 0,
     outputTokens: 0,
     iterationCount: 0,
     changesProduced: result.changes?.length ?? 0,

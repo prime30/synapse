@@ -1,7 +1,7 @@
 /**
  * Head-to-head: Cursor agent vs Synapse agent on the same prompt.
  *
- * Tests all three Synapse pipelines (executeSolo, streamAgentLoop, streamV2)
+ * Tests the V2 pipeline (streamV2)
  * with REAL Anthropic calls against a theme analysis prompt, capturing:
  *   - Response quality (text length, relevance)
  *   - Timing (total time, time to first chunk)
@@ -40,7 +40,6 @@ vi.mock('@/lib/design-tokens/agent-integration', () => ({
 
 import { setCacheAdapter, MemoryAdapter } from '@/lib/cache/cache-adapter';
 import type { FileContext } from '@/lib/types/agent';
-import type { AgentToolEvent } from '@/lib/agents/coordinator';
 
 // ── Cost estimation ──────────────────────────────────────────────────────────
 
@@ -204,194 +203,6 @@ describe('Cursor vs Synapse: head-to-head', () => {
       );
     }
   });
-
-  it.skipIf(!runLive)(
-    'Pipeline 1: executeSolo (legacy) — live Anthropic',
-    async () => {
-      const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-      const coordinator = new AgentCoordinator();
-      const files = loadThemeFiles();
-
-      console.log('\n========================================');
-      console.log('PIPELINE 1: executeSolo (legacy)');
-      console.log('Prompt:', PROMPT);
-      console.log('Files in context:', files.length);
-      console.log('========================================\n');
-
-      const t0 = Date.now();
-
-      const result = await coordinator.executeSolo(
-        'h2h-solo-' + Date.now(),
-        '00000000-0000-0000-0000-000000000099',
-        'h2h-user',
-        PROMPT,
-        files,
-        [],
-        {
-          intentMode: 'ask',
-          autoRoute: false,
-          onProgress: (ev) => {
-            if (ev.type === 'thinking') console.log('[progress]', ev.label);
-          },
-        },
-      );
-
-      const elapsed = Date.now() - t0;
-      const responseText = result.analysis || '';
-      const usage = coordinator.getAccumulatedUsage();
-
-      const totalInput = usage.totalInputTokens;
-      const totalOutput = usage.totalOutputTokens;
-      const model = usage.perAgent[0]?.model ?? 'unknown';
-      const cost = usage.perAgent.reduce(
-        (sum, entry) => sum + estimateCostUSD(entry.model, entry.inputTokens, entry.outputTokens),
-        0,
-      );
-
-      scores.push({
-        pipeline: 'executeSolo (v1 legacy)',
-        success: result.success,
-        totalTimeMs: elapsed,
-        firstChunkMs: elapsed,
-        responseChars: responseText.length,
-        changesCount: result.changes?.length ?? 0,
-        toolCallsCount: 0,
-        toolsUsed: [],
-        inputTokens: totalInput,
-        outputTokens: totalOutput,
-        estimatedCostUSD: cost,
-        model,
-      });
-
-      console.log('\n--- Cost Breakdown ---');
-      for (const entry of usage.perAgent) {
-        const entryCost = estimateCostUSD(entry.model, entry.inputTokens, entry.outputTokens);
-        console.log(`  ${entry.agentType}: ${entry.model} — ${entry.inputTokens}in/${entry.outputTokens}out — ${formatCost(entryCost)}`);
-      }
-      console.log(`  TOTAL: ${totalInput}in/${totalOutput}out — ${formatCost(cost)}`);
-      console.log('---');
-      console.log('Response (first 1000 chars):');
-      console.log(responseText.slice(0, 1000));
-      console.log('========================================\n');
-
-      expect(result.success).toBe(true);
-      expect(responseText.length).toBeGreaterThan(50);
-      expect(responseText.toLowerCase()).toMatch(/accessib|a11y|alt|aria|label/);
-    },
-    120_000,
-  );
-
-  it.skipIf(!runLive)(
-    'Pipeline 2: streamAgentLoop (v1 streaming) — live Anthropic',
-    async () => {
-      const { AgentCoordinator } = await import('@/lib/agents/coordinator');
-      const coordinator = new AgentCoordinator();
-      const files = loadThemeFiles();
-
-      const contentChunks: string[] = [];
-      const toolEvents: AgentToolEvent[] = [];
-      let firstChunkAt = 0;
-      let progressCostEvent: Record<string, unknown> | null = null;
-
-      console.log('\n========================================');
-      console.log('PIPELINE 2: streamAgentLoop (v1 streaming)');
-      console.log('Prompt:', PROMPT);
-      console.log('Files in context:', files.length);
-      console.log('========================================\n');
-
-      const t0 = Date.now();
-
-      const result = await coordinator.streamAgentLoop(
-        'h2h-stream-' + Date.now(),
-        '00000000-0000-0000-0000-000000000099',
-        'h2h-user',
-        PROMPT,
-        files,
-        [],
-        {
-          intentMode: 'ask',
-          onProgress: (ev) => {
-            if (ev.type === 'thinking') console.log('[progress]', ev.label);
-            // Capture the cost event emitted at end of loop
-            const meta = (ev as unknown as Record<string, unknown>).metadata as Record<string, unknown> | undefined;
-            if (meta?.cost) progressCostEvent = meta.cost as Record<string, unknown>;
-          },
-          onContentChunk: (chunk) => {
-            if (contentChunks.length === 0) firstChunkAt = Date.now() - t0;
-            contentChunks.push(chunk);
-          },
-          onToolEvent: (ev) => {
-            toolEvents.push(ev);
-            if (ev.type === 'tool_start') console.log('[tool_start]', ev.name);
-            if (ev.type === 'tool_call') console.log('[tool_call]', ev.name);
-          },
-        },
-      );
-
-      const elapsed = Date.now() - t0;
-      const fullResponse = contentChunks.join('');
-      const usage = coordinator.getAccumulatedUsage();
-
-      // getAccumulatedUsage can return 0 when streaming fell back to completeWithTools
-      // Use the progress cost event as a fallback source
-      let totalInput = usage.totalInputTokens;
-      let totalOutput = usage.totalOutputTokens;
-      let model = usage.perAgent[0]?.model ?? 'unknown';
-
-      if (totalInput === 0 && progressCostEvent) {
-        const costEvt = progressCostEvent as Record<string, unknown>;
-        totalInput = (costEvt.inputTokens as number) ?? 0;
-        totalOutput = (costEvt.outputTokens as number) ?? 0;
-        const perAgent = costEvt.perAgent as Array<{model: string; inputTokens: number; outputTokens: number}> | undefined;
-        if (perAgent?.[0]?.model) model = perAgent[0].model;
-      }
-
-      const cost = usage.perAgent.length > 0
-        ? usage.perAgent.reduce(
-            (sum, entry) => sum + estimateCostUSD(entry.model, entry.inputTokens, entry.outputTokens),
-            0,
-          )
-        : estimateCostUSD(model, totalInput, totalOutput);
-
-      const toolNames = [...new Set(toolEvents.filter(e => e.type === 'tool_call').map(e => e.name))];
-
-      scores.push({
-        pipeline: 'streamAgentLoop (v1 streaming)',
-        success: result.success,
-        totalTimeMs: elapsed,
-        firstChunkMs: firstChunkAt,
-        responseChars: fullResponse.length,
-        changesCount: result.changes?.length ?? 0,
-        toolCallsCount: toolEvents.filter(e => e.type === 'tool_call').length,
-        toolsUsed: toolNames,
-        inputTokens: totalInput,
-        outputTokens: totalOutput,
-        estimatedCostUSD: cost,
-        model,
-      });
-
-      console.log('\n--- Cost Breakdown ---');
-      if (usage.perAgent.length > 0) {
-        for (const entry of usage.perAgent) {
-          const entryCost = estimateCostUSD(entry.model, entry.inputTokens, entry.outputTokens);
-          console.log(`  ${entry.agentType}: ${entry.model} — ${entry.inputTokens}in/${entry.outputTokens}out — ${formatCost(entryCost)}`);
-        }
-      } else {
-        console.log(`  (usage from progress event fallback)`);
-      }
-      console.log(`  TOTAL: ${totalInput}in/${totalOutput}out — ${formatCost(cost)}`);
-      console.log('---');
-      console.log('Time to first chunk:', firstChunkAt, 'ms');
-      console.log('Response (first 1000 chars):');
-      console.log(fullResponse.slice(0, 1000));
-      console.log('========================================\n');
-
-      expect(result.success).toBe(true);
-      expect(fullResponse.length).toBeGreaterThan(50);
-      expect(fullResponse.toLowerCase()).toMatch(/accessib|a11y|alt|aria|label/);
-    },
-    300_000,
-  );
 
   it.skipIf(!runLive)(
     'Pipeline 3: streamV2 (v2 architecture) — live Anthropic',

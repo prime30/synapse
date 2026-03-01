@@ -33,6 +33,106 @@ export interface VerificationResult {
  * @param changes  - Proposed code changes from specialist agents
  * @param allFiles - All project files (for cross-file reference checking)
  */
+function verificationIssueKey(i: VerificationIssue): string {
+  return `${i.severity}:${i.category}:${i.file}:${i.message}`;
+}
+
+function runVerificationChecks(
+  content: string,
+  fileName: string,
+  allFiles: FileContext[],
+): VerificationIssue[] {
+  const issues: VerificationIssue[] = [];
+  const isLiquid = fileName.endsWith('.liquid');
+  const isJSON = fileName.endsWith('.json');
+
+  if (isLiquid) {
+    try {
+      const parseResult = parseLiquidAST(content);
+      for (const err of parseResult.errors) {
+        issues.push({ file: fileName, line: err.loc.line, severity: 'error', message: err.message, category: 'syntax' });
+      }
+      if (parseResult.ast.length > 0) {
+        try {
+          const scopeTracker = new ScopeTracker();
+          scopeTracker.buildFromAST(parseResult.ast);
+          const typeChecker = new TypeChecker();
+          const typeIssues = typeChecker.walkAndCheck(parseResult.ast, new Map(), scopeTracker);
+          for (const issue of typeIssues) {
+            issues.push({ file: fileName, line: issue.line, severity: issue.severity, message: issue.message, category: 'type' });
+          }
+        } catch (err) {
+          issues.push({ file: fileName, line: 0, severity: 'warning', message: `Type validation skipped: ${err instanceof Error ? err.message : String(err)}`, category: 'type' });
+        }
+      }
+    } catch (err) {
+      issues.push({ file: fileName, line: 0, severity: 'warning', message: `Syntax validation skipped: ${err instanceof Error ? err.message : String(err)}`, category: 'syntax' });
+    }
+
+    try {
+      const schemaMatch = content.match(/\{%[-\s]*schema\s*[-]?%\}([\s\S]*?)\{%[-\s]*endschema\s*[-]?%\}/);
+      if (schemaMatch) {
+        const schemaContent = schemaMatch[1].trim();
+        try {
+          const schema = JSON.parse(schemaContent);
+          if (!schema.name || typeof schema.name !== 'string') {
+            issues.push({ file: fileName, line: 0, severity: 'warning', message: "Schema missing 'name' field", category: 'schema' });
+          }
+          if (Array.isArray(schema.settings)) {
+            for (const setting of schema.settings) {
+              if (!setting.type) {
+                issues.push({ file: fileName, line: 0, severity: 'error', message: `Schema setting missing 'type' field${setting.id ? ` (id: ${setting.id})` : ''}`, category: 'schema' });
+              }
+              if (!setting.id && setting.type !== 'header' && setting.type !== 'paragraph') {
+                issues.push({ file: fileName, line: 0, severity: 'error', message: `Schema setting missing 'id' field (type: ${setting.type})`, category: 'schema' });
+              }
+            }
+          }
+        } catch {
+          issues.push({ file: fileName, line: 0, severity: 'error', message: 'Invalid JSON in schema block', category: 'schema' });
+        }
+      }
+    } catch { /* Schema extraction failed */ }
+
+    try {
+      const renderPattern = /\{%[-\s]*render\s+['"]([^'"]+)['"]/g;
+      let match;
+      while ((match = renderPattern.exec(content)) !== null) {
+        const snippetName = match[1];
+        const snippetPath = `snippets/${snippetName}.liquid`;
+        const exists = allFiles.some(
+          (f) => f.path === snippetPath || f.fileName === snippetPath || f.fileName === `${snippetName}.liquid`
+        );
+        if (!exists) {
+          issues.push({ file: fileName, line: 0, severity: 'warning', message: `Rendered snippet '${snippetName}' not found in project`, category: 'reference' });
+        }
+      }
+    } catch { /* Reference check failed */ }
+  }
+
+  if (isJSON) {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.sections && typeof parsed.sections === 'object') {
+        for (const [key, section] of Object.entries(parsed.sections)) {
+          const sec = section as Record<string, unknown>;
+          if (sec.type && typeof sec.type === 'string') {
+            const sectionPath = `sections/${sec.type}.liquid`;
+            const exists = allFiles.some(
+              (f) => f.path === sectionPath || f.fileName === sectionPath || f.fileName === `${sec.type}.liquid`
+            );
+            if (!exists) {
+              issues.push({ file: fileName, line: 0, severity: 'error', message: `Section type '${sec.type}' (key: ${key}) not found in project`, category: 'reference' });
+            }
+          }
+        }
+      }
+    } catch { /* Not valid JSON or not a template file */ }
+  }
+
+  return issues;
+}
+
 export function verifyChanges(
   changes: CodeChange[],
   allFiles: FileContext[],
@@ -41,191 +141,27 @@ export function verifyChanges(
     return { passed: true, issues: [], errorCount: 0, warningCount: 0, formatted: '' };
   }
 
-  const issues: VerificationIssue[] = [];
+  const afterIssues: VerificationIssue[] = [];
+  const beforeIssues: VerificationIssue[] = [];
 
   for (const change of changes) {
-    const fileName = change.fileName;
-    const isLiquid = fileName.endsWith('.liquid');
-    const isJSON = fileName.endsWith('.json');
-
-    // ── Liquid file checks ────────────────────────────────────────────
-    if (isLiquid) {
-      // 1. Syntax check
-      try {
-        const parseResult = parseLiquidAST(change.proposedContent);
-
-        for (const err of parseResult.errors) {
-          issues.push({
-            file: fileName,
-            line: err.loc.line,
-            severity: 'error',
-            message: err.message,
-            category: 'syntax',
-          });
-        }
-
-        // 2. Type check (only if AST is available)
-        if (parseResult.ast.length > 0) {
-          try {
-            const scopeTracker = new ScopeTracker();
-            scopeTracker.buildFromAST(parseResult.ast);
-
-            const typeChecker = new TypeChecker();
-            const typeIssues = typeChecker.walkAndCheck(
-              parseResult.ast,
-              new Map(),
-              scopeTracker,
-            );
-
-            for (const issue of typeIssues) {
-              issues.push({
-                file: fileName,
-                line: issue.line,
-                severity: issue.severity,
-                message: issue.message,
-                category: 'type',
-              });
-            }
-          } catch (err) {
-            issues.push({
-              file: fileName,
-              line: 0,
-              severity: 'warning',
-              message: `Type validation skipped: ${err instanceof Error ? err.message : String(err)}`,
-              category: 'type',
-            });
-          }
-        }
-      } catch (err) {
-        issues.push({
-          file: fileName,
-          line: 0,
-          severity: 'warning',
-          message: `Syntax validation skipped: ${err instanceof Error ? err.message : String(err)}`,
-          category: 'syntax',
-        });
-      }
-
-      // 3. Schema validation
-      try {
-        const schemaMatch = change.proposedContent.match(
-          /\{%[-\s]*schema\s*[-]?%\}([\s\S]*?)\{%[-\s]*endschema\s*[-]?%\}/
-        );
-        if (schemaMatch) {
-          const schemaContent = schemaMatch[1].trim();
-          try {
-            const schema = JSON.parse(schemaContent);
-
-            if (!schema.name || typeof schema.name !== 'string') {
-              issues.push({
-                file: fileName,
-                line: 0,
-                severity: 'warning',
-                message: "Schema missing 'name' field",
-                category: 'schema',
-              });
-            }
-
-            if (Array.isArray(schema.settings)) {
-              for (const setting of schema.settings) {
-                if (!setting.type) {
-                  issues.push({
-                    file: fileName,
-                    line: 0,
-                    severity: 'error',
-                    message: `Schema setting missing 'type' field${setting.id ? ` (id: ${setting.id})` : ''}`,
-                    category: 'schema',
-                  });
-                }
-                if (!setting.id && setting.type !== 'header' && setting.type !== 'paragraph') {
-                  issues.push({
-                    file: fileName,
-                    line: 0,
-                    severity: 'error',
-                    message: `Schema setting missing 'id' field (type: ${setting.type})`,
-                    category: 'schema',
-                  });
-                }
-              }
-            }
-          } catch {
-            issues.push({
-              file: fileName,
-              line: 0,
-              severity: 'error',
-              message: 'Invalid JSON in schema block',
-              category: 'schema',
-            });
-          }
-        }
-      } catch {
-        // Schema extraction failed — skip
-      }
-
-      // 4. Cross-file reference check (render tags)
-      try {
-        const renderPattern = /\{%[-\s]*render\s+['"]([^'"]+)['"]/g;
-        let match;
-        while ((match = renderPattern.exec(change.proposedContent)) !== null) {
-          const snippetName = match[1];
-          const snippetPath = `snippets/${snippetName}.liquid`;
-          const exists = allFiles.some(
-            (f) => f.path === snippetPath || f.fileName === snippetPath ||
-                   f.fileName === `${snippetName}.liquid`
-          );
-          if (!exists) {
-            issues.push({
-              file: fileName,
-              line: 0,
-              severity: 'warning',
-              message: `Rendered snippet '${snippetName}' not found in project`,
-              category: 'reference',
-            });
-          }
-        }
-      } catch {
-        // Reference check failed — skip
-      }
-    }
-
-    // ── JSON template checks ──────────────────────────────────────────
-    if (isJSON) {
-      try {
-        const parsed = JSON.parse(change.proposedContent);
-        if (parsed.sections && typeof parsed.sections === 'object') {
-          for (const [key, section] of Object.entries(parsed.sections)) {
-            const sec = section as Record<string, unknown>;
-            if (sec.type && typeof sec.type === 'string') {
-              const sectionPath = `sections/${sec.type}.liquid`;
-              const exists = allFiles.some(
-                (f) => f.path === sectionPath || f.fileName === sectionPath ||
-                       f.fileName === `${sec.type}.liquid`
-              );
-              if (!exists) {
-                issues.push({
-                  file: fileName,
-                  line: 0,
-                  severity: 'error',
-                  message: `Section type '${sec.type}' (key: ${key}) not found in project`,
-                  category: 'reference',
-                });
-              }
-            }
-          }
-        }
-      } catch {
-        // Not valid JSON or not a template file — skip
-      }
+    afterIssues.push(...runVerificationChecks(change.proposedContent, change.fileName, allFiles));
+    if (change.originalContent) {
+      beforeIssues.push(...runVerificationChecks(change.originalContent, change.fileName, allFiles));
     }
   }
 
-  const errorCount = issues.filter((i) => i.severity === 'error').length;
-  const warningCount = issues.filter((i) => i.severity === 'warning').length;
-  const formatted = formatVerificationIssues(issues);
+  // Only report regressions — issues that are new (not in the baseline)
+  const baselineSet = new Set(beforeIssues.map(verificationIssueKey));
+  const regressions = afterIssues.filter(i => !baselineSet.has(verificationIssueKey(i)));
+
+  const errorCount = regressions.filter((i) => i.severity === 'error').length;
+  const warningCount = regressions.filter((i) => i.severity === 'warning').length;
+  const formatted = formatVerificationIssues(regressions);
 
   return {
     passed: errorCount === 0,
-    issues,
+    issues: regressions,
     errorCount,
     warningCount,
     formatted,

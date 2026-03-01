@@ -4,7 +4,7 @@
  * Represents what a developer gets from "raw Claude with tools" — no
  * orchestration layer, no signal-based file loading, no domain knowledge
  * injection. Used as the control group in head-to-head comparisons
- * against Synapse's orchestrated `streamAgentLoop`.
+ * against Synapse's V2 coordinator.
  */
 
 import { createAnthropicProvider } from '@/lib/ai/providers/anthropic';

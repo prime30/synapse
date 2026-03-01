@@ -223,7 +223,7 @@ export function CheckpointPanel({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'revert' }),
+          body: JSON.stringify({ action: 'restore' }),
         },
       );
       if (!res.ok) throw new Error('Failed to revert');

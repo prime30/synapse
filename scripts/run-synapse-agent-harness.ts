@@ -6,7 +6,7 @@ import {
   runSynapseHarness,
 } from '../lib/agents/testing/synapse-harness';
 
-type Mode = 'v1' | 'v2';
+type Mode = 'v2';
 type IntentMode = 'ask' | 'code' | 'plan' | 'debug';
 type PromptFirstScenario = {
   label: string;
@@ -88,8 +88,7 @@ function parseNumberArg(name: string, defaultValue: number): number {
 }
 
 function parseMode(): Mode {
-  const mode = parseArg('mode');
-  return mode === 'v1' ? 'v1' : 'v2';
+  return 'v2';
 }
 
 function parseIntent(): IntentMode | undefined {

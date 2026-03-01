@@ -17,7 +17,11 @@ export interface ToastData {
   type?: 'success' | 'error' | 'warning' | 'info';
   duration?: number;
   action?: { label: string; onClick: () => void };
+  /** Secondary action rendered alongside the primary action. */
+  secondaryAction?: { label: string; onClick: () => void };
   pinned?: boolean;
+  /** Visual countdown duration in ms. When set, a shrinking bar is rendered at the bottom. */
+  countdown?: number;
 }
 
 const DEFAULT_DURATION: Record<NonNullable<ToastData['type']>, number> = {
@@ -105,6 +109,12 @@ export function Toast({ toast, onDismiss, onTogglePin }: ToastProps) {
     dismiss();
   }, [toast.action, dismiss]);
 
+  const handleSecondaryClick = useCallback(() => {
+    toast.secondaryAction?.onClick();
+  }, [toast.secondaryAction]);
+
+  const countdownDuration = toast.countdown ?? 0;
+
   return (
     <AnimatePresence>
       {!isExiting && (
@@ -115,24 +125,37 @@ export function Toast({ toast, onDismiss, onTogglePin }: ToastProps) {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: '100%' }}
           transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-          className="flex w-80 flex-shrink-0 rounded-lg border border-stone-200 bg-white px-4 py-3 shadow-lg dark:border-white/10 dark:bg-[oklch(0.21_0_0)]"
+          className="relative flex w-80 flex-shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-lg dark:border-white/10 dark:bg-[oklch(0.21_0_0)]"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 px-4 py-3">
             <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${iconClass}`} />
             <div className="min-w-0 flex-1">
               <p className="text-sm text-stone-900 dark:text-white">
                 {toast.message}
               </p>
-              {toast.action && (
-                <button
-                  type="button"
-                  onClick={handleActionClick}
-                  className="mt-1.5 text-sm font-medium text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300"
-                >
-                  {toast.action.label}
-                </button>
+              {(toast.action || toast.secondaryAction) && (
+                <div className="mt-1.5 flex items-center gap-3">
+                  {toast.action && (
+                    <button
+                      type="button"
+                      onClick={handleActionClick}
+                      className="text-sm font-medium text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300"
+                    >
+                      {toast.action.label}
+                    </button>
+                  )}
+                  {toast.secondaryAction && (
+                    <button
+                      type="button"
+                      onClick={handleSecondaryClick}
+                      className="text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                    >
+                      {toast.secondaryAction.label}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex flex-shrink-0 items-center gap-0.5">
@@ -163,6 +186,14 @@ export function Toast({ toast, onDismiss, onTogglePin }: ToastProps) {
               </button>
             </div>
           </div>
+          {countdownDuration > 0 && (
+            <motion.div
+              className="absolute bottom-0 left-0 h-0.5 bg-sky-500 dark:bg-sky-400"
+              initial={{ width: '100%' }}
+              animate={{ width: '0%' }}
+              transition={{ duration: countdownDuration / 1000, ease: 'linear' }}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>

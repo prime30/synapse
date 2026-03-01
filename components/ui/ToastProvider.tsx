@@ -26,7 +26,9 @@ export interface ToastOptions {
   type?: 'success' | 'error' | 'warning' | 'info';
   duration?: number;
   action?: { label: string; onClick: () => void };
+  secondaryAction?: { label: string; onClick: () => void };
   pinned?: boolean;
+  countdown?: number;
 }
 
 export interface ToastContextValue {
@@ -70,7 +72,9 @@ export function ToastProvider({ children }: ToastProviderProps) {
       type: opts.type ?? 'info',
       duration: opts.duration,
       action: opts.action,
+      secondaryAction: opts.secondaryAction,
       pinned: opts.pinned ?? false,
+      countdown: opts.countdown,
     };
     setToasts((prev) => {
       const next = [...prev, data];

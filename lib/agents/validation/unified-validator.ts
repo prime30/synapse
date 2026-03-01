@@ -51,6 +51,9 @@ const CHANGESET_CATEGORY_MAP: Record<ChangeSetIssue['category'], UnifiedValidati
   asset_reference: 'syntax',
   deprecated_liquid: 'syntax',
   locale_key: 'consistency',
+  companion_css: 'consistency',
+  companion_js: 'consistency',
+  companion_schema: 'schema',
 };
 
 function mapChangeSetIssue(issue: ChangeSetIssue): UnifiedValidationIssue {

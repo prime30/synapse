@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, usePathname } from 'next/navigation';
+import { Modal } from '@/components/ui/Modal';
 import { GoogleSignInButton } from '@/components/features/auth/GoogleSignInButton';
 
 interface AuthModalProps {
@@ -219,33 +219,17 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
     'w-full rounded-lg bg-accent py-3 text-sm font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-md dark:bg-black/60 dark:backdrop-blur-lg"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-          />
-
-          {/* Modal container */}
-          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4" onClick={onClose}>
-            <motion.div
-              className="relative w-full max-w-sm rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden border-stone-200 bg-white/95 shadow-stone-200/20 dark:border-white/10 dark:bg-[oklch(0.145_0_0)]/90 dark:shadow-black/20"
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Subtle accent glow */}
-              <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[300px] h-[200px] rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl pointer-events-none" aria-hidden="true" />
-
-              <div className="relative p-6">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      hideHeader
+      size="sm"
+      bodyClassName="p-0"
+      className="rounded-2xl"
+    >
+      {/* Subtle accent glow */}
+      <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[300px] h-[200px] rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl pointer-events-none" aria-hidden="true" />
+      <div className="relative p-6">
                 {/* Tabs */}
                 <div className="mb-6 flex rounded-xl p-1 bg-stone-100 dark:bg-white/5">
                   <button
@@ -456,11 +440,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
                     </button>
                   </form>
                 )}
-              </div>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+      </div>
+    </Modal>
   );
 }

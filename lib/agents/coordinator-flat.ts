@@ -39,7 +39,7 @@ import {
 } from './execution-store';
 import { verifyChanges, mergeThemeCheckIssues } from './verification';
 import { validateChangeSet } from './validation/change-set-validator';
-import { runThemeCheck } from './tools/theme-check';
+import { runThemeCheck, formatThemeCheckResult } from './tools/theme-check';
 import { estimateTokens } from '@/lib/ai/token-counter';
 import { persistToolTurn } from '@/lib/ai/message-persistence';
 import { recordTierMetrics } from '@/lib/telemetry/tier-metrics';
@@ -51,6 +51,7 @@ import { FileStore } from './tools/file-store';
 import { matchKnowledgeModules, buildKnowledgeBlock } from './knowledge/module-matcher';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { recordHistogram } from '@/lib/observability/metrics';
+import { createCheckpoint } from '@/lib/checkpoints/checkpoint-service';
 import type { V2CoordinatorOptions } from './coordinator-v2';
 
 // Re-export the options type so the route can import from either coordinator
@@ -59,6 +60,7 @@ export type { V2CoordinatorOptions as FlatCoordinatorOptions };
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_ITERATIONS = 40;
+const MAX_CORRECTION_ATTEMPTS = 2;
 const TOTAL_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes (flat should be faster)
 const KNOWLEDGE_BUDGET_TOKENS = 8000;
 const FIRST_EDIT_SLA_TOOL_CALLS = 12;
@@ -184,13 +186,15 @@ async function buildFlatContext(
 }> {
   const contextEngine = getProjectContextEngine(projectId);
 
+  await contextEngine.indexFiles(files);
+
   const contextResult = contextEngine.selectRelevantFiles(
     userRequest,
     options.recentMessages,
     options.activeFilePath,
   );
 
-  let preloaded = contextResult.files.length > 0 ? contextResult.files : files.slice(0, 15);
+  const preloaded = contextResult.files.length > 0 ? contextResult.files : files.slice(0, 15);
 
   if (options.loadContent && preloaded.length > 0) {
     const idsToHydrate = preloaded
@@ -204,8 +208,8 @@ async function buildFlatContext(
           const newContent = contentMap.get(f.fileId);
           if (newContent) f.content = newContent;
         }
-      } catch {
-        // Fall back to whatever content we have
+      } catch (err) {
+        console.error('[Flat] loadContent hydration failed for fileIds:', idsToHydrate.slice(0, 5), err);
       }
     }
   }
@@ -255,8 +259,16 @@ async function buildFlatContext(
     // Theme map not available — agent will use search tools
   }
 
-  // Build knowledge block
-  const matchedModules = matchKnowledgeModules(userRequest, KNOWLEDGE_BUDGET_TOKENS);
+  // Build knowledge block with file-type awareness
+  const activeFileTypes = [...new Set(files.map((f) => f.fileType).filter((t) => t !== 'other'))];
+  const matchedModules = matchKnowledgeModules(
+    userRequest,
+    KNOWLEDGE_BUDGET_TOKENS,
+    undefined,
+    undefined,
+    undefined,
+    activeFileTypes,
+  );
   const knowledgeBlock = buildKnowledgeBlock(matchedModules);
 
   return { preloaded, allFiles: files, manifest, scoutBrief, knowledgeBlock };
@@ -358,7 +370,7 @@ export async function streamFlat(
   let totalCacheWriteTokens = 0;
   let totalToolCalls = 0;
   let hasAttemptedEdit = false;
-  let needsClarification = false;
+  const needsClarification = false;
   let fullText = '';
   const accumulatedChanges: CodeChange[] = [];
   const lineTracker = createLineOffsetTracker();
@@ -407,11 +419,33 @@ export async function streamFlat(
   );
 
   onProgress?.({
-    type: 'context_stats',
+    type: 'thinking',
     phase: 'context',
     label: `${preloaded.length} files loaded`,
     detail: `${allFiles.length} total files`,
   });
+
+  // ── Auto-checkpoint before editing (non-blocking) ─────────────────
+  // Fire checkpoint creation in parallel with the first LLM call.
+  // We only await the result at the end when building the AgentResult.
+  let checkpointPromise: Promise<string | undefined> | undefined;
+  if (intentMode === 'code') {
+    const fileIds = preloaded
+      .map(f => f.fileId)
+      .filter((id): id is string => !!id && !id.startsWith('['));
+    if (fileIds.length > 0) {
+      const label = `Pre-agent: ${userRequest.slice(0, 50)}${userRequest.length > 50 ? '...' : ''}`;
+      const snapshots = preloaded
+        .filter(f => f.fileId && !f.fileId.startsWith('[') && f.content && !f.content.startsWith('['))
+        .map(f => ({ fileId: f.fileId, fileName: f.fileName, content: f.content }));
+      checkpointPromise = createCheckpoint(projectId, label, fileIds, snapshots)
+        .then(cp => cp?.id)
+        .catch((err) => {
+          console.error(`[Flat] Checkpoint creation failed for project ${projectId}:`, err);
+          return undefined;
+        });
+    }
+  }
 
   // ── Build system prompt ────────────────────────────────────────────
   const systemPrompt = buildFlatSystemPrompt(
@@ -536,6 +570,12 @@ export async function streamFlat(
   const targetFiles = extractTargetFiles(userRequest, preloaded);
   const editedFiles = new Set<string>();
 
+  // ── Self-correction state ──────────────────────────────────────────
+  let correctionAttempts = 0;
+  let lastVerificationErrorCount = Infinity;
+  let verificationEvidence: AgentResult['verificationEvidence'];
+  const validationIssues: AgentResult['validationIssues'] = [];
+
   // ── Agent loop ─────────────────────────────────────────────────────
   let iteration = 0;
   let firstTokenMs: number | undefined;
@@ -546,6 +586,9 @@ export async function streamFlat(
     phase: 'analyzing',
     label: 'Analyzing request...',
   });
+
+  // Outer loop: agent runs, then verification, then self-correction if needed
+  correctionLoop: while (correctionAttempts <= MAX_CORRECTION_ATTEMPTS) {
 
   while (iteration < MAX_ITERATIONS) {
     if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
@@ -684,6 +727,13 @@ export async function streamFlat(
       totalCacheWriteTokens += usage.cacheCreationInputTokens ?? 0;
     } catch { /* usage collection non-critical */ }
 
+    onProgress?.({
+      type: 'token_budget_update',
+      used: totalInputTokens + totalOutputTokens,
+      remaining: Math.max(0, MAX_ITERATIONS * 4096 - (totalInputTokens + totalOutputTokens)),
+      iteration,
+    });
+
     // ── Execute tools (parallel where safe) ─────────────────────────
     if (pendingTools.length > 0) {
       const { parallel, sequential } = classifyToolBatch(pendingTools);
@@ -747,6 +797,25 @@ export async function streamFlat(
             result: result.content.slice(0, 500),
             isError: result.is_error || false,
           });
+
+          // Auto-lint after mutating tools
+          if (MUTATING_TOOL_NAMES.has(tool.name) && !result.is_error) {
+            const lintPath = String(tool.input.filePath ?? tool.input.path ?? tool.input.file_path ?? '');
+            if (lintPath) {
+              try {
+                const lintResult = await dispatchToolCall(
+                  { id: `auto-lint-${Date.now()}`, name: 'check_lint', input: { fileName: lintPath } },
+                  unifiedCtx,
+                );
+                if (lintResult.content && !lintResult.content.includes('no issues') && !lintResult.content.includes('No lint errors') && !lintResult.content.includes('Syntax valid')) {
+                  messages.push({
+                    role: 'user',
+                    content: `SYSTEM: Lint results for ${lintPath}:\n${lintResult.content}`,
+                  } as AIMessage);
+                }
+              } catch { /* lint unavailable */ }
+            }
+          }
         }
       }
 
@@ -794,6 +863,25 @@ export async function streamFlat(
           result: result.content.slice(0, 500),
           isError: result.is_error || false,
         });
+
+        // Auto-lint after mutating tools
+        if (MUTATING_TOOL_NAMES.has(tool.name) && !result.is_error) {
+          const lintPath = String(tool.input.filePath ?? tool.input.path ?? tool.input.file_path ?? '');
+          if (lintPath) {
+            try {
+              const lintResult = await dispatchToolCall(
+                { id: `auto-lint-seq-${Date.now()}`, name: 'check_lint', input: { fileName: lintPath } },
+                unifiedCtx,
+              );
+              if (lintResult.content && !lintResult.content.includes('no issues') && !lintResult.content.includes('No lint errors') && !lintResult.content.includes('Syntax valid')) {
+                messages.push({
+                  role: 'user',
+                  content: `SYSTEM: Lint results for ${lintPath}:\n${lintResult.content}`,
+                } as AIMessage);
+              }
+            } catch { /* lint unavailable */ }
+          }
+        }
       }
 
       // Re-read nudge for heavily edited files
@@ -926,7 +1014,9 @@ export async function streamFlat(
             return (b as { type: string }).type === 'tool_use';
           }),
           toolResultBlocks.length > 0 ? toolResultBlocks : undefined,
-        ).catch(() => {});
+        ).catch((err) => {
+          console.error(`[Flat] persistToolTurn failed for session ${options.sessionId}:`, err);
+        });
       }
     }
 
@@ -934,12 +1024,16 @@ export async function streamFlat(
   }
 
   // ── Flush file store ───────────────────────────────────────────────
-  await fileStore.flush();
+  const flushResult = await fileStore.flush();
+  if (flushResult.failedFileIds.length > 0) {
+    onProgress?.({
+      type: 'thinking',
+      phase: 'warning',
+      label: `Warning: ${flushResult.failedFileIds.length} file(s) may not have saved`,
+    });
+  }
 
   // ── Verification ───────────────────────────────────────────────────
-  let verificationEvidence: AgentResult['verificationEvidence'];
-  const validationIssues: AgentResult['validationIssues'] = [];
-
   if (accumulatedChanges.length > 0) {
     const verifyStart = Date.now();
 
@@ -1002,7 +1096,67 @@ export async function streamFlat(
         });
       }
     }
+
+    // ── Structural integrity: broken references that would cause render failures ──
+    const STRUCTURAL_CATEGORIES = new Set(['snippet_reference', 'template_section', 'asset_reference']);
+    const structuralErrors = validation.issues.filter(
+      i => i.severity === 'error' && STRUCTURAL_CATEGORIES.has(i.category),
+    );
+
+    verificationEvidence!.structuralCheck = structuralErrors.length > 0
+      ? {
+          passed: false,
+          errorCount: structuralErrors.length,
+          issues: structuralErrors.map(e => `${e.file}: ${e.description}`),
+        }
+      : { passed: true, errorCount: 0, issues: [] };
+
+    // ── Self-correction: re-enter agent loop if verification failed ──
+    const currentErrorCount = (verification.errorCount || 0) +
+      (themeCheckResult?.errorCount || 0) +
+      structuralErrors.length;
+
+    if (
+      currentErrorCount > 0 &&
+      correctionAttempts < MAX_CORRECTION_ATTEMPTS &&
+      currentErrorCount <= lastVerificationErrorCount &&
+      iteration < MAX_ITERATIONS - 2
+    ) {
+      const errorDetails: string[] = [];
+      if (verification.formatted) errorDetails.push(verification.formatted);
+      if (themeCheckResult && themeCheckResult.errorCount > 0) {
+        errorDetails.push(formatThemeCheckResult(themeCheckResult));
+      }
+      if (structuralErrors.length > 0) {
+        errorDetails.push(
+          '[Structural Integrity — broken references will cause render failures]\n' +
+          structuralErrors.map(e => `- ${e.file}: ${e.description}`).join('\n'),
+        );
+      }
+
+      messages.push({
+        role: 'user',
+        content:
+          `SYSTEM: Your changes have ${currentErrorCount} verification error(s). ` +
+          `Fix them before finishing:\n${errorDetails.join('\n\n')}`,
+      } as AIMessage);
+
+      correctionAttempts++;
+      lastVerificationErrorCount = currentErrorCount;
+      consecutiveEmptyIterations = 0;
+
+      onProgress?.({
+        type: 'thinking',
+        phase: 'self_correcting',
+        label: `Fixing ${currentErrorCount} verification error(s) (attempt ${correctionAttempts}/${MAX_CORRECTION_ATTEMPTS})...`,
+      });
+
+      continue correctionLoop;
+    }
   }
+
+  break correctionLoop;
+  } // end correctionLoop
 
   // ── Persist execution ──────────────────────────────────────────────
   await updateExecutionStatus(executionId, 'completed');
@@ -1044,6 +1198,9 @@ export async function streamFlat(
       : 'Complete',
   });
 
+  // ── Resolve deferred checkpoint ────────────────────────────────────
+  const autoCheckpointId = checkpointPromise ? await checkpointPromise : undefined;
+
   // ── Return result ──────────────────────────────────────────────────
   return {
     agentType: 'project_manager',
@@ -1063,5 +1220,6 @@ export async function streamFlat(
     },
     verificationEvidence,
     validationIssues: validationIssues && validationIssues.length > 0 ? validationIssues : undefined,
+    checkpointId: autoCheckpointId,
   };
 }

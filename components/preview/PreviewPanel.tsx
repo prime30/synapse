@@ -570,8 +570,6 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
         const data = await res.json();
         if (data.status === 'running') {
           setCLIStatus('running');
-          setPreviewSessionStatus('cli');
-          setPreviewMode('cli');
           setRefreshToken((prev) => prev + 1);
           clearInterval(poll);
         } else if (data.status === 'error') {
@@ -590,15 +588,12 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     let cancelled = false;
     async function checkSession() {
       try {
-        // Check CLI status first
+        // Check CLI status (update indicator only — don't force mode switch)
         const cliRes = await fetch(`/api/projects/${projectId}/cli-preview`);
         if (!cancelled) {
           const cliData = await cliRes.json();
           if (cliData.running) {
             setCLIStatus('running');
-            setPreviewSessionStatus('cli');
-            setPreviewMode('cli');
-            return;
           }
         }
 
@@ -631,7 +626,8 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   useEffect(() => {
     if (!isDesktopApp) return;
 
-    const removeListener = window.electron?.on('preview:url-changed', (url: string) => {
+    const removeListener = window.electron?.on('preview:url-changed', (...args: unknown[]) => {
+      const url = args[0] as string;
       const isLoginPage = url.includes('/admin/auth/login') || url.includes('/admin/login');
       const isAdminDashboard = url.includes('/admin') && !isLoginPage;
 
@@ -890,17 +886,17 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               <button
                 type="button"
                 onClick={() => {
-                  setPreviewMode('cli');
+                  setPreviewMode('proxy');
                   setRefreshToken((prev) => prev + 1);
                 }}
                 className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  previewMode === 'cli'
+                  previewMode === 'proxy'
                     ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white shadow-sm'
                     : 'ide-text-muted hover:text-stone-900 dark:hover:text-white'
                 }`}
-                title="CLI mode: uses Shopify CLI dev server for live draft preview"
+                title="Native mode: Shopify's renderer via TKA proxy"
               >
-                CLI
+                Native
               </button>
               {devStoreStatus.connected && (
                 <button
