@@ -92,9 +92,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Synapse",
       "uninstallDisplayName": "Synapse",
-      "installerIcon": "../build/icons/icon.png",
-      "uninstallerIcon": "../build/icons/icon.png",
-      "installerHeader": "../build/icons/icon.png",
+      "installerIcon": "../build/icons/icon.ico",
+      "uninstallerIcon": "../build/icons/icon.ico",
       "license": "../LICENSE"
     },
     "mac": {
