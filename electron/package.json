@@ -82,7 +82,7 @@
         }
       ],
       "icon": "../build/icons/icon.png",
-      "publisherName": "Synapse Inc."
+      "legalTrademarks": "Synapse Inc."
     },
     "nsis": {
       "oneClick": false,
