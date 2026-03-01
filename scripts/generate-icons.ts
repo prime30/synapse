@@ -19,6 +19,7 @@
  */
 
 import sharp from 'sharp';
+import toIco from 'to-ico';
 import path from 'path';
 import fs from 'fs';
 
@@ -71,22 +72,25 @@ async function main() {
   console.log('  ✓ public/apple-touch-icon.png (180x180)');
 
   // Generate Windows ICO (contains 16, 32, 48, 64, 128, 256)
-  // electron-builder handles ICO conversion from PNG, so we just need the PNGs
-  // But for the web favicon, we'll use the 32px PNG
   const icoSizes = [16, 32, 48, 64, 128, 256];
+  const icoBuffers: Buffer[] = [];
   for (const size of icoSizes) {
-    if (!SIZES.includes(size as (typeof SIZES)[number])) {
+    const pngPath = path.join(ICONS_DIR, `icon@${size}.png`);
+    if (!fs.existsSync(pngPath)) {
       await sharp(svgBuffer)
         .resize(size, size)
         .png()
-        .toFile(path.join(ICONS_DIR, `icon@${size}.png`));
-
+        .toFile(pngPath);
       console.log(`  ✓ icon@${size}.png (${size}x${size}) [for ICO]`);
     }
+    icoBuffers.push(fs.readFileSync(pngPath));
   }
 
+  const icoBuffer = await toIco(icoBuffers);
+  fs.writeFileSync(path.join(ICONS_DIR, 'icon.ico'), icoBuffer);
+  console.log('  ✓ icon.ico (multi-size Windows icon)');
+
   console.log('\nDone! Icons generated in build/icons/');
-  console.log('electron-builder will automatically create .ico and .icns from the PNGs.');
 }
 
 main().catch((err) => {

@@ -139,6 +139,7 @@
     "jsdom": "^28.0.0",
     "node-pty": "^1.1.0",
     "tailwindcss": "^4",
+    "to-ico": "^1.1.5",
     "typescript": "5.9.3",
     "vite-tsconfig-paths": "^6.1.0",
     "vitest": "^4.0.18",

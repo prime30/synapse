@@ -81,7 +81,7 @@
           ]
         }
       ],
-      "icon": "../build/icons/icon.png",
+      "icon": "../build/icons/icon.ico",
       "legalTrademarks": "Synapse Inc."
     },
     "nsis": {
