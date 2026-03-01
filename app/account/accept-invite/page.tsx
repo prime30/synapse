@@ -15,26 +15,27 @@ function AcceptInviteContent() {
 
   const acceptInvite = useCallback(
     async (inviteToken: string) => {
-      // TODO: Replace mock with real API call
-      // await fetch('/api/account/accept-invite', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ token: inviteToken }),
-      // });
-
-      // Mock: simulate a 2-second accept flow
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
       if (!inviteToken) {
         setErrorMessage('No invitation token provided.');
         setState('error');
         return;
       }
 
-      // Mock success
+      const res = await fetch('/api/account/accept-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: inviteToken }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setErrorMessage(body.error ?? 'Invalid or expired invitation.');
+        setState('error');
+        return;
+      }
+
       setState('success');
 
-      // Redirect after brief pause so user sees success
       setTimeout(() => {
         router.push('/account/members?invite=accepted');
       }, 1500);

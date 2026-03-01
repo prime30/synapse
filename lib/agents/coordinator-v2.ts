@@ -1993,6 +1993,22 @@ export async function streamV2(
       } catch { /* never blocks */ }
     }
 
+    // Include learned user coding preferences in the PM context
+    try {
+      const prefLearner = new PatternLearning();
+      const [themePrefs, codingPrefs] = await Promise.all([
+        prefLearner.getThemePatterns(userId).catch(() => []),
+        prefLearner.getPatterns(userId).catch(() => []),
+      ]);
+      const allPrefs = [...themePrefs, ...codingPrefs];
+      if (allPrefs.length > 0) {
+        const prefsBlock = allPrefs
+          .map((p) => `- ${p.key}${p.value && p.value !== p.key ? `: ${p.value}` : ''}`)
+          .join('\n');
+        systemPrompt += `\n\n## User Coding Preferences\n${prefsBlock}`;
+      }
+    } catch { /* preferences are non-critical */ }
+
     const designContext = styleProfileContent;
 
     const refSections = selectReferenceSections(

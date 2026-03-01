@@ -22,6 +22,7 @@ import { VersionHistoryPanel } from '@/components/features/versions/VersionHisto
 import { DiagnosticsPanel } from '@/components/diagnostics/DiagnosticsPanel';
 import { ShopifyConnectPanel } from '@/components/features/shopify/ShopifyConnectPanel';
 import { AgentPromptPanel } from '@/components/features/agents/AgentPromptPanel';
+import { CheckpointPanel } from '@/components/features/checkpoints/CheckpointPanel';
 import { AgentLiveBreakout } from '@/components/features/agents/AgentLiveBreakout';
 import { useFileTabs, PREVIEW_TAB_ID } from '@/hooks/useFileTabs';
 import { useAISidebar } from '@/hooks/useAISidebar';
@@ -60,7 +61,9 @@ import type { ThemeConsoleTab, ThemeConsoleEntry } from '@/components/editor/The
 import { QuickActionsToolbar } from '@/components/editor/QuickActionsToolbar';
 import { AmbientBar } from '@/components/ai-sidebar/AmbientBar';
 import { IntentCompletionPanel } from '@/components/ai-sidebar/IntentCompletionPanel';
+import { useAmbientIntelligence } from '@/hooks/useAmbientIntelligence';
 import type { AmbientNudge } from '@/hooks/useAmbientIntelligence';
+import { useIntentCompletion } from '@/hooks/useIntentCompletion';
 import type { WorkflowMatch } from '@/lib/ai/workflow-patterns';
 import { EditorSettingsProvider } from '@/hooks/useEditorSettings';
 import { ChromaticSettingsProvider } from '@/hooks/useChromaticSettings';
@@ -540,6 +543,65 @@ export default function ProjectPage() {
       fileLanguage: activeFile?.file_type ?? null,
     });
   }, [activeFile?.path, activeFile?.file_type, sidebar.updateContext]);
+
+  // A5: Ambient intelligence — proactive nudge detection
+  const ambientFileContext = useMemo(() => {
+    if (!activeFile) return null;
+    return {
+      fileId: activeFile.id,
+      fileName: activeFile.name,
+      content: activeFileContent,
+      path: activeFile.path,
+    };
+  }, [activeFile, activeFileContent]);
+
+  const ambientProjectFiles = useMemo(
+    () => rawFiles.map((f) => ({ fileId: f.id, fileName: f.name, content: '', path: f.path })),
+    [rawFiles],
+  );
+
+  const ambient = useAmbientIntelligence({
+    activeFile: ambientFileContext,
+    projectFiles: ambientProjectFiles,
+    enabled: viewMode === 'editor',
+    onResolve: (nudge) => {
+      setAmbientNudge(null);
+      if (sendMessageRef.current && nudge.actionLabel) {
+        sendMessageRef.current(nudge.message);
+      }
+    },
+  });
+
+  useEffect(() => {
+    setAmbientNudge(ambient.topNudge);
+  }, [ambient.topNudge]);
+
+  // A5: Intent completion — workflow pattern detection
+  const intentProjectFiles = useMemo(
+    () => rawFiles.map((f) => ({ fileId: f.id, fileName: f.name, filePath: f.path })),
+    [rawFiles],
+  );
+
+  const intentCompletion = useIntentCompletion({
+    projectFiles: intentProjectFiles,
+    enabled: viewMode === 'editor',
+    onApplyAll: (match) => {
+      if (sendMessageRef.current) {
+        const pending = match.steps.filter((s) => !s.completed).map((s) => s.label).join(', ');
+        sendMessageRef.current(`Apply remaining workflow steps: ${pending}`);
+      }
+    },
+    onApplyStep: (match, stepId) => {
+      const step = match.steps.find((s) => s.id === stepId);
+      if (step && sendMessageRef.current) {
+        sendMessageRef.current(`Apply workflow step: ${step.label}`);
+      }
+    },
+  });
+
+  useEffect(() => {
+    setActiveWorkflow(intentCompletion.activeMatch);
+  }, [intentCompletion.activeMatch]);
 
   // EPIC 1c: Selection injection — track editor selection for AI context
   // (Also triggers QuickActionsToolbar — see handleEditorSelectionChange below)
@@ -1341,22 +1403,32 @@ export default function ProjectPage() {
   }, [sidebar]);
 
   // A5: AmbientBar handlers
-  const handleAmbientAccept = useCallback((_nudgeId: string) => {
-    // Future: trigger resolution action
-    setAmbientNudge(null);
-  }, []);
-  const handleAmbientDismiss = useCallback((_nudgeId: string) => {
-    setAmbientNudge(null);
-  }, []);
+  const handleAmbientAccept = useCallback((nudgeId: string) => {
+    ambient.acceptNudge(nudgeId);
+  }, [ambient]);
+  const handleAmbientDismiss = useCallback((nudgeId: string) => {
+    ambient.dismissNudge(nudgeId);
+  }, [ambient]);
 
-  // A5: IntentCompletionPanel handlers (no-op stubs; workflow engine not yet connected)
-  const handleWorkflowToggleStep = useCallback((_stepId: string) => {}, []);
-  const handleWorkflowApplyStep = useCallback((_stepId: string) => {}, []);
-  const handleWorkflowApplyAll = useCallback(() => {}, []);
-  const handleWorkflowPreviewAll = useCallback(() => {}, []);
+  // A5: IntentCompletionPanel handlers
+  const handleWorkflowToggleStep = useCallback((stepId: string) => {
+    intentCompletion.toggleStep(stepId);
+  }, [intentCompletion]);
+  const handleWorkflowApplyStep = useCallback((stepId: string) => {
+    intentCompletion.applyStep(stepId);
+  }, [intentCompletion]);
+  const handleWorkflowApplyAll = useCallback(() => {
+    intentCompletion.applyAll();
+  }, [intentCompletion]);
+  const handleWorkflowPreviewAll = useCallback(() => {
+    if (!activeWorkflow) return;
+    const pending = activeWorkflow.steps.filter((s) => !s.completed).map((s) => s.label).join('\n- ');
+    sendMessageRef.current?.(`Preview these workflow steps:\n- ${pending}`);
+  }, [activeWorkflow]);
   const handleWorkflowDismiss = useCallback(() => {
+    intentCompletion.dismiss();
     setActiveWorkflow(null);
-  }, []);
+  }, [intentCompletion]);
 
   // ── EPIC 3: Snippet usage counting (path-based via theme grouping) ──────
   const snippetUsageCounts = useMemo(() => {
@@ -1777,6 +1849,7 @@ export default function ProjectPage() {
                     sections={[{ header: 'Timeline', items: [
                       { id: 'versions', label: 'Versions' },
                       { id: 'push-log', label: 'Push Log' },
+                      { id: 'checkpoints', label: 'Checkpoints' },
                     ]}]}
                     activeItem={historyNav}
                     onItemClick={setHistoryNav}
@@ -1845,6 +1918,11 @@ export default function ProjectPage() {
                             ))}
                           </div>
                         )}
+                      </div>
+                    )}
+                    {historyNav === 'checkpoints' && (
+                      <div className="flex-1 overflow-auto p-2">
+                        <CheckpointPanel projectId={projectId} sessionId={projectId} />
                       </div>
                     )}
                   </div>

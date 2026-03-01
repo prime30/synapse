@@ -177,6 +177,13 @@ export async function updateFile(fileId: string, input: UpdateFileInput) {
   // Metadata (file list) hasn't changed, so no need to invalidate the project cache.
   invalidateFileContent(fileId);
 
+  if (data.project_id && data.path) {
+    try {
+      const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+      await markFileForPush(data.project_id, data.path);
+    } catch { /* non-blocking */ }
+  }
+
   return data;
 }
 

@@ -6,6 +6,9 @@ import { listProjectFilesWithContent } from '@/lib/services/files';
 import { scanThemeHealth } from '@/lib/ai/theme-health-scanner';
 import { createClient } from '@/lib/supabase/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface RouteParams {
   params: Promise<{ projectId: string }>;
 }

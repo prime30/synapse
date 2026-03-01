@@ -12,6 +12,7 @@ interface ChangeEntry {
   originalContent: string;
   proposedContent: string;
   reasoning: string;
+  changeType?: 'create' | 'edit' | 'delete';
 }
 
 function computeDiffStats(original: string, proposed: string): { added: number; removed: number } {
@@ -172,6 +173,12 @@ export function ChangePreviewCard({
                 <span className="font-mono text-[11px] ide-text-2 truncate min-w-0">
                   {change.fileName}
                 </span>
+                {(() => {
+                  const type = change.changeType ?? (!change.originalContent ? 'create' : 'edit');
+                  if (type === 'create') return <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold bg-[#28CD56]/10 text-[#28CD56]">New</span>;
+                  if (type === 'delete') return <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold bg-red-500/10 text-red-500 dark:text-red-400">Deleted</span>;
+                  return null;
+                })()}
                 <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono ml-auto">
                   <span className="text-emerald-600 dark:text-emerald-400">+{stats.added}</span>
                   <span className="text-red-500 dark:text-red-400">-{stats.removed}</span>

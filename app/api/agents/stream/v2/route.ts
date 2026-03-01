@@ -551,6 +551,7 @@ export async function POST(req: NextRequest) {
                 originalContent: c.originalContent ?? '',
                 proposedContent: c.proposedContent ?? '',
                 reasoning: c.reasoning ?? '',
+                changeType: (!c.originalContent || c.fileId?.startsWith('new_')) ? 'create' as const : 'edit' as const,
               })),
             });
 
@@ -696,6 +697,7 @@ export async function POST(req: NextRequest) {
             failedFilePath: result.failedFilePath ?? undefined,
             validationIssues: result.validationIssues ?? undefined,
             checkpointId: result.checkpointId ?? undefined,
+            rolledBack: result.rolledBack ?? undefined,
           });
 
           emitEvent({

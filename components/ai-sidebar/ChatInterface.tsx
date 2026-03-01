@@ -322,6 +322,8 @@ export interface ChatMessage {
 
   /** Auto-checkpoint ID for rollback (set when agent creates a pre-edit checkpoint). */
   checkpointId?: string;
+  /** True when changes were automatically rolled back after a fatal error. */
+  rolledBack?: boolean;
 
   /** Attached image data URLs (base64) displayed as thumbnails in user messages. */
   imageUrls?: string[];
@@ -2391,6 +2393,17 @@ export function ChatInterface({
                 <span className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 border-orange-500/30 bg-orange-500/10">
                   referential replay failed
                 </span>
+              </div>
+            )}
+
+            {/* Rollback notification */}
+            {m.role === 'assistant' && m.rolledBack && (
+              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 text-sm rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                Changes rolled back due to error
               </div>
             )}
 

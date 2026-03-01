@@ -772,6 +772,37 @@ export class ThemeSyncService {
         Array.from({ length: Math.min(PUSH_CONCURRENCY, pendingFiles.length) }, () => pushWorker())
       );
 
+      // 5. Handle deleted files: remove from Shopify and clean up theme_files rows
+      const { data: deletedFiles } = await supabase
+        .from('theme_files')
+        .select('*')
+        .eq('connection_id', connectionId)
+        .eq('sync_status', 'deleted');
+
+      if (deletedFiles && deletedFiles.length > 0) {
+        for (const themeFile of deletedFiles) {
+          try {
+            await api.deleteAsset(themeId, themeFile.file_path);
+            await supabase
+              .from('theme_files')
+              .delete()
+              .eq('id', themeFile.id);
+            result.pushed++;
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : 'Unknown error';
+            result.errors.push(`${themeFile.file_path}: delete: ${errorMessage}`);
+            await supabase
+              .from('theme_files')
+              .update({
+                sync_status: 'error',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', themeFile.id);
+          }
+        }
+      }
+
       // Bulk invalidation: clear metadata + all per-file content caches
       if (result.pushed > 0) {
         const { data: projFiles } = await supabase

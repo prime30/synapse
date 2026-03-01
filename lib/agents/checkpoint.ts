@@ -15,7 +15,7 @@ const CHECKPOINT_SCHEMA_VERSION = 2;
 interface CheckpointData {
   schemaVersion: number;
   executionId: string;
-  phase: 'pm_complete' | 'specialist_complete' | 'review_complete';
+  phase: 'pm_complete' | 'specialist_complete' | 'review_complete' | 'flat_iteration';
   timestamp: number;
   /** PM analysis result (saved after PM phase) */
   pmResult?: {
@@ -33,6 +33,8 @@ interface CheckpointData {
   dirtyFileIds: string[];
   /** Accumulated changes for cross-phase continuity */
   accumulatedChanges?: CodeChange[];
+  /** Flat-pipeline iteration counter (for resume) */
+  iteration?: number;
 }
 
 /** Track wall-clock time remaining for the current function invocation */
@@ -128,6 +130,13 @@ export async function getCheckpoint(executionId: string): Promise<CheckpointData
     return null;
   }
   return data;
+}
+
+/** Save an arbitrary checkpoint (used by flat pipeline for mid-run state). */
+export async function saveCheckpoint(executionId: string, data: CheckpointData): Promise<void> {
+  const cache = getCache();
+  data.schemaVersion = CHECKPOINT_SCHEMA_VERSION;
+  await cache.set(checkpointKey(executionId), data, TTL_MS);
 }
 
 /** Clear checkpoint after successful completion */

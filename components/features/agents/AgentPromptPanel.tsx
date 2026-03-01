@@ -197,6 +197,7 @@ interface SSEExecutionOutcomeEvent {
   changedFiles?: number;
   needsClarification?: boolean;
   changeSummary?: string;
+  rolledBack?: boolean;
 }
 
 interface SSEWorktreeStatusEvent {
@@ -1635,6 +1636,7 @@ export function AgentPromptPanel({
                 }
 
                 const sseCheckpointId = (sseEvent as { checkpointId?: string }).checkpointId;
+                const sseRolledBack = (sseEvent as { rolledBack?: boolean }).rolledBack;
                 const failureMeta = {
                   failureReason: (sseEvent as { failureReason?: string }).failureReason ?? undefined,
                   suggestedAction: (sseEvent as { suggestedAction?: string }).suggestedAction ?? undefined,
@@ -1645,6 +1647,7 @@ export function AgentPromptPanel({
                   verificationEvidence: ((sseEvent as unknown as Record<string, unknown>).verificationEvidence) as { syntaxCheck: { passed: boolean; errorCount: number; warningCount: number }; themeCheck?: { passed: boolean; errorCount: number; warningCount: number; infoCount: number }; checkedFiles: string[]; totalCheckTimeMs: number } | undefined,
                   validationIssues: sseValidationIssues,
                   checkpointId: sseCheckpointId,
+                  rolledBack: sseRolledBack || undefined,
                 };
 
                 // Only show clarification card when the agent explicitly asked
@@ -3094,7 +3097,26 @@ export function AgentPromptPanel({
 
       {/* Chat area */}
       <div className="flex flex-col flex-1 min-h-0">
-      <ContextPanel context={context} className="mb-2 flex-shrink-0 mx-2" />
+      <div className="flex items-center gap-1 mb-2 flex-shrink-0 mx-2">
+        <ContextPanel context={context} className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setTrainingPanelOpen((v) => !v)}
+          className={`shrink-0 p-1.5 rounded-md transition-colors ${
+            trainingPanelOpen
+              ? 'bg-sky-500/10 text-sky-500'
+              : 'ide-text-muted hover:ide-text-2 ide-hover'
+          }`}
+          title="Toggle training review"
+          aria-label="Toggle training review"
+          aria-pressed={trainingPanelOpen}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+          </svg>
+        </button>
+      </div>
       <TrainingReviewPanel
         open={trainingPanelOpen}
         onClose={() => setTrainingPanelOpen(false)}

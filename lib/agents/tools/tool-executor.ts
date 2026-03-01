@@ -891,6 +891,10 @@ export async function executeToolCall(
             }
             const store = getFileStore(ctx);
             await store.invalidateFile(file.fileId);
+            try {
+              const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+              await markFileForPush(ctx.projectId, file.path ?? file.fileName, 'deleted');
+            } catch { /* non-blocking */ }
             return { tool_use_id: toolCall.id, content: `File deleted: ${file.fileName}` };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Delete failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
@@ -931,6 +935,11 @@ export async function executeToolCall(
             }
             const store = getFileStore(ctx);
             await store.invalidateRename(file.fileId, newPath);
+            try {
+              const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+              await markFileForPush(ctx.projectId, file.path ?? file.fileName, 'deleted');
+              await markFileForPush(ctx.projectId, newFileName, 'pending');
+            } catch { /* non-blocking */ }
             return { tool_use_id: toolCall.id, content: `File renamed: ${file.fileName} → ${newFileName}` };
           } catch (err) {
             return { tool_use_id: toolCall.id, content: `Rename failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
@@ -1956,6 +1965,82 @@ export async function executeToolCall(
         }
 
         return { tool_use_id: toolCall.id, content: sections.join('\n\n') };
+      }
+
+      case 'create_file': {
+        const fileName = String(toolCall.input.fileName ?? '');
+        const content = String(toolCall.input.content ?? '');
+
+        if (!fileName || fileName.includes('..') || fileName.includes(':')) {
+          return { tool_use_id: toolCall.id, content: `Invalid file path: ${fileName}`, is_error: true };
+        }
+        if (!content || content.trim().length === 0) {
+          return { tool_use_id: toolCall.id, content: 'create_file rejected: content is empty.', is_error: true };
+        }
+        if (new TextEncoder().encode(content).length > 1_048_576) {
+          return { tool_use_id: toolCall.id, content: 'File content exceeds 1MB limit.', is_error: true };
+        }
+
+        const existing = resolveFileContext(files, fileName);
+        if (existing) {
+          return { tool_use_id: toolCall.id, content: `File already exists: ${fileName}. Use write_file or search_replace to modify it.`, is_error: true };
+        }
+
+        if (!ctx.supabaseClient) {
+          return { tool_use_id: toolCall.id, content: 'Database client not available for file creation.', is_error: true };
+        }
+
+        return (async () => {
+          try {
+            const { detectFileTypeFromName } = await import('@/lib/types/files');
+            const fileType = detectFileTypeFromName(fileName);
+            const baseName = fileName.split('/').pop() || fileName;
+            const normalizedPath = fileName.startsWith('/') ? fileName : fileName;
+            const sizeBytes = new TextEncoder().encode(content).length;
+
+            const { data: inserted, error } = await ctx.supabaseClient!
+              .from('files')
+              .insert({
+                project_id: ctx.projectId,
+                name: baseName,
+                path: normalizedPath,
+                file_type: fileType,
+                size_bytes: sizeBytes,
+                content,
+                created_by: ctx.userId,
+              })
+              .select()
+              .single();
+
+            if (error) {
+              if (error.code === '23505') {
+                return { tool_use_id: toolCall.id, content: `File already exists: ${fileName}. Use write_file or search_replace to modify it.`, is_error: true as const };
+              }
+              return { tool_use_id: toolCall.id, content: `Create failed: ${error.message}`, is_error: true as const };
+            }
+
+            const newFileContext = {
+              fileId: inserted.id,
+              fileName: baseName,
+              path: normalizedPath,
+              content,
+              fileType: fileType as FileContext['fileType'],
+            };
+            files.push(newFileContext);
+
+            const store = getFileStore(ctx);
+            store.addFile(newFileContext);
+
+            try {
+              const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+              await markFileForPush(ctx.projectId, normalizedPath);
+            } catch { /* non-blocking */ }
+
+            return { tool_use_id: toolCall.id, content: `File created: ${fileName} (${sizeBytes} bytes)` };
+          } catch (err) {
+            return { tool_use_id: toolCall.id, content: `Create failed: ${err instanceof Error ? err.message : String(err)}`, is_error: true as const };
+          }
+        })();
       }
 
       default:

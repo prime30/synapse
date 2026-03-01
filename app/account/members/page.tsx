@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -78,7 +78,30 @@ const UPSELL_FEATURES = [
 function InviteMemberModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('Member');
+  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const handleSendInvite = async () => {
+    setSending(true);
+    setInviteError(null);
+    try {
+      const res = await fetch('/api/account/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Failed to send invite');
+      }
+      setSent(true);
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : 'Failed to send invite');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -128,6 +151,10 @@ function InviteMemberModal({ onClose }: { onClose: () => void }) {
           </div>
         </label>
 
+        {inviteError && (
+          <p className="text-sm text-red-500 mt-3">{inviteError}</p>
+        )}
+
         <div className="flex items-center justify-end gap-3 mt-6">
           <button
             onClick={onClose}
@@ -136,11 +163,11 @@ function InviteMemberModal({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button
-            onClick={() => setSent(true)}
-            disabled={!email}
+            onClick={handleSendInvite}
+            disabled={!email || sending}
             className="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {sent ? 'Sent!' : 'Send Invite'}
+            {sending ? 'Sending...' : sent ? 'Sent!' : 'Send Invite'}
           </button>
         </div>
       </div>
@@ -210,7 +237,7 @@ function SoloUpsellView() {
 /*  Team / Member List View                                            */
 /* ------------------------------------------------------------------ */
 
-function TeamMembersView() {
+function TeamMembersView({ members, seats }: { members: TeamMember[]; seats: { used: number; total: number } }) {
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   return (
@@ -222,7 +249,7 @@ function TeamMembersView() {
             <h2 className="text-base font-medium ide-text">
               Members{' '}
               <span className="ide-text-muted font-normal">
-                ({SEATS.used} / {SEATS.total} seats)
+                ({seats.used} / {seats.total} seats)
               </span>
             </h2>
           </div>
@@ -251,7 +278,7 @@ function TeamMembersView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200 dark:divide-white/10">
-              {MOCK_MEMBERS.map((m) => (
+              {members.map((m) => (
                 <tr
                   key={m.id}
                   className="ide-hover transition-colors"
@@ -310,34 +337,70 @@ function TeamMembersView() {
 /* ------------------------------------------------------------------ */
 
 export default function MembersPage() {
-  // Default to solo view; toggle for dev preview
-  const [viewMode, setViewMode] = useState<'solo' | 'team'>('solo');
+  const [loading, setLoading] = useState(true);
+  const [isTeamPlan, setIsTeamPlan] = useState(false);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [seats, setSeats] = useState({ used: 1, total: 5 });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const subRes = await fetch('/api/billing/subscription');
+        if (subRes.ok) {
+          const data = await subRes.json();
+          const sub = data.data ?? data;
+          const plan = (sub.plan ?? 'starter').toLowerCase();
+          if (!cancelled) {
+            setIsTeamPlan(plan === 'team' || plan === 'agency');
+          }
+        }
+
+        try {
+          const membersRes = await fetch('/api/account/members');
+          if (membersRes.ok) {
+            const membersData = await membersRes.json();
+            const list = membersData.data ?? membersData;
+            if (!cancelled && Array.isArray(list) && list.length > 0) {
+              setMembers(list);
+              setSeats((prev) => ({ ...prev, used: list.length }));
+            }
+          }
+        } catch {
+          // Route may not exist yet; current user fallback handled by default empty state
+        }
+      } catch {
+        // subscription fetch failed; default to solo view
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-stone-200 dark:bg-white/10 rounded" />
+          <div className="h-64 bg-stone-200 dark:bg-white/10 rounded-lg" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* ── Heading ────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Members</h1>
-          <p className="ide-text-muted text-sm mt-1">
-            Manage your team and collaboration settings.
-          </p>
-        </div>
-
-        {/* Dev-only toggle */}
-        <button
-          onClick={() =>
-            setViewMode((v) => (v === 'solo' ? 'team' : 'solo'))
-          }
-          className="px-3 py-1.5 text-xs rounded-md border ide-border ide-text-muted ide-hover transition-colors"
-          title="Dev: toggle between solo and team views"
-        >
-          Preview: {viewMode === 'solo' ? 'Solo' : 'Team'}
-        </button>
+      <div>
+        <h1 className="text-2xl font-semibold">Members</h1>
+        <p className="ide-text-muted text-sm mt-1">
+          Manage your team and collaboration settings.
+        </p>
       </div>
 
       {/* ── View ──────────────────────────────────── */}
-      {viewMode === 'solo' ? <SoloUpsellView /> : <TeamMembersView />}
+      {isTeamPlan ? <TeamMembersView members={members} seats={seats} /> : <SoloUpsellView />}
     </div>
   );
 }

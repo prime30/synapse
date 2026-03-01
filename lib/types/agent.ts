@@ -273,6 +273,8 @@ export interface AgentResult {
   checkpointed?: boolean;
   /** Auto-checkpoint ID created before agent edits, for rollback via checkpoint-service. */
   checkpointId?: string;
+  /** True when changes were automatically rolled back after a fatal error. */
+  rolledBack?: boolean;
   /** Aggregated cost summary from per-phase AgentCostEvents. */
   costSummary?: {
     totalCostCents: number;

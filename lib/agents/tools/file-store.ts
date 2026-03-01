@@ -288,6 +288,12 @@ export class FileStore {
     return new Set(this.dirtyFiles);
   }
 
+  /** Add a newly created file to the store so subsequent tools can reference it. */
+  addFile(file: FileContext): void {
+    this.files.push(file);
+    this.dirtyFiles.add(file.fileId);
+  }
+
   /**
    * Wait for all pending background DB writes to complete.
    * Call before session ends to ensure Supabase is consistent.
@@ -413,6 +419,13 @@ export class FileStore {
             try {
               const { schedulePushForProject } = await import('@/lib/shopify/push-queue');
               schedulePushForProject(this.projectId);
+            } catch { /* non-blocking */ }
+            try {
+              const file = this.files.find(f => f.fileId === fileId);
+              if (file && this.projectId) {
+                const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+                await markFileForPush(this.projectId, file.path ?? file.fileName);
+              }
             } catch { /* non-blocking */ }
             this.fireAndForgetEmbed(this.projectId, fileId, content);
           }

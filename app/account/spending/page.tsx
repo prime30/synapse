@@ -318,7 +318,7 @@ export default function SpendingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200 dark:divide-white/10">
-              {MOCK_BREAKDOWN.map((row) => (
+              {breakdown.map((row) => (
                 <tr
                   key={row.model}
                   className="ide-hover transition-colors"

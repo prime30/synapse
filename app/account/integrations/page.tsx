@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShoppingBag,
   Github,
@@ -127,10 +127,25 @@ function AddKeyModal({
 }: {
   provider: string;
   onClose: () => void;
-  onSave: (key: string) => void;
+  onSave: (key: string) => Promise<void>;
 }) {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(apiKey.trim());
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save key');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -178,6 +193,10 @@ function AddKeyModal({
           </div>
         </label>
 
+        {saveError && (
+          <p className="text-sm text-red-500 mt-3">{saveError}</p>
+        )}
+
         <div className="flex items-center justify-end gap-3 mt-6">
           <button
             onClick={onClose}
@@ -186,13 +205,11 @@ function AddKeyModal({
             Cancel
           </button>
           <button
-            onClick={() => {
-              if (apiKey.trim()) onSave(apiKey.trim());
-            }}
-            disabled={!apiKey.trim()}
+            onClick={handleSave}
+            disabled={!apiKey.trim() || saving}
             className="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Save Key
+            {saving ? 'Saving...' : 'Save Key'}
           </button>
         </div>
       </div>
@@ -209,7 +226,40 @@ export default function IntegrationsPage() {
   const [addKeyModal, setAddKeyModal] = useState<string | null>(null);
   const [platformKeys] = useState<{ id: string; name: string; prefix: string; created: string }[]>([]);
 
-  const handleSaveKey = (providerId: string, key: string) => {
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/billing/api-keys');
+        if (!res.ok) return;
+        const data = await res.json();
+        const keys = data.data ?? data;
+        if (Array.isArray(keys)) {
+          setProviderKeys((prev) =>
+            prev.map((pk) => {
+              const match = keys.find((k: { provider: string }) => k.provider === pk.id);
+              if (match) {
+                return { ...pk, keySuffix: match.keySuffix ?? match.key_suffix ?? null, status: match.keySuffix || match.key_suffix ? 'valid' as const : 'not_set' as const };
+              }
+              return pk;
+            }),
+          );
+        }
+      } catch {
+        // API may not exist yet
+      }
+    })();
+  }, []);
+
+  const handleSaveKey = async (providerId: string, key: string) => {
+    const res = await fetch(`/api/billing/api-keys/${providerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to save key');
+    }
     setProviderKeys((prev) =>
       prev.map((pk) =>
         pk.id === providerId
@@ -220,7 +270,15 @@ export default function IntegrationsPage() {
     setAddKeyModal(null);
   };
 
-  const handleRemoveKey = (providerId: string) => {
+  const handleRemoveKey = async (providerId: string) => {
+    try {
+      const res = await fetch(`/api/billing/api-keys/${providerId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) return;
+    } catch {
+      return;
+    }
     setProviderKeys((prev) =>
       prev.map((pk) =>
         pk.id === providerId
@@ -401,7 +459,7 @@ export default function IntegrationsPage() {
             addKeyModal
           }
           onClose={() => setAddKeyModal(null)}
-          onSave={(key) => handleSaveKey(addKeyModal, key)}
+          onSave={async (key) => handleSaveKey(addKeyModal, key)}
         />
       )}
     </div>

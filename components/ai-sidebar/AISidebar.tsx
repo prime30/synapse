@@ -1,6 +1,9 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { ContextPanel } from './ContextPanel';
+import { ContextDrawer } from './ContextDrawer';
+import type { ContextDrawerFile } from './ContextDrawer';
 import { ChatInterface } from './ChatInterface';
 import { AmbientBar } from './AmbientBar';
 import type { ChatMessage } from './ChatInterface';
@@ -26,6 +29,14 @@ interface AISidebarProps {
   onNudgeAccept?: (nudgeId: string) => void;
   /** Called when user dismisses a nudge. */
   onNudgeDismiss?: (nudgeId: string) => void;
+  /** Context files for the ContextDrawer (optional — drawer hidden when absent). */
+  contextFiles?: ContextDrawerFile[];
+  /** Total tokens in context. */
+  contextTotalTokens?: number;
+  /** Model context window limit. */
+  contextModelLimit?: number;
+  /** Called when user pins/unpins a file in the context drawer. */
+  onTogglePin?: (filePath: string) => void;
 }
 
 export function AISidebar({
@@ -43,7 +54,14 @@ export function AISidebar({
   topNudge = null,
   onNudgeAccept,
   onNudgeDismiss,
+  contextFiles = [],
+  contextTotalTokens = 0,
+  contextModelLimit = 128000,
+  onTogglePin,
 }: AISidebarProps) {
+  const [contextDrawerOpen, setContextDrawerOpen] = useState(false);
+  const toggleContextDrawer = useCallback(() => setContextDrawerOpen((v) => !v), []);
+
   if (!isOpen) return null;
 
   return (
@@ -66,17 +84,46 @@ export function AISidebar({
           {/* Header */}
           <div className="flex items-center justify-between border-b ide-border-subtle px-3 py-2 flex-shrink-0">
             <span className="text-sm font-medium ide-text-2">AI Assistant</span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-1.5 ide-text-3 ide-hover hover:ide-text-2"
-              aria-label="Close sidebar"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleContextDrawer}
+                className={`rounded p-1.5 transition-colors ${
+                  contextDrawerOpen
+                    ? 'bg-sky-500/10 text-sky-500'
+                    : 'ide-text-3 ide-hover hover:ide-text-2'
+                }`}
+                aria-label="Toggle context panel"
+                title="Context files"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded p-1.5 ide-text-3 ide-hover hover:ide-text-2"
+                aria-label="Close sidebar"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
+          <ContextDrawer
+            isOpen={contextDrawerOpen}
+            onClose={() => setContextDrawerOpen(false)}
+            contextFiles={contextFiles}
+            totalTokens={contextTotalTokens}
+            modelLimit={contextModelLimit}
+            onTogglePin={onTogglePin ?? (() => {})}
+          />
           <ContextPanel context={context} className="mx-2 mt-2 flex-shrink-0" />
           <ChatInterface
             messages={messages}

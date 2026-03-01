@@ -11,6 +11,7 @@ export interface Checkpoint {
   project_id: string;
   label: string;
   file_snapshots: FileSnapshot[];
+  created_file_ids?: string[];
   created_at: string;
 }
 
@@ -29,6 +30,7 @@ export async function createCheckpoint(
   label: string,
   fileIds: string[],
   preloadedSnapshots?: FileSnapshot[],
+  createdFileIds?: string[],
 ): Promise<Checkpoint | null> {
   const supabase = await createClient();
   let snapshots: FileSnapshot[];
@@ -57,6 +59,7 @@ export async function createCheckpoint(
       project_id: projectId,
       label,
       file_snapshots: snapshots,
+      ...(createdFileIds && createdFileIds.length > 0 ? { created_file_ids: createdFileIds } : {}),
     })
     .select('*')
     .single();
@@ -69,6 +72,7 @@ export async function createCheckpoint(
       project_id: projectId,
       label,
       file_snapshots: snapshots,
+      ...(createdFileIds && createdFileIds.length > 0 ? { created_file_ids: createdFileIds } : {}),
       created_at: new Date().toISOString(),
     };
   }
@@ -116,7 +120,50 @@ export async function restoreCheckpoint(checkpointId: string): Promise<{
     }
   }
 
+  // Delete files that were created during this run
+  const createdFileIds = checkpoint.created_file_ids as string[] | undefined;
+  if (createdFileIds && createdFileIds.length > 0) {
+    for (const fileId of createdFileIds) {
+      const { error: delError } = await supabase
+        .from('files')
+        .delete()
+        .eq('id', fileId);
+      if (delError) {
+        errors.push(`Failed to delete created file ${fileId}: ${delError.message}`);
+      } else {
+        restored++;
+      }
+    }
+  }
+
+  // Mark restored files for Shopify push so rollback propagates
+  if (checkpoint.project_id) {
+    try {
+      const { markFileForPush } = await import('@/lib/shopify/theme-file-sync');
+      for (const snap of snapshots) {
+        const { data: fileData } = await supabase.from('files').select('path').eq('id', snap.fileId).maybeSingle();
+        if (fileData?.path) {
+          await markFileForPush(checkpoint.project_id, fileData.path);
+        }
+      }
+    } catch { /* non-blocking — sync service may not be available */ }
+  }
+
   return { restored, errors };
+}
+
+/**
+ * Attach created-file IDs to an existing checkpoint so rollback can delete them.
+ */
+export async function updateCheckpointCreatedFiles(
+  checkpointId: string,
+  createdFileIds: string[],
+): Promise<void> {
+  const supabase = await createClient();
+  await supabase
+    .from('checkpoints')
+    .update({ created_file_ids: createdFileIds })
+    .eq('id', checkpointId);
 }
 
 /**

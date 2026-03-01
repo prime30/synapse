@@ -41,6 +41,7 @@ export default function AdminBugsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<BugStatus | 'all'>('open');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -90,7 +91,8 @@ export default function AdminBugsPage() {
 
     navigator.clipboard.writeText(prompt).then(() => {
       updateStatus(report.id, 'in_progress');
-      alert('Bug context copied to clipboard. Paste it into the agent chat to start fixing.');
+      setCopiedId(report.id);
+      setTimeout(() => setCopiedId((prev) => (prev === report.id ? null : prev)), 2000);
     });
   }, [updateStatus]);
 
@@ -171,15 +173,22 @@ export default function AdminBugsPage() {
                       </button>
                     )}
                     {(report.status === 'open' || report.status === 'in_progress') && (
-                      <button
-                        onClick={() => handleFix(report)}
-                        disabled={updating === report.id}
-                        title="Fix with agent"
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors"
-                      >
-                        <Wrench className="h-3.5 w-3.5" />
-                        Fix
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleFix(report)}
+                          disabled={updating === report.id}
+                          title="Fix with agent"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors"
+                        >
+                          <Wrench className="h-3.5 w-3.5" />
+                          Fix
+                        </button>
+                        {copiedId === report.id && (
+                          <span className="text-[11px] font-medium text-[#28CD56] animate-in fade-in">
+                            Copied!
+                          </span>
+                        )}
+                      </div>
                     )}
                     {report.status === 'in_progress' && (
                       <button

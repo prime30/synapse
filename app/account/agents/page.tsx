@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Bot,
@@ -10,6 +10,8 @@ import {
   MessageSquare,
   Check,
 } from 'lucide-react';
+import { useAgentSettings } from '@/hooks/useAgentSettings';
+import type { MaxAgents } from '@/hooks/useAgentSettings';
 
 /* ------------------------------------------------------------------ */
 /*  Toggle Switch (matches settings page pattern)                      */
@@ -110,10 +112,16 @@ const MODE_DESCRIPTIONS: Record<string, string> = {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
+function settingsToMode(specialistMode: boolean, maxAgents: number): string {
+  if (!specialistMode) return 'direct';
+  return maxAgents > 1 ? 'full' : 'pm-only';
+}
+
 export default function AgentSettingsPage() {
-  // Defaults
-  const [model, setModel] = useState('claude-sonnet-4');
-  const [mode, setMode] = useState('full');
+  const agentSettings = useAgentSettings();
+
+  const derivedMode = settingsToMode(agentSettings.specialistMode, agentSettings.maxAgents);
+  const [mode, setModeLocal] = useState(derivedMode);
 
   // Behavior
   const [autoApply, setAutoApply] = useState(false);
@@ -126,10 +134,37 @@ export default function AgentSettingsPage() {
   // Save state
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleModelChange = useCallback((v: string) => {
+    agentSettings.setModel(v);
+  }, [agentSettings]);
+
+  const handleModeChange = useCallback((v: string) => {
+    setModeLocal(v);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    // Persist model (already persisted on change, but ensure latest)
+    agentSettings.setModel(agentSettings.model);
+
+    // Persist mode mapping
+    switch (mode) {
+      case 'full':
+        agentSettings.setSpecialistMode(true);
+        agentSettings.setMaxAgents(3 as MaxAgents);
+        break;
+      case 'pm-only':
+        agentSettings.setSpecialistMode(true);
+        agentSettings.setMaxAgents(1 as MaxAgents);
+        break;
+      case 'direct':
+        agentSettings.setSpecialistMode(false);
+        agentSettings.setMaxAgents(1 as MaxAgents);
+        break;
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
+  }, [agentSettings, mode]);
 
   return (
     <div className="max-w-3xl mx-auto space-y-10">
@@ -154,12 +189,12 @@ export default function AgentSettingsPage() {
             <div>
             <p className="text-sm font-medium ide-text">Default Model</p>
             <p className="text-xs ide-text-muted mt-0.5 max-w-sm">
-                {MODEL_DESCRIPTIONS[model]}
+                {MODEL_DESCRIPTIONS[agentSettings.model] ?? ''}
               </p>
             </div>
             <Select
-              value={model}
-              onChange={setModel}
+              value={agentSettings.model}
+              onChange={handleModelChange}
               options={MODEL_OPTIONS}
             />
           </div>
@@ -176,7 +211,7 @@ export default function AgentSettingsPage() {
             </div>
             <Select
               value={mode}
-              onChange={setMode}
+              onChange={handleModeChange}
               options={MODE_OPTIONS}
             />
           </div>

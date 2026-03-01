@@ -51,7 +51,8 @@ import { FileStore } from './tools/file-store';
 import { matchKnowledgeModules, buildKnowledgeBlock } from './knowledge/module-matcher';
 import { enforceRequestBudget } from '@/lib/ai/request-budget';
 import { recordHistogram } from '@/lib/observability/metrics';
-import { createCheckpoint } from '@/lib/checkpoints/checkpoint-service';
+import { createCheckpoint, restoreCheckpoint } from '@/lib/checkpoints/checkpoint-service';
+import { createDeadlineTracker, isBackgroundResumeEnabled } from '@/lib/agents/checkpoint';
 import type { V2CoordinatorOptions } from './coordinator-v2';
 
 // Re-export the options type so the route can import from either coordinator
@@ -354,6 +355,9 @@ export async function streamFlat(
   options: V2CoordinatorOptions,
 ): Promise<AgentResult> {
   const startTime = Date.now();
+  const deadline = isBackgroundResumeEnabled()
+    ? createDeadlineTracker(options.deadlineMs ?? Date.now(), 300_000)
+    : null;
   const intentMode = options.intentMode || 'code';
   const {
     onProgress,
@@ -372,7 +376,8 @@ export async function streamFlat(
   let hasAttemptedEdit = false;
   const needsClarification = false;
   let fullText = '';
-  const accumulatedChanges: CodeChange[] = [];
+  let resumedIteration = 0;
+  let resumedChanges: CodeChange[] = [];
   const lineTracker = createLineOffsetTracker();
 
   // ── Resolve model ──────────────────────────────────────────────────
@@ -447,6 +452,29 @@ export async function streamFlat(
     }
   }
 
+  // ── Resume from checkpoint if available ────────────────────────────
+  if (isBackgroundResumeEnabled()) {
+    try {
+      const { getCheckpoint } = await import('@/lib/agents/checkpoint');
+      const checkpoint = await getCheckpoint(executionId);
+      if (checkpoint && checkpoint.phase === 'flat_iteration') {
+        resumedIteration = checkpoint.iteration ?? 0;
+        resumedChanges = checkpoint.accumulatedChanges ?? [];
+        if (checkpoint.dirtyFileIds.length > 0 && options.loadContent) {
+          try {
+            const hydrated = await options.loadContent(checkpoint.dirtyFileIds);
+            const contentMap = new Map(hydrated.map(h => [h.fileId, h.content]));
+            for (const f of allFiles) {
+              const newContent = contentMap.get(f.fileId);
+              if (newContent) f.content = newContent;
+            }
+          } catch { /* best effort */ }
+        }
+        console.log(`[Flat] Resuming from checkpoint: iteration=${resumedIteration}, changes=${resumedChanges.length}`);
+      }
+    } catch { /* no checkpoint — fresh run */ }
+  }
+
   // ── Build system prompt ────────────────────────────────────────────
   const systemPrompt = buildFlatSystemPrompt(
     intentMode,
@@ -503,6 +531,16 @@ export async function streamFlat(
     } as AIMessage);
   }
 
+  // ── Accumulated changes (seeded from checkpoint on resume) ─────────
+  const accumulatedChanges: CodeChange[] = [...resumedChanges];
+
+  if (resumedChanges.length > 0) {
+    messages.push({
+      role: 'user',
+      content: `SYSTEM: This is a resumed execution. You have already made ${resumedChanges.length} changes: ${resumedChanges.map(c => c.fileName).join(', ')}. Continue from where you left off.`,
+    } as AIMessage);
+  }
+
   // ── File Store ─────────────────────────────────────────────────────
   const fileStore = new FileStore(
     allFiles,
@@ -527,6 +565,9 @@ export async function streamFlat(
       storeChanges(executionId, 'project_manager', [codeChange]);
     },
   );
+
+  // ── Track initial file IDs to detect created files ─────────────────
+  const initialFileIds = new Set(allFiles.map(f => f.fileId));
 
   // ── Tool context ───────────────────────────────────────────────────
   const ioCtx: ToolExecutorContext = {
@@ -577,7 +618,7 @@ export async function streamFlat(
   const validationIssues: AgentResult['validationIssues'] = [];
 
   // ── Agent loop ─────────────────────────────────────────────────────
-  let iteration = 0;
+  let iteration = resumedIteration;
   let firstTokenMs: number | undefined;
   let consecutiveEmptyIterations = 0;
 
@@ -588,6 +629,7 @@ export async function streamFlat(
   });
 
   // Outer loop: agent runs, then verification, then self-correction if needed
+  try {
   correctionLoop: while (correctionAttempts <= MAX_CORRECTION_ATTEMPTS) {
 
   while (iteration < MAX_ITERATIONS) {
@@ -613,6 +655,54 @@ export async function streamFlat(
         phase: 'editing',
         label: 'Edit SLA reached — making edit',
       });
+    }
+
+    // ── Deadline checkpoint: save state and continue in background ──
+    if (deadline?.shouldCheckpoint()) {
+      await fileStore.flush();
+      const dirtyIds = [...fileStore.getDirtyFileIds()];
+
+      const { saveCheckpoint } = await import('@/lib/agents/checkpoint');
+      await saveCheckpoint(executionId, {
+        schemaVersion: 1,
+        executionId,
+        phase: 'flat_iteration',
+        timestamp: Date.now(),
+        iteration,
+        dirtyFileIds: dirtyIds,
+        accumulatedChanges: [...accumulatedChanges],
+        completedSpecialists: [],
+      });
+
+      const { enqueueAgentJob, triggerDispatch } = await import('@/lib/tasks/agent-job-queue');
+      await enqueueAgentJob({
+        executionId,
+        projectId,
+        userId,
+        userRequest,
+        options: {
+          ...options,
+          useFlatPipeline: true,
+          onProgress: undefined,
+          onContentChunk: undefined,
+          onToolEvent: undefined,
+        },
+      });
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      triggerDispatch(appUrl);
+
+      onProgress?.({ type: 'checkpointed', phase: 'background', label: 'Continuing in background...' });
+
+      const autoCheckpointId = checkpointPromise ? await checkpointPromise : undefined;
+      return {
+        agentType: 'project_manager' as const,
+        success: true,
+        analysis: 'Execution checkpointed — continuing in background.',
+        needsClarification: false,
+        directStreamed: true,
+        checkpointed: true,
+        checkpointId: autoCheckpointId,
+      };
     }
 
     // ── Budget enforcement ──────────────────────────────────────────
@@ -1157,6 +1247,56 @@ export async function streamFlat(
 
   break correctionLoop;
   } // end correctionLoop
+  } catch (fatalErr) {
+    // ── Auto-rollback: restore checkpoint if changes were made ──────
+    let rolledBack = false;
+    const autoCheckpointId = checkpointPromise ? await checkpointPromise : undefined;
+    if (autoCheckpointId && accumulatedChanges.length > 0) {
+      try {
+        const rollbackResult = await restoreCheckpoint(autoCheckpointId);
+        rolledBack = rollbackResult.restored > 0;
+        console.error(
+          `[Flat] Auto-rollback after fatal error: restored=${rollbackResult.restored}, errors=${rollbackResult.errors.length}`,
+        );
+        onProgress?.({
+          type: 'thinking',
+          phase: 'warning',
+          label: `Changes rolled back (${rollbackResult.restored} file(s) restored)`,
+        });
+      } catch (rollbackErr) {
+        console.error('[Flat] Auto-rollback failed:', rollbackErr);
+      }
+    }
+
+    const errMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+    console.error('[Flat] Fatal error during agent loop:', errMsg);
+
+    try { updateExecutionStatus(executionId, 'failed'); } catch { /* best effort */ }
+
+    return {
+      agentType: 'project_manager' as const,
+      success: false,
+      rolledBack,
+      analysis: `Error: ${errMsg}${rolledBack ? '. Changes have been rolled back.' : ''}`,
+      directStreamed: true,
+      checkpointId: autoCheckpointId,
+      error: {
+        code: 'AGENT_FATAL',
+        message: errMsg,
+        agentType: 'project_manager' as const,
+        recoverable: false,
+      },
+      usage: {
+        totalInputTokens,
+        totalOutputTokens,
+        totalCacheReadTokens,
+        totalCacheWriteTokens,
+        model,
+        provider: providerName,
+        tier: 'FLAT',
+      },
+    };
+  }
 
   // ── Persist execution ──────────────────────────────────────────────
   await updateExecutionStatus(executionId, 'completed');
@@ -1200,6 +1340,18 @@ export async function streamFlat(
 
   // ── Resolve deferred checkpoint ────────────────────────────────────
   const autoCheckpointId = checkpointPromise ? await checkpointPromise : undefined;
+
+  // ── Attach created-file IDs to checkpoint for rollback ─────────────
+  if (autoCheckpointId) {
+    const dirtyIds = [...fileStore.getDirtyFileIds()];
+    const createdIds = dirtyIds.filter(id => !initialFileIds.has(id));
+    if (createdIds.length > 0) {
+      try {
+        const { updateCheckpointCreatedFiles } = await import('@/lib/checkpoints/checkpoint-service');
+        await updateCheckpointCreatedFiles(autoCheckpointId, createdIds);
+      } catch { /* non-blocking */ }
+    }
+  }
 
   // ── Return result ──────────────────────────────────────────────────
   return {

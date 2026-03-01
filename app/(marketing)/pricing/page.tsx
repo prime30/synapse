@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navbar } from '@/components/marketing/nav';
 import { Footer } from '@/components/marketing/sections';
@@ -206,8 +206,9 @@ function ComparisonCell({ value }: { value: string | boolean }) {
   return <span className="text-stone-700 dark:text-white/70 text-sm">{value}</span>;
 }
 
-function TierCard({ tier, annual }: { tier: Tier; annual: boolean }) {
+function TierCard({ tier, annual, onCheckout, isLoading }: { tier: Tier; annual: boolean; onCheckout?: (plan: string, annual: boolean) => void; isLoading?: boolean }) {
   const price = formatPrice(tier.monthlyPrice, annual);
+  const isPaid = tier.monthlyPrice > 0;
 
   return (
     <div className="relative rounded-xl">
@@ -274,16 +275,31 @@ function TierCard({ tier, annual }: { tier: Tier; annual: boolean }) {
           <p>{tier.seats}</p>
         </div>
 
-        <a
-          href={tier.ctaHref}
-          className={`block w-full py-3 rounded-full text-center font-semibold transition-shadow mb-8 ${
-            tier.highlighted
-              ? 'gradient-accent text-white hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)]'
-              : 'border border-stone-200 dark:border-white/10 text-stone-900 dark:text-white bg-stone-50 dark:bg-white/5 hover:border-accent/30 dark:hover:border-accent/30'
-          }`}
-        >
-          {tier.cta}
-        </a>
+        {isPaid && onCheckout ? (
+          <button
+            type="button"
+            onClick={() => onCheckout(tier.name.toLowerCase(), annual)}
+            disabled={isLoading}
+            className={`block w-full py-3 rounded-full text-center font-semibold transition-shadow mb-8 cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
+              tier.highlighted
+                ? 'gradient-accent text-white hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)]'
+                : 'border border-stone-200 dark:border-white/10 text-stone-900 dark:text-white bg-stone-50 dark:bg-white/5 hover:border-accent/30 dark:hover:border-accent/30'
+            }`}
+          >
+            {isLoading ? 'Redirecting...' : tier.cta}
+          </button>
+        ) : (
+          <a
+            href={tier.ctaHref}
+            className={`block w-full py-3 rounded-full text-center font-semibold transition-shadow mb-8 ${
+              tier.highlighted
+                ? 'gradient-accent text-white hover:shadow-[0_0_30px_oklch(0.745_0.189_148_/_0.35)]'
+                : 'border border-stone-200 dark:border-white/10 text-stone-900 dark:text-white bg-stone-50 dark:bg-white/5 hover:border-accent/30 dark:hover:border-accent/30'
+            }`}
+          >
+            {tier.cta}
+          </a>
+        )}
 
         <ul className="space-y-2.5 mt-auto">
           {tier.features.map((feature) => (
@@ -302,6 +318,31 @@ function TierCard({ tier, annual }: { tier: Tier; annual: boolean }) {
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const handleCheckout = useCallback(async (plan: string, isAnnual: boolean) => {
+    setCheckoutLoading(plan);
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, annual: isAnnual }),
+      });
+      if (res.status === 401) {
+        window.location.href = `/auth/signin?callbackUrl=${encodeURIComponent('/pricing')}`;
+        return;
+      }
+      const data = await res.json();
+      if (data?.data?.url) {
+        window.location.href = data.data.url;
+      }
+    } catch {
+      // Network error — fall back to sign-in flow
+      window.location.href = `/auth/signin?callbackUrl=${encodeURIComponent('/account/billing')}`;
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }, []);
 
   return (
     <div className="relative film-grain bg-[oklch(0.985_0.001_106)] dark:bg-[oklch(0.145_0_0)] min-h-screen">
@@ -357,7 +398,7 @@ export default function PricingPage() {
         {/* ── Pricing Cards ──────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {TIERS.map((tier) => (
-            <TierCard key={tier.name} tier={tier} annual={annual} />
+            <TierCard key={tier.name} tier={tier} annual={annual} onCheckout={handleCheckout} isLoading={checkoutLoading === tier.name.toLowerCase()} />
           ))}
         </div>
 

@@ -23,6 +23,9 @@ import {
 } from '@/lib/preview/relevant-liquid-files';
 import { isElectron } from '@/lib/utils/environment';
 import { useDevStorePreview } from '@/hooks/useDevStorePreview';
+import { capturePreviewScreenshot, compareScreenshots } from '@/lib/preview/visual-regression';
+import type { RegressionResult } from '@/lib/preview/visual-regression';
+import { RegressionAlert } from '@/components/ui/RegressionAlert';
 
 /** Element data returned by the bridge's element-selected action */
 export interface SelectedElement {
@@ -226,6 +229,9 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
   const [cliStatus, setCLIStatus] = useState<'stopped' | 'pulling' | 'starting' | 'running' | 'error'>('stopped');
   const [cliError, setCLIError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('proxy');
+  const [regressionResult, setRegressionResult] = useState<RegressionResult | null>(null);
+  const [baselineScreenshot, setBaselineScreenshot] = useState<string | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
   const desktopPreviewRef = useRef<HTMLDivElement>(null);
   const isDesktopApp = useMemo(() => isElectron(), []);
   const { status: devStoreStatus } = useDevStorePreview(projectId);
@@ -730,6 +736,37 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
     sendBridgeMessage(next ? 'enableInspect' : 'disableInspect');
   }, [inspecting, sendBridgeMessage]);
 
+  const handleVisualCompare = useCallback(async () => {
+    const iframe = frameRef.current?.getIframe();
+    if (!iframe) return;
+
+    if (!baselineScreenshot) {
+      const screenshot = await capturePreviewScreenshot(iframe);
+      if (screenshot) {
+        setBaselineScreenshot(screenshot);
+      } else {
+        console.warn('[visual-regression] Could not capture baseline -- cross-origin iframe');
+      }
+      return;
+    }
+
+    setIsComparing(true);
+    try {
+      const afterShot = await capturePreviewScreenshot(iframe);
+      if (!afterShot) {
+        console.warn('[visual-regression] Could not capture comparison screenshot');
+        return;
+      }
+      const result = await compareScreenshots(baselineScreenshot, afterShot);
+      if (result.hasRegression) {
+        setRegressionResult(result);
+      }
+      setBaselineScreenshot(afterShot);
+    } finally {
+      setIsComparing(false);
+    }
+  }, [baselineScreenshot]);
+
   const handleDetach = useCallback(() => {
     const previewUrl = buildPreviewUrl({ projectId, path: effectivePath, mode: previewMode, parityDiagnostic: true });
     const features = 'width=1280,height=900,menubar=no,toolbar=no,location=no,status=no';
@@ -820,6 +857,27 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               </svg>
             </button>
           )}
+
+          {/* Visual regression compare */}
+          <button
+            type="button"
+            onClick={handleVisualCompare}
+            disabled={isComparing}
+            className={`rounded p-1.5 transition-colors ${
+              baselineScreenshot
+                ? 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20'
+                : 'ide-text-muted hover:ide-text-2 ide-hover'
+            } disabled:opacity-50 disabled:cursor-wait`}
+            title={baselineScreenshot ? 'Compare with baseline' : 'Capture baseline screenshot'}
+            aria-label={baselineScreenshot ? 'Compare with baseline' : 'Capture baseline screenshot'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+          </button>
         </div>
 
         {/* Center: device breakpoint + page type dropdown + refresh icon */}
@@ -1230,6 +1288,15 @@ export const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(
               onSubmit={(data) => { onAnnotation?.(data); setAnnotating(false); }}
               previewPath={effectivePath}
             />
+          )}
+          {/* Visual regression alert */}
+          {regressionResult && (
+            <div className="absolute bottom-3 left-3 right-3 z-10">
+              <RegressionAlert
+                result={regressionResult}
+                onDismiss={() => setRegressionResult(null)}
+              />
+            </div>
           )}
         </div>
       )}

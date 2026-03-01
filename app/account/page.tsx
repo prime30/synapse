@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AreaChart,
@@ -14,10 +14,10 @@ import {
 import { ArrowRight, Plug, ShoppingBag } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/*  Mock data helpers                                                  */
+/*  Chart data helper                                                  */
 /* ------------------------------------------------------------------ */
 
-function generateMockChart(days: number) {
+function generateEmptyChart(days: number) {
   const data: { date: string; requests: number }[] = [];
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
@@ -25,16 +25,11 @@ function generateMockChart(days: number) {
     d.setDate(d.getDate() - i);
     data.push({
       date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      requests: Math.floor(Math.random() * 16),
+      requests: 0,
     });
   }
   return data;
 }
-
-const MOCK_USAGE = { used: 0, total: 50 };
-const MOCK_COST = 0;
-const MOCK_PLAN = 'Starter';
-const MOCK_RENEWAL = 'Mar 12, 2026';
 
 /* ------------------------------------------------------------------ */
 /*  Circular Progress Ring                                             */
@@ -112,8 +107,77 @@ const RANGES = [
 
 export default function AccountOverviewPage() {
   const [range, setRange] = useState<number>(30);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState({ used: 0, total: 50 });
+  const [cost, setCost] = useState(0);
+  const [plan, setPlan] = useState('Starter');
+  const [renewal, setRenewal] = useState('');
 
-  const chartData = useMemo(() => generateMockChart(range), [range]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/billing/subscription');
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        if (cancelled) return;
+        const sub = data.data ?? data;
+
+        const breakdown: { requests: number; cost: number }[] = sub.usageBreakdown ?? [];
+        const totalRequests = breakdown.reduce((s, r) => s + r.requests, 0);
+        const totalCost = breakdown.reduce((s, r) => s + r.cost, 0);
+
+        setUsage({ used: totalRequests, total: sub.planLimits?.requests ?? 50 });
+        setCost(totalCost);
+
+        const planName = sub.plan ?? 'starter';
+        setPlan(planName.charAt(0).toUpperCase() + planName.slice(1));
+
+        const renewDate = new Date();
+        renewDate.setDate(renewDate.getDate() + 30);
+        setRenewal(
+          renewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        );
+      } catch {
+        if (!cancelled) setError('Failed to load account data.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const chartData = useMemo(() => generateEmptyChart(range), [range]);
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-stone-200 dark:bg-white/10 rounded" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="h-32 bg-stone-200 dark:bg-white/10 rounded-lg" />
+            <div className="h-32 bg-stone-200 dark:bg-white/10 rounded-lg" />
+          </div>
+          <div className="h-64 bg-stone-200 dark:bg-white/10 rounded-lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-3">
+        <p className="text-red-500">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-accent hover:opacity-80 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -129,13 +193,13 @@ export default function AccountOverviewPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Agent Requests */}
         <div className="ide-surface-panel ide-border rounded-lg p-6 flex items-center gap-5">
-          <ProgressRing used={MOCK_USAGE.used} total={MOCK_USAGE.total} />
+          <ProgressRing used={usage.used} total={usage.total} />
           <div>
             <p className="text-sm ide-text-muted">Agent Requests</p>
             <p className="text-xl font-semibold mt-1">
-              {MOCK_USAGE.used}{' '}
+              {usage.used}{' '}
               <span className="ide-text-muted text-base font-normal">
-                / {MOCK_USAGE.total}
+                / {usage.total}
               </span>
             </p>
           </div>
@@ -149,7 +213,7 @@ export default function AccountOverviewPage() {
           <div>
             <p className="text-sm ide-text-muted">Estimated Cost</p>
             <p className="text-xl font-semibold mt-1">
-              ${MOCK_COST.toFixed(2)}
+              ${cost.toFixed(2)}
             </p>
           </div>
         </div>
@@ -232,10 +296,12 @@ export default function AccountOverviewPage() {
         {/* Current Plan */}
         <div className="ide-surface-panel ide-border rounded-lg p-6">
           <h3 className="text-sm font-medium ide-text-muted">Current Plan</h3>
-          <p className="text-xl font-semibold mt-2">{MOCK_PLAN}</p>
-          <p className="text-xs ide-text-muted mt-1">
-            Renews {MOCK_RENEWAL}
-          </p>
+          <p className="text-xl font-semibold mt-2">{plan}</p>
+          {renewal && (
+            <p className="text-xs ide-text-muted mt-1">
+              Renews {renewal}
+            </p>
+          )}
           <Link
             href="/account/billing"
             className="inline-flex items-center gap-1.5 mt-4 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"

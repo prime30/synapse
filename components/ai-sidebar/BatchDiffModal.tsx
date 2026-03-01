@@ -16,6 +16,7 @@ export interface BatchDiffEntry {
   newContent: string;
   /** Short description of what changed. */
   description?: string;
+  changeType?: 'create' | 'edit' | 'delete';
 }
 
 interface BatchDiffModalProps {
@@ -98,6 +99,12 @@ function FileEntryItem({
           <span className="text-xs font-mono ide-text-2 truncate">
             {entry.fileName}
           </span>
+          {(() => {
+            const type = entry.changeType ?? (!entry.originalContent ? 'create' : 'edit');
+            if (type === 'create') return <span className="flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold bg-[#28CD56]/10 text-[#28CD56]">New</span>;
+            if (type === 'delete') return <span className="flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold bg-red-500/10 text-red-500 dark:text-red-400">Deleted</span>;
+            return null;
+          })()}
         </button>
 
         {/* Description */}
