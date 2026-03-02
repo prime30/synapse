@@ -44,11 +44,13 @@ function StepLine({ active }: { active: boolean }) {
 export function PreviewOnboarding({
   connected,
   hasThemeId,
+  syncStatus,
   hasFiles,
   onConnectStore,
   onImportTheme,
 }: PreviewOnboardingProps) {
-  const step1Done = connected;
+  const isSyncing = syncStatus === 'syncing' || syncStatus === 'connected';
+  const step1Done = connected || isSyncing;
   const step2Done = connected && hasFiles;
   const step3Active = step2Done && !hasThemeId;
 
@@ -108,7 +110,16 @@ export function PreviewOnboarding({
               <p className={`text-sm font-medium ${step2State === 'pending' ? 'ide-text-muted' : 'ide-text'}`}>
                 Import your theme
               </p>
-              {step2State === 'active' && (
+              {step2State === 'active' && isSyncing && !hasFiles && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
+                  </span>
+                  <span className="text-xs ide-text-muted">Syncing theme files&hellip;</span>
+                </div>
+              )}
+              {step2State === 'active' && !isSyncing && (
                 <button
                   type="button"
                   onClick={onImportTheme}
