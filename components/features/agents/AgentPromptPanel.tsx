@@ -280,7 +280,7 @@ function parseSSEEvent(chunk: string): SSEEvent | null {
 function splitStreamParts(input: string, carry: string): { parts: string[]; remainder: string } {
   const combined = carry + input;
   const parts: string[] = [];
-  const eventRegex = /data:\s*\{[^\n]*\}\r?\n\r?\n/g;
+  const eventRegex = /(?:event:\s*\S+\r?\n)?data:\s*\{[^\n]*\}\r?\n\r?\n/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -298,13 +298,23 @@ function splitStreamParts(input: string, carry: string): { parts: string[]; rema
   if (!tail) return { parts, remainder: '' };
 
   // Buffer a likely partial SSE frame at the end for the next read.
+  // Look for incomplete frames starting with either "event:" or "data:" lines.
+  const lastEventIdx = tail.lastIndexOf('event:');
   const lastDataIdx = tail.lastIndexOf('data:');
-  if (lastDataIdx >= 0) {
-    const maybeFrame = tail.slice(lastDataIdx);
+  const frameStart = lastEventIdx >= 0 && (lastDataIdx < 0 || lastEventIdx < lastDataIdx)
+    ? lastEventIdx
+    : lastDataIdx;
+  if (frameStart >= 0) {
+    const maybeFrame = tail.slice(frameStart);
     const hasJsonStart = maybeFrame.includes('{');
     const hasFrameEnd = /\r?\n\r?\n/.test(maybeFrame);
     if (hasJsonStart && !hasFrameEnd) {
-      const prefix = tail.slice(0, lastDataIdx);
+      const prefix = tail.slice(0, frameStart);
+      if (prefix) parts.push(prefix);
+      return { parts, remainder: maybeFrame };
+    }
+    if (maybeFrame.startsWith('event:') && !maybeFrame.includes('data:')) {
+      const prefix = tail.slice(0, frameStart);
       if (prefix) parts.push(prefix);
       return { parts, remainder: maybeFrame };
     }
