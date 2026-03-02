@@ -1722,12 +1722,14 @@ export function AgentPromptPanel({
               if (sseEvent.type === 'token_budget_update') {
                 const total = sseEvent.used + sseEvent.remaining;
                 const ratio = total > 0 ? sseEvent.used / total : 0;
-                setContextPressure({
-                  usedTokens: sseEvent.used,
-                  maxTokens: total,
-                  percentage: Math.round(ratio * 100),
-                  level: ratio > 0.9 ? 'critical' : ratio > 0.7 ? 'warning' : 'warning',
-                });
+                if (ratio > 0.7) {
+                  setContextPressure({
+                    usedTokens: sseEvent.used,
+                    maxTokens: total,
+                    percentage: Math.round(ratio * 100),
+                    level: ratio > 0.9 ? 'critical' : 'warning',
+                  });
+                }
                 continue;
               }
               if (sseEvent.type === 'context_file_loaded') {

@@ -831,12 +831,16 @@ export async function streamFlat(
       totalCacheWriteTokens += usage.cacheCreationInputTokens ?? 0;
     } catch { /* usage collection non-critical */ }
 
-    onProgress?.({
-      type: 'token_budget_update',
-      used: totalInputTokens + totalOutputTokens,
-      remaining: Math.max(0, MAX_ITERATIONS * 4096 - (totalInputTokens + totalOutputTokens)),
-      iteration,
-    });
+    {
+      const budgetTotal = 180_000;
+      const currentIterTokens = budgeted.totalTokens;
+      onProgress?.({
+        type: 'token_budget_update',
+        used: currentIterTokens,
+        remaining: Math.max(0, budgetTotal - currentIterTokens),
+        iteration,
+      });
+    }
 
     // ── Execute tools (parallel where safe) ─────────────────────────
     if (pendingTools.length > 0) {

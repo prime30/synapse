@@ -2689,12 +2689,16 @@ export async function streamV2(
         }
       } catch { /* getUsage may fail if stream errored */ }
 
-      onProgress?.({
-        type: 'token_budget_update',
-        used: totalInputTokens + totalOutputTokens,
-        remaining: Math.max(0, MAX_ITERATIONS * 4096 - (totalInputTokens + totalOutputTokens)),
-        iteration,
-      });
+      {
+        const budgetTotal = AI_FEATURES.compaction ? 250_000 : 180_000;
+        const currentIterTokens = budgeted.totalTokens;
+        onProgress?.({
+          type: 'token_budget_update',
+          used: currentIterTokens,
+          remaining: Math.max(0, budgetTotal - currentIterTokens),
+          iteration,
+        });
+      }
 
       // Treat provider stream interruptions as incomplete execution, never as normal completion.
       const terminalStreamError = await streamResult.getTerminalError?.();
