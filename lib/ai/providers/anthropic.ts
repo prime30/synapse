@@ -108,6 +108,10 @@ function buildHeaders(apiKey: string, options?: Partial<AICompletionOptions>): R
   if (AI_FEATURES.contextEditing) {
     betaFeatures.push('context-management-2025-06-27');
   }
+  betaFeatures.push('token-efficient-tools-2025-02-19');
+  if (AI_FEATURES.compaction) {
+    betaFeatures.push('compact-2026-01-12');
+  }
   if (betaFeatures.length > 0) {
     headers['anthropic-beta'] = betaFeatures.join(',');
   }

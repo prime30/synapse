@@ -14,6 +14,7 @@ export type RailPhase =
   | 'planning'
   | 'executing'
   | 'reviewing'
+  | 'recovery'
   | 'complete';
 
 export type RailPhaseStatus =
@@ -76,6 +77,7 @@ export const RAIL_PHASE_LABELS: Record<RailPhase, string> = {
   planning: 'Planning',
   executing: 'Executing',
   reviewing: 'Reviewing',
+  recovery: 'Recovery',
   complete: 'Complete',
 };
 
@@ -110,6 +112,8 @@ const PHASE_MAP: Record<CoordinatorPhase, RailPhase> = {
   validating: 'reviewing',
   clarification: 'understanding',
   budget_warning: 'understanding',
+  recovery: 'recovery',
+  error: 'recovery',
   complete: 'complete',
 };
 

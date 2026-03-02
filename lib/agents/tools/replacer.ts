@@ -396,6 +396,8 @@ export interface ReplaceResult {
   content: string;
   replacerUsed: string;
   matchCount: number;
+  /** Zero-based index of the replacer tier that matched (0 = exact, 8 = multi-occurrence) */
+  tierIndex: number;
 }
 
 /**
@@ -441,6 +443,7 @@ export function replace(
           content: content.replaceAll(search, newString),
           replacerUsed: replacerNames[r],
           matchCount,
+          tierIndex: r,
         };
       }
 
@@ -452,6 +455,7 @@ export function replace(
         content: content.substring(0, index) + newString + content.substring(index + search.length),
         replacerUsed: replacerNames[r],
         matchCount: 1,
+        tierIndex: r,
       };
     }
   }

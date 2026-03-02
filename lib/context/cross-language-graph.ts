@@ -143,6 +143,95 @@ export class ThemeDependencyGraph {
     return refs.map(r => ({ source: r.file, type: r.type }));
   }
 
+  /**
+   * Return the full node map (path → GraphNode).
+   * Used by PageRank and other whole-graph algorithms.
+   */
+  getAllNodes(): Map<string, GraphNode> {
+    return this.nodes;
+  }
+
+  /**
+   * Return all edges in the graph.
+   * Used by PageRank to build adjacency lists.
+   */
+  getAllEdges(): GraphEdge[] {
+    return this.edges;
+  }
+
+  /**
+   * Compute PageRank scores for all nodes.
+   *
+   * Damping factor d=0.85, converge when maxDelta < 0.001 or 20 iterations.
+   * Handles dangling nodes (no outgoing edges) by redistributing evenly.
+   * Accepts optional bias map to weight starting ranks (e.g. 50x for active files).
+   */
+  computePageRank(bias?: Map<string, number>): Map<string, number> {
+    const nodes = this.getAllNodes();
+    const edges = this.getAllEdges();
+    const N = nodes.size;
+    if (N === 0) return new Map();
+
+    const d = 0.85;
+    const MAX_ITER = 20;
+    const EPSILON = 0.001;
+
+    const outDegree = new Map<string, number>();
+    const inLinks = new Map<string, string[]>();
+
+    for (const path of nodes.keys()) {
+      outDegree.set(path, 0);
+      inLinks.set(path, []);
+    }
+
+    for (const edge of edges) {
+      if (!nodes.has(edge.source) || !nodes.has(edge.target)) continue;
+      outDegree.set(edge.source, (outDegree.get(edge.source) ?? 0) + 1);
+      inLinks.get(edge.target)?.push(edge.source);
+    }
+
+    let rank = new Map<string, number>();
+    if (bias && bias.size > 0) {
+      let totalBias = 0;
+      for (const path of nodes.keys()) {
+        const w = bias.get(path) ?? 1;
+        rank.set(path, w);
+        totalBias += w;
+      }
+      for (const [path, r] of rank) rank.set(path, r / totalBias);
+    } else {
+      for (const path of nodes.keys()) rank.set(path, 1 / N);
+    }
+
+    for (let iter = 0; iter < MAX_ITER; iter++) {
+      const newRank = new Map<string, number>();
+      let danglingSum = 0;
+
+      for (const [path] of nodes) {
+        if ((outDegree.get(path) ?? 0) === 0) {
+          danglingSum += rank.get(path) ?? 0;
+        }
+      }
+
+      let maxDelta = 0;
+      for (const [path] of nodes) {
+        let incoming = 0;
+        for (const src of inLinks.get(path) ?? []) {
+          const srcOut = outDegree.get(src) ?? 1;
+          incoming += (rank.get(src) ?? 0) / srcOut;
+        }
+        const nr = (1 - d) / N + d * (incoming + danglingSum / N);
+        newRank.set(path, nr);
+        maxDelta = Math.max(maxDelta, Math.abs(nr - (rank.get(path) ?? 0)));
+      }
+
+      rank = newRank;
+      if (maxDelta < EPSILON) break;
+    }
+
+    return rank;
+  }
+
   // ── Internal extraction ──────────────────────────────────────────────
 
   private extractLiquidEdges(filePath: string, content: string) {

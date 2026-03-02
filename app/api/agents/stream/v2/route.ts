@@ -370,6 +370,7 @@ export async function POST(req: NextRequest) {
           }
 
           let firstTokenRecorded = false;
+          const pendingToolCalls = new Map<string, string>();
           const maxParallelSpecialists = Math.min(
             Math.max(Number(body.subagentCount) || 3, 1),
             4,
@@ -400,13 +401,22 @@ export async function POST(req: NextRequest) {
               }
               emitEvent({ type: 'content_chunk', chunk });
             },
-            onToolEvent: (event) => emitEvent(event),
+            onToolEvent: (event) => {
+              if (event.type === 'tool_call' && event.id) {
+                pendingToolCalls.set(event.id, event.name);
+              }
+              if ((event.type === 'tool_result') && event.id) {
+                pendingToolCalls.delete(event.id);
+              }
+              emitEvent(event);
+            },
             onReasoningChunk: (agent, chunk) => {
               emitEvent({ type: 'reasoning', agent, text: chunk });
             },
             shopifyConnectionId: shopifyInfo.connectionId,
             themeId: shopifyInfo.themeId,
             deadlineMs: requestStart,
+            signal: req.signal,
           };
 
           const coordinatorFn = body.useFlatPipeline ? streamFlat : streamV2;
@@ -522,6 +532,8 @@ export async function POST(req: NextRequest) {
               isByok: usageCheck.isByok,
               isIncluded: usageCheck.isIncluded,
               requestType: 'agent' as const,
+              cacheReadInputTokens: result.usage.totalCacheReadTokens ?? 0,
+              cacheCreationInputTokens: result.usage.totalCacheWriteTokens ?? 0,
             }]).catch((err) =>
               console.error('[V2 Stream] usage recording failed:', err),
             );
@@ -690,6 +702,25 @@ export async function POST(req: NextRequest) {
             if (fileNames.length > 8) changeSummaryLines.push(`...and ${fileNames.length - 8} more file(s)`);
           }
 
+          // ── Token optimization tracking SSE ──────────────────────────
+          if (result.usage) {
+            const u = result.usage as Record<string, unknown>;
+            const cacheHitRate = result.usage.totalInputTokens > 0
+              ? (result.usage.totalCacheReadTokens ?? 0) / ((result.usage.totalInputTokens ?? 0) + (result.usage.totalCacheReadTokens ?? 0))
+              : 0;
+            emitEvent({
+              type: 'token_optimization',
+              microcompaction: {
+                cold: (u.microcompactionColdCount as number) ?? 0,
+                rereads: (u.microcompactionRereadCount as number) ?? 0,
+                savedTokens: (u.microcompactionTokensSaved as number) ?? 0,
+              },
+              cache: { hitRate: Math.round(cacheHitRate * 100) / 100 },
+              compaction: ((u.compactionEvents as number) ?? 0) > 0,
+              activeFlags: (u.activeOptimizations as string[]) ?? [],
+            });
+          }
+
           emitEvent({
             type: 'execution_outcome',
             executionId,
@@ -717,6 +748,20 @@ export async function POST(req: NextRequest) {
             ),
             totalFiles: fileContexts.length,
           });
+
+          // Flush orphaned tool calls that never got results
+          if (pendingToolCalls.size > 0) {
+            for (const [toolId, toolName] of pendingToolCalls) {
+              emitEvent({
+                type: 'tool_result',
+                name: toolName,
+                id: toolId,
+                result: 'Stream ended before tool result was received.',
+                isError: true,
+              });
+            }
+            pendingToolCalls.clear();
+          }
 
           emit(formatSSEDone());
         } catch (error) {

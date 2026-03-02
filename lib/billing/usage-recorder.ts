@@ -14,6 +14,10 @@ export interface RecordUsageParams {
   isByok: boolean;
   isIncluded: boolean;
   requestType: 'agent' | 'completion' | 'review' | 'summary';
+  /** Tokens served from Anthropic prompt cache (billed at ~10% of input rate). */
+  cacheReadInputTokens?: number;
+  /** Tokens written to Anthropic prompt cache (billed at ~125% of input rate). */
+  cacheCreationInputTokens?: number;
 }
 
 /**
@@ -49,6 +53,8 @@ export async function recordUsage(params: RecordUsageParams): Promise<void> {
         is_byok: params.isByok,
         is_included: params.isIncluded,
         request_type: params.requestType,
+        cache_read_input_tokens: params.cacheReadInputTokens ?? 0,
+        cache_creation_input_tokens: params.cacheCreationInputTokens ?? 0,
       });
 
     if (insertError) {

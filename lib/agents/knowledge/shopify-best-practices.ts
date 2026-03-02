@@ -202,27 +202,60 @@ export const SETTINGS_UX = `## Settings UX Guidelines
 - **Conditional settings**: Use for progressive disclosure. Limit to 2 levels deep. Code defensively — conditional settings still evaluate in Liquid even when hidden.
 - **Optimistic UI**: Update small UI elements client-side before server response when API success is highly certain (e.g., cart count after add-to-cart). Never optimistically update computed values (cart total, product count).`;
 
+// --- Core vs Supplementary classification ---
+// Core modules stay in the system prompt (always available).
+// Supplementary modules are served via the get_knowledge tool when ENABLE_KNOWLEDGE_TOOL is on.
+
+export const CORE_KNOWLEDGE = [
+  SCHEMA_BEST_PRACTICES,
+  ACCESSIBILITY_REQUIREMENTS,
+  PERFORMANCE_PATTERNS,
+  THEME_ARCHITECTURE,
+].join('\n\n');
+
+export const SUPPLEMENTARY_MODULES: Record<string, string> = {
+  dawn_conventions: DAWN_CONVENTIONS,
+  diagnostics: DIAGNOSTIC_REASONING,
+  settings_ux: SETTINGS_UX,
+  css: CSS_ARCHITECTURE,
+  javascript: JS_PATTERNS,
+};
+
+export const ALL_SUPPLEMENTARY = Object.values(SUPPLEMENTARY_MODULES).join('\n\n');
+
 // --- Helper ---
 
-export function getKnowledgeForAgent(agentType: string): string {
+export function getKnowledgeForAgent(agentType: string, onDemandEnabled = false): string {
   const blocks: string[] = [];
   switch (agentType) {
     case 'project_manager':
     case 'review':
-      return ALL_KNOWLEDGE;
+      return onDemandEnabled ? CORE_KNOWLEDGE : ALL_KNOWLEDGE;
     case 'liquid':
-      blocks.push(SCHEMA_BEST_PRACTICES, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, THEME_ARCHITECTURE, SETTINGS_UX);
+      blocks.push(SCHEMA_BEST_PRACTICES, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, THEME_ARCHITECTURE);
+      if (!onDemandEnabled) blocks.push(SETTINGS_UX);
       break;
     case 'css':
-      blocks.push(DAWN_CONVENTIONS, CSS_ARCHITECTURE, ACCESSIBILITY_REQUIREMENTS, PERFORMANCE_PATTERNS);
+      blocks.push(ACCESSIBILITY_REQUIREMENTS, PERFORMANCE_PATTERNS);
+      if (!onDemandEnabled) blocks.push(DAWN_CONVENTIONS, CSS_ARCHITECTURE);
       break;
     case 'javascript':
-      blocks.push(JS_PATTERNS, PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS, DIAGNOSTIC_REASONING);
+      blocks.push(PERFORMANCE_PATTERNS, ACCESSIBILITY_REQUIREMENTS);
+      if (!onDemandEnabled) blocks.push(JS_PATTERNS, DIAGNOSTIC_REASONING);
       break;
     default:
       return '';
   }
   return blocks.join('\n\n');
+}
+
+/**
+ * Retrieve a specific supplementary knowledge module by domain.
+ * Used by the get_knowledge tool handler.
+ */
+export function getSupplementaryKnowledge(domain: string): string {
+  if (domain === 'all_supplementary') return ALL_SUPPLEMENTARY;
+  return SUPPLEMENTARY_MODULES[domain] ?? `Unknown knowledge domain: ${domain}. Available: ${Object.keys(SUPPLEMENTARY_MODULES).join(', ')}, all_supplementary`;
 }
 
 // --- All Knowledge ---

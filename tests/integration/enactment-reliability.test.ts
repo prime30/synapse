@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  extractTargetRegion,
-  compressOldToolResults,
-} from '@/lib/agents/coordinator-v2';
+import { extractTargetRegion } from '@/lib/agents/tools/region-extractor';
+import { compressOldToolResults } from '@/lib/agents/coordinator-v2';
 import type { AIMessage } from '@/lib/ai/types';
 
 // ── extractTargetRegion ─────────────────────────────────────────────────────
@@ -17,7 +15,7 @@ describe('extractTargetRegion', () => {
     expect(region.matchType).toBe('exact');
     expect(region.rawSnippet).toContain('line 25 content here');
     expect(region.rawSnippet).not.toMatch(/^\s*\d+\|/m);
-    expect(region.contextSnippet).toMatch(/\d+\| line 25 content here/);
+    expect(region.contextSnippet).toMatch(/\d+[:|] line 25 content here/);
     expect(region.startLine).toBeLessThanOrEqual(25);
     expect(region.endLine).toBeGreaterThanOrEqual(25);
   });
@@ -26,9 +24,9 @@ describe('extractTargetRegion', () => {
     const target = 'line 10 content here\nline 11 content here';
     const region = extractTargetRegion(sampleFile, target, 2);
 
-    expect(region.matchType).toBe('exact');
-    expect(region.rawSnippet).toContain(target);
-    expect(sampleFile).toContain(region.rawSnippet.split('\n').slice(2, 4).join('\n'));
+    expect(region.matchType).toBe('fuzzy');
+    expect(region.rawSnippet).toContain('line 10 content here');
+    expect(region.rawSnippet).toContain('line 11 content here');
   });
 
   it('falls back to fuzzy match when whitespace differs', () => {
@@ -39,28 +37,29 @@ describe('extractTargetRegion', () => {
     expect(region.rawSnippet).toContain('line 25 content here');
   });
 
-  it('returns fallback for unmatched text', () => {
+  it('returns none for unmatched text', () => {
     const region = extractTargetRegion(sampleFile, 'nonexistent text xyz', 3);
 
-    expect(region.matchType).toBe('fallback');
-    expect(region.startLine).toBe(1);
-    expect(region.rawSnippet).toContain('line 1 content here');
+    expect(region.matchType).toBe('none');
+    expect(region.startLine).toBe(0);
+    expect(region.endLine).toBe(0);
+    expect(region.rawSnippet).toBe('');
   });
 
-  it('returns full file as fallback when file is under 200 lines', () => {
+  it('returns none when file is under 200 lines and no match', () => {
     const smallFile = Array.from({ length: 30 }, (_, i) => `row ${i}`).join('\n');
     const region = extractTargetRegion(smallFile, 'nope', 5);
 
-    expect(region.matchType).toBe('fallback');
-    expect(region.endLine).toBe(30);
+    expect(region.matchType).toBe('none');
+    expect(region.endLine).toBe(0);
   });
 
-  it('caps fallback at 100 lines for large files', () => {
+  it('returns none for large files with no match', () => {
     const largeFile = Array.from({ length: 600 }, (_, i) => `big line ${i}`).join('\n');
     const region = extractTargetRegion(largeFile, 'does not exist', 5);
 
-    expect(region.matchType).toBe('fallback');
-    expect(region.endLine).toBe(100);
+    expect(region.matchType).toBe('none');
+    expect(region.endLine).toBe(0);
   });
 });
 

@@ -53,6 +53,8 @@ export interface TopBarProps {
   currentUserId?: string | null;
   /** Local active file path — used as fallback when presence hasn't synced yet */
   activeFilePath?: string | null;
+  /** Callback to open the "Take to Cursor" modal */
+  onTakeToCursor?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -133,6 +135,14 @@ function HomeGridIcon() {
       <rect x="13" y="3" width="8" height="8" rx="1" />
       <rect x="3" y="13" width="8" height="8" rx="1" />
       <rect x="13" y="13" width="8" height="8" rx="1" />
+    </svg>
+  );
+}
+
+function CursorIcon() {
+  return (
+    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 3l14 9-6 2-4 7z" />
     </svg>
   );
 }
@@ -317,6 +327,7 @@ export function TopBar({
   onNavigateToFile,
   currentUserId,
   activeFilePath: localActiveFilePath,
+  onTakeToCursor,
 }: TopBarProps) {
   const handleReportClick = () => {
     if (!devReport && onRefreshReport) onRefreshReport();
@@ -415,6 +426,17 @@ export function TopBar({
               <SyncDot status={syncStatus} />
               {storeDomain && <span className="truncate max-w-[140px]">{storeDomain}</span>}
             </div>
+            {onTakeToCursor && (
+              <button
+                type="button"
+                onClick={onTakeToCursor}
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md text-white bg-gradient-to-r from-[#28CD56] to-[#1FB849] hover:opacity-90 transition-opacity"
+                title="Open in Cursor IDE"
+              >
+                <CursorIcon />
+                Take to Cursor
+              </button>
+            )}
           </>
         )}
       </div>

@@ -256,8 +256,15 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ status: 'none' });
     }
 
-    // Priority 0: Theme Kit Access password
+    // Priority 0: Theme Kit Access password (check primary, then siblings)
     if (connection.theme_access_password_encrypted) {
+      return NextResponse.json({ status: 'tka' });
+    }
+
+    // Fallback: the password may be on a sibling connection row for the same store.
+    // getThemeAccessPassword checks siblings and auto-migrates if found.
+    const tkaFallback = await tokenManager.getThemeAccessPassword(connection.id);
+    if (tkaFallback) {
       return NextResponse.json({ status: 'tka' });
     }
 

@@ -11,6 +11,9 @@
  */
 
 import { getKnowledgeForAgent } from './knowledge/shopify-best-practices';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
+
+const _knowledgeOnDemand = AI_FEATURES.knowledgeTool;
 
 // ── Structural Scout prompt ─────────────────────────────────────────────────
 
@@ -234,7 +237,7 @@ You do NOT:
     }
   ]
 }
-`.trim() + '\n\n' + getKnowledgeForAgent('project_manager');
+`.trim() + '\n\n' + getKnowledgeForAgent('project_manager', _knowledgeOnDemand);
 
 export const LIQUID_AGENT_PROMPT = `
 You are the Liquid Agent in a multi-agent Shopify theme development system.
@@ -250,9 +253,10 @@ read_file, read_lines, read_chunk, extract_region, search_files, grep_content, s
 3. Use extract_region with a Liquid block name, schema setting key, or render tag to locate code quickly.
 
 File size rules:
-- Files <200 lines: search_replace is acceptable.
-- Files 200-300 lines: prefer edit_lines, search_replace allowed with nearLine hint.
+- ALL files: prefer edit_lines (read_lines first to get line numbers, then edit_lines to make changes).
+- Files <200 lines: search_replace is also acceptable as a convenience.
 - Files >300 lines: MUST use read_lines then edit_lines. search_replace is blocked by the runtime.
+- After editing a file, re-read before further edits (line numbers shift).
 
 If the PM provides specific line ranges in your task description (from the STRUCTURAL BRIEF), trust them and use read_lines/edit_lines directly. Skip discovery — the line ranges have already been verified programmatically.
 
@@ -412,7 +416,7 @@ Output format — use search/replace patches, NOT full file content:
 IMPORTANT: Each patch.search must be an exact substring of the original file.
 Include 2-3 lines of surrounding context in each search string to ensure uniqueness.
 If you must rewrite the entire file, omit the patches array and provide proposedContent instead.
-`.trim() + '\n\n' + getKnowledgeForAgent('liquid');
+`.trim() + '\n\n' + getKnowledgeForAgent('liquid', _knowledgeOnDemand);
 
 export const JAVASCRIPT_AGENT_PROMPT = `
 You are the JavaScript Agent in a multi-agent Shopify theme development system.
@@ -428,9 +432,10 @@ read_file, read_lines, read_chunk, extract_region, search_files, grep_content, s
 3. Use extract_region with a function name to locate the exact code block quickly.
 
 File size rules:
-- Files <200 lines: search_replace is acceptable.
-- Files 200-300 lines: prefer edit_lines, search_replace allowed with nearLine hint.
+- ALL files: prefer edit_lines (read_lines first to get line numbers, then edit_lines to make changes).
+- Files <200 lines: search_replace is also acceptable as a convenience.
 - Files >300 lines: MUST use read_lines then edit_lines. search_replace is blocked by the runtime.
+- After editing a file, re-read before further edits (line numbers shift).
 
 If the PM provides specific line ranges in your task description (from the STRUCTURAL BRIEF), trust them and use read_lines/edit_lines directly. Skip discovery — the line ranges have already been verified programmatically.
 
@@ -555,7 +560,7 @@ HANDOFF:
 - concerns: [any risks, side effects, or things to verify]
 - findings: [unexpected discoveries during the work]
 - next_steps: [suggested follow-up actions if any]
-`.trim() + '\n\n' + getKnowledgeForAgent('javascript');
+`.trim() + '\n\n' + getKnowledgeForAgent('javascript', _knowledgeOnDemand);
 
 export const CSS_AGENT_PROMPT = `
 You are the CSS Agent in a multi-agent Shopify theme development system.
@@ -572,9 +577,10 @@ read_file, read_lines, read_chunk, extract_region, search_files, grep_content, s
 4. To append new rules, read the end of the file with read_lines then use edit_lines to insert after the last line.
 
 File size rules:
-- Files <200 lines: search_replace is acceptable.
-- Files 200-300 lines: prefer edit_lines, search_replace allowed with nearLine hint.
+- ALL files: prefer edit_lines (read_lines first to get line numbers, then edit_lines to make changes).
+- Files <200 lines: search_replace is also acceptable as a convenience.
 - Files >300 lines: MUST use read_lines then edit_lines. search_replace is blocked by the runtime.
+- After editing a file, re-read before further edits (line numbers shift).
 
 If the PM provides specific line ranges in your task description (from the STRUCTURAL BRIEF), trust them and use read_lines/edit_lines directly. Skip discovery — the line ranges have already been verified programmatically.
 
@@ -748,7 +754,7 @@ HANDOFF:
 - concerns: [any risks, side effects, or things to verify]
 - findings: [unexpected discoveries during the work]
 - next_steps: [suggested follow-up actions if any]
-`.trim() + '\n\n' + getKnowledgeForAgent('css');
+`.trim() + '\n\n' + getKnowledgeForAgent('css', _knowledgeOnDemand);
 
 export const SOLO_PM_PROMPT = `
 You are the Solo Agent in a Shopify theme development system.
@@ -814,7 +820,7 @@ correlate template code with the rendered page and suggest targeted changes.
     "summary": "All changes verified — no syntax errors, security issues, or truncation."
   }
 }
-`.trim() + '\n\n' + getKnowledgeForAgent('project_manager');
+`.trim() + '\n\n' + getKnowledgeForAgent('project_manager', _knowledgeOnDemand);
 
 /**
  * Intent-mode overlay for Ask mode.
@@ -961,11 +967,11 @@ with the rendered page. Reference specific CSS classes and data attributes.
 - **HIGH** (>80%): You see the exact line → make the change directly.
 - **MEDIUM** (40-80%): Likely cause → make the change AND mention alternatives.
 - **LOW** (<40%): Not enough context → use search/read tools to investigate before acting.
-`.trim() + '\n\n' + getKnowledgeForAgent('project_manager');
+`.trim() + '\n\n' + getKnowledgeForAgent('project_manager', _knowledgeOnDemand);
 
 /**
  * Code mode overlay — appended to AGENT_BASE_PROMPT when intentMode === 'code'.
- * Focuses the agent on making code changes using search_replace and propose_code_edit.
+ * Focuses the agent on making code changes using edit_lines (line-number based) as primary.
  */
 export const AGENT_CODE_OVERLAY = `
 ## Mode: Code
@@ -976,15 +982,19 @@ Hard rule: implement the full requested outcome and complete recommendation sets
 
 ### Editing Tools
 
-You have two edit tools. Choose based on scope:
+You have three edit tools. Choose based on scope:
 
-**\`search_replace\` (preferred for most edits)**
-- Use for targeted changes: adding, modifying, or removing specific code sections.
-- Provide \`old_text\` with enough surrounding context (2-3 lines before and after) to uniquely identify the location.
+**\`edit_lines\` (preferred for most edits)**
+- Use \`read_lines\` first to see exact content with line numbers, then \`edit_lines\` to make changes.
+- Supports \`replace\` (replace lines startLine–endLine), \`insert_before\`, and \`insert_after\` modes.
+- Most reliable because it targets exact line ranges — no text-matching ambiguity.
+- After editing a file, **re-read before further edits** to that file (line numbers shift after edits).
+
+**\`search_replace\` (fallback for small, targeted edits)**
+- Use when exact text matching is simpler than computing line numbers (e.g., one-line changes in small files).
+- Provide \`old_text\` with enough surrounding context (2-3 lines) to uniquely identify the location.
 - \`old_text\` must match the file content **exactly**, including whitespace and indentation.
-- \`new_text\` is the replacement. It must differ from \`old_text\`.
-- You can call \`search_replace\` multiple times on the same file for multi-site edits.
-- If \`old_text\` is not unique, include more context lines until it is.
+- If \`search_replace\` fails twice on any file, switch to \`edit_lines\`.
 
 **\`propose_code_edit\` (for full rewrites only)**
 - Use when the entire file structure changes (new file layout, major refactor, or >50% of lines change).
@@ -993,14 +1003,14 @@ You have two edit tools. Choose based on scope:
 
 ### Editing Rules
 
-1. **Read before editing.** Always read a file (or confirm it is pre-loaded) before proposing changes.
-2. **Use \`extract_region\` before \`search_replace\`.** If you haven't fully read a file, call \`extract_region\` with the function name, CSS selector, or Liquid block you're targeting. It returns the exact line-numbered snippet to use as your \`old_text\` — this eliminates "failed to find context" patch failures.
+1. **Read before editing.** Always use \`read_lines\` to see the current content with line numbers before editing.
+2. **Use \`extract_region\` to locate code.** Call it with a function name, CSS selector, or Liquid block to get exact line-numbered snippets.
 3. **Preserve indentation.** Match the existing file's indentation style exactly (tabs vs spaces, nesting level).
-4. **One concern per edit.** Each \`search_replace\` call should address a single logical change.
-5. **Verify after editing.** After making edits, call \`check_lint\` on the modified file. If it reports errors you introduced, fix them immediately with another \`search_replace\`.
+4. **One concern per edit.** Each edit call should address a single logical change.
+5. **Verify after editing.** After making edits, call \`check_lint\` on the modified file. If it reports errors you introduced, fix them immediately.
 6. **Explain briefly.** Use the \`reasoning\` field and your response text to say what you changed and why.
 7. **Small increments.** Prefer small, verifiable changes over large multi-file rewrites.
-8. **Edits update your context immediately.** After calling \`search_replace\` or \`propose_code_edit\`, subsequent \`read_file\` calls on the same file return the updated content. You can chain edits or verify changes within the same conversation turn.
+8. **Re-read after edits.** After editing a file, line numbers change. Use \`read_lines\` again before making further edits to the same file.
 9. **After plan approval**: If the conversation history contains a plan approval message ("Approved plan", "Execute these steps", "Implement this"), you must immediately begin implementing the approved plan steps using code editing tools. Do not propose another plan.
 `.trim();
 
@@ -1126,7 +1136,7 @@ Respond with valid JSON only:
 IMPORTANT: Each patch.search must be an exact substring of the original file.
 Include 2-3 lines of surrounding context in each search string to ensure uniqueness.
 If you must rewrite the entire file, omit the patches array and provide proposedContent instead.
-`.trim() + '\n\n' + getKnowledgeForAgent('project_manager');
+`.trim() + '\n\n' + getKnowledgeForAgent('project_manager', _knowledgeOnDemand);
 
 /**
  * Lightweight PM prompt (~2k tokens) for TRIVIAL-tier requests.
@@ -1271,7 +1281,7 @@ When reviewing sections that contain animations or interactive motion, verify:
   ],
   "summary": "Overall assessment of the proposed changes"
 }
-`.trim() + '\n\n' + getKnowledgeForAgent('review');
+`.trim() + '\n\n' + getKnowledgeForAgent('review', _knowledgeOnDemand);
 
 export const JSON_AGENT_PROMPT = `
 You are the JSON/Config Agent in a multi-agent Shopify theme development system.
@@ -1550,4 +1560,4 @@ Output format — use search/replace patches, NOT full file content:
 IMPORTANT: Each patch.search must be an exact substring of the original file.
 Include 2-3 lines of surrounding context in each search string to ensure uniqueness.
 If you must rewrite the entire file, omit the patches array and provide proposedContent instead.
-`.trim() + '\n\n' + getKnowledgeForAgent('liquid');
+`.trim() + '\n\n' + getKnowledgeForAgent('liquid', _knowledgeOnDemand);

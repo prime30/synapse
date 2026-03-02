@@ -52,6 +52,31 @@ export function calculateCostCents(
 }
 
 /**
+ * Calculate cost in cents with Anthropic cache-aware pricing.
+ * Cache reads are billed at 10% of input rate.
+ * Cache creation is billed at 125% of input rate.
+ * Non-cached input tokens are billed at the standard input rate.
+ */
+export function calculateCostCentsWithCache(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadTokens: number,
+  cacheCreationTokens: number,
+): number {
+  const rates = MODEL_RATES[model];
+  if (!rates) return 0;
+
+  const nonCachedInput = Math.max(0, inputTokens - cacheReadTokens - cacheCreationTokens);
+  const standardInputCost = (nonCachedInput / 1_000_000) * rates.input;
+  const cacheReadCost = (cacheReadTokens / 1_000_000) * rates.input * 0.1;
+  const cacheCreationCost = (cacheCreationTokens / 1_000_000) * rates.input * 1.25;
+  const outputCost = (outputTokens / 1_000_000) * rates.output;
+
+  return Math.ceil((standardInputCost + cacheReadCost + cacheCreationCost + outputCost) * 100);
+}
+
+/**
  * Get the per-million-token rate for a model, or null if unknown.
  */
 export function getModelRate(

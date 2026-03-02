@@ -7,6 +7,7 @@
  * instead of requiring a separate orchestrated pipeline.
  */
 import type { ToolDefinition } from '@/lib/ai/types';
+import { AI_FEATURES } from '@/lib/ai/feature-flags';
 import {
   AGENT_TOOLS,
   CHECK_LINT_TOOL,
@@ -196,6 +197,33 @@ export const GET_DESIGN_TOKENS_TOOL: ToolDefinition = {
   },
 };
 
+/**
+ * Retrieve supplementary Shopify theme knowledge on demand.
+ * Only registered when ENABLE_KNOWLEDGE_TOOL is active (core knowledge
+ * stays in the system prompt; this covers Dawn conventions, diagnostics,
+ * settings UX, CSS, and JS patterns).
+ */
+export const GET_KNOWLEDGE_TOOL: ToolDefinition = {
+  name: 'get_knowledge',
+  description:
+    'Load supplementary Shopify theme development knowledge. Available domains: ' +
+    'dawn_conventions (Dawn theme patterns), diagnostics (debugging methodology), ' +
+    'settings_ux (settings schema UX), css (CSS architecture patterns), ' +
+    'javascript (JS patterns). Call when working in these specific areas.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      domain: {
+        type: 'string',
+        enum: ['dawn_conventions', 'diagnostics', 'settings_ux', 'css', 'javascript', 'all_supplementary'],
+        description: 'Which knowledge domain to load',
+      },
+    },
+    required: ['domain'],
+    additionalProperties: false,
+  },
+};
+
 // -- Specialist tool selection -------------------------------------------
 
 type SpecialistType = 'liquid' | 'javascript' | 'css' | 'json' | 'schema' | 'general' | string;
@@ -369,6 +397,10 @@ export function selectV2Tools(
   tools.push(REFRESH_MEMORY_ANCHOR_TOOL);
   tools.push(RECALL_ROLE_MEMORY_TOOL);
   tools.push(GET_DESIGN_TOKENS_TOOL);
+
+  if (AI_FEATURES.knowledgeTool) {
+    tools.push(GET_KNOWLEDGE_TOOL);
+  }
 
   if (intentMode === 'plan' || intentMode === 'summary') {
     tools.push(PROPOSE_PLAN_TOOL);

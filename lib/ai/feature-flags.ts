@@ -26,9 +26,12 @@ export const AI_FEATURES = {
   pmExplorationTools: process.env.ENABLE_PM_EXPLORATION_TOOLS === 'true',
 
   /** Programmatic Tool Calling: let Claude batch read-only tools in a Python sandbox.
-   *  DISABLED: PTC causes broken tool calls (empty patterns, wrong async signatures).
-   *  Direct tool calling is more reliable. Re-enable when Anthropic improves PTC stability. */
-  programmaticToolCalling: process.env.ENABLE_PTC === 'true',
+   *  Staged rollout: 'ask' = ask mode only, 'simple' = ask + code TRIVIAL/SIMPLE,
+   *  'true'/'all' = all modes/tiers. Default 'false' (off). */
+  programmaticToolCalling: process.env.ENABLE_PTC === 'true' || process.env.ENABLE_PTC === 'all',
+
+  /** PTC rollout stage: controls which modes/tiers have PTC enabled. */
+  ptcStage: (process.env.ENABLE_PTC ?? 'false') as 'false' | 'ask' | 'simple' | 'true' | 'all',
 
   /** Server-side context editing: auto-clear old tool results and thinking blocks. */
   contextEditing: process.env.ENABLE_CONTEXT_EDITING !== 'false',
@@ -54,4 +57,13 @@ export const AI_FEATURES = {
   /** Structural Scout LLM enrichment for COMPLEX+ tiers (requires XAI_API_KEY or Anthropic key). */
   scoutEnrichment: process.env.ENABLE_SCOUT_ENRICHMENT === 'true'
     || (process.env.XAI_API_KEY != null && process.env.XAI_API_KEY !== ''),
+
+  /** Microcompaction: hot tail / cold storage for tool results in the agent loop. */
+  microcompaction: process.env.ENABLE_MICROCOMPACTION !== 'false',
+
+  /** On-demand knowledge: move supplementary knowledge modules behind a get_knowledge tool. */
+  knowledgeTool: process.env.ENABLE_KNOWLEDGE_TOOL !== 'false',
+
+  /** Server-side compaction: Anthropic's compact strategy for long conversations. */
+  compaction: process.env.ENABLE_COMPACTION !== 'false',
 } as const;

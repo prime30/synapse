@@ -48,7 +48,7 @@ const BASE_SCORES: Record<string, number> = {
   locale: 1,
 };
 
-function computeImportance(
+function computeHeuristicScore(
   entry: RepoMapEntry,
   graph: ThemeDependencyGraph,
   mentionedSet: Set<string>,
@@ -74,6 +74,23 @@ function computeImportance(
   if (entry.lineCount > 500) score += 1;
 
   return score;
+}
+
+function computeImportance(
+  entry: RepoMapEntry,
+  graph: ThemeDependencyGraph,
+  mentionedSet: Set<string>,
+  activeFile: string | undefined,
+  pageRankScores?: Map<string, number>,
+): number {
+  const heuristic = computeHeuristicScore(entry, graph, mentionedSet, activeFile);
+  if (!pageRankScores || pageRankScores.size === 0) return heuristic;
+
+  const rawPR = pageRankScores.get(entry.path) ?? 0;
+  const maxPR = Math.max(...pageRankScores.values(), 0.001);
+  const normalizedPR = (rawPR / maxPR) * 100;
+
+  return 0.4 * normalizedPR + 0.6 * heuristic;
 }
 
 // ── Symbol extraction ───────────────────────────────────────────────────────
@@ -181,10 +198,15 @@ export function buildRepoMap(
   const maxTokens = options.maxTokens ?? 2000;
   const mentionedSet = new Set(options.mentionedFiles ?? []);
 
+  const bias = new Map<string, number>();
+  for (const m of mentionedSet) bias.set(m, 50);
+  if (options.activeFilePath) bias.set(options.activeFilePath, 50);
+  const pageRankScores = graph.computePageRank(bias.size > 0 ? bias : undefined);
+
   const entries = buildEntries(files);
 
   for (const entry of entries) {
-    entry.importance = computeImportance(entry, graph, mentionedSet, options.activeFilePath);
+    entry.importance = computeImportance(entry, graph, mentionedSet, options.activeFilePath, pageRankScores);
   }
 
   entries.sort((a, b) => b.importance - a.importance);

@@ -680,7 +680,8 @@ export async function executeToolCall(
             ? ` ${result.matchCount} replacements`
             : ' 1 replacement';
           const lintSuffix = await runQuickLint(file.fileName, rawUpdated);
-          return { tool_use_id: toolCall.id, content: `File updated: ${file.fileName} (${sizeBytes} bytes,${countNote}).${matchNote}${lintSuffix}` };
+          const tierTag = `[tier:${result.tierIndex}]`;
+          return { tool_use_id: toolCall.id, content: `${tierTag} File updated: ${file.fileName} (${sizeBytes} bytes,${countNote}).${matchNote}${lintSuffix}` };
         } catch (err) {
           const hint = nearLine > 0 ? ` (searched near line ${nearLine})` : '';
           const msg = err instanceof Error ? err.message : String(err);

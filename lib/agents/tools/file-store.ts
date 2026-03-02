@@ -30,6 +30,24 @@ type DbFileRow = {
   content: string | null;
 };
 
+/**
+ * Normalize a file path reference for comparison:
+ * 1. Replace backslashes with forward slashes
+ * 2. Collapse double slashes
+ * 3. Strip leading ./ or /
+ * 4. Strip trailing whitespace
+ * 5. Lowercase for case-insensitive matching (Shopify themes)
+ */
+function normalizeFileRef(ref: string): string {
+  return ref
+    .replace(/\\/g, '/')
+    .replace(/\/\//g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\//, '')
+    .trim()
+    .toLowerCase();
+}
+
 const DB_WRITE_MAX_RETRIES = 2;
 const DB_WRITE_RETRY_BASE_MS = 500;
 const COALESCE_WINDOW_MS = 200;
@@ -74,18 +92,19 @@ export class FileStore {
    */
   resolve(ref: string): FileContext | undefined {
     if (!ref) return undefined;
-    const baseRef = ref.split('/').pop() ?? ref;
+    const normalized = normalizeFileRef(ref);
+    const baseRef = normalized.split('/').pop() ?? normalized;
     return this.files.find((f) => {
-      const name = f.fileName ?? '';
-      const path = f.path ?? '';
+      const name = normalizeFileRef(f.fileName ?? '');
+      const path = normalizeFileRef(f.path ?? '');
       const baseName = name.split('/').pop() ?? name;
       const basePath = path.split('/').pop() ?? path;
       return (
         f.fileId === ref ||
-        name === ref ||
-        path === ref ||
-        name.endsWith(`/${ref}`) ||
-        path.endsWith(`/${ref}`) ||
+        name === normalized ||
+        path === normalized ||
+        name.endsWith(`/${normalized}`) ||
+        path.endsWith(`/${normalized}`) ||
         baseName === baseRef ||
         basePath === baseRef
       );

@@ -215,13 +215,13 @@ export default function UsagePage() {
         const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
         const records: UsageRecord[] = (data.daily ?? [])
           .filter((d: { date: string }) => new Date(d.date) >= cutoff)
-          .map((d: { date: string; requests: number; costCents: number }, i: number) => ({
+          .map((d: { date: string; requests: number; costCents: number; inputTokens?: number; outputTokens?: number }, i: number) => ({
             id: `usage-${i}`,
             date: new Date(d.date),
             type: 'agent',
             model: 'mixed',
-            inputTokens: 0,
-            outputTokens: 0,
+            inputTokens: d.inputTokens ?? 0,
+            outputTokens: d.outputTokens ?? 0,
             cost: d.costCents / 100,
             projectId: 'all',
             projectName: 'All Projects',

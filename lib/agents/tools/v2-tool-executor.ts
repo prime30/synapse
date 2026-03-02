@@ -207,6 +207,7 @@ export async function executeV2Tool(
   toolCall: ToolCall,
   ctx: V2ToolExecutorContext,
 ): Promise<ToolResult> {
+  const MAX_OUTPUT_CHARS = 6000;
   switch (toolCall.name) {
     // -- run_specialist ------------------------------------------------------
     case 'run_specialist': {
@@ -966,8 +967,6 @@ export async function executeV2Tool(
           '@/lib/design-tokens/components/component-persistence'
         );
 
-        const MAX_OUTPUT_CHARS = 6000;
-
         if (category === 'button_system') {
           const components = await listComponentsByProject(ctx.projectId);
           const buttons = components.filter(
@@ -1083,6 +1082,25 @@ export async function executeV2Tool(
         return {
           tool_use_id: toolCall.id,
           content: truncate(`Design token lookup failed: ${msg}`),
+          is_error: true,
+        };
+      }
+    }
+
+    // -- get_knowledge --------------------------------------------------------
+    case 'get_knowledge': {
+      const domain = String(toolCall.input.domain ?? '');
+      try {
+        const { getSupplementaryKnowledge } = await import(
+          '@/lib/agents/knowledge/shopify-best-practices'
+        );
+        const knowledge = getSupplementaryKnowledge(domain);
+        return { tool_use_id: toolCall.id, content: truncate(knowledge, MAX_OUTPUT_CHARS) };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          tool_use_id: toolCall.id,
+          content: truncate(`Knowledge lookup failed: ${msg}`),
           is_error: true,
         };
       }

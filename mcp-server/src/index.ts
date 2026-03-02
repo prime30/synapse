@@ -12,18 +12,15 @@ import { registerChatTools } from './tools/chat.js';
 import { registerPreferencesTools } from './tools/preferences.js';
 import { registerInspectPreviewTools } from './tools/inspect-preview.js';
 import { registerMediaTools } from './tools/media.js';
+import { registerLocalShopifyTools } from './tools/local-shopify.js';
+import { registerLocalPreviewTools } from './tools/local-preview.js';
 import { AuthManager } from './auth/manager.js';
 import { APIClient } from './api/client.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
   initLogger(config.logLevel);
-  logger.info('Synapse MCP server starting', { version: '1.0.0' });
-
-  const authManager = new AuthManager(config);
-  await authManager.loadToken();
-
-  const apiClient = new APIClient(config, authManager);
+  logger.info('Synapse MCP server starting', { version: '1.0.0', mode: config.mode });
 
   const server = new Server(
     {
@@ -37,22 +34,30 @@ async function main(): Promise<void> {
     }
   );
 
-  // Build centralized tool registry
   const registry = new ToolRegistry();
-  registerAuthTools(registry, authManager);
-  registerProjectTools(registry, apiClient, authManager);
-  registerFileTools(registry, apiClient, authManager);
-  registerAgentTools(registry, apiClient, authManager);
-  registerApplyTools(registry, apiClient, authManager);
-  registerChatTools(registry, apiClient, authManager);
-  registerPreferencesTools(registry, apiClient, authManager);
-  registerInspectPreviewTools(registry, apiClient, authManager);
-  registerMediaTools(registry, apiClient, authManager);
 
-  // Register all tools with the MCP server (single tools/list + tools/call handler)
+  if (config.mode === 'local') {
+    const sidecarUrl = process.env.SYNAPSE_SIDECAR_URL || 'http://localhost:4000';
+    registerLocalShopifyTools(registry, config);
+    registerLocalPreviewTools(registry, sidecarUrl, config.workspacePath);
+  } else {
+    const authManager = new AuthManager(config);
+    await authManager.loadToken();
+    const apiClient = new APIClient(config, authManager);
+
+    registerAuthTools(registry, authManager);
+    registerProjectTools(registry, apiClient, authManager);
+    registerFileTools(registry, apiClient, authManager);
+    registerAgentTools(registry, apiClient, authManager);
+    registerApplyTools(registry, apiClient, authManager);
+    registerChatTools(registry, apiClient, authManager);
+    registerPreferencesTools(registry, apiClient, authManager);
+    registerInspectPreviewTools(registry, apiClient, authManager);
+    registerMediaTools(registry, apiClient, authManager);
+  }
+
   registerAllTools(server, registry);
 
-  // Graceful shutdown
   const shutdown = async () => {
     logger.info('Synapse MCP server shutting down');
     closeLogger();
@@ -62,7 +67,6 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  // Connect via stdio
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

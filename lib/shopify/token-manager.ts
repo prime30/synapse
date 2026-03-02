@@ -912,6 +912,9 @@ export class ShopifyTokenManager {
 
   /**
    * Store a Theme Kit Access password (shptka_*) for draft theme preview.
+   * Propagates the password to ALL sibling connections for the same
+   * user + store_domain so it persists regardless of which connection
+   * row getActiveConnection resolves to on subsequent page loads.
    */
   async storeThemeAccessPassword(
     connectionId: string,
@@ -919,12 +922,13 @@ export class ShopifyTokenManager {
   ): Promise<void> {
     const supabase = adminSupabase();
     const encrypted = this.encrypt(password);
+    const now = new Date().toISOString();
 
     const { error } = await supabase
       .from('shopify_connections')
       .update({
         theme_access_password_encrypted: encrypted,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq('id', connectionId);
 
@@ -935,11 +939,34 @@ export class ShopifyTokenManager {
         500,
       );
     }
+
+    // Propagate to sibling connections (same user + store) so the password
+    // is found regardless of which connection row is resolved on next load.
+    try {
+      const { data: primary } = await supabase
+        .from('shopify_connections')
+        .select('user_id, store_domain')
+        .eq('id', connectionId)
+        .single();
+
+      if (primary?.user_id && primary?.store_domain) {
+        await supabase
+          .from('shopify_connections')
+          .update({ theme_access_password_encrypted: encrypted })
+          .eq('user_id', primary.user_id)
+          .eq('store_domain', primary.store_domain)
+          .neq('id', connectionId);
+      }
+    } catch {
+      // Best-effort propagation — primary save already succeeded
+    }
   }
 
   /**
    * Retrieve and decrypt the Theme Kit Access password for a connection.
-   * Returns null if no password is stored.
+   * Falls back to sibling connections (same user + store_domain) when
+   * the primary connection doesn't have a stored password.
+   * Returns null if no password is found anywhere.
    */
   async getThemeAccessPassword(
     connectionId: string,
@@ -948,17 +975,51 @@ export class ShopifyTokenManager {
 
     const { data, error } = await supabase
       .from('shopify_connections')
-      .select('theme_access_password_encrypted')
+      .select('theme_access_password_encrypted, user_id, store_domain')
       .eq('id', connectionId)
       .single();
 
-    if (error || !data?.theme_access_password_encrypted) return null;
+    if (error) return null;
 
-    try {
-      return this.decrypt(data.theme_access_password_encrypted);
-    } catch {
-      return null;
+    if (data?.theme_access_password_encrypted) {
+      try {
+        return this.decrypt(data.theme_access_password_encrypted);
+      } catch {
+        return null;
+      }
     }
+
+    // Fallback: check sibling connections for the same user + store
+    if (data?.user_id && data?.store_domain) {
+      try {
+        const { data: siblings } = await supabase
+          .from('shopify_connections')
+          .select('id, theme_access_password_encrypted')
+          .eq('user_id', data.user_id)
+          .eq('store_domain', data.store_domain)
+          .neq('id', connectionId)
+          .not('theme_access_password_encrypted', 'is', null)
+          .limit(1);
+
+        const sibling = siblings?.[0];
+        if (sibling?.theme_access_password_encrypted) {
+          const password = this.decrypt(sibling.theme_access_password_encrypted);
+
+          // Migrate to the primary connection so the fallback isn't needed next time
+          await supabase
+            .from('shopify_connections')
+            .update({ theme_access_password_encrypted: sibling.theme_access_password_encrypted })
+            .eq('id', connectionId);
+
+          console.log(`[TKA] Migrated password from connection ${sibling.id} to ${connectionId}`);
+          return password;
+        }
+      } catch {
+        // Best-effort fallback
+      }
+    }
+
+    return null;
   }
 
   /**

@@ -201,8 +201,9 @@ export const V2_CODE_OVERLAY = `**CRITICAL: Complete the full requested scope (n
 
 You are in code mode. Focus on producing working code changes efficiently.
 
-- Prefer \`search_replace\` for small, targeted edits (a few lines).
-- Use \`propose_code_edit\` when rewriting larger sections or entire files.
+- Prefer \`edit_lines\` for most edits: use \`read_lines\` to see line numbers, then \`edit_lines\` to make changes. After editing a file, re-read before further edits (line numbers shift).
+- Use \`search_replace\` as a fallback for small, simple edits where exact text matching is easier.
+- Use \`propose_code_edit\` only when rewriting >50% of a file.
 - Delegate to \`run_specialist\` for multi-file or domain-heavy changes (e.g., adding a new section with schema, styles, and JS).
 - Always run \`check_lint\` after making edits to catch errors immediately.
 - Match the existing code style — indentation, naming, quote style, comment patterns.
@@ -214,10 +215,10 @@ You are in code mode. Focus on producing working code changes efficiently.
 **Do NOT use \`code_execution\` to search for or verify text that is already in the PRE-LOADED FILES.**
 The pre-loaded file content is exact and current. Using \`code_execution\` or any lookup tool to "double-check" text you already have wastes the lookup budget and delays the edit.
 
-When using \`search_replace\`:
+When using \`search_replace\` (fallback):
 - Copy \`old_text\` verbatim from the PRE-LOADED FILES section — do not paraphrase or normalize whitespace.
-- If the file content was truncated in pre-loaded context, use \`read_file\` once to get the full content, then immediately edit.
-- If \`search_replace\` returns "old_text not found", re-read the exact characters from the pre-loaded content and retry once. If it still fails, use \`propose_code_edit\` with the full updated file content instead.
+- If the file content was truncated in pre-loaded context, use \`read_lines\` to get the full content with line numbers, then use \`edit_lines\`.
+- If \`search_replace\` fails twice on any file, switch to \`edit_lines\` immediately.
 
 ## Self-Check Before Completing
 
@@ -418,10 +419,11 @@ The user asked for code changes, not explanations.
 - Do NOT investigate when you should delegate.
 
 ### FILE SIZE RULES
-- Files <200 lines: \`search_replace\` is safe.
-- Files 200-300 lines: prefer \`edit_lines\`, \`search_replace\` allowed with \`nearLine\` hint.
+- ALL files: prefer \`edit_lines\` (\`read_lines\` first to get line numbers, then \`edit_lines\` to make changes).
+- Files <200 lines: \`search_replace\` is also acceptable as a convenience.
 - Files >300 lines: MUST use \`read_lines\` → \`edit_lines\`. \`search_replace\` is blocked by the runtime.
 - Files >1000 lines: \`propose_code_edit\` is also blocked.
+- After editing a file, re-read before further edits (line numbers shift).
 - If \`search_replace\` fails twice on any file, switch to \`edit_lines\`.
 
 ## Progress Narration

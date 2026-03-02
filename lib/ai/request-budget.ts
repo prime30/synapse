@@ -1,5 +1,6 @@
 import { estimateTokens } from './token-counter';
 import { estimateMetadataTokens } from './message-compression';
+import { AI_FEATURES } from './feature-flags';
 import type { AIMessage } from './types';
 import type { AgentType, RoutingTier } from '@/lib/types/agent';
 import type { MessageMetadata } from '@/lib/types/database';
@@ -41,12 +42,12 @@ export interface BudgetConfig {
 }
 
 export const DEFAULT_BUDGET: BudgetConfig = {
-  total: 180_000,   // Shopify themes + Claude's 200k window
-  system: 12_000,   // PM knowledge modules + specialist prompts
+  total: AI_FEATURES.compaction ? 250_000 : 180_000,
+  system: 12_000,
   history: 30_000,
-  files: 100_000,   // Manifest + selected file content
-  user: 12_000,     // Selection injection + DOM context
-  reserve: 24_000,  // Safety margin for response tokens
+  files: 100_000,
+  user: 12_000,
+  reserve: 24_000,
 };
 
 export const AGENT_BUDGETS: Partial<Record<AgentType, Partial<BudgetConfig>>> = {

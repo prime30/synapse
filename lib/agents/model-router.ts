@@ -171,21 +171,23 @@ function resolveTierModel(
 
   let model: string;
 
+  const reviewModelOverride = process.env.REVIEW_MODEL;
+
   switch (tier) {
     case 'TRIVIAL':
-      if (action === 'review') { model = MODELS.CLAUDE_SONNET; break; }
+      if (action === 'review') { model = reviewModelOverride ?? MODELS.CLAUDE_HAIKU; break; }
       if (isSpecialist) { model = hasGrok ? MODELS.GROK_CODE : MODELS.CLAUDE_HAIKU; break; }
       model = MODELS.CLAUDE_SONNET;
       break;
 
     case 'SIMPLE':
-      if (action === 'review') { model = MODELS.CLAUDE_SONNET; break; }
+      if (action === 'review') { model = reviewModelOverride ?? MODELS.CLAUDE_HAIKU; break; }
       if (isSpecialist) { model = hasGrok ? MODELS.GROK_CODE : MODELS.CLAUDE_SONNET; break; }
       model = MODELS.CLAUDE_SONNET;
       break;
 
     case 'COMPLEX':
-      if (action === 'review') { model = MODELS.CLAUDE_OPUS; break; }
+      if (action === 'review') { model = reviewModelOverride ?? MODELS.CLAUDE_OPUS; break; }
       if (isSpecialist) { model = MODELS.CLAUDE_SONNET; break; }
       model = MODELS.CLAUDE_OPUS;
       break;

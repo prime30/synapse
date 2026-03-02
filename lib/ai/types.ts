@@ -58,6 +58,10 @@ export type ContextEditStrategy =
   | {
       type: 'clear_thinking_20251015';
       keep?: 'all' | { type: 'thinking_turns'; value: number };
+    }
+  | {
+      type: 'compact_20260112';
+      trigger?: { type: 'input_tokens'; value: number };
     };
 
 /** Result of an applied context edit from the API response. */

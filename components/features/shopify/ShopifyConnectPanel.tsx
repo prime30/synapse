@@ -12,6 +12,7 @@ import type { QuickScanResult, QuickScanIssue } from '@/lib/ai/theme-reviewer';
 
 interface ShopifyConnectPanelProps {
   projectId: string;
+  onTakeToCursor?: () => void;
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -80,7 +81,7 @@ interface PushHistoryRow {
   file_count: number;
 }
 
-export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
+export function ShopifyConnectPanel({ projectId, onTakeToCursor }: ShopifyConnectPanelProps) {
   const queryClient = useQueryClient();
   const {
     connection: activeConnection,
@@ -792,6 +793,7 @@ export function ShopifyConnectPanel({ projectId }: ShopifyConnectPanelProps) {
                   <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover" onClick={() => { setPublishConfirmStep(1); setActionMenuOpen(false); }}>Publish to live</button></li>
                 )}
                 <li><a href={`/api/projects/${projectId}/export`} download className="block px-3 py-2 ide-text-2 ide-hover">Export JSON</a></li>
+                <li><button type="button" className="w-full text-left px-3 py-2 ide-text-2 ide-hover flex items-center gap-1.5" onClick={() => { onTakeToCursor?.(); setActionMenuOpen(false); }}><svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[#28CD56]"><path d="M5 3l14 9-6 2-4 7z" /></svg>Take to Cursor</button></li>
                 {themes.find((t) => t.id === effectiveThemeId)?.role !== 'main' && (
                   <li><button type="button" className="w-full text-left px-3 py-2 text-red-500 dark:text-red-400 ide-hover" onClick={() => { setDeleteConfirmName(themes.find((t) => t.id === effectiveThemeId)?.name ?? ''); setDeleteInputValue(''); setActionMenuOpen(false); }}>Delete theme</button></li>
                 )}

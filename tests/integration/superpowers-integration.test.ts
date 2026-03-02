@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReviewAgent, REVIEW_OUTPUT_SCHEMA } from '@/lib/agents/review';
-import { parseReviewToolContent } from '@/lib/agents/coordinator-v2';
+import { parseReviewToolContent } from '@/lib/agents/tools/review-parser';
 import {
   convertThemeCheckIssue,
   mergeThemeCheckIssues,
@@ -89,8 +89,8 @@ describe('ReviewAgent.parseResponse — two-stage review fields', () => {
 
 // ── Review: Text-based tool content parsing ──────────────────────────────────
 
-describe('parseReviewToolContent — text format with spec/code quality lines', () => {
-  it('parses PASS/PASS correctly', () => {
+describe('parseReviewToolContent — text format parsing', () => {
+  it('parses APPROVED with summary and no issues', () => {
     const content = [
       'Review APPROVED',
       'All changes look correct.',
@@ -100,12 +100,11 @@ describe('parseReviewToolContent — text format with spec/code quality lines', 
     const result = parseReviewToolContent(content);
     expect(result).not.toBeNull();
     expect(result!.approved).toBe(true);
-    expect(result!.specCompliant).toBe(true);
-    expect(result!.codeQualityApproved).toBe(true);
-    expect(result!.failedSection).toBeNull();
+    expect(result!.summary).toBe('All changes look correct.');
+    expect(result!.issues).toHaveLength(0);
   });
 
-  it('parses FAIL/PASS and hard-gates approval', () => {
+  it('parses APPROVED with issues section', () => {
     const content = [
       'Review APPROVED',
       'Looks good on surface.',
@@ -116,13 +115,14 @@ describe('parseReviewToolContent — text format with spec/code quality lines', 
     ].join('\n');
     const result = parseReviewToolContent(content);
     expect(result).not.toBeNull();
-    expect(result!.approved).toBe(false);
-    expect(result!.specCompliant).toBe(false);
-    expect(result!.codeQualityApproved).toBe(true);
-    expect(result!.failedSection).toBe('spec');
+    expect(result!.approved).toBe(true);
+    expect(result!.summary).toBe('Looks good on surface.');
+    expect(result!.issues).toHaveLength(1);
+    expect(result!.issues[0].severity).toBe('error');
+    expect(result!.issues[0].file).toBe('header.liquid');
   });
 
-  it('parses PASS/FAIL', () => {
+  it('parses NEEDS CHANGES with issues', () => {
     const content = [
       'Review NEEDS CHANGES',
       'Code has issues.',
@@ -133,21 +133,23 @@ describe('parseReviewToolContent — text format with spec/code quality lines', 
     ].join('\n');
     const result = parseReviewToolContent(content);
     expect(result).not.toBeNull();
-    expect(result!.specCompliant).toBe(true);
-    expect(result!.codeQualityApproved).toBe(false);
-    expect(result!.failedSection).toBe('code_quality');
+    expect(result!.approved).toBe(false);
+    expect(result!.summary).toBe('Code has issues.');
+    expect(result!.issues).toHaveLength(1);
+    expect(result!.issues[0].severity).toBe('warning');
+    expect(result!.issues[0].file).toBe('style.css');
   });
 
-  it('defaults to passing when spec/quality lines are absent', () => {
+  it('parses APPROVED with no issues section', () => {
     const content = [
       'Review APPROVED',
       'Everything is fine.',
     ].join('\n');
     const result = parseReviewToolContent(content);
     expect(result).not.toBeNull();
-    expect(result!.specCompliant).toBe(true);
-    expect(result!.codeQualityApproved).toBe(true);
-    expect(result!.failedSection).toBeNull();
+    expect(result!.approved).toBe(true);
+    expect(result!.summary).toBe('Everything is fine.');
+    expect(result!.issues).toHaveLength(0);
   });
 
   it('returns null for non-review content', () => {

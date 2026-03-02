@@ -46,6 +46,7 @@ import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { ActivityBar } from '@/components/editor/ActivityBar';
 import { TopBar } from '@/components/editor/TopBar';
 import { DevReportModal } from '@/components/editor/DevReportModal';
+import { TakeToCursorModal } from '@/components/features/cursor/TakeToCursorModal';
 import { useDevReport } from '@/hooks/useDevReport';
 import { SectionNav } from '@/components/ui/SectionNav';
 import { SettingsModal } from '@/components/editor/SettingsModal';
@@ -262,6 +263,7 @@ export default function ProjectPage() {
   const [mergeConflicts, setMergeConflicts] = useState<Array<{ path: string; oursContent: string; theirsContent: string }> | null>(null);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [branchManagerOpen, setBranchManagerOpen] = useState(false);
+  const [takeToCursorOpen, setTakeToCursorOpen] = useState(false);
   const [collabPeers, setCollabPeers] = useState<CollaborativePeer[]>([]);
   const [collabStatus, setCollabStatus] = useState<string>('disconnected');
 
@@ -1640,6 +1642,7 @@ export default function ProjectPage() {
         onNavigateToFile={handleOpenFile}
         currentUserId={authUser?.id ?? null}
         activeFilePath={activeFilePath ?? null}
+        onTakeToCursor={() => setTakeToCursorOpen(true)}
       />
 
       {/* Toast notification overlay */}
@@ -1777,7 +1780,7 @@ export default function ProjectPage() {
                   <div className="flex-1 flex flex-col min-h-0 overflow-auto">
                     {storeNav === 'sync' && (
                       <div className="flex-1 overflow-auto p-2">
-                        <ShopifyConnectPanel projectId={projectId} />
+                        <ShopifyConnectPanel projectId={projectId} onTakeToCursor={() => setTakeToCursorOpen(true)} />
                       </div>
                     )}
                     {storeNav === 'content' && (
@@ -2673,6 +2676,13 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
+
+      <TakeToCursorModal
+        isOpen={takeToCursorOpen}
+        onClose={() => setTakeToCursorOpen(false)}
+        storeDomain={connection?.store_domain ?? ''}
+        themeId={previewThemeId ?? ''}
+      />
 
       {devReportOpen && devReport.data && (
         <DevReportModal

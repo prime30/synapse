@@ -27,7 +27,7 @@ function stripIDEAndPreview(s: string | undefined): string {
 // ── Types ─────────────────────────────────────────────────────────────
 
 export interface ThinkingStep {
-  phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'validating' | 'fixing' | 'change_ready' | 'clarification' | 'budget_warning' | 'reasoning' | 'complete';
+  phase: 'analyzing' | 'planning' | 'executing' | 'reviewing' | 'validating' | 'fixing' | 'change_ready' | 'clarification' | 'budget_warning' | 'reasoning' | 'recovery' | 'error' | 'complete';
   label: string;
   detail?: string;
   agent?: string;
@@ -206,6 +206,16 @@ const phaseSvg: Record<ThinkingStep['phase'], React.ReactNode> = {
     <svg className="w-2.5 h-2.5 ide-text-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
       <line x1="9" y1="21" x2="15" y2="21" />
+    </svg>
+  ),
+  recovery: (
+    <svg className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </svg>
+  ),
+  error: (
+    <svg className="w-2.5 h-2.5 text-red-500 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
     </svg>
   ),
   complete: (

@@ -224,6 +224,12 @@ async function resolveConnection(userId: string, projectId: string) {
 
 const TKA_DOMAIN = 'theme-kit-access.shopifyapps.com';
 
+// Cache accumulated TKA handshake cookies keyed by store domain.
+// After the first request completes the multi-step cookie exchange,
+// subsequent requests reuse the cookies and skip the handshake.
+const tkaCookieCache = new Map<string, { cookies: string; ts: number }>();
+const TKA_COOKIE_TTL = 20 * 60 * 1000; // 20 min, under the 25 min session TTL
+
 function buildShopifyUrl(storeDomain: string, themeId: string, pathParam: string, useTKA = false) {
   const domain = storeDomain.replace(/^https?:\/\//, '');
   const basePath = pathParam.startsWith('/') ? pathParam : `/${pathParam}`;
@@ -634,41 +640,77 @@ async function fetchWithManualRedirects(
   url: string,
   headers: Record<string, string>,
   themeId: string | undefined,
-  opts?: { isTKA?: boolean },
-  maxRedirects = 5,
+  opts?: { isTKA?: boolean; storeDomain?: string },
+  maxRedirects = 8,
 ): Promise<Response> {
   let currentUrl = url;
+  let currentHeaders = { ...headers };
   const isTKA = opts?.isTKA ?? false;
-  console.log(`[Preview Fetch] START url=${currentUrl} isTKA=${isTKA}`);
+  const storeDomain = opts?.storeDomain;
+
+  // Inject cached TKA handshake cookies so we skip the multi-step exchange
+  if (isTKA && storeDomain) {
+    const cached = tkaCookieCache.get(storeDomain);
+    if (cached && Date.now() - cached.ts < TKA_COOKIE_TTL) {
+      currentHeaders['Cookie'] = currentHeaders['Cookie']
+        ? `${currentHeaders['Cookie']}; ${cached.cookies}`
+        : cached.cookies;
+    }
+  }
+
   for (let i = 0; i < maxRedirects; i++) {
     const res = await fetch(currentUrl, {
-      headers,
+      headers: currentHeaders,
       redirect: 'manual',
       signal: AbortSignal.timeout(25_000),
     });
 
-    console.log(`[Preview Fetch] Step ${i}: ${res.status} url=${currentUrl}`);
-    if (res.status < 300 || res.status >= 400) return res;
+    // Collect any Set-Cookie values (TKA sets cookies during handshake)
+    const setCookies = res.headers.getSetCookie?.() ?? [];
+    for (const sc of setCookies) {
+      const pair = sc.split(';')[0];
+      if (pair) {
+        currentHeaders['Cookie'] = currentHeaders['Cookie']
+          ? `${currentHeaders['Cookie']}; ${pair}`
+          : pair;
+      }
+    }
+
+    if (res.status < 300 || res.status >= 400) {
+      // On success, cache the accumulated cookies for future TKA requests
+      if (isTKA && storeDomain && res.status >= 200 && res.status < 300) {
+        tkaCookieCache.set(storeDomain, { cookies: currentHeaders['Cookie'] ?? '', ts: Date.now() });
+      }
+      return res;
+    }
 
     const location = res.headers.get('location');
     if (!location) return res;
 
     const nextUrl = new URL(location, currentUrl);
 
-    // If TKA redirects us to the store domain, the TKA password is invalid.
-    // Return a synthetic 401 instead of following (which would serve the published theme).
+    // When TKA redirects to the store domain, the cookie it set is scoped
+    // to TKA's domain. Instead of following to the store (which will 401),
+    // retry the SAME TKA URL with the newly acquired cookies. This is the
+    // cookie handshake: TKA sets cookies via Set-Cookie on 302,
+    // and subsequent requests to TKA with those cookies get proxied (200).
     if (isTKA && nextUrl.hostname !== TKA_DOMAIN) {
-      console.log(`[Preview Fetch] TKA redirected to store domain ${nextUrl.hostname} — password invalid`);
+      if (setCookies.length > 0) {
+        continue; // retry same URL with updated cookies
+      }
+      console.log(`[Preview Fetch] TKA redirect to ${nextUrl.hostname} with no cookies — auth failed`);
+      // Invalidate cached cookies since they didn't work
+      if (storeDomain) tkaCookieCache.delete(storeDomain);
       return new Response('Theme Access password not accepted by Shopify', { status: 401 });
     }
 
     if (themeId && !nextUrl.searchParams.has('preview_theme_id')) {
       nextUrl.searchParams.set('preview_theme_id', themeId);
     }
-    console.log(`[Preview Fetch] Redirect → ${nextUrl.toString()}`);
+
     currentUrl = nextUrl.toString();
   }
-  return fetch(currentUrl, { headers, redirect: 'follow', signal: AbortSignal.timeout(25_000) });
+  return fetch(currentUrl, { headers: currentHeaders, redirect: 'follow', signal: AbortSignal.timeout(25_000) });
 }
 
 type ParityIssueCategory = 'auth-cookie' | 'missing-local-file' | 'app-endpoint' | 'proxy-rewrite' | 'upstream-other';
@@ -1040,7 +1082,7 @@ async function proxyShopifyStorefront(
       url.toString(),
       fwdHeaders,
       themeId,
-      { isTKA },
+      { isTKA, storeDomain: isTKA ? domain : undefined },
     );
 
     if (shopifyRes.status === 401) {
@@ -1143,11 +1185,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
     const connection = await resolveConnection(userId, projectId);
     if (!connection?.store_domain) {
+      console.log(`[Preview] No connection for project=${projectId} user=${userId}`);
       return new NextResponse(NO_PREVIEW_HTML('No preview theme configured.'), {
         status: 200,
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
+
+    console.log(`[Preview] project=${projectId} conn=${connection.id} store=${connection.store_domain} hasTKA=${!!connection.theme_access_password_encrypted}`);
 
     // Per-project dev theme takes precedence; fall back to connection.theme_id
     let themeId = connection.theme_id;
@@ -1192,8 +1237,20 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       return proxyCLIDevServer(request, projectId, cliPort, connection.store_domain);
     }
 
-    // No TKA password → show connect empty state
+    // No TKA password on the resolved connection — check siblings before showing empty state.
+    // The password may live on a different connection row for the same user+store.
     if (!connection.theme_access_password_encrypted) {
+      console.log(`[Preview] TKA not on primary conn=${connection.id}, checking siblings...`);
+      const tokenManager = new ShopifyTokenManager();
+      const tkaFallback = await tokenManager.getThemeAccessPassword(connection.id);
+      if (tkaFallback) {
+        console.log(`[Preview] TKA found on sibling, migrated to conn=${connection.id}`);
+        const refreshed = await resolveConnection(userId, projectId);
+        if (refreshed?.theme_access_password_encrypted) {
+          return proxyShopifyStorefront(request, projectId, refreshed, String(themeId));
+        }
+      }
+      console.log(`[Preview] No TKA password found for project=${projectId} — showing connect page`);
       return new NextResponse(CONNECT_PREVIEW_HTML, {
         status: 200,
         headers: {
@@ -1288,9 +1345,19 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     // CLI not running — try proxying POST through TKA
-    const connection = await resolveConnection(userId, projectId);
-    if (!connection?.store_domain || !connection.theme_access_password_encrypted) {
+    let connection = await resolveConnection(userId, projectId);
+    if (!connection?.store_domain) {
       return NextResponse.json({ error: 'No preview session available' }, { status: 503 });
+    }
+    if (!connection.theme_access_password_encrypted) {
+      const tokenManager = new ShopifyTokenManager();
+      const tkaFallback = await tokenManager.getThemeAccessPassword(connection.id);
+      if (tkaFallback) {
+        connection = await resolveConnection(userId, projectId);
+      }
+      if (!connection?.theme_access_password_encrypted) {
+        return NextResponse.json({ error: 'No preview session available' }, { status: 503 });
+      }
     }
 
     let themeId = connection.theme_id;

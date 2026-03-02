@@ -43,6 +43,8 @@ interface StatusBarProps {
   onCancelBatch?: (batchId: string) => void;
   /** EPIC D: Cache backend status */
   cacheBackend?: 'redis' | 'memory' | null;
+  /** Prompt cache hit rate (0-100) from the last execution */
+  cacheHitRate?: number | null;
   /** Collapsed loading indicator: items done / total */
   loadingProgress?: { done: number; total: number } | null;
   /** Project ID for sync queue status indicator */
@@ -85,7 +87,7 @@ function formatTokenCount(n: number): string {
   return `${n}`;
 }
 
-export function StatusBar({ fileName, content, language, filePath, cursorPosition, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, termMappingCount = 0, lastCostCents, sessionCostCents, costBreakdown, batchJobs, onCancelBatch, cacheBackend, loadingProgress, syncQueueProjectId, children }: StatusBarProps) {
+export function StatusBar({ fileName, content, language, filePath, cursorPosition, tokenUsage, isOnline = true, hasOfflineChanges = false, activeMemoryCount = 0, termMappingCount = 0, lastCostCents, sessionCostCents, costBreakdown, batchJobs, onCancelBatch, cacheBackend, cacheHitRate, loadingProgress, syncQueueProjectId, children }: StatusBarProps) {
   const lineCount = useMemo(() => content.split('\n').length, [content]);
   const sizeLabel = useMemo(() => formatSize(new Blob([content]).size), [content]);
   const langLabel = LANGUAGE_LABELS[language];
@@ -224,6 +226,24 @@ export function StatusBar({ fileName, content, language, filePath, cursorPositio
         <>
           <span className="whitespace-nowrap ide-text-quiet" title={`Input: ${tokenUsage.inputTokens} tokens, Output: ${tokenUsage.outputTokens} tokens`}>
             ↑{formatTokenCount(tokenUsage.inputTokens)} ↓{formatTokenCount(tokenUsage.outputTokens)}
+          </span>
+          <Divider />
+        </>
+      )}
+
+      {/* Prompt cache hit rate badge */}
+      {cacheHitRate != null && cacheHitRate > 0 && (
+        <>
+          <span
+            className={`inline-flex items-center gap-0.5 whitespace-nowrap ${
+              cacheHitRate >= 70 ? 'text-emerald-400' : cacheHitRate >= 30 ? 'text-amber-400' : 'text-stone-400 dark:text-stone-500'
+            }`}
+            title={`Prompt cache hit rate: ${cacheHitRate}%`}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            {cacheHitRate}%
           </span>
           <Divider />
         </>
