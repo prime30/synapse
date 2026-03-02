@@ -791,24 +791,15 @@ export default function ProjectPage() {
     [allCursors, activeFilePath]
   );
 
-  // Preview theme resolution (instant preview optimization):
-  // 1. If dev_theme_id exists AND sync is complete → use dev theme (edits are live)
-  // 2. Otherwise, use the source theme (shopify_theme_id) for instant preview
-  // 3. Fall back to connection.theme_id for backward compat
+  // Preview theme resolution: only use the dev theme, never the live/source theme.
+  // The dev theme is a dedicated preview copy that reflects edits in real-time.
+  // If no dev theme exists or sync isn't ready, show onboarding instead.
   const currentProject = projects.find((p) => p.id === projectId);
   const devThemeReady =
     currentProject?.dev_theme_id && connection?.sync_status === 'connected';
-  const previewThemeId = devThemeReady
-    ? currentProject.dev_theme_id
-    : currentProject?.shopify_theme_id ??
-      currentProject?.dev_theme_id ??
-      connection?.theme_id ??
-      null;
-  const showPreview = connected && connection && !!previewThemeId;
-  const isPreviewUsingSourceTheme =
-    !!previewThemeId &&
-    !devThemeReady &&
-    previewThemeId === (currentProject?.shopify_theme_id ?? null);
+  const previewThemeId = currentProject?.dev_theme_id ?? null;
+  const showPreview = connected && connection && devThemeReady && !!previewThemeId;
+  const isPreviewUsingSourceTheme = false;
 
   // Auto-open preview tab when preview becomes available (once)
   const openPreviewTab = tabs.openPreviewTab;
